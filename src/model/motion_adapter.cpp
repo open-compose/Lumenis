@@ -1,5 +1,7 @@
 #include "lumenis/model/motion_adapter.h"
 
+#include "lumenis/model/group_clip.h"
+
 #include "lumenis/core/project_format.h"
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/marker.h"
@@ -214,6 +216,11 @@ bool isAdapted(const BinItem& item) {
 }
 
 BinItem clipForSegment(const BinItem& clip, const Segment& segment) {
+    // A group clip's segment plays its angle (group_clip.h).
+    if (clip.kind == BinItemKind::Group) {
+        const BinItem angle = groupAngleClip(clip, segment.groupAngle.value_or(-1));
+        return segment.adapter ? adaptedClip(angle, *segment.adapter) : angle;
+    }
     return segment.adapter ? adaptedClip(clip, *segment.adapter) : clip;
 }
 

@@ -1,5 +1,7 @@
 #include "lumenis/model/sequence.h"
 
+#include "lumenis/model/group_clip.h"
+
 #include "lumenis/model/timewarp.h"
 
 #include "lumenis/model/audio_eq.h"
@@ -212,6 +214,7 @@ QJsonObject segmentToJson(const Segment& s) {
     o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
     if (!s.note.isEmpty()) o.insert(QStringLiteral("note"), s.note);
+    if (s.groupAngle) o.insert(QStringLiteral("groupAngle"), *s.groupAngle);
     if (!s.correctionComment.isEmpty()) o.insert(QStringLiteral("correctionComment"), s.correctionComment);
     if (!s.sourceCorrection.isEmpty()) o.insert(QStringLiteral("sourceCorrection"), s.sourceCorrection.toJson());
     if (!s.programCorrection.isEmpty()) o.insert(QStringLiteral("programCorrection"), s.programCorrection.toJson());
@@ -255,6 +258,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.nestIn = s.nest.isEmpty() ? 0 : o.value(QStringLiteral("nestIn")).toInteger();
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
     if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
+    if (!s.isFiller() && o.contains(QStringLiteral("groupAngle"))) s.groupAngle = o.value(QStringLiteral("groupAngle")).toInt();
     if (!s.isFiller()) s.correctionComment = o.value(QStringLiteral("correctionComment")).toString();
     if (!s.isFiller()) {
         s.sourceCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("sourceCorrection")).toObject());
@@ -1033,6 +1037,11 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.sourceMob = source.mobId;
             s.binId = binId;
             s.name = source.name;
+            // A group clip's segments show its selected angle under the angle's name (p.1131).
+            if (const auto group = groupOf(source); group && !group->angles.isEmpty()) {
+                s.groupAngle = group->selected;
+                s.name = group->angles[group->selected].clip.name;
+            }
             // A multichannel source track is named by its first channel (multichannel.h).
             s.sourceTrack = sourceChannel(source, from);
             s.sourceIn = plan.sourceStart;

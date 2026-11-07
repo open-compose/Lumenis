@@ -3,6 +3,7 @@
 #include "lumenis/ui/correction_monitors.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/ui/bin_dock.h"
@@ -2795,6 +2796,23 @@ QMenu* Composer::contextMenu(MonitorId monitor) {
     captions->setChecked(showsCaptions(monitor));
     connect(captions, &QAction::toggled, this, [this, monitor](bool on) { setShowCaptions(monitor, on); });
     return menu;
+}
+
+void Composer::setGroupSplit(int split) {
+    split = split == 4 || split == 9 ? split : 1;
+    // Pressing a split's button again goes back to Full-Monitor display (p.1128).
+    groupSplit_ = split == groupSplit_ ? 1 : split;
+    groupBank_ = 0;
+    if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
+}
+
+void Composer::swapCamBank() {
+    const model::LoadedClip* loaded = state(MonitorId::Source).current();
+    const auto group = loaded ? model::groupOf(loaded->item) : std::nullopt;
+    if (!group || groupSplit_ <= 1) return;
+    const int banks = std::max(1, static_cast<int>((group->angles.size() + groupSplit_ - 1) / groupSplit_));
+    groupBank_ = (groupBank_ + 1) % banks;
+    if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
 }
 
 bool Composer::showsCaptions(MonitorId monitor) const {

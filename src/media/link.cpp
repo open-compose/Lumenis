@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/fields.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 
 #include <QDir>
@@ -774,6 +775,8 @@ std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
 QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
     const auto link = linkOf(item);
     if (!link || link->videoStream < 0 || link->unlinked) return {};
+    // A group's angle shows black where it has no material (group_clip.h).
+    if (const auto range = model::groupAngleRange(item); range && (clipFrame < range->first || clipFrame >= range->second)) return {};
     const std::int64_t n = link->fileFrame(clipFrame, item.editRate);
     // A mixed rate clip's adapter of a blending Type (model::adapterBlends) mixes the file frame with the
     // next one by how far the clip frame's time is between them ("Blended Interpolated", p.1215): the

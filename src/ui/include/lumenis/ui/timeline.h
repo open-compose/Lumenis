@@ -259,6 +259,10 @@ public:
     // Asked first when Delete (edit.delete) runs: true when it deleted something of its own (the Effect Editor's
     // selected tracking data points), so the Timeline does nothing more.
     void setDeleteHook(std::function<bool()> hook) { deleteHook_ = std::move(hook); }
+    // The Up and Down Arrow keys are Move Clip Up and Down (p.613) and Previous In Group and Next In Group (p.1131).
+    // Ours: with no segments selected, the hook is asked first with -1 (Up) or 1 (Down) and is true when it switched a
+    // group's angle; MainWindow's switches it on the active monitor when that shows a group clip.
+    void setGroupArrowHook(std::function<bool(int)> hook) { groupArrows_ = std::move(hook); }
     // Closed captions on D1 (7.4b; docs/spec/closed-captions.md): MainWindow gives the caption data of a segment's
     // clip (model::clipCaptionData of the clip it resolves).
     void setCaptionClipData(std::function<QByteArray(const model::Segment&)> clipData) {
@@ -574,6 +578,9 @@ public:
     // Timeline Clip Notes (p.483-486). setClipNote() gives `segments` of the record sequence `note`
     // (empty deletes it), as one undo step; false if none of them is material or nothing changed.
     bool setClipNote(const QList<model::SegmentRef>& segments, const QString& note);
+    // Previous In Group (-1) and Next In Group (1) on the group segment at the Record monitor's position (p.1131), an
+    // undo step; false (with a message) when there is none.
+    bool stepGroupAngle(int step);
     // Right-click > Add Timeline Clip Note: "The Timeline Clip Note dialog box opens. Type your notes
     // in the text box, and click OK" (p.483). On the selected segments, else on `segment`. The dialog
     // starts with the first one's note; tests answer it through setNoteAsk (nothing: Cancel).
@@ -1629,6 +1636,7 @@ private:
     bool syncing_ = false;
     SequenceStore store_;
     std::function<bool()> deleteHook_;
+    std::function<bool(int)> groupArrows_;
     std::function<QByteArray(const model::Segment&)> captionClipData_;
     mutable CaptionTrack captionCache_;
     FindOptions findOptions_;

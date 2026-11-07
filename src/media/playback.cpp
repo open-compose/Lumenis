@@ -6,6 +6,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
@@ -185,6 +186,11 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
     auto side = [alternatingPan](int trackNumber) { return alternatingPan ? sidePan(trackNumber) : 0; };
     std::vector<AudioPiece> out;
     const Rational rate = item.editRate;
+    // A group clip plays its selected angle (group_clip.h).
+    if (item.kind == model::BinItemKind::Group) {
+        const model::BinItem angle = model::groupAngleClip(item, -1);
+        return angle.kind == model::BinItemKind::Group ? out : audioPieces(angle, clips, monitored, alternatingPan);
+    }
     if (item.kind != model::BinItemKind::Sequence) {
         const auto link = linkOf(item);
         if (!link) return out;
@@ -552,6 +558,16 @@ std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offse
     if (piece.tone) {
         std::vector<float> out(static_cast<std::size_t>(std::max(count, 0)));
         renderTone(*piece.tone, piece.sourceStart + offset, count, kPlaybackRate, out.data());
+        return out;
+    }
+    // Before the media's first sample (a group's angle that starts after the group, group_clip.h): silence.
+    if (const std::int64_t start = piece.sourceStart + offset; start < 0 && count > 0) {
+        const int lead = static_cast<int>(std::min<std::int64_t>(-start, count));
+        std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
+        if (lead < count) {
+            const std::vector<float> rest = samples(piece, offset + lead, count - lead);
+            std::copy(rest.begin(), rest.end(), out.begin() + lead);
+        }
         return out;
     }
     AudioReader* r = reader(piece);

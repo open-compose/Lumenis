@@ -1,0 +1,201 @@
+// Group clips' model (Editing Guide p.1123-1131; docs/spec/multicamera.md): grouping by IN points, OUT points,
+// source timecode and Auxiliary TC, the group's name, length and tracks, an angle played as a clip of the group's
+// frames, edits from a group and the angle kept on segments.
+#include "lumenis/model/group_clip.h"
+#include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/sequence.h"
+
+#include <QJsonObject>
+#include <QTest>
+
+using namespace lumenis;
+using namespace lumenis::model;
+
+namespace {
+
+// A linked master clip of `frames` at 25 fps starting at timecode `start`.
+BinItem clip(const QString& id, std::int64_t frames, const QString& start = QStringLiteral("01:00:00:00"),
+             const QString& tracks = QStringLiteral("V1 A1-2")) {
+    BinItem item;
+    item.id = id;
+    item.name = id;
+    item.editRate = Rational(25);
+    item.durationFrames = frames;
+    item.fields.insert(QStringLiteral("Start"), start);
+    item.fields.insert(QStringLiteral("Tracks"), tracks);
+    item.link = QJsonObject{{QStringLiteral("path"), QStringLiteral("/media/%1.mov").arg(id)},
+                            {QStringLiteral("rate"), QStringLiteral("25/1")},
+                            {QStringLiteral("frames"), static_cast<qint64>(frames)},
+                            {QStringLiteral("videoStream"), 0}};
+    return item;
+}
+
+QList<std::pair<QString, BinItem>> inBin(const QList<BinItem>& items) {
+    QList<std::pair<QString, BinItem>> out;
+    for (const BinItem& i : items) out.append({QStringLiteral("bin"), i});
+    return out;
+}
+
+} // namespace
+
+class TestGroupClip : public QObject {
+    Q_OBJECT
+
+private slots:
+    // "mark an IN point at the sync point at the start of each clip" (p.1124): the clips line up on their IN points,
+    // and the group covers them all.
+    void groupsByInPoints() {
+        Bin bin;
+        const BinItem a = clip(QStringLiteral("A"), 100);
+        const BinItem b = clip(QStringLiteral("B"), 80);
+        GroupOptions options;
+        options.sync = GroupSync::Inpoints;
+        options.marks = [](const BinItem& c, bool in) -> std::optional<std::int64_t> {
+            if (!in) return std::nullopt;
+            return c.id == QLatin1String("A") ? 30 : 10;
+        };
+        QString error;
+        const auto group = groupClips(bin, inBin({a, b}), options, &error);
+        QVERIFY2(group, qPrintable(error));
+        QCOMPARE(group->kind, BinItemKind::Group);
+        // "the name of the first clip in the group, followed by the file name extension Grp.n" (p.1124).
+        QCOMPARE(group->name, QStringLiteral("A.Grp.1"));
+        // A from -30 to 70 about the sync point, B from -10 to 70: the group from -30 to 70.
+        QCOMPARE(group->durationFrames, std::int64_t(100));
+        const auto g = groupOf(*group);
+        QVERIFY(g);
+        QCOMPARE(g->angles.size(), qsizetype(2));
+        QCOMPARE(g->angles[0].offset, std::int64_t(0));
+        QCOMPARE(g->angles[1].offset, std::int64_t(-20));
+        QCOMPARE(g->selected, 0);
+        QCOMPARE(sourceTracksOf(*group), (QStringList{"V1", "A1", "A2"}));
+        QCOMPARE(group->fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00:00"));
+        // The next group of the same name counts on.
+        bin.items << *group;
+        QCOMPARE(groupName(bin, QStringLiteral("A")), QStringLiteral("A.Grp.2"));
+    }
+
+    void groupsByOutPointsAndTheBinsMarks() {
+        Bin bin;
+        BinItem a = clip(QStringLiteral("A"), 50);
+        BinItem b = clip(QStringLiteral("B"), 50);
+        // The bin's Mark OUT columns when the clips were not marked in the Source monitor.
+        a.fields.insert(QStringLiteral("Mark OUT"), QStringLiteral("01:00:01:15")); // frame 40
+        b.fields.insert(QStringLiteral("Mark OUT"), QStringLiteral("01:00:01:05")); // frame 30
+        GroupOptions options;
+        options.sync = GroupSync::Outpoints;
+        const auto group = groupClips(bin, inBin({a, b}), options);
+        QVERIFY(group);
+        const auto g = groupOf(*group);
+        QCOMPARE(g->angles[0].offset, std::int64_t(0));
+        QCOMPARE(g->angles[1].offset, std::int64_t(-10));
+        QCOMPARE(group->durationFrames, std::int64_t(60));
+    }
+
+    void groupsByTimecode() {
+        Bin bin;
+        const BinItem a = clip(QStringLiteral("A"), 100, QStringLiteral("10:00:00:00"));
+        const BinItem b = clip(QStringLiteral("B"), 100, QStringLiteral("10:00:02:00")); // 50 frames later
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        const auto group = groupClips(bin, inBin({a, b}), options);
+        QVERIFY(group);
+        const auto g = groupOf(*group);
+        QCOMPARE(g->angles[0].offset, std::int64_t(0));
+        QCOMPARE(g->angles[1].offset, std::int64_t(-50));
+        QCOMPARE(group->durationFrames, std::int64_t(150));
+        // Auxiliary TC2.
+        BinItem c = a;
+        BinItem d = b;
+        c.fields.insert(QStringLiteral("Auxiliary TC2"), QStringLiteral("00:00:10:00"));
+        d.fields.insert(QStringLiteral("Auxiliary TC2"), QStringLiteral("00:00:09:00")); // 25 frames earlier
+        options.sync = GroupSync::AuxTimecode;
+        options.auxTc = 2;
+        const auto aux = groupClips(bin, inBin({c, d}), options);
+        QVERIFY(aux);
+        QCOMPARE(groupOf(*aux)->angles[0].offset, std::int64_t(-25));
+        QCOMPARE(groupOf(*aux)->angles[1].offset, std::int64_t(0));
+    }
+
+    void refusesWhatCannotBeGrouped() {
+        Bin bin;
+        const BinItem a = clip(QStringLiteral("A"), 100);
+        QString error;
+        GroupOptions options;
+        options.sync = GroupSync::Inpoints;
+        // One clip.
+        QVERIFY(!groupClips(bin, inBin({a}), options, &error));
+        QVERIFY(!error.isEmpty());
+        // No IN point.
+        QVERIFY(!groupClips(bin, inBin({a, clip(QStringLiteral("B"), 10)}), options, &error));
+        QVERIFY(error.contains(QLatin1String("IN point")));
+        // Another frame rate.
+        BinItem other = clip(QStringLiteral("B"), 10);
+        other.editRate = Rational(30);
+        options.sync = GroupSync::SourceTimecode;
+        QVERIFY(!groupClips(bin, inBin({a, other}), options, &error));
+        // Not built: waveform analysis.
+        options.sync = GroupSync::Waveform;
+        QVERIFY(!groupClips(bin, inBin({a, clip(QStringLiteral("B"), 10)}), options, &error));
+    }
+
+    // An angle plays as a clip of the group's frames: its link starts later or earlier by the offset, and frames
+    // where it has no material are outside its range.
+    void playsAnAngleAtTheGroupsFrames() {
+        Bin bin;
+        const BinItem a = clip(QStringLiteral("A"), 100, QStringLiteral("10:00:00:00"));
+        const BinItem b = clip(QStringLiteral("B"), 100, QStringLiteral("10:00:02:00"));
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        BinItem group = *groupClips(bin, inBin({a, b}), options);
+        const BinItem angleB = groupAngleClip(group, 1);
+        QCOMPARE(angleB.id, QStringLiteral("B"));
+        QCOMPARE(angleB.durationFrames, std::int64_t(150));
+        QCOMPARE(angleB.link.value(QStringLiteral("first")).toInteger(), qint64(-50));
+        QCOMPARE(groupAngleRange(angleB), (std::optional<std::pair<std::int64_t, std::int64_t>>{{50, 150}}));
+        QCOMPARE(groupAngleRange(groupAngleClip(group, 0)), (std::optional<std::pair<std::int64_t, std::int64_t>>{{0, 100}}));
+        QVERIFY(!groupAngleRange(a));
+        // Out of range: the selected angle.
+        auto g = *groupOf(group);
+        g.selected = 1;
+        setGroup(group, g);
+        QCOMPARE(groupAngleClip(group, 7).id, QStringLiteral("B"));
+        QCOMPARE(groupAngleClip(group, -1).id, QStringLiteral("B"));
+        // "cycle through all the clips" (p.1131).
+        QCOMPARE(stepAngle(1, 1, 2), 0);
+        QCOMPARE(stepAngle(0, -1, 2), 1);
+        QCOMPARE(stepAngle(2, -1, 9), 1);
+    }
+
+    // Segments from a group show its selected angle under the angle's name, keep it in the bin and play it.
+    void editsKeepTheAngle() {
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        BinItem group = *groupClips(bin, inBin({clip(QStringLiteral("A"), 100), clip(QStringLiteral("B"), 100)}), options);
+        auto g = *groupOf(group);
+        g.selected = 1;
+        setGroup(group, g);
+        Sequence s = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(group));
+        applyEdit(s, EditKind::Overwrite, EditPlan{10, 0, 20, {}}, QStringLiteral("bin"), group, p);
+        const Segment& v = s.track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(v.clipId, group.id);
+        QCOMPARE(v.groupAngle, std::optional<int>(1));
+        QCOMPARE(v.name, QStringLiteral("B"));
+        QCOMPARE(clipForSegment(group, v).id, QStringLiteral("B"));
+        // Kept with the sequence.
+        const Sequence back = Sequence::fromJson(s.toJson());
+        QCOMPARE(back.track(QStringLiteral("V1"))->segments.first().groupAngle, std::optional<int>(1));
+        QCOMPARE(back.track(QStringLiteral("A1"))->segments.first().groupAngle, std::optional<int>(1));
+        // And the group in its bin item.
+        const auto again = binItemFromJson(binItemToJson(group));
+        QVERIFY(again);
+        QCOMPARE(groupOf(*again)->selected, 1);
+        QCOMPARE(groupOf(*again)->angles[1].clip.name, QStringLiteral("B"));
+    }
+};
+
+QTEST_GUILESS_MAIN(TestGroupClip)
+#include "tst_group_clip.moc"

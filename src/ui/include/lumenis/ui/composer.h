@@ -180,6 +180,15 @@ public:
     std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const {
         return phantoms_ ? phantoms_(monitor) : std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>{};
     }
+    // MultiCamera displays (8.1a; Editing Guide p.1126-1129): a group clip in the Source monitor shows its selected
+    // angle full size (Full-Monitor display, split 1) or the angles of bank groupBank() in Quad Split (4) or Nine Split
+    // (9) Source view; MainWindow's picture resolver draws them. The Quad Split and Nine Split buttons "switch the Source
+    // monitor between Full-Monitor display and" their view; Swap Cam Bank steps to the next bank, back to the first
+    // after the last.
+    int groupSplit() const { return groupSplit_; }
+    void setGroupSplit(int split);
+    int groupBank() const { return groupBank_; }
+    void swapCamBank();
     // Repaints the monitors and position bars, after a setting they show changed.
     void refreshDisplay() { refresh(); }
     // Puts a clip that is in no bin (loaded from the Source Browser) into
@@ -756,6 +765,8 @@ private:
     PhantomResolver phantoms_;
     CaptionResolver captions_;
     bool showCaptions_[2] = {false, false}; // Source, Record
+    int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
+    int groupBank_ = 0;
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;

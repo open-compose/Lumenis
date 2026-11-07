@@ -41,7 +41,9 @@
        "cc.bucket_7", "cc.bucket_8"],
       ["cc.update_correction", "cc.merge_correction", "cc.flatten_correction", "cc.remove_correction"]
     ]},
-    {"name": "MCam", "page": 96, "columns": []},
+    {"name": "MCam", "page": 96, "columns": [
+      ["mcam.quad_split", "mcam.nine_split", "mcam.swap_cam_bank", "mcam.previous_in_group", "mcam.next_in_group"]
+    ]},
     {"name": "Tracks", "page": 96, "columns": [
       ["timeline.enlarge_waveform", "timeline.reduce_waveform"]
     ]},

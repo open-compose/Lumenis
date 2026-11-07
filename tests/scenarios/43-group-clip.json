@@ -1,0 +1,22 @@
+[
+  {
+    "name": "a group clip edits in at its selected angle on every track; Previous In Group switches only the picture at the position",
+    "guide": "p.1124, p.1131",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "G", "group": ["A", "B"], "offsets": [0, -10], "selected": 1}],
+    "sequence": {"tracks": {"V1": [["A", 0, 10]], "A1": [["A", 0, 10]], "A2": [["A", 0, 10]]}},
+    "steps": [
+      {"load": "source", "clip": "G"},
+      {"mark": "source", "in": 20, "out": 39},
+      {"position": "record", "frame": 10},
+      {"command": "edit.splice_in"},
+      {"position": "record", "frame": 15},
+      {"group_step": -1},
+      {"position": "record", "frame": 5},
+      {"group_step": 1, "refused": true}
+    ],
+    "expect": {
+      "V1": [["A", 0, 10], ["A", 20, 20, {"angle": 0}]],
+      "A1": [["A", 0, 10], ["B", 20, 20, {"angle": 1}]],
+      "A2": [["A", 0, 10], ["B", 20, 20, {"angle": 1}]]}
+  }
+]

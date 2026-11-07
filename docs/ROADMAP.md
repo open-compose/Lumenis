@@ -1401,9 +1401,12 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
   Folders/background services, FrameFlex, stereoscopic, Symphony-level colour,
   and multi-user bin locking.
 * In steps (planned 2026-11-07, from the Editing Guide's chapters):
-  * 8.1, MultiCamera Editing (ch.32, p.1123-1136). 8.1a, group clips: Create Group by Source Timecode, Film, IN
-    points, OUT points or Auxiliary TC1-5 (p.1123-1125), Waveform Sync (p.1126), the group in the Source monitor with
-    its quad, nine- and sixteen-split displays (p.1126-1130). 8.1b, MultiCamera mode: switching angles while playing
+  * 8.1, MultiCamera Editing (ch.32, p.1123-1136). 8.1a, group clips, in two parts. 8.1a1 (done,
+    docs/spec/multicamera.md): Group Clips by IN points, OUT points, Source Timecode or Auxiliary TC1-5 (p.1123-1125),
+    the group in the Source monitor full size and in Quad and Nine Split views with Swap Cam Bank (p.1126-1129),
+    groups edited into sequences with "(G)", Previous In Group and Next In Group in both monitors (p.1131). 8.1a2:
+    Waveform Sync and Waveform Analysis grouping (p.1124, p.1126), Edit Group, Update Group, Create Group from a
+    sequence and Refresh Sequence > Group Edits (p.1125-1126). 8.1b, MultiCamera mode: switching angles while playing
     (arrow keys, numeric keypad, mouse, p.1131), the linecut and Add Edit (p.1132), the Group menu and Multi-angle
     View menus (p.1133-1134), Match Frame (p.1134), multigroups (p.1125). 8.1c, Change Source Track for groups
     (2026.8 guide p.507), stereoscopic groups (p.1124) and Auto Cut from transcript speakers (after 8.2).

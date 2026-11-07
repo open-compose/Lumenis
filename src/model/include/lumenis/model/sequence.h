@@ -266,6 +266,9 @@ struct Segment {
     // Add Timeline Clip Note (p.483): the segment's note, empty for none. A segment cut in two keeps
     // it on both parts.
     QString note;
+    // On a segment edited from a group clip (lumenis/model/group_clip.h): the camera angle it shows, an
+    // index into the group's angles. Previous In Group and Next In Group change it (Editing Guide p.1131).
+    std::optional<int> groupAngle;
     // Its Motion Adapter, on video and audio segments from a mixed rate clip. None for a clip at the
     // sequence's rate, and for segments edited before adapters (6.5d2), which count the clip's own
     // frames. Not an effect: Remove Effect leaves it (p.469).

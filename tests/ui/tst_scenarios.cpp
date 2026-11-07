@@ -12,6 +12,7 @@
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/pan_scan.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/surround_pan.h"
@@ -195,6 +196,26 @@ struct Run {
                     t.pages = 2;
                 }
                 model::reviseClassicTitleClip(i, t, {}, QDateTime::currentDateTimeUtc());
+            }
+            // "group": a group clip of the clips named, synced by "offsets" (group frame g is frame g + offset of each),
+            // showing angle "selected" (Editing Guide p.1124; group_clip.h).
+            if (o.contains(QStringLiteral("group"))) {
+                i.kind = BinItemKind::Group;
+                model::GroupClip g;
+                const QJsonArray names = o.value(QStringLiteral("group")).toArray();
+                const QJsonArray offsets = o.value(QStringLiteral("offsets")).toArray();
+                for (int k = 0; k < names.size(); ++k) {
+                    if (!clips.contains(names[k].toString())) return fail(QStringLiteral("no clip %1 to group").arg(names[k].toString()));
+                    model::GroupAngle a;
+                    a.binId = QStringLiteral("bin");
+                    a.clip = clips.value(names[k].toString());
+                    a.clipId = a.clip.id;
+                    a.offset = offsets.at(k).toInteger();
+                    g.angles << a;
+                }
+                g.selected = o.value(QStringLiteral("selected")).toInt();
+                model::setGroup(i, g);
+                i.fields.insert(QStringLiteral("Tracks"), model::groupTracks(g).join(QLatin1Char(' ')));
             }
             clips.insert(i.name, i);
             items.insert(i.id, i);
@@ -742,6 +763,12 @@ struct Run {
             }
             return true;
         }
+        // Previous In Group (-1) or Next In Group (1) on the Record monitor's group segment (p.1131).
+        if (o.contains(QStringLiteral("group_step"))) {
+            const bool ok = timeline.stepGroupAngle(o.value(QStringLiteral("group_step")).toInt());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) return fail(QStringLiteral("group_step: %1").arg(timeline.lastMessage()));
+            return true;
+        }
         if (o.contains(QStringLiteral("command"))) {
             const QString id = o.value(QStringLiteral("command")).toString();
             // The Timeline's perform() is true for every command it handles; a refused edit leaves
@@ -807,6 +834,8 @@ struct Run {
                         extra.insert(QLatin1String(name), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
+                    // A group clip's segment: the angle it shows (group_clip.h).
+                    if (g.groupAngle) extra.insert(QStringLiteral("angle"), *g.groupAngle);
                     // Nested effects (FX Guide p.221), outermost first, at the segment's first frame.
                     if (g.hasNest()) {
                         QJsonArray names;

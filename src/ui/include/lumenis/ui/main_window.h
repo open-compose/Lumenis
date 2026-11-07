@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/closed_captions.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
@@ -540,6 +541,12 @@ public:
     int applyClipGain();
     int centerPan();
     int autoVo();
+    // Clip > Group Clips (8.1a; p.1124): the new group's id, nothing when none was made. The hook stands in for the
+    // dialog in tests: the option and Auxiliary TC chosen, or nothing for Cancel.
+    std::optional<QString> groupClips();
+    void setGroupClipsHook(std::function<std::optional<std::pair<model::GroupSync, int>>()> hook) { groupClipsHook_ = std::move(hook); }
+    // Previous In Group (-1) and Next In Group (1) on the active monitor (p.1131); false when nothing changed.
+    bool stepInGroup(int step);
     // Read Audio Timecode (p.668-669): the selected master clips' and subclips' LTC on the chosen
     // track, into the chosen Auxiliary TC column (media::ltc::readClipTimecode); other items are
     // ignored with a message.
@@ -897,6 +904,8 @@ private:
     // An unrendered motion effect clip's frame as its source clip and that clip's frame
     // (model::motionEffectOf); nothing for other clips.
     std::optional<std::pair<model::BinItem, std::int64_t>> followMotion(const model::BinItem& clip, std::int64_t frame) const;
+    // The Source monitor's Quad Split or Nine Split picture of a group clip at group frame `at` (p.1127-1128).
+    QImage groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline) const;
     // An unrendered motion effect clip's frame `frame` made from its interlaced source clip's fields with the
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
@@ -950,6 +959,7 @@ private:
     QString currentBinLayout_;
     QList<QAction*> binLayoutActions_;
     std::function<bool(ModifyDialog&)> modifyHook_;
+    std::function<std::optional<std::pair<model::GroupSync, int>>()> groupClipsHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;

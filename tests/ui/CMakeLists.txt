@@ -98,6 +98,8 @@ lumenis_add_test(tst_send_to SOURCES tst_send_to.cpp LIBS ${ui_test_libs} lumeni
 # Render Effect and Clear Renders in the application (docs/spec/rendering.md).
 lumenis_add_test(tst_render_ui SOURCES tst_render_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_motion_effect_ui SOURCES tst_motion_effect_ui.cpp LIBS ${ui_test_libs} lumenis::media)
+# Group clips and the MultiCamera displays (Editing Guide p.1123-1131).
+lumenis_add_test(tst_multicam_ui SOURCES tst_multicam_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_motion_adapter_ui SOURCES tst_motion_adapter_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_nest_ui SOURCES tst_nest_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_effect_template_ui SOURCES tst_effect_template_ui.cpp LIBS ${ui_test_libs} lumenis::media)

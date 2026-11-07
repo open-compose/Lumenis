@@ -13,6 +13,7 @@
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/subcap.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/nest.h"
@@ -3369,7 +3370,8 @@ bool Timeline::perform(const QString& id) {
     } else if (id == QLatin1String("edit.sync_lock_all_tracks")) {
         toggleSyncLockAll();
     } else if (id == QLatin1String("edit.move_clip_up") || id == QLatin1String("edit.move_clip_down")) {
-        moveClips(id == QLatin1String("edit.move_clip_up") ? 1 : -1);
+        const bool up = id == QLatin1String("edit.move_clip_up");
+        if (!selection_.isEmpty() || !groupArrows_ || !groupArrows_(up ? -1 : 1)) moveClips(up ? 1 : -1);
     } else if (id == QLatin1String("fx.add_keyframe")) {
         addKeyframe();
     } else if (id == QLatin1String("edit.paste_audio_keyframes")) {
@@ -7243,6 +7245,46 @@ bool Timeline::createSequenceFromSelection() {
     return true;
 }
 
+// Next In Group / Previous In Group in the Record monitor (p.1131): "you can place the position indicator within any
+// segment and use the arrow keys to switch the group clip selected for that segment". The segment is the group segment
+// at the position on the highest selected video track, else on the highest video track with one (ours). Only picture
+// switches: Audio Follow Video comes with the Group menu (8.1b).
+bool Timeline::stepGroupAngle(int step) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    model::Segment* found = nullptr;
+    std::optional<model::GroupClip> group;
+    // Video tracks, highest first (names taken first: seq.track() may detach the list).
+    QStringList video;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Video) video.prepend(t.name());
+    }
+    for (const bool selectedOnly : {true, false}) {
+        for (const QString& name : video) {
+            if (found || (selectedOnly && !patch_.isRecordSelected(name))) continue;
+            model::Track* t = seq.track(name);
+            const int i = t->segmentAt(pos);
+            if (i < 0 || !t->segments[i].groupAngle) continue;
+            const auto clip = composer_.resolve(t->segments[i].binId, t->segments[i].clipId);
+            group = clip ? model::groupOf(*clip) : std::nullopt;
+            if (group && !group->angles.isEmpty()) found = &t->segments[i];
+        }
+        if (found) break;
+    }
+    if (!found) return fail(tr("There is no group clip under the position indicator."));
+    const int angle = model::stepAngle(*found->groupAngle, step, static_cast<int>(group->angles.size()));
+    found->groupAngle = angle;
+    found->name = group->angles[angle].clip.name;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(step < 0 ? tr("Previous In Group") : tr("Next In Group"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
 bool Timeline::setClipNote(const QList<model::SegmentRef>& segments, const QString& note) {
     message_.clear();
     const model::LoadedClip* rec = recordSequence();
@@ -7824,7 +7866,11 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
     // (p.470): on video tracks (ours: the guide's picture shows a video track).
     if (d.clipNames) {
         const bool mixed = s.adapter && track.kind == model::TrackKind::Video && !(s.adapter->clipRate == s.adapter->sequenceRate);
-        parts << (mixed ? model::mixedRateName(s.name, s.adapter->clipRate) : s.name);
+        QString name = mixed ? model::mixedRateName(s.name, s.adapter->clipRate) : s.name;
+        // "Media Composer uses the name of the clip within the group to identify the clip in each cut, and adds a G
+        // in parentheses to indicate the group" (p.1131).
+        if (s.groupAngle) name += QStringLiteral(" (G)");
+        parts << name;
     }
     if (d.clipTracks) parts << s.sourceTrack;
     if (d.clipDurations) parts << state.durationText(s.length);

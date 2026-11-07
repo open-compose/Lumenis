@@ -74,7 +74,8 @@ BinItem adaptedClip(const BinItem& clip, const MotionAdapter& adapter);
 // The adapter an adapted copy carries; nothing for any other item.
 std::optional<MotionAdapter> adapterOf(const BinItem& item);
 bool isAdapted(const BinItem& item);
-// The clip to play a segment from: its adapted copy when the segment has an adapter, else `clip`.
+// The clip to play a segment from: a group clip's angle (groupAngleClip, group_clip.h), its adapted copy when the
+// segment has an adapter, else `clip`.
 BinItem clipForSegment(const BinItem& clip, const Segment& segment);
 // The clip an adapted copy came from, with the changes made to the copy (its markers, name, columns) in
 // its own frames: `original` (the clip in the bin) gives back the duration and timecode the conversion

@@ -823,7 +823,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   As DCP, `src/media/dcp.*` with asdcplib's asdcp-wrap found like bmxtranswrap, `LUMENIS_ASDCP_WRAP`; tests `tst_dcp`,
   `tst_movie_export_ui exportDcp`), is done. 7.6, the Titler+ Dashboard and Effect Editor laid out as the FX Guide's
   pictures (p.302, p.321; `TitlerPanel`, `GlyphIcon`s in theme.h; test `tst_main_window toolWindowsFitTheScreen`,
-  `LUMENIS_SHOT_DIR` for pictures), is done. Phase 7 is done but 7.3c (hardware modules); next is Phase 8. After Phase 7, before Phase 8: 7.6, the owner's report
+  `LUMENIS_SHOT_DIR` for pictures), is done. Phase 7 is done but 7.3c (hardware modules). Phase 8 has started (steps in ROADMAP).
+  8.1a1, group clips (docs/spec/multicamera.md: `src/model/group_clip.*` with each angle's clip kept in the group,
+  `Segment::groupAngle` played through `model::clipForSegment`; Group Clips with `group_clips_dialog.*` and
+  `MainWindow::groupClips`; Quad and Nine Split through `Composer::setGroupSplit` and `MainWindow::groupSplitImage`;
+  Previous/Next In Group with `MainWindow::stepInGroup`, `Timeline::stepGroupAngle` and the arrow keys' hook; tests
+  `tst_group_clip`, `tst_multicam_ui`, scenario `43-group-clip.json`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

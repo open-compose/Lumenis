@@ -601,6 +601,15 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * locked tracks refuse insert changes;
   * a double-click in the Effect Palette inserts an Audio Track effect;
   * an effect's tail in filler keeps the last piece's pan.
+* Group clips (docs/spec/multicamera.md):
+  * the group covering every clip once synced;
+  * its timecode (the first clip's) and tracks (V1 and the most audio tracks);
+  * Source monitor marks before the bin's Mark IN and Mark OUT for Inpoints and Outpoints;
+  * Inpoints chosen when the dialog opens;
+  * angles kept as copies of their clips;
+  * the yellow outline on the selected angle in the split views;
+  * which Record monitor segment Previous/Next In Group switches, and only its picture;
+  * the Up and Down Arrow keys switching angles only with no segments selected.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -981,7 +990,7 @@ Not yet built:
   * Closing the Command Palette in Menu to Button mode returns to Button
     to Button mode.
 * **Not yet.**
-  * The FX, 3D, CC, MCam, Tracks, Workspaces (1.6) and Plug-ins tabs.
+  * The 3D, Workspaces (1.6) and Plug-ins tabs; the MCam tab past Quad Split, Nine Split, Swap Cam Bank and Previous/Next In Group (8.1b).
   * The modifier key buttons, and mapping onto the Keyboard palette (1.6).
   * What's This? help.
   * Named Tool Palettes in the Tools menu.
@@ -1078,7 +1087,7 @@ English layout:
 | V / B | Splice-in / Overwrite | p.624 |
 | E / R / T | Mark IN / Mark OUT / Mark Clip (the T-E-X and T-R-X sequences) | p.639 |
 | X | Extract | p.639 |
-| Up / Down | Move Clip Up / Move Clip Down | p.613 |
+| Up / Down | Move Clip Up / Move Clip Down; Previous In Group / Next In Group when a group clip is shown and no segment is selected | p.613, p.1131 |
 | Ctrl+X | Cut (Ctrl+C, Ctrl+V: Copy, Paste) | p.622 |
 | U / A / S | Nearest / previous / next transition, both sides (Trim mode) | p.651 |
 

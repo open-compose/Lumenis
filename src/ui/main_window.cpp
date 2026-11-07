@@ -37,6 +37,7 @@
 #include "lumenis/model/subcap.h"
 #include "lumenis/model/export_volume.h"
 #include "lumenis/model/bin_relations.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
@@ -81,6 +82,7 @@
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/group_clips_dialog.h"
 #include "lumenis/ui/digital_cut_tool.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_volume_dialog.h"
@@ -135,6 +137,7 @@
 #include <QMimeData>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
@@ -751,6 +754,10 @@ void MainWindow::createPanels() {
             return image;
         }
         if (const model::LoadedClip* loaded = state.current()) {
+            // A group clip in Quad Split or Nine Split Source view (p.1127-1128).
+            if (monitor == MonitorId::Source && loaded->item.kind == model::BinItemKind::Group && composer_->groupSplit() > 1) {
+                return groupSplitImage(loaded->item, at, size, offline);
+            }
             if (auto field = motionFieldFrame(loaded->item, at, size)) return *field;
         }
         const auto shown = frameAt(monitor, at);
@@ -2226,12 +2233,113 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
         if (!clip) return std::nullopt;
         item = *clip;
         frame = match->frame;
+        // A group clip's segment shows its angle (group_clip.h).
+        if (item.kind == model::BinItemKind::Group) item = model::groupAngleClip(item, match->segment.groupAngle.value_or(-1));
     } else if (frame >= item.durationFrames) {
         return std::nullopt;
+    } else if (item.kind == model::BinItemKind::Group) {
+        // A group clip shows its selected angle (Full-Monitor display, p.1127).
+        item = model::groupAngleClip(item, -1);
     }
     if (auto source = followMotion(item, frame)) return source;
     if (!media::isLinked(item)) return std::nullopt;
     return std::make_pair(item, frame);
+}
+
+// The angles of the shown bank in rows of two or three, the selected one outlined (ours: the guide's pictures show
+// the split without saying how the selected angle is marked). Angles past the group's last are black.
+QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline) const {
+    const auto g = model::groupOf(group);
+    if (!g || size.isEmpty()) return {};
+    const int split = composer_->groupSplit();
+    const int side = split == 9 ? 3 : 2;
+    QImage out(size, QImage::Format_RGB32);
+    out.fill(Qt::black);
+    QPainter p(&out);
+    const QSize cell(size.width() / side, size.height() / side);
+    bool anyOffline = false;
+    for (int k = 0; k < split; ++k) {
+        const int angle = composer_->groupBank() * split + k;
+        if (angle >= g->angles.size()) break;
+        const QRect r((k % side) * cell.width(), (k / side) * cell.height(), cell.width(), cell.height());
+        const model::BinItem clip = model::groupAngleClip(group, angle);
+        if (media::isLinked(clip)) {
+            if (frames_->isOffline(clip)) {
+                anyOffline = true;
+            } else if (const QImage frame = frames_->frame(clip, at, cell); !frame.isNull()) {
+                const QSize fitted = frame.size().scaled(cell, Qt::KeepAspectRatio);
+                p.drawImage(QRect(r.topLeft() + QPoint((cell.width() - fitted.width()) / 2, (cell.height() - fitted.height()) / 2), fitted),
+                            frame);
+            }
+        }
+        if (angle == g->selected) {
+            p.setPen(QPen(QColor(255, 210, 0), 3));
+            p.drawRect(r.adjusted(1, 1, -2, -2));
+        }
+    }
+    if (anyOffline && offline) *offline = true;
+    return out;
+}
+
+// Previous In Group and Next In Group (p.1131): "The angle selection switches in either the Source monitor (source
+// material) or in the Record monitor (sequence material), whichever is active." In the Source monitor the group's
+// selected angle changes, in its bin too ("you also switch the frame representing the group in the bin"); in the
+// Record monitor the group segment at the position does.
+bool MainWindow::stepInGroup(int step) {
+    if (composer_->activeMonitor() == MonitorId::Record) return timeline_ && timeline_->stepGroupAngle(step);
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (!loaded) return false;
+    auto group = model::groupOf(loaded->item);
+    if (!group || group->angles.isEmpty()) return false;
+    group->selected = model::stepAngle(group->selected, step, static_cast<int>(group->angles.size()));
+    model::BinItem item = loaded->item;
+    model::setGroup(item, *group);
+    storeClip(loaded->binId, item);
+    composer_->refreshDisplay();
+    return true;
+}
+
+// Clip > Group Clips (p.1124): the bin's selected clips, in the bin's order, synced by the dialog's option; the IN
+// and OUT points are the Source monitor's marks of each clip where it has been loaded (ours), else the bin's Mark IN
+// and Mark OUT. The group goes into the same bin, selected.
+std::optional<QString> MainWindow::groupClips() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return std::nullopt;
+    const QString binId = view->document().nodeId();
+    QList<std::pair<QString, model::BinItem>> clips;
+    for (const model::BinItem& item : view->document().bin().items) {
+        if (view->selectedIds().contains(item.id)) clips.append({binId, item});
+    }
+    if (clips.isEmpty()) return std::nullopt;
+    model::GroupOptions options;
+    options.when = QDateTime::currentDateTimeUtc();
+    if (groupClipsHook_) {
+        const auto chosen = groupClipsHook_();
+        if (!chosen) return std::nullopt;
+        options.sync = chosen->first;
+        options.auxTc = chosen->second;
+    } else {
+        const int fps = project_ ? TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps : 30;
+        GroupClipsDialog dialog(fps == 24 || fps == 25, this);
+        if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+        options.sync = dialog.sync();
+        options.auxTc = dialog.auxTc();
+    }
+    options.marks = [this](const model::BinItem& clip, bool in) -> std::optional<std::int64_t> {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Source).loaded(clip.id);
+        if (!loaded) return std::nullopt;
+        return in ? loaded->in : loaded->out;
+    };
+    QString error;
+    const auto group = model::groupClips(view->document().bin(), clips, options, &error);
+    if (!group) {
+        ConsoleLog::instance().append(tr("Group Clips: %1").arg(error));
+        if (!groupClipsHook_) QMessageBox::warning(this, tr("Group Clips"), error);
+        return std::nullopt;
+    }
+    view->document().addItem(*group);
+    view->selectIds({group->id});
+    return group->id;
 }
 
 std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::followMotion(const model::BinItem& clip,
@@ -5620,10 +5728,11 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
             if (it == clips->cend()) return QImage();
             clipFrame = std::clamp<std::int64_t>(motion->sourceFrame(clipFrame), 0, std::max<std::int64_t>(it->durationFrames - 1, 0));
         }
-        if (!media::isLinked(*it)) return QImage();
-        if (!cache->isOnline(*it)) return std::nullopt;
-        // A mixed rate clip at the sequence's rate (motion_adapter.h).
-        return cache->frame(model::clipForSegment(*it, segment), clipFrame, want);
+        // A group clip's angle, a mixed rate clip at the sequence's rate (motion_adapter.h).
+        const model::BinItem clip = model::clipForSegment(*it, segment);
+        if (!media::isLinked(clip)) return QImage();
+        if (!cache->isOnline(clip)) return std::nullopt;
+        return cache->frame(clip, clipFrame, want);
     };
     c.burnIn.sequence = loaded.item;
     c.burnIn.markIn = loaded.in;
@@ -7504,6 +7613,18 @@ void MainWindow::installPanelHandlers() {
     handle("clip.audio.apply_gain", [this] { applyClipGain(); });
     handle("clip.audio.center_pan", [this] { centerPan(); });
     handle("clip.auto_vo", [this] { autoVo(); });
+    // MultiCamera (8.1a; p.1123-1131).
+    handle("clip.group_clips", [this] { groupClips(); });
+    timeline_->setGroupArrowHook([this](int step) {
+        const model::LoadedClip* source = composer_->state(MonitorId::Source).current();
+        if (composer_->activeMonitor() == MonitorId::Source && !(source && model::isGroupClip(source->item))) return false;
+        return stepInGroup(step);
+    });
+    handle("mcam.previous_in_group", [this] { stepInGroup(-1); });
+    handle("mcam.next_in_group", [this] { stepInGroup(1); });
+    handle("mcam.quad_split", [this] { composer_->setGroupSplit(4); });
+    handle("mcam.nine_split", [this] { composer_->setGroupSplit(9); });
+    handle("mcam.swap_cam_bank", [this] { composer_->swapCamBank(); });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
