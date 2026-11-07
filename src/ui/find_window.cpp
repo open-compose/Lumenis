@@ -17,10 +17,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QStandardItemModel>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -28,7 +32,8 @@
 // The Find window (find_window.h; Editing Guide p.417, p.428-431). Bins are read as they are now: an
 // open bin from its document, a closed one from its file, so nothing needs indexing first (ours; the
 // guide's Bin Index light is always full). The Timeline and Monitors tab reads the Record monitor's
-// sequence; the Clip Text the Timeline shows comes from Timeline::clipText.
+// sequence; the Clip Text the Timeline shows comes from Timeline::clipText. PhraseFind AI (8.2c) searches the
+// transcripts of the bins' clips through model::findPhrase.
 
 namespace lumenis::ui {
 
@@ -38,7 +43,8 @@ namespace {
 struct Result {
     QString binId;
     model::BinItem item;
-    std::int64_t frame = -1; // markers and Timeline results: where the position goes
+    std::int64_t frame = -1; // markers, Timeline and PhraseFind results: where the position goes
+    bool phrase = false;     // a PhraseFind hit: the IN mark goes at `frame` too
 };
 
 } // namespace
@@ -68,13 +74,52 @@ FindWindow::FindWindow(BinContainer& bins, Composer& composer, Timeline& timelin
     }
     // Script Text waits for scripts (ScriptSync, Phase 9).
     tabs_->setTabEnabled(ScriptTab, false);
-    // The Bin Index status (p.429): ours, always indexed.
+    // The Bin Index status (p.429): ours, always indexed. The PhraseFind AI Index (p.437, p.441) beside it, and the
+    // Settings button (p.441).
     auto* status = new QHBoxLayout;
     auto* index = new QLabel(tr("Bin Index: ready"), this);
     index->setObjectName(QStringLiteral("binIndex"));
     status->addWidget(index);
+    status->addWidget(new QLabel(tr("PhraseFind AI Index"), this));
+    phraseIndex_ = new QProgressBar(this);
+    phraseIndex_->setObjectName(QStringLiteral("phraseIndex"));
+    phraseIndex_->setTextVisible(false);
+    phraseIndex_->setFixedWidth(120);
+    phraseIndex_->setRange(0, 1);
+    phraseIndex_->setValue(1);
+    // Green as the guide's status.
+    QPalette green = phraseIndex_->palette();
+    green.setColor(QPalette::Highlight, QColor(0x3c, 0xa0, 0x46));
+    phraseIndex_->setPalette(green);
+    status->addWidget(phraseIndex_);
+    found_ = new QLabel(this);
+    found_->setObjectName(QStringLiteral("found"));
+    status->addWidget(found_);
     status->addStretch(1);
+    auto* settings = new QToolButton(this);
+    settings->setObjectName(QStringLiteral("searchSettings"));
+    settings->setText(tr("Settings"));
+    settings->setPopupMode(QToolButton::InstantPopup);
+    settings->setMenu(settingsMenu(settings));
+    connect(settings->menu(), &QMenu::aboutToShow, this, [this, settings] {
+        // Rebuilt each time so that Stop/Start reads the current state.
+        QMenu* menu = settings->menu();
+        QMenu* fresh = settingsMenu(this);
+        menu->clear();
+        for (QAction* a : fresh->actions()) {
+            a->setParent(menu);
+            menu->addAction(a);
+        }
+        delete fresh;
+    });
+    status->addWidget(settings);
     v->addLayout(status);
+    indexTimer_ = new QTimer(this);
+    indexTimer_->setInterval(2000);
+    connect(indexTimer_, &QTimer::timeout, this, [this] {
+        if (isVisible()) refreshIndexStatus();
+    });
+    indexTimer_->start();
     resize(720, 420);
 }
 
@@ -109,6 +154,13 @@ QWidget* FindWindow::buildPage(int tab) {
     findRow->addWidget(p.find, 1);
     p.findButton = new QPushButton(tr("Find"), w);
     findRow->addWidget(p.findButton);
+    if (tab == ClipsTab) {
+        // "Click the PhraseFind AI button to begin the search" (p.437).
+        auto* phrase = new QPushButton(tr("PhraseFind AI"), w);
+        phrase->setObjectName(QStringLiteral("phraseFindButton"));
+        findRow->addWidget(phrase);
+        connect(phrase, &QPushButton::clicked, this, [this] { phraseFind(); });
+    }
     v->addLayout(findRow);
     connect(p.findButton, &QPushButton::clicked, this, [this] { find(); });
     connect(p.find->lineEdit(), &QLineEdit::returnPressed, this, [this] { find(); });
@@ -318,25 +370,121 @@ int FindWindow::find() {
     } else if (tab == TimelineTab) {
         found = fillTimeline(text);
     }
-    // "The filter menu populates after the initial search" (p.430): Any Column and every column of
-    // what was found.
-    if (p.filters && !p.rows.isEmpty()) {
-        QStringList columns{QString()};
-        for (const Result& r : p.rows) {
-            for (const QString& c : model::searchColumns(r.item)) {
-                if (!columns.contains(c)) columns << c;
-            }
-        }
-        p.filterColumns = columns;
-        for (QWidget* row : p.filterRows) {
-            auto* box = row->findChild<QComboBox*>(QStringLiteral("column"));
-            const QString current = box->currentData().toString();
-            box->clear();
-            for (const QString& c : columns) box->addItem(c.isEmpty() ? tr("Any Column") : c, c);
-            box->setCurrentIndex(std::max(box->findData(current), 0));
+    if (tab == ClipsTab) lastPhrase_ = false;
+    populateFilters(tab, {});
+    found_->setText(tr("Found: %1").arg(found));
+    return found;
+}
+
+void FindWindow::populateFilters(int tab, const QStringList& extra) {
+    Page& p = page(tab);
+    if (!p.filters || p.rows.isEmpty()) return;
+    QStringList columns{QString()};
+    columns << extra;
+    for (const Result& r : p.rows) {
+        for (const QString& c : model::searchColumns(r.item)) {
+            if (!columns.contains(c)) columns << c;
         }
     }
+    p.filterColumns = columns;
+    for (QWidget* row : p.filterRows) {
+        auto* box = row->findChild<QComboBox*>(QStringLiteral("column"));
+        const QString current = box->currentData().toString();
+        box->clear();
+        for (const QString& c : columns) box->addItem(c.isEmpty() ? tr("Any Column") : c, c);
+        box->setCurrentIndex(std::max(box->findData(current), 0));
+    }
+}
+
+void FindWindow::setPhraseFind(PhraseFindSource source) {
+    phrase_ = std::move(source);
+    refreshIndexStatus();
+}
+
+// PhraseFind AI (p.437): the bins of the search's scope (the project's, or the current bin), their master clips,
+// subclips and groups searched in their transcripts. Ours: the search is quick enough to need no Cancel.
+int FindWindow::phraseFind() {
+    tabs_->setCurrentIndex(ClipsTab);
+    Page& p = page(ClipsTab);
+    const QString text = p.find->currentText().trimmed();
+    if (!text.isEmpty() && p.find->findText(text) < 0) p.find->insertItem(0, text);
+    p.rows.clear();
+    p.table->clearContents();
+    p.table->setRowCount(0);
+    QList<model::FindBin> bins;
+    if (scope_->currentIndex() == static_cast<int>(Scope::CurrentBin)) {
+        if (BinDocument* doc = bins_.activeDocument()) bins.append({doc->nodeId(), doc->name(), doc->bin()});
+    } else {
+        bins = projectBins();
+    }
+    const auto hits = model::findPhrase(bins, phrase_.transcriptFor, text, filters(ClipsTab), options());
+    fillPhrases(hits);
+    lastPhrase_ = true;
+    populateFilters(ClipsTab, {QStringLiteral("Score"), QStringLiteral("Transcription")});
+    refreshIndexStatus();
+    const int found = static_cast<int>(hits.size());
+    found_->setText(tr("Found: %1").arg(found));
     return found;
+}
+
+// "The Score and Transcription columns always display in PhraseFind AI" (p.439), after Name and Bin ("The Icon, Name
+// and Bin columns always display").
+void FindWindow::fillPhrases(const QList<model::PhraseHit>& found) {
+    Page& p = page(ClipsTab);
+    QStringList headers{tr("Name"), tr("Bin"), tr("Score"), tr("Transcription")};
+    headers << columns_;
+    p.table->setColumnCount(static_cast<int>(headers.size()));
+    p.table->setHorizontalHeaderLabels(headers);
+    p.table->setRowCount(static_cast<int>(found.size()));
+    for (int r = 0; r < found.size(); ++r) {
+        const model::PhraseHit& h = found.at(r);
+        p.rows << Result{h.binId, h.item, h.frame, true};
+        p.table->setItem(r, 0, new QTableWidgetItem(h.item.name));
+        p.table->setItem(r, 1, new QTableWidgetItem(h.binName));
+        auto* score = new QTableWidgetItem;
+        score->setData(Qt::DisplayRole, h.score);
+        p.table->setItem(r, 2, score);
+        p.table->setItem(r, 3, new QTableWidgetItem(h.text));
+        for (int c = 0; c < columns_.size(); ++c) p.table->setItem(r, c + 4, new QTableWidgetItem(model::cellText(h.item, columns_.at(c))));
+    }
+}
+
+void FindWindow::refreshIndexStatus() {
+    const auto [done, total] = phrase_.indexStatus ? phrase_.indexStatus() : std::pair{0, 0};
+    // Nothing to transcribe reads as indexed.
+    phraseIndex_->setRange(0, std::max(total, 1));
+    phraseIndex_->setValue(total > 0 ? std::min(done, total) : 1);
+    const bool stopped = phrase_.indexing && !phrase_.indexing();
+    phraseIndex_->setToolTip(total > 0 ? tr("%1 of %2 clips indexed%3").arg(done).arg(total).arg(stopped ? tr(" (indexing stopped)") : QString())
+                                       : tr("Nothing to index"));
+}
+
+// The Settings button (p.441): "change the location of the Search Data Directory, stop or start the Find or PhraseFind
+// AI indexing, or Manage Transcripts". Ours: the transcripts' folder is the store's (LUMENIS_TRANSCRIPTS), shown dimmed;
+// Manage Transcripts comes with 8.2d.
+QMenu* FindWindow::settingsMenu(QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    menu->setObjectName(QStringLiteral("searchSettingsMenu"));
+    const bool running = !phrase_.indexing || phrase_.indexing();
+    QAction* toggle = menu->addAction(running ? tr("Stop PhraseFind AI Indexing") : tr("Start PhraseFind AI Indexing"));
+    toggle->setObjectName(QStringLiteral("toggleIndexing"));
+    toggle->setEnabled(static_cast<bool>(phrase_.setIndexing));
+    connect(toggle, &QAction::triggered, this, [this, running] {
+        if (phrase_.setIndexing) phrase_.setIndexing(!running);
+        refreshIndexStatus();
+    });
+    menu->addAction(tr("Search Data Directory: %1").arg(model::TranscriptStore::defaultFolder()))->setEnabled(false);
+    menu->addAction(tr("Manage Transcripts..."))->setEnabled(false);
+    return menu;
+}
+
+QString FindWindow::foundText() const {
+    return found_->text();
+}
+
+void FindWindow::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    refreshIndexStatus();
 }
 
 void FindWindow::fillItems(const QList<model::ItemFound>& found) {
@@ -445,6 +593,19 @@ void FindWindow::openResult(int row) {
         return;
     }
     composer_.load(MonitorId::Source, r.binId, r.item);
+    if (r.phrase) {
+        // "places the blue position bar on the frame immediately before the dialogue starts. A Mark IN point displays
+        // on the frame immediately preceding the audio dialogue, the bin opens and the clip highlights inside the bin"
+        // (p.437).
+        const std::int64_t in = r.frame > 0 ? r.frame - 1 : 0;
+        model::MonitorState& s = composer_.state(MonitorId::Source);
+        s.clearBoth();
+        s.setPosition(in);
+        s.markIn();
+        composer_.moveTo(MonitorId::Source, in);
+        emit showInBin(r.binId, r.item.id);
+        return;
+    }
     if (r.frame >= 0) composer_.moveTo(MonitorId::Source, r.frame);
 }
 
@@ -509,7 +670,7 @@ void FindWindow::chooseColumns() {
     }
     if (!chosen) return;
     columns_ = *chosen;
-    if (!page(ClipsTab).rows.isEmpty()) find();
+    if (!page(ClipsTab).rows.isEmpty()) lastPhrase_ ? phraseFind() : find();
 }
 
 } // namespace lumenis::ui

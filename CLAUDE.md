@@ -858,7 +858,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `model::groupedLines`, the tool's in-place editor and right-click menus, `MainWindow::editTranscript`), is done. 8.2b2b,
   Manage Speaker Names (`src/ui/speaker_names_dialog.*` from the Transcript setting's "button" option, `model::ProjectSpeakers`
   in `<project>/Speakers.json`, `renameSpeakerName`/`mergeSpeakerNames`/`clearSpeakerName`, `MainWindow::manageSpeakers`)
-  and the New Project tab's Language Hint (`SelectProjectDialog`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  and the New Project tab's Language Hint (`SelectProjectDialog`), is done. 8.2c, PhraseFind AI in the Find window
+  (`src/model/phrase_find.*` over the transcripts, `FindWindow::phraseFind` with Score and Transcription, the PhraseFind
+  AI Index and Settings menu, `MainWindow::connectPhraseFind`/`phraseIndexStatus`/`setTranscriptionIndexing`; tests
+  `tst_transcript phraseFind`, `tst_transcripts_ui phraseFindWindow`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

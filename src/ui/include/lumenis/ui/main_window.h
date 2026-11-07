@@ -589,6 +589,13 @@ public:
     // modal, without blocking) and returns it; nullptr without a project. Its changes apply at once to the project's
     // speaker list (<project>/Speakers.json) and to the transcripts of the project's master clips.
     SpeakerNamesDialog* manageSpeakers();
+    // PhraseFind AI indexing (the Find window's Settings > Stop/Start PhraseFind AI Indexing, p.441): while off, no
+    // clip is queued for transcription in the background (Transcribe still works). On at start.
+    bool transcriptionIndexing() const { return transcriptionIndexing_; }
+    void setTranscriptionIndexing(bool on) { transcriptionIndexing_ = on; }
+    // The PhraseFind AI index's state: the master clips with sound in the bins included in transcription, and how many
+    // of them have a transcript.
+    std::pair<int, int> phraseIndexStatus() const;
     void applySpeakerNameChange(const SpeakerNameChange& change);
     // The project's speaker names and those in its transcripts, and those in its transcripts only; the names Identify
     // Speaker offers ("a list of previously identified speakers in this project", p.444).
@@ -989,6 +996,9 @@ private:
     QString lastRecordLoaded_;
     int transcriptGeneration_ = 0;    // bumped when a transcript is made or changed
     void setUpTranscriptTool();
+    bool transcriptionIndexing_ = true;
+    // Gives the Find window the transcripts and the index (8.2c).
+    void connectPhraseFind(FindWindow& window);
     // Queues one clip's transcription; `now` for the user's Transcribe (High priority). False when it is already queued
     // or there is no engine.
     bool queueTranscription(const QString& binId, const model::BinItem& item, bool now);

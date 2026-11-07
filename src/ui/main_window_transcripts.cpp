@@ -12,6 +12,7 @@
 #include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/transcript_tool.h"
 #include "lumenis/ui/speaker_names_dialog.h"
+#include "lumenis/ui/find_window.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/model/group_clip.h"
@@ -23,6 +24,7 @@
 #include <QEvent>
 #include <QFontDialog>
 #include <QPlainTextEdit>
+#include <QSet>
 #include <QTimer>
 
 #include <algorithm>
@@ -110,7 +112,7 @@ void MainWindow::setUpTranscription(bool projectOpen) {
 }
 
 void MainWindow::transcriptionTick() {
-    if (!project_ || backgroundQueue_->isBusy()) return;
+    if (!project_ || backgroundQueue_->isBusy() || !transcriptionIndexing_) return;
     // "When this option is selected (the default), the transcription process will be temporarily stopped while
     // editing" (p.447). Ours: new clips start only after ten idle seconds; a clip being transcribed finishes.
     const auto* watcher = static_cast<const ActivityWatcher*>(activityWatcher_);
@@ -445,6 +447,28 @@ void MainWindow::applySpeakerNameChange(const SpeakerNameChange& change) {
         ++transcriptGeneration_;
         refreshTranscriptTool();
     }
+}
+
+std::pair<int, int> MainWindow::phraseIndexStatus() const {
+    if (!project_ || !transcriptionBins_) return {0, 0};
+    const model::TranscriptStore store;
+    QSet<QString> all;
+    QSet<QString> done;
+    for (const auto& [binId, item] : projectClips(*binContainer_, &*transcriptionBins_)) {
+        const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
+        all.insert(mob);
+        if (store.has(mob)) done.insert(mob);
+    }
+    return {static_cast<int>(done.size()), static_cast<int>(all.size())};
+}
+
+void MainWindow::connectPhraseFind(FindWindow& window) {
+    FindWindow::PhraseFindSource source;
+    source.transcriptFor = [](const QString& mob) { return model::TranscriptStore().load(mob); };
+    source.indexStatus = [this] { return phraseIndexStatus(); };
+    source.indexing = [this] { return transcriptionIndexing_; };
+    source.setIndexing = [this](bool on) { setTranscriptionIndexing(on); };
+    window.setPhraseFind(std::move(source));
 }
 
 } // namespace lumenis::ui

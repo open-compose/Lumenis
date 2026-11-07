@@ -8301,6 +8301,7 @@ void MainWindow::installPanelHandlers() {
     handle("edit.find", [this] {
         if (!findWindow_) {
             findWindow_ = new FindWindow(*binContainer_, *composer_, *timeline_, this);
+            connectPhraseFind(*findWindow_);
             connect(findWindow_, &FindWindow::showInBin, this, [this](const QString& binId, const QString& itemId) {
                 if (BinDocument* doc = binContainer_->openBin(binId)) {
                     if (BinView* view = binContainer_->viewFor(doc)) view->selectIds({itemId});

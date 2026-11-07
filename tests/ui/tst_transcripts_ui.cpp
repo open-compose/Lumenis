@@ -11,6 +11,8 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/transcript_tool.h"
 #include "lumenis/ui/speaker_names_dialog.h"
+#include "lumenis/ui/find_window.h"
+#include "lumenis/model/monitor.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/main_window.h"
@@ -21,7 +23,9 @@
 #include <QMenu>
 #include <QDir>
 #include <QTemporaryDir>
+#include <QProgressBar>
 #include <QPushButton>
+#include <QTableWidget>
 #include <QSignalSpy>
 #include <QTest>
 #include <QRegularExpression>
@@ -29,6 +33,7 @@
 #include <QTreeView>
 
 #include <atomic>
+#include <memory>
 #include <cmath>
 
 using namespace lumenis;
@@ -353,6 +358,78 @@ private slots:
         QCOMPARE(d->names(), QStringList({"Ann"}));
         for (const QString& mob : mobs) QCOMPARE(store.load(mob)->speakerName(2), QStringLiteral("Speaker 2"));
         d->accept();
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // PhraseFind AI in the Find window (p.436-441): the PhraseFind AI button, Score and Transcription, the index status,
+    // Load into monitor with the IN on the frame before the dialogue, Stop/Start indexing.
+    void phraseFindWindow() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString a = dir.filePath(QStringLiteral("talk.wav"));
+        const QString b = dir.filePath(QStringLiteral("other.wav"));
+        QVERIFY(writeTone(a, 4.0));
+        QVERIFY(writeTone(b, 1.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString bin = bins.newBin();
+        bins.openBin(bin);
+        QCOMPARE(window.linkFiles(bin, {a, b}).size(), qsizetype(2));
+        QCOMPARE(window.phraseIndexStatus(), (std::pair<int, int>{0, 2}));
+        const model::TranscriptStore store;
+        const model::BinItem talk = bins.document(bin)->bin().items.first();
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(talk).toString());
+        t.clipName = talk.name;
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("The"), 2.0, 2.2}, {QStringLiteral("answer"), 2.2, 2.6}, {QStringLiteral("is"), 2.6, 2.8},
+                                            {QStringLiteral("42."), 2.8, 3.2}}}};
+        QVERIFY(store.save(t));
+        QCOMPARE(window.phraseIndexStatus(), (std::pair<int, int>{1, 2}));
+
+        commands.action(QStringLiteral("edit.find"))->trigger();
+        FindWindow* find = window.findWindow();
+        QVERIFY(find);
+        QCOMPARE(find->phraseIndex()->value(), 1);
+        QCOMPARE(find->phraseIndex()->maximum(), 2); // partly green: still indexing
+        find->setText(QStringLiteral("the answer is 42"));
+        QCOMPARE(find->phraseFind(), 1);
+        QTableWidget* results = find->results();
+        QCOMPARE(results->horizontalHeaderItem(2)->text(), QStringLiteral("Score"));
+        QCOMPARE(results->horizontalHeaderItem(3)->text(), QStringLiteral("Transcription"));
+        QCOMPARE(results->item(0, 2)->data(Qt::DisplayRole).toInt(), 100);
+        QCOMPARE(results->item(0, 3)->text(), QStringLiteral("The answer is 42."));
+        QCOMPARE(find->foundText(), QStringLiteral("Found: 1"));
+        // Double-click: the Source monitor, the position and IN on the frame before "The" (frame 50).
+        find->openResult(0);
+        const model::MonitorState& source = window.composer().state(MonitorId::Source);
+        QVERIFY(source.current());
+        QCOMPARE(source.current()->item.id, talk.id);
+        QCOMPARE(source.position(), std::int64_t(49));
+        QCOMPARE(source.in(), std::optional<std::int64_t>(49));
+        // A Transcription filter.
+        find->setFilter(0, QStringLiteral("Transcription"), QStringLiteral("nothing like it"));
+        QCOMPARE(find->phraseFind(), 0);
+        find->setFilter(0, QString(), QString());
+        // Settings > Stop PhraseFind AI Indexing stops the background transcription.
+        std::unique_ptr<QMenu> menu(find->settingsMenu(nullptr));
+        auto* toggle = menu->findChild<QAction*>(QStringLiteral("toggleIndexing"));
+        QVERIFY(toggle);
+        QCOMPARE(toggle->text(), QStringLiteral("Stop PhraseFind AI Indexing"));
+        toggle->trigger();
+        QVERIFY(!window.transcriptionIndexing());
+        menu.reset(find->settingsMenu(nullptr));
+        QCOMPARE(menu->findChild<QAction*>(QStringLiteral("toggleIndexing"))->text(), QStringLiteral("Start PhraseFind AI Indexing"));
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };

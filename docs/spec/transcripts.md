@@ -143,6 +143,35 @@ The Transcript setting's Manage Speakers button opens it (p.445; `src/ui/speaker
 * Every change applies at once (`MainWindow::applySpeakerNameChange`); Done closes the window. It is window modal over
   the setting's dialog.
 
+## PhraseFind AI (8.2c)
+
+The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441; `src/model/phrase_find.*`,
+`FindWindow::phraseFind`, `MainWindow::connectPhraseFind`):
+
+* "PhraseFind AI indexes and finds audio in master clips, subclips and group clips. Only your project needs to be
+  opened, and you do not need to have the bins open": the bins of the search scope (the project's, or Current Bin),
+  open or not, and their master clips (audio-only too), subclips and groups (not multigroups). Our index is the
+  transcripts: each clip's words as it shows them (`model::shownTranscript`), so a subclip finds what is said within it,
+  a group what its selected angle says.
+* "case insensitive and ignores punctuation" (p.441, `model::phraseWords`).
+* Score, "ranging from 100 to 50 ... the score with the higher value is more probable" (p.438). Ours: 100 where the
+  words come in order (across lines too); 50 to 90 for a line holding at least half of them in any order, a word that
+  only begins with one of three or more letters counting half. Results best first, then in bin order; one row for each
+  place.
+* "The Score and Transcription columns always display in PhraseFind AI" after Name and Bin (p.439); Transcription is
+  the line (or lines) the words are in. Select Columns adds the rest as for text find. The filters also take Score and
+  Transcription; Any Column looks in the Transcription and the item's columns.
+* Load into monitor: "places the blue position bar on the frame immediately before the dialogue starts. A Mark IN point
+  displays on the frame immediately preceding the audio dialogue, the bin opens and the clip highlights inside the bin"
+  (p.437; `model::phraseMarkIn`). Without Load into monitor the bin opens with the clip selected, as text find does.
+* The PhraseFind AI Index (p.437, p.441): green as far as the master clips with sound in the bins included in
+  transcription have transcripts (`MainWindow::phraseIndexStatus`), read every two seconds while the window shows; full
+  with nothing to transcribe. "Found" counts the results.
+* The Settings button (p.441): Stop/Start PhraseFind AI Indexing stops or starts background transcription
+  (`MainWindow::setTranscriptionIndexing`; Transcribe still works); the Search Data Directory is shown, dimmed, as the
+  store's folder (`LUMENIS_TRANSCRIPTS`); Manage Transcripts comes with 8.2d.
+* Ours: no Cancel button, the search over transcripts being quick; filtering applies when the search runs.
+
 ## Tests
 
 * `tst_transcript`: lines from engine words, JSON round trips, the store, the bins' status.
@@ -150,6 +179,8 @@ The Transcript setting's Manage Speakers button opens it (p.445; `src/ui/speaker
   a stand-in `whisper-cli` script (not on Windows).
 * `tst_transcript editing`, `groupedSpeakerLines`: timing kept through edits, Find and Replace, speakers, Start New
   Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
+* `tst_transcript phraseFind`: scores, order, subclips, filters; `tst_transcripts_ui phraseFindWindow` the Find window's
+  button, columns, index status, loading with the IN mark, Stop/Start indexing.
 * `tst_transcript speakerNames`: rename, merge and clear by name, the project's list; `tst_transcripts_ui
   manageSpeakerNames` the window and the setting's button; `tst_select_project_dialog languageHintGoesIntoTheProject`.
 * `tst_transcript shownTranscripts`: what a clip, subclip, group and sequence show; `tst_transcripts_ui transcriptTool`:

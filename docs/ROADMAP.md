@@ -1432,7 +1432,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       audio track button for sequences and groups; Speaker IDs (rename, Identify Speaker, Correct Speaker ID, Manage
       Speaker Names); editing text with word timing kept (p.445-446), Find and Replace; 2026.8's Group Speaker Lines,
       New Line After, Start New Line, Revert and Revert Transcript (2026.8 guide p.446-447).
-    * 8.2c, PhraseFind AI in the Find window (p.436-441): the index of the project's transcripts, the PhraseFind AI
+    * 8.2c (done), PhraseFind AI in the Find window (p.436-441): the index of the project's transcripts, the PhraseFind AI
       button, Score and Transcription columns, the index status, Load into monitor with the mark IN before the
       dialogue, the Search Settings (indexing on/off, Manage Transcripts).
     * 8.2d, transcripts out (p.450-453; 2026.8 guide p.455-456): the bin's Transcript menu (Export Transcript as .txt,

@@ -15,8 +15,8 @@ Code:
   enter ... Bins do not have to be open for the system to search in them."
   * Open bins are searched as they are; closed bins are read from their files. Nothing has to be
     indexed or saved first.
-  * The Bin Index status always reads ready (ours). There is no Stop Indexing and no PhraseFind
-    (a licensed option).
+  * The Bin Index status always reads ready (ours). PhraseFind AI (8.2c) shares the Clips and
+    Sequences tab; it is in docs/spec/transcripts.md, "PhraseFind AI".
 * "The system searches through all available columns in your bins including metadata columns, even if
   they are not visible in your current bin."
   * Every standard heading and every custom column is searched.

@@ -1,12 +1,15 @@
 // Transcripts (Editing Guide ch.14; lumenis/model/transcript.h): lines from an engine's words, JSON round trips, the
 // transcript store and which bins are transcribed.
 #include "lumenis/model/group_clip.h"
+#include "lumenis/model/phrase_find.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/transcript.h"
 #include "lumenis/model/transcript_view.h"
 
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <algorithm>
 
 using namespace lumenis::model;
 
@@ -226,6 +229,74 @@ private slots:
         QCOMPARE(g.lines.size(), qsizetype(4)); // A A | B | A | A (past 300 frames)
         QCOMPARE(g.lines[0].words.size(), qsizetype(4));
         QCOMPARE(groupedLines(s, true, 0).lines.size(), qsizetype(3));
+    }
+
+    // PhraseFind AI (p.436-441): the words in order score 100, a line with most of them less; case and punctuation
+    // ignored; subclips find what is said within them; filters on Score and Transcription.
+    void phraseFind() {
+        BinItem master;
+        master.id = QStringLiteral("m");
+        master.name = QStringLiteral("Interview");
+        master.kind = BinItemKind::MasterClip;
+        master.editRate = lumenis::Rational(25);
+        master.durationFrames = 500;
+        const QString mob = QString::fromStdString(mobIdOf(master).toString());
+        Transcript t;
+        t.mob = mob;
+        t.lines = {TranscriptLine{1, {{QStringLiteral("Here's"), 1.0, 1.3}, {QStringLiteral("to"), 1.3, 1.4}, {QStringLiteral("you,"), 1.4, 1.6}}},
+                   TranscriptLine{2, {{QStringLiteral("Mrs."), 1.8, 2.0}, {QStringLiteral("Robinson."), 2.0, 2.6}}},
+                   TranscriptLine{1, {{QStringLiteral("You"), 10.0, 10.2}, {QStringLiteral("know"), 10.2, 10.4}, {QStringLiteral("Robinsons?"), 10.4, 11.0}}}};
+        const TranscriptFor transcriptFor = [&](const QString& m) -> std::optional<Transcript> {
+            return m == mob ? std::optional(t) : std::nullopt;
+        };
+        BinItem sub = master;
+        sub.id = QStringLiteral("s");
+        sub.name = QStringLiteral("Late");
+        sub.kind = BinItemKind::Subclip;
+        sub.durationFrames = 100;
+        ClipSource src;
+        src.kind = ClipSource::Kind::Clip;
+        src.mob = mobIdOf(master);
+        src.offset = 200;
+        sub.sources = {src};
+        BinItem seq;
+        seq.id = QStringLiteral("q");
+        seq.kind = BinItemKind::Sequence;
+        Bin bin;
+        bin.items = {master, sub, seq};
+        const QList<FindBin> bins{{QStringLiteral("b"), QStringLiteral("Bin 1"), bin}};
+        QCOMPARE(phraseWords(QStringLiteral("Here's to you, Mrs. Robinson.")), QStringList({"heres", "to", "you", "mrs", "robinson"}));
+        // Across two lines, in order: 100, at "Here's" (frame 25), the IN on the frame before.
+        auto hits = findPhrase(bins, transcriptFor, QStringLiteral("heres to you mrs robinson"), {}, {});
+        QCOMPARE(hits.size(), qsizetype(1));
+        QCOMPARE(hits[0].score, 100);
+        QCOMPARE(hits[0].item.id, QStringLiteral("m"));
+        QCOMPARE(hits[0].frame, std::int64_t(25));
+        QCOMPARE(phraseMarkIn(hits[0]), std::int64_t(24));
+        QCOMPARE(hits[0].text, QStringLiteral("Here's to you, Mrs. Robinson."));
+        // "you robinson": the master's later line holds both (You, Robinsons? as half): below 100; the subclip from
+        // frame 200 shows that line too, at its frame 50.
+        hits = findPhrase(bins, transcriptFor, QStringLiteral("you robinson"), {}, {});
+        QVERIFY(hits.size() >= 3);
+        for (const PhraseHit& h : hits) QVERIFY(h.score >= 50 && h.score <= 100);
+        QVERIFY(std::is_sorted(hits.cbegin(), hits.cend(), [](const PhraseHit& a, const PhraseHit& b) { return a.score > b.score; }));
+        bool subclip = false;
+        for (const PhraseHit& h : hits) {
+            if (h.item.id == QStringLiteral("s")) {
+                subclip = true;
+                QCOMPARE(h.frame, std::int64_t(50));
+                QVERIFY(h.score < 100);
+            }
+        }
+        QVERIFY(subclip);
+        // Filters.
+        hits = findPhrase(bins, transcriptFor, QStringLiteral("you robinson"), {{QStringLiteral("Name"), QStringLiteral("Late")}}, {});
+        QCOMPARE(hits.size(), qsizetype(1));
+        hits = findPhrase(bins, transcriptFor, QStringLiteral("robinson"), {{QStringLiteral("Transcription"), QStringLiteral("mrs")}}, {});
+        QCOMPARE(hits.size(), qsizetype(1));
+        QCOMPARE(hits[0].score, 100);
+        QVERIFY(findPhrase(bins, transcriptFor, QStringLiteral("elephant"), {}, {}).isEmpty());
+        QVERIFY(findPhrase(bins, transcriptFor, QStringLiteral("  ...  "), {}, {}).isEmpty());
     }
 
     // Manage Speaker Names (p.445): renaming, merging and clearing by name, and the project's list.
