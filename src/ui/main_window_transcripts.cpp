@@ -10,10 +10,17 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/tool_windows.h"
+#include "lumenis/ui/transcript_tool.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/panels.h"
+#include "lumenis/model/group_clip.h"
+#include "lumenis/model/transcript_view.h"
+#include "lumenis/core/timecode.h"
 
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QFontDialog>
 #include <QPlainTextEdit>
 #include <QTimer>
 
@@ -108,47 +115,85 @@ void MainWindow::transcriptionTick() {
     queueTranscriptions();
 }
 
-int MainWindow::queueTranscriptions() {
-    const model::ProjectBins* bins = binContainer_->bins();
-    const auto provider = transcriber();
-    if (!project_ || !bins || !provider || !transcriptionBins_) return 0;
-    const model::TranscriptStore store;
-    ext::TranscriptionOptions options;
-    // The Language Hint (p.448): empty is Multilingual, the engine detects the language.
-    options.language = settings_->text(QStringLiteral("Transcript"), QStringLiteral("languageHint")).toStdString();
-    int queued = 0;
+namespace {
+
+// Every master clip with sound in the project's bins, with its bin (open bins as they are now), in `included` bins only
+// when that is given.
+QList<std::pair<QString, model::BinItem>> projectClips(const BinContainer& container, const model::TranscriptionBins* included) {
+    QList<std::pair<QString, model::BinItem>> out;
+    const model::ProjectBins* bins = container.bins();
+    if (!bins) return out;
     for (const model::BinNode* node : bins->bins()) {
-        if (!transcriptionBins_->isIncluded(node->id) || bins->isInTrash(node->id)) continue;
+        if ((included && !included->isIncluded(node->id)) || bins->isInTrash(node->id)) continue;
         QList<model::BinItem> items;
-        if (const BinDocument* doc = binContainer_->document(node->id)) {
+        if (const BinDocument* doc = container.document(node->id)) {
             items = doc->bin().items;
         } else if (const auto bin = model::BinFile::read(bins->binPath(node->id))) {
             items = bin->items;
         }
         for (const model::BinItem& item : items) {
-            if (!transcribable(item)) continue;
-            const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
-            if (transcribing_.contains(mob) || store.has(mob)) continue;
-            transcribing_.insert(mob);
-            const QString folder = store.folder();
-            auto work = [item, provider, options, folder](const std::function<bool(double)>& progress) {
-                media::ConsolidateResult result;
-                QString error;
-                const auto t = media::transcribeClip(item, *provider, options, progress, &error);
-                if (!t) {
-                    result.error = error;
-                } else if (!model::TranscriptStore(folder).save(*t)) {
-                    result.error = QObject::tr("The transcript of \"%1\" could not be saved in %2.").arg(item.name, folder);
-                }
-                return result;
-            };
-            auto done = [this, mob, name = item.name](const media::ConsolidateResult& result) {
-                transcribing_.remove(mob);
-                if (!result.error.isEmpty() && console_) {
-                    console_->log()->appendPlainText(tr("Transcribing \"%1\": %2").arg(name, result.error));
-                }
-            };
-            backgroundQueue_->add(tr("Transcribe %1").arg(item.name), node->id, work, BackgroundQueue::Priority::Low, done);
+            if (transcribable(item)) out.append({node->id, item});
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+bool MainWindow::queueTranscription(const QString& binId, const model::BinItem& item, bool now) {
+    const auto provider = transcriber();
+    const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
+    if (!provider || transcribing_.contains(mob)) return false;
+    transcribing_.insert(mob);
+    ext::TranscriptionOptions options;
+    // The Language Hint (p.448): empty is Multilingual, the engine detects the language.
+    options.language = settings_->text(QStringLiteral("Transcript"), QStringLiteral("languageHint")).toStdString();
+    const QString folder = model::TranscriptStore().folder();
+    auto work = [item, provider, options, folder](const std::function<bool(double)>& progress) {
+        media::ConsolidateResult result;
+        QString error;
+        const auto t = media::transcribeClip(item, *provider, options, progress, &error);
+        if (!t) {
+            result.error = error;
+        } else if (!model::TranscriptStore(folder).save(*t)) {
+            result.error = QObject::tr("The transcript of \"%1\" could not be saved in %2.").arg(item.name, folder);
+        }
+        return result;
+    };
+    auto done = [this, mob, name = item.name](const media::ConsolidateResult& result) {
+        transcribing_.remove(mob);
+        if (!result.error.isEmpty() && console_) {
+            console_->log()->appendPlainText(tr("Transcribing \"%1\": %2").arg(name, result.error));
+        }
+        // A new transcript: the Transcript Tool shows it.
+        ++transcriptGeneration_;
+        refreshTranscriptTool();
+    };
+    // "Foreground transcriptions will always pause the background transcription" (p.448). Ours: clips asked for go at
+    // High priority, ahead of the Low background jobs; a background clip already running finishes first.
+    backgroundQueue_->add(tr("Transcribe %1").arg(item.name), binId, work,
+                          now ? BackgroundQueue::Priority::High : BackgroundQueue::Priority::Low, done);
+    return true;
+}
+
+int MainWindow::queueTranscriptions() {
+    if (!project_ || !binContainer_->bins() || !transcriber() || !transcriptionBins_) return 0;
+    const model::TranscriptStore store;
+    int queued = 0;
+    for (const auto& [binId, item] : projectClips(*binContainer_, &*transcriptionBins_)) {
+        if (store.has(QString::fromStdString(model::mobIdOf(item).toString()))) continue;
+        if (queueTranscription(binId, item, false)) ++queued;
+    }
+    return queued;
+}
+
+int MainWindow::transcribeNow(const QStringList& mobs) {
+    if (!project_ || mobs.isEmpty() || !transcriber()) return 0;
+    // Any bin, included in transcription or not: the user asked for these clips.
+    QSet<QString> wanted(mobs.cbegin(), mobs.cend());
+    int queued = 0;
+    for (const auto& [binId, item] : projectClips(*binContainer_, nullptr)) {
+        if (wanted.remove(QString::fromStdString(model::mobIdOf(item).toString())) && queueTranscription(binId, item, true)) {
             ++queued;
         }
     }
@@ -167,6 +212,115 @@ void MainWindow::setBinsTranscribed(bool included) {
     }
     for (const QString& id : ids) transcriptionBins_->setIncluded(id, included);
     binContainer_->refreshTree();
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+void MainWindow::setUpTranscriptTool() {
+    transcriptTool_ = new TranscriptTool;
+    panels_->addPanel(new Panel(QStringLiteral("Transcript"), tr("Transcript"), transcriptTool_));
+    connect(composer_, &Composer::changed, this, &MainWindow::refreshTranscriptTool);
+    // Clicks and selections move the monitor's position and set its marks (p.442).
+    auto monitor = [this] { return transcriptSourceSide_ ? MonitorId::Source : MonitorId::Record; };
+    connect(transcriptTool_, &TranscriptTool::positionChosen, this, [this, monitor](std::int64_t frame) {
+        composer_->moveTo(monitor(), frame);
+    });
+    connect(transcriptTool_, &TranscriptTool::marksChosen, this, [this, monitor](std::int64_t in, std::int64_t out) {
+        model::MonitorState& s = composer_->state(monitor());
+        if (!s.current()) return;
+        s.clearBoth();
+        s.setPosition(out);
+        s.markOut();
+        s.setPosition(in);
+        s.markIn();
+        composer_->moveTo(monitor(), in);
+    });
+    connect(transcriptTool_, &TranscriptTool::sideChosen, this, [this](bool source) {
+        transcriptSourceSide_ = source;
+        transcriptKey_.clear();
+        refreshTranscriptTool();
+    });
+    connect(transcriptTool_, &TranscriptTool::tracksChosen, this, [this](const QStringList& tracks) {
+        transcriptTracks_ = tracks;
+        transcriptKey_.clear();
+        refreshTranscriptTool();
+    });
+    connect(transcriptTool_, &TranscriptTool::transcribeRequested, this, [this](const QStringList& mobs) {
+        if (transcribeNow(mobs) == 0 && console_) {
+            console_->log()->appendPlainText(transcriber() ? tr("Nothing to transcribe.")
+                                                           : tr("No transcription engine: whisper.cpp's whisper-cli was not found."));
+        }
+    });
+    // "Choosing the Set Font option in the fast menu opens a window to select a Font Family and Size" (p.443).
+    connect(transcriptTool_, &TranscriptTool::fontRequested, this, [this] {
+        bool ok = false;
+        const QFont font = QFontDialog::getFont(&ok, transcriptTool_->view()->font(), this, tr("Set Font"));
+        if (ok) transcriptTool_->setTextFont(font);
+    });
+}
+
+void MainWindow::refreshTranscriptTool() {
+    if (!transcriptTool_) return;
+    // "the Transcript Tool will update each time a clip is loaded into the Source monitor, or a sequence is loaded into
+    // the Record monitor" (p.442): the side follows the last load.
+    const model::LoadedClip* source = composer_->state(MonitorId::Source).current();
+    const model::LoadedClip* record = composer_->state(MonitorId::Record).current();
+    const QString sourceId = source ? source->binId + QLatin1Char('/') + source->item.id : QString();
+    const QString recordId = record ? record->binId + QLatin1Char('/') + record->item.id : QString();
+    if (sourceId != lastSourceLoaded_) {
+        lastSourceLoaded_ = sourceId;
+        if (source) transcriptSourceSide_ = true;
+    }
+    if (recordId != lastRecordLoaded_) {
+        lastRecordLoaded_ = recordId;
+        if (record) transcriptSourceSide_ = false;
+    }
+    transcriptTool_->setSourceSide(transcriptSourceSide_);
+    const MonitorId monitor = transcriptSourceSide_ ? MonitorId::Source : MonitorId::Record;
+    const model::MonitorState& state = composer_->state(monitor);
+    const model::LoadedClip* loaded = state.current();
+    if (!loaded) {
+        const QString key = transcriptSourceSide_ ? QStringLiteral("empty:source") : QStringLiteral("empty:record");
+        if (key != transcriptKey_) {
+            transcriptKey_ = key;
+            transcriptTool_->clear(transcriptSourceSide_ ? tr("Load a clip into the Source monitor.")
+                                                         : tr("Load a sequence into the Record monitor."));
+        }
+        return;
+    }
+    const model::BinItem& item = loaded->item;
+    const QString key = QStringLiteral("%1|%2|%3|%4|%5|%6|%7")
+                            .arg(transcriptSourceSide_)
+                            .arg(loaded->binId, item.id)
+                            .arg(item.modified.toMSecsSinceEpoch())
+                            .arg(item.durationFrames)
+                            .arg(transcriptTracks_.join(QLatin1Char(',')))
+                            .arg(transcriptGeneration_);
+    if (key != transcriptKey_) {
+        transcriptKey_ = key;
+        const model::TranscriptStore store;
+        const model::TranscriptFor transcriptFor = [store](const QString& mob) { return store.load(mob); };
+        const model::ShownClipLookup lookup = [this](const QString& binId, const QString& clipId) {
+            return composer_->resolve(binId, clipId);
+        };
+        model::ShownTranscript shown;
+        if (item.kind == model::BinItemKind::Sequence) {
+            shown = model::shownTranscript(model::Sequence::fromItem(item), transcriptTracks_, transcriptFor, lookup);
+        } else if (const auto seq = model::multigroupSequence(item)) {
+            shown = model::shownTranscript(model::Sequence::fromItem(*seq), transcriptTracks_, transcriptFor, lookup);
+        } else {
+            shown = model::shownTranscript(item, transcriptFor);
+        }
+        const TimecodeFormat format = TimecodeFormat::forRate(item.editRate, model::isDropFrame(item));
+        const std::int64_t start = state.startFrame();
+        transcriptTool_->setTranscript(shown, [format, start](std::int64_t frame) {
+            return QString::fromStdString(Timecode(start + frame, format).toString());
+        });
+    }
+    transcriptTool_->setPosition(state.position());
+    transcriptTool_->setMarks(state.in(), state.out());
 }
 
 } // namespace lumenis::ui

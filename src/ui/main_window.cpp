@@ -1664,6 +1664,8 @@ void MainWindow::createTools() {
         return pixel.isNull() ? std::nullopt : std::optional<QColor>(pixel.pixelColor(0, 0));
     });
     panels_->addPanel(new Panel(QStringLiteral("ColorInfo"), tr("Color Info"), colorInfo_));
+    // Tools > Transcript Tool (p.442; main_window_transcripts.cpp).
+    setUpTranscriptTool();
     // Effects (FX guide p.37, p.83).
     effectPalette_ = new EffectPalette;
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
@@ -8020,6 +8022,10 @@ void MainWindow::installPanelHandlers() {
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
     handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
     handle("tools.color_info_tool", [this] { showTool(QStringLiteral("ColorInfo")); });
+    handle("tools.transcript_tool", [this] {
+        showTool(QStringLiteral("Transcript"));
+        refreshTranscriptTool();
+    });
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
     handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
     handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });

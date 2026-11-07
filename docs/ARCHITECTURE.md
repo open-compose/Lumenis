@@ -168,7 +168,8 @@ headers in `include/lumenis/<library>/`.
   syncing by sound is `src/media/waveform_sync.*`. Transcripts are `src/model/transcript.*` (the
   store and which bins are transcribed), made by `src/media/transcription.*` through an
   `ext::TranscriptionProvider` (whisper.cpp's `whisper-cli` built in) and queued by
-  `main_window_transcripts.cpp` (docs/spec/transcripts.md).
+  `main_window_transcripts.cpp`; the Transcript Tool is `transcript_tool.*` showing `src/model/transcript_view.*`
+  (docs/spec/transcripts.md).
 
 ## Data flow
 

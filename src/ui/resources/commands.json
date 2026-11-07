@@ -215,6 +215,7 @@
     {"id": "timeline.render.clear_renders_at_position", "text": "Clear Renders at Position"},
     {"id": "tools.titler", "text": "Titler+"},
     {"id": "tools.color_info_tool", "text": "Color Info Tool"},
+    {"id": "tools.transcript_tool", "text": "Transcript Tool"},
     {"id": "tools.effect_editor", "text": "Effect Editor"},
     {"id": "tools.title_tool_application", "text": "Title Tool Application"},
     {"id": "play.play", "text": "Play", "palette": "play"},

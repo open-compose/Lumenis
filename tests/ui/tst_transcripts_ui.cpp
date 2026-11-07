@@ -8,6 +8,9 @@
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/transcript_tool.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -16,6 +19,8 @@
 #include <QDir>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QRegularExpression>
+#include <QTextEdit>
 #include <QTreeView>
 
 #include <atomic>
@@ -129,6 +134,107 @@ private slots:
         window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("includeNewBins"), false);
         const QString later = bins.newBin();
         QVERIFY(!window.isBinTranscribed(later));
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // The Transcript Tool (p.442-444): a clip in the Source monitor and a sequence in the Record monitor shown, clicks
+    // and selections moving the position and setting marks, search, Transcribe for a clip not transcribed.
+    void transcriptTool() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString wav = dir.filePath(QStringLiteral("talk.wav"));
+        const QString other = dir.filePath(QStringLiteral("other.wav"));
+        QVERIFY(writeTone(wav, 4.0));
+        QVERIFY(writeTone(other, 2.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        auto provider = std::make_shared<FakeProvider>();
+        window.setTranscriber(provider);
+        BinContainer& bins = window.binContainer();
+        const QString binId = bins.newBin();
+        BinDocument* bin = bins.openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {wav, other});
+        QCOMPARE(ids.size(), qsizetype(2));
+        const model::BinItem talk = *bin->bin().item(ids[0]);
+        const model::BinItem quiet = *bin->bin().item(ids[1]);
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(talk).toString());
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("Good"), 0.0, 0.4}, {QStringLiteral("morning,"), 0.4, 0.8},
+                                             {QStringLiteral("everyone."), 0.8, 1.2}}},
+                   model::TranscriptLine{2, {{QStringLiteral("Morning!"), 2.0, 2.6}}}};
+        QVERIFY(model::TranscriptStore().save(t));
+        commands.action(QStringLiteral("tools.transcript_tool"))->trigger();
+        TranscriptTool& tool = window.transcriptTool();
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, talk);
+        QCoreApplication::processEvents();
+        QVERIFY(tool.sourceSide());
+        QCOMPARE(tool.transcript().lines.size(), qsizetype(2));
+        QVERIFY(tool.plainText().contains(QStringLiteral("Speaker 1: Good morning, everyone.")));
+        QVERIFY(QRegularExpression(QStringLiteral("^\\d\\d:\\d\\d:\\d\\d[:;]\\d\\d ")).match(tool.plainText()).hasMatch()); // Show Timecode
+        // The playhead word follows the position.
+        composer.moveTo(MonitorId::Source, 52);
+        QCOMPARE(tool.playheadWord(), (std::optional<std::pair<int, int>>{{1, 0}}));
+        // A click moves the position; a selection sets the marks (p.442).
+        tool.clickWord(0, 2);
+        QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(20));
+        tool.selectWords(0, 0, 2);
+        QCOMPARE(composer.state(MonitorId::Source).in(), std::optional<std::int64_t>(0));
+        QCOMPARE(composer.state(MonitorId::Source).out(), std::optional<std::int64_t>(19));
+        // Search ignores case and punctuation; the arrows go to the next match.
+        QCOMPARE(tool.search(QStringLiteral("morning")), 2);
+        composer.moveTo(MonitorId::Source, 0);
+        QVERIFY(tool.next());
+        QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(10));
+        QVERIFY(tool.next());
+        QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(50));
+        // A sequence in the Record monitor: the Record side, with the track button.
+        model::BinItem seqItem;
+        seqItem.id = model::newItemId();
+        seqItem.name = QStringLiteral("Cut");
+        seqItem.kind = model::BinItemKind::Sequence;
+        seqItem.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = talk.id;
+        seg.binId = binId;
+        seg.name = talk.name;
+        seg.sourceIn = 40;
+        seg.length = 40;
+        seg.sourceTrack = QStringLiteral("A1");
+        seq.ensureTrack(QStringLiteral("A1"));
+        seq.track(QStringLiteral("A1"))->segments = {seg};
+        seq.storeIn(seqItem);
+        bin->addItem(seqItem);
+        composer.load(MonitorId::Record, binId, seqItem);
+        QCoreApplication::processEvents();
+        QVERIFY(!tool.sourceSide());
+        QCOMPARE(tool.transcript().lines.size(), qsizetype(1));
+        QCOMPARE(tool.transcript().lines[0].words[0].frame, std::int64_t(10));
+        QVERIFY(tool.transcript().availableTracks.contains(QStringLiteral("A1")));
+        // A clip not transcribed: the banner's Transcribe makes its transcript.
+        composer.loadDefault(binId, quiet);
+        QCoreApplication::processEvents();
+        QVERIFY(tool.sourceSide());
+        QCOMPARE(tool.transcript().notTranscribed.size(), qsizetype(1));
+        QVERIFY(tool.findChild<QWidget*>(QStringLiteral("transcribe"))->isVisibleTo(&tool));
+        QCOMPARE(window.transcribeNow(tool.transcript().notTranscribedMobs), 1);
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        QCOMPARE(tool.transcript().lines.size(), qsizetype(1));
+        QVERIFY(tool.transcript().notTranscribed.isEmpty());
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };

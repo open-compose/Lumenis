@@ -1,6 +1,9 @@
 // Transcripts (Editing Guide ch.14; lumenis/model/transcript.h): lines from an engine's words, JSON round trips, the
 // transcript store and which bins are transcribed.
+#include "lumenis/model/group_clip.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/model/transcript.h"
+#include "lumenis/model/transcript_view.h"
 
 #include <QTemporaryDir>
 #include <QTest>
@@ -69,6 +72,77 @@ private slots:
         QVERIFY(!TranscriptionBins(dir.path()).isIncluded(QStringLiteral("b1")));
         QVERIFY(bins.setIncluded(QStringLiteral("b1"), true));
         QVERIFY(TranscriptionBins(dir.path()).isIncluded(QStringLiteral("b1")));
+    }
+
+    // What the Transcript Tool shows (p.448-449): a master clip's words at its frames, a subclip's from where it starts,
+    // a group's selected angle's, a sequence's chosen audio tracks' without repeating a clip on two tracks.
+    void shownTranscripts() {
+        BinItem master;
+        master.id = QStringLiteral("m");
+        master.name = QStringLiteral("Interview");
+        master.kind = BinItemKind::MasterClip;
+        master.editRate = lumenis::Rational(25);
+        master.durationFrames = 250;
+        master.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2"));
+        const QString mob = QString::fromStdString(mobIdOf(master).toString());
+        Transcript t;
+        t.mob = mob;
+        t.lines = {TranscriptLine{1, {{QStringLiteral("Hello"), 0.0, 0.4}, {QStringLiteral("there."), 0.4, 0.8}}},
+                   TranscriptLine{2, {{QStringLiteral("Hi"), 4.0, 4.4}}}};
+        t.speakers.insert(2, QStringLiteral("Ann"));
+        const TranscriptFor transcriptFor = [&](const QString& m) -> std::optional<Transcript> {
+            return m == mob ? std::optional(t) : std::nullopt;
+        };
+        ShownTranscript s = shownTranscript(master, transcriptFor);
+        QCOMPARE(s.lines.size(), qsizetype(2));
+        QCOMPARE(s.lines[0].words[1].frame, std::int64_t(10));
+        QCOMPARE(s.lines[1].speaker, QStringLiteral("Ann"));
+        QCOMPARE(s.lines[1].frame, std::int64_t(100));
+        QCOMPARE(wordAt(s, 12), (std::optional<std::pair<int, int>>{{0, 1}}));
+        QCOMPARE(wordAt(s, 150), (std::optional<std::pair<int, int>>{{1, 0}}));
+        // A subclip from frame 50: only "Hi", at its frame 50.
+        BinItem sub = master;
+        sub.id = QStringLiteral("s");
+        sub.kind = BinItemKind::Subclip;
+        sub.durationFrames = 100;
+        ClipSource src;
+        src.kind = ClipSource::Kind::Clip;
+        src.mob = mobIdOf(master);
+        src.offset = 50;
+        sub.sources = {src};
+        s = shownTranscript(sub, transcriptFor);
+        QCOMPARE(s.lines.size(), qsizetype(1));
+        QCOMPARE(s.lines[0].words[0].frame, std::int64_t(50));
+        // Not transcribed.
+        BinItem other = master;
+        other.id = QStringLiteral("o");
+        other.name = QStringLiteral("Other");
+        s = shownTranscript(other, transcriptFor);
+        QVERIFY(s.lines.isEmpty());
+        QCOMPARE(s.notTranscribed, QStringList{QStringLiteral("Other")});
+        // A sequence: the master on A1 and A2 from frame 90 at sequence frame 0 shows "Hi" once, at frame 10.
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment seg;
+        seg.clipId = master.id;
+        seg.binId = QStringLiteral("bin");
+        seg.sourceIn = 90;
+        seg.length = 40;
+        seg.sourceTrack = QStringLiteral("A1");
+        seq.ensureTrack(QStringLiteral("A1"));
+        seq.ensureTrack(QStringLiteral("A2"));
+        seq.track(QStringLiteral("A1"))->segments = {seg};
+        seq.track(QStringLiteral("A2"))->segments = {seg};
+        const ShownClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<BinItem> {
+            return id == master.id ? std::optional(master) : std::nullopt;
+        };
+        s = shownTranscript(seq, {}, transcriptFor, lookup);
+        QCOMPARE(s.availableTracks, (QStringList{QStringLiteral("A1"), QStringLiteral("A2")}));
+        QCOMPARE(s.lines.size(), qsizetype(1));
+        QCOMPARE(s.lines[0].words.size(), qsizetype(1));
+        QCOMPARE(s.lines[0].words[0].frame, std::int64_t(10));
+        // Only A2 chosen; none.
+        s = shownTranscript(seq, {QStringLiteral("A3")}, transcriptFor, lookup);
+        QVERIFY(s.lines.isEmpty());
     }
 };
 

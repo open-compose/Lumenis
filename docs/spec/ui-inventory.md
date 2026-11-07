@@ -632,6 +632,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   speaker turns, 2-second pauses and 30-second sentences; Speaker IDs alternating at turns; the Language Hint's
   languages; background transcription starting new clips after ten idle seconds and finishing a running one; the
   Sidebar's Transcription column; audio-only master clips transcribed too.
+* The Transcript Tool (docs/spec/transcripts.md): the side following the last load, search ignoring punctuation and
+  going round, Transcribe at High priority and for excluded bins too, the timecode, speaker and words on one line, a clip
+  on two tracks shown once.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -3087,7 +3090,8 @@ Details: docs/spec/bin-locking.md.
 * File > Settings > Project > Transcript (p.447-450): Include all new bins in transcription, Pause background
   transcription while editing, Language Hint, Subclips/Groups. Manage Speakers and Manage Transcripts later (8.2b,
   8.2d).
-* Later: the Transcript Tool (8.2b), PhraseFind AI in the Find window (8.2c), the bin's Transcript menu (8.2d), AutoCut
+* Tools > Transcript Tool (p.442), 8.2b1; its editing and speakers 8.2b2.
+* Later: PhraseFind AI in the Find window (8.2c), the bin's Transcript menu (8.2d), AutoCut
   (8.2e).
 
 ## 21. Still to document

@@ -2,6 +2,7 @@ add_library(lumenis_model STATIC
     bin.cpp
     bin_lock.cpp
     transcript.cpp
+    transcript_view.cpp
     project_bins.cpp
     project_store.cpp
     locations.cpp

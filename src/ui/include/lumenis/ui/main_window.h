@@ -62,6 +62,7 @@ class BackgroundQueue;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ColorInfoTool;
+class TranscriptTool;
 class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
@@ -575,6 +576,10 @@ public:
     // clips are queued.
     void setBinsTranscribed(bool included);
     bool isBinTranscribed(const QString& binId) const;
+    // "Transcribe" and Transcribe Remaining Clips (p.443): the project's master clips with these MobIDs, transcribed at
+    // once (High priority on the Background Queue, ahead of background transcription). Returns how many were queued.
+    int transcribeNow(const QStringList& mobs);
+    TranscriptTool& transcriptTool() const { return *transcriptTool_; }
     bool chooseAngle(int angle);
     // Clip > MultiGroup (8.1b3; p.1125): the multigroup's id, nothing when none was made (the Group Clips hook
     // stands in for its dialog in tests).
@@ -962,6 +967,20 @@ private:
     void setUpTranscription(bool projectOpen);
     // The timer's tick: queues transcriptions once the user has been idle ten seconds (or always, with the pause off).
     void transcriptionTick();
+    // The Transcript Tool (8.2b; Tools > Transcript Tool): its panel and what it follows.
+    TranscriptTool* transcriptTool_ = nullptr;
+    QString transcriptKey_;           // what it shows now, so that position changes do not rebuild it
+    QStringList transcriptTracks_;    // the track button's choice; empty: all audio tracks
+    bool transcriptSourceSide_ = true;
+    QString lastSourceLoaded_;
+    QString lastRecordLoaded_;
+    int transcriptGeneration_ = 0;    // bumped when a transcript is made or changed
+    void setUpTranscriptTool();
+    // Queues one clip's transcription; `now` for the user's Transcribe (High priority). False when it is already queued
+    // or there is no engine.
+    bool queueTranscription(const QString& binId, const model::BinItem& item, bool now);
+    // Shows what the chosen side's monitor holds, its position and marks (Composer::changed).
+    void refreshTranscriptTool();
     // The Group menu (p.1133): its contents, and a choice of an angle for one of the group's tracks.
     std::optional<Composer::GroupMenuInfo> groupMenuInfo() const;
     bool chooseGroupTrackAngle(const QString& track, int angle);

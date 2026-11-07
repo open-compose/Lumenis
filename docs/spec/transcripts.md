@@ -64,10 +64,43 @@ File > Settings > Project > Transcript (p.447-450):
   8.2b on.
 * Manage Speakers and Manage Transcripts come with 8.2b and 8.2d.
 
+## The Transcript Tool (8.2b1)
+
+Tools > Transcript Tool (p.442; command `tools.transcript_tool`) opens it as the "Transcript" panel
+(`ui::TranscriptTool`, wired in `main_window_transcripts.cpp`).
+
+* What it shows (`model::shownTranscript`): "the Transcript Tool will always reference master clip transcripts"
+  (p.449). A master clip shows its own; a subclip its master clip's from where it starts (its Clip source's offset); a
+  group its selected angle's; a sequence or multigroup "the transcript for the master clip associated with any selected
+  audio tracks" (p.449), each segment's words placed at its frames. A clip on two tracks is shown once.
+* "the Transcript Tool will update each time a clip is loaded into the Source monitor, or a sequence is loaded into the
+  Record monitor" (p.442): the side follows the last load; the Source/Record button switches it ("green when the Source
+  side is selected", p.444).
+* Each line: its timecode (Show Timecode), its speaker (Show Speaker ID) and its words.
+* "ganged to the Source or Record monitor's playhead, which displays as a bold, green (for Source) or blue (for Record)
+  word" (p.442); the word is the last one starting at or before the position.
+* "Clicking on a word in a transcript will also move the playhead ... selecting text in the Transcript Tool will set In
+  and Out marks" (p.442): IN at the first word's frame, OUT on the last word's last frame. Shift+Left/Right move the end
+  of the selection word by word. Marks set in the monitor select their words. Unganged (the gang button), neither
+  follows the other (p.444).
+* Copy: the selected text, plain (p.442).
+* Search (p.444): every place the typed words follow one another, ignoring case and punctuation (ours, as PhraseFind,
+  p.441); the arrows and Enter go to the next or previous match after the playhead word, going round.
+* The track button for sequences, groups and multigroups (p.449): the audio tracks whose transcripts are shown, all of
+  them until chosen.
+* Fast menu (p.443): Show Timecode, Show Speaker ID, Show Not Transcribed, Set Font, Transcribe Remaining Clips.
+  "Clip not transcribed" with a Transcribe button; transcribing from the tool runs the clips at High priority on the
+  Background Queue, ahead of background transcription (`MainWindow::transcribeNow`). Ours: Transcribe also works for
+  clips in excluded bins.
+* Still to come (8.2b2): editing text, Speaker IDs, Find and Replace, the 2026.8 items, the New Project tab's Language
+  Hint, editing with V and B from the tool's marks (they work through the monitors already).
+
 ## Tests
 
 * `tst_transcript`: lines from engine words, JSON round trips, the store, the bins' status.
 * `tst_transcription`: whisper-cli's JSON, a linked clip transcribed through a stand-in engine, `WhisperProvider` running
   a stand-in `whisper-cli` script (not on Windows).
+* `tst_transcript shownTranscripts`: what a clip, subclip, group and sequence show; `tst_transcripts_ui transcriptTool`:
+  the tool in the application (sides, clicks, selections, search, a sequence, Transcribe).
 * `tst_transcripts_ui`: Include/Exclude Bin in Transcription with the Sidebar's status, queuing the included bins' clips
   once, the Language Hint reaching the engine, new bins excluded.

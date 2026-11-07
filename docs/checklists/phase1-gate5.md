@@ -260,6 +260,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Source Browser |  | p.522 | works | ☐ | | |
 | Timecode Window |  | p.389 | works | ☐ | | |
 | Timeline Clip Notes |  | p.484 | works | ☐ | | |
+| Transcript Tool |  | p.442 | works | ☐ | | |
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
 | Video Output Tool |  | p.910 | works | ☐ | | |
 | Titler+ |  | p.303 | works | ☐ | | |
@@ -319,6 +320,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 215 menu commands, 171 of them working with a project open; the
+* 216 menu commands, 172 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

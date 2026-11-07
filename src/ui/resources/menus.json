@@ -340,6 +340,7 @@
         "tools.source_browser",
         "tools.timecode_window",
         "tools.timeline_clip_notes",
+        "tools.transcript_tool",
         "tools.video_input_tool",
         "tools.video_output_tool",
         "tools.titler",
