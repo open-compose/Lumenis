@@ -48,6 +48,7 @@ add_library(lumenis_model STATIC
     sync_dupes.cpp
     text_find.cpp
     phrase_find.cpp
+    transcript_export.cpp
     bin_attic.cpp
     effect_keyframes.cpp
     bin_relations.cpp
@@ -81,6 +82,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/sync_dupes.h
     include/lumenis/model/text_find.h
     include/lumenis/model/phrase_find.h
+    include/lumenis/model/transcript_export.h
     include/lumenis/model/bin_attic.h
     include/lumenis/model/effect_keyframes.h
     include/lumenis/model/bin_relations.h

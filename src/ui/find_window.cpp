@@ -460,8 +460,7 @@ void FindWindow::refreshIndexStatus() {
 }
 
 // The Settings button (p.441): "change the location of the Search Data Directory, stop or start the Find or PhraseFind
-// AI indexing, or Manage Transcripts". Ours: the transcripts' folder is the store's (LUMENIS_TRANSCRIPTS), shown dimmed;
-// Manage Transcripts comes with 8.2d.
+// AI indexing, or Manage Transcripts". Ours: the transcripts' folder is the store's (LUMENIS_TRANSCRIPTS), shown dimmed.
 QMenu* FindWindow::settingsMenu(QWidget* parent) {
     auto* menu = new QMenu(parent);
     menu->setObjectName(QStringLiteral("searchSettingsMenu"));
@@ -474,7 +473,12 @@ QMenu* FindWindow::settingsMenu(QWidget* parent) {
         refreshIndexStatus();
     });
     menu->addAction(tr("Search Data Directory: %1").arg(model::TranscriptStore::defaultFolder()))->setEnabled(false);
-    menu->addAction(tr("Manage Transcripts..."))->setEnabled(false);
+    QAction* manage = menu->addAction(tr("Manage Transcripts..."));
+    manage->setObjectName(QStringLiteral("manageTranscripts"));
+    manage->setEnabled(static_cast<bool>(phrase_.manageTranscripts));
+    connect(manage, &QAction::triggered, this, [this] {
+        if (phrase_.manageTranscripts) phrase_.manageTranscripts();
+    });
     return menu;
 }
 

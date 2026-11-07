@@ -638,6 +638,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
   a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
+* Transcripts out (docs/spec/transcripts.md): the exported .txt as an Avid DS caption file with the speaker as its first
+  row, several items into a folder, two rows to a caption under the character limit (32 offered), Create SubCap on a new
+  top track, the shared file as our JSON `.cttr`, Manage Transcripts listing the current project's clips with Export.
 * PhraseFind AI (docs/spec/transcripts.md): the scores below 100 (half or more of the words in a line, a word's start
   counting half), one row per place, no Cancel button, the Search Data Directory fixed, indexing meaning background
   transcription.
@@ -3104,7 +3107,10 @@ Details: docs/spec/bin-locking.md.
 * Tools > Transcript Tool (p.442), 8.2b1; its editing and speakers 8.2b2.
 * Edit > Find's PhraseFind AI button, Score and Transcription, the PhraseFind AI Index and the Settings button
   (p.436-441), 8.2c.
-* Later: the bin's Transcript menu (8.2d), AutoCut
+* The bin's right-click Transcript menu: Export Transcript, Share Transcripts, Delete Transcript, Export SubCap
+  (p.450-453, 2026.8 guide p.456); the Timeline's Transcript > Create SubCap (p.452); Script > Manage Transcripts and
+  the Transcript setting's Manage Transcripts button (2026.8 guide p.455), 8.2d.
+* Later: AutoCut
   (8.2e).
 
 ## 21. Still to document

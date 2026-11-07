@@ -81,6 +81,7 @@ public:
         std::function<std::pair<int, int>()> indexStatus;
         std::function<bool()> indexing;
         std::function<void(bool)> setIndexing;
+        std::function<void()> manageTranscripts; // the Settings button's Manage Transcripts (8.2d)
     };
     void setPhraseFind(PhraseFindSource source);
     // The PhraseFind AI button: searches the dialogue and fills the Results (Clips and Sequences tab). Returns the

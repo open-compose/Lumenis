@@ -65,7 +65,7 @@ File > Settings > Project > Transcript (p.447-450):
 * Subclips/Groups: Ask (the default), Use Master Clips Transcripts, Transcribe Subclip or Group (p.449-450); used from
   8.2b on.
 * Manage Speakers (p.445, 8.2b2b), a "button" option (`SettingsDialog::buttonClicked`, `toolRequested`), opens Manage
-  Speaker Names. Manage Transcripts comes with 8.2d.
+  Speaker Names; Manage Transcripts (p.453, 8.2d) opens Manage Transcripts.
 
 ## The Transcript Tool (8.2b1)
 
@@ -169,8 +169,42 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   with nothing to transcribe. "Found" counts the results.
 * The Settings button (p.441): Stop/Start PhraseFind AI Indexing stops or starts background transcription
   (`MainWindow::setTranscriptionIndexing`; Transcribe still works); the Search Data Directory is shown, dimmed, as the
-  store's folder (`LUMENIS_TRANSCRIPTS`); Manage Transcripts comes with 8.2d.
+  store's folder (`LUMENIS_TRANSCRIPTS`); Manage Transcripts opens Manage Transcripts (8.2d).
 * Ours: no Cancel button, the search over transcripts being quick; filtering applies when the search runs.
+
+## Transcripts out (8.2d)
+
+`src/model/transcript_export.*`, `src/ui/transcript_dialogs.*` and `main_window_transcripts.cpp`:
+
+* The bin's right-click Transcript menu (p.450-453, 2026.8 guide p.456): Export Transcript and Share Transcripts for clips
+  and sequences, Delete Transcript for clips (master clips, subclips, groups: the master clip's, a group's selected
+  angle's), Export SubCap for sequences. The Timeline's right-click Transcript > Create SubCap (p.452). Commands
+  `bin.export_transcript`, `bin.share_transcripts`, `bin.delete_transcript`, `bin.export_subcap`,
+  `timeline.create_subcap`.
+* The Transcribe window (`TranscribeTracksDialog`): "select the audio tracks from your sequence" for a sequence's Export
+  Transcript, Export SubCap and Create SubCap, with "Use Marks" and "Limit characters per caption" for captions
+  (p.452-453). Ours: every audio track checked at first, a 32-character limit offered when turned on.
+* Export Transcript (p.450): "a text file (.txt), containing timecode and unique speaker ID information ... can also be
+  imported back ... for use in the SubCap effect". Ours is an Avid DS caption file (`model::exportedTranscriptText`):
+  each line a caption from its first word to its last word's end, its first row the speaker ("Speaker 1:"), so the
+  SubCap effect's Import Caption Data reads it as it is. Several items go into a chosen folder, a file each.
+* Captions (`model::transcriptCaptions`): a line a caption; with the limit, rows broken between words, two rows to a
+  caption (ours); each ending before the next starts; with Use Marks, only between the Record monitor's IN and OUT.
+  Export SubCap writes Avid DS (.txt) or EBU N19 (.stl) as the SubCap effect's Export Caption Data does. Create SubCap
+  adds a video track above the others with a SubCap effect over the captions, subdivided at them
+  (`model::createSubCapTrack`), as one undo step.
+* Share Transcripts (p.451): the selection's transcripts in one file with the project's Language Hint. Avid's .avt is
+  undocumented, so ours is JSON, "cutthulhu-transcripts" with the suffix `.cttr` (`model::writeSharedTranscripts`).
+  Importing needs the same Language Hint ("Project Transcript Language Hint settings need to match when exporting and
+  importing"). Peer-to-peer sharing over Avid NEXIS (p.451-452) waits for 8.7.
+* Delete Transcript also on the Transcript Tool's fast menu (2026.8 guide p.456: "The currently loaded transcript is
+  immediately deleted"): every transcript it shows.
+* Manage Transcripts (2026.8 guide p.455-456), from Script > Manage Transcripts, the Find window's Settings and the
+  Transcript setting's button (`ManageTranscriptsDialog`, `MainWindow::manageTranscripts`): "Select the project whose
+  transcripts you want to delete and click Delete ... Click Import". Ours: our store is not kept by project, so the
+  window lists the current project's transcribed clips (clip, language, created, edited); Delete removes the selected
+  ones, Import reads a shared transcripts file, Export shares them all (p.451: "transcripts for an entire project can be
+  exported using the Manage Transcripts window"), Done closes it.
 
 ## Tests
 
@@ -179,6 +213,10 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   a stand-in `whisper-cli` script (not on Windows).
 * `tst_transcript editing`, `groupedSpeakerLines`: timing kept through edits, Find and Replace, speakers, Start New
   Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
+* `tst_transcript transcriptsOut`: the exported text read back as captions, captions with a limit and marks, Create
+  SubCap's track, the shared file; `tst_transcripts_ui transcriptsOut` the bin's Transcript menu, Export Transcript,
+  Share and Import with the Language Hint check, Delete, Export SubCap and Create SubCap on a sequence, Manage
+  Transcripts.
 * `tst_transcript phraseFind`: scores, order, subclips, filters; `tst_transcripts_ui phraseFindWindow` the Find window's
   button, columns, index status, loading with the IN mark, Stop/Start indexing.
 * `tst_transcript speakerNames`: rename, merge and clear by name, the project's list; `tst_transcripts_ui

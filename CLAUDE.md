@@ -861,7 +861,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   and the New Project tab's Language Hint (`SelectProjectDialog`), is done. 8.2c, PhraseFind AI in the Find window
   (`src/model/phrase_find.*` over the transcripts, `FindWindow::phraseFind` with Score and Transcription, the PhraseFind
   AI Index and Settings menu, `MainWindow::connectPhraseFind`/`phraseIndexStatus`/`setTranscriptionIndexing`; tests
-  `tst_transcript phraseFind`, `tst_transcripts_ui phraseFindWindow`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  `tst_transcript phraseFind`, `tst_transcripts_ui phraseFindWindow`), is done. 8.2d, transcripts out (the bin's and
+  Timeline's Transcript menus, `src/model/transcript_export.*` with the exported text as Avid DS captions, captions,
+  `createSubCapTrack` and our `.cttr` shared file; `src/ui/transcript_dialogs.*` with the Transcribe window and Manage
+  Transcripts; `MainWindow::exportTranscripts`/`shareTranscripts`/`deleteTranscripts`/`exportSubCap`/`createSubCap`/
+  `manageTranscripts`; tests `tst_transcript transcriptsOut`, `tst_transcripts_ui transcriptsOut`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

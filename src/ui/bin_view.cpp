@@ -2274,6 +2274,32 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             commit->setEnabled(!document_.isReadOnly());
         }
     }
+    // The Transcript menu (p.450-453; 2026.8 guide p.456): Export Transcript and Share Transcripts for clips and
+    // sequences, Delete Transcript for clips, Export SubCap for sequences.
+    {
+        bool clipSelected = false;
+        bool sequence = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            if (!item) continue;
+            sequence = sequence || item->kind == model::BinItemKind::Sequence;
+            clipSelected = clipSelected || item->kind == model::BinItemKind::MasterClip || item->kind == model::BinItemKind::AudioClip ||
+                   item->kind == model::BinItemKind::Subclip || item->kind == model::BinItemKind::Group;
+        }
+        if (clipSelected || sequence) {
+            QMenu* transcript = menu->addMenu(tr("Transcript"));
+            transcript->setObjectName(QStringLiteral("binTranscriptMenu"));
+            auto add = [this, transcript](const QString& text, const char* id, bool enabled) {
+                QAction* a = transcript->addAction(text, this, [this, id] { emit commandRequested(QString::fromLatin1(id)); });
+                a->setObjectName(QString::fromLatin1(id));
+                a->setEnabled(enabled);
+            };
+            add(tr("Export Transcript"), "bin.export_transcript", true);
+            add(tr("Share Transcripts"), "bin.share_transcripts", true);
+            add(tr("Delete Transcript"), "bin.delete_transcript", clipSelected);
+            add(tr("Export SubCap"), "bin.export_subcap", sequence);
+        }
+    }
     colorMenu(menu, tr("Set Background Color"), true);
     if (mode() == model::BinViewMode::Frame) {
         // Snap to Grid (p.252).

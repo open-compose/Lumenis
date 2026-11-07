@@ -52,6 +52,7 @@ add_library(lumenis_ui STATIC
     color_info.cpp
     transcript_tool.cpp
     speaker_names_dialog.cpp
+    transcript_dialogs.cpp
     command_palette.cpp
     full_screen.cpp
     keyboard_map.cpp
@@ -143,6 +144,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/color_info.h
     include/lumenis/ui/transcript_tool.h
     include/lumenis/ui/speaker_names_dialog.h
+    include/lumenis/ui/transcript_dialogs.h
     include/lumenis/ui/command_palette.h
     include/lumenis/ui/full_screen.h
     include/lumenis/ui/keyboard_map.h

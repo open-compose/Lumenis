@@ -13,6 +13,7 @@
 #include "lumenis/model/safe_colors.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/transcript.h"
+#include "lumenis/model/transcript_view.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -64,6 +65,8 @@ class CalculatorWindow;
 class ColorInfoTool;
 class TranscriptTool;
 class SpeakerNamesDialog;
+class TranscribeTracksDialog;
+class ManageTranscriptsDialog;
 struct SpeakerNameChange;
 class ConsolidateDialog;
 class UnmountDialog;
@@ -596,6 +599,30 @@ public:
     // The PhraseFind AI index's state: the master clips with sound in the bins included in transcription, and how many
     // of them have a transcript.
     std::pair<int, int> phraseIndexStatus() const;
+    // Transcripts out (8.2d; Editing Guide p.450-456). Each acts on the active bin's selection, as the bin's Transcript
+    // menu does. Export Transcript: a text file per clip or sequence (a sequence's tracks from the Transcribe window);
+    // returns how many were written. Share Transcripts: the selection's transcripts in one shared transcripts file.
+    // Delete Transcript: the selected clips' transcripts; returns how many were deleted. Export SubCap: the selected
+    // sequence's dialogue as a caption file. Create SubCap: captions on a new track of the Record monitor's sequence.
+    int exportTranscripts();
+    bool shareTranscripts();
+    int deleteTranscripts(const QStringList& mobs = {});
+    bool exportSubCap();
+    bool createSubCap();
+    // Manage Transcripts (2026.8 guide p.455-456; Script > Manage Transcripts, the Find window's Settings, the Transcript
+    // setting's button): opened window modal without blocking, returned; nullptr without a project.
+    ManageTranscriptsDialog* manageTranscripts();
+    // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
+    // to match when exporting and importing", p.451).
+    int importSharedTranscripts(const QString& path, QString* error = nullptr);
+    // Test hooks: the file or folder chosen (`kind`: "save", "folder" or "open"; `suggested` a file name) and the
+    // Transcribe window's answer, in place of the dialogs.
+    using TranscriptPathAsk = std::function<QString(const QString& kind, const QString& suggested)>;
+    using TranscribeTracksAsk = std::function<bool(TranscribeTracksDialog&)>;
+    void setTranscriptHooks(TranscriptPathAsk path, TranscribeTracksAsk tracks) {
+        transcriptPathHook_ = std::move(path);
+        transcribeTracksHook_ = std::move(tracks);
+    }
     void applySpeakerNameChange(const SpeakerNameChange& change);
     // The project's speaker names and those in its transcripts, and those in its transcripts only; the names Identify
     // Speaker offers ("a list of previously identified speakers in this project", p.444).
@@ -997,6 +1024,14 @@ private:
     int transcriptGeneration_ = 0;    // bumped when a transcript is made or changed
     void setUpTranscriptTool();
     bool transcriptionIndexing_ = true;
+    TranscriptPathAsk transcriptPathHook_;
+    TranscribeTracksAsk transcribeTracksHook_;
+    // The file or folder for transcripts out, through the hook or a file dialog; empty when cancelled.
+    QString transcriptPath(const QString& kind, const QString& suggested, const QString& filter);
+    // What an item shows, its sequence's or multigroup's on `tracks`.
+    model::ShownTranscript shownTranscriptOf(const model::BinItem& item, const QStringList& tracks) const;
+    // The Transcribe window for a sequence's audio tracks; false when cancelled.
+    bool chooseTranscribeTracks(TranscribeTracksDialog& dialog);
     // Gives the Find window the transcripts and the index (8.2c).
     void connectPhraseFind(FindWindow& window);
     // Queues one clip's transcription; `now` for the user's Transcribe (High priority). False when it is already queued

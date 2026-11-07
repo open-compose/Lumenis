@@ -1394,6 +1394,7 @@ SettingsWindow* MainWindow::showSettings() {
             if (tool == QLatin1String("videoOutputTool")) openVideoOutput();
             // The Transcript setting's Manage Speakers button (p.445).
             if (tool == QLatin1String("manageSpeakers")) manageSpeakers();
+            if (tool == QLatin1String("manageTranscripts")) manageTranscripts();
             // A Bin Layout setting: opened (p.92).
             if (tool == QLatin1String("binLayout")) {
                 const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
@@ -8171,6 +8172,13 @@ void MainWindow::installPanelHandlers() {
         storeClip(binId, item);
     });
     handle("bin.commit_multicam_edits", [this] { commitMulticamEdits(); });
+    // The Transcript menus (8.2d; p.450-453, 2026.8 guide p.455-456).
+    handle("bin.export_transcript", [this] { exportTranscripts(); });
+    handle("bin.share_transcripts", [this] { shareTranscripts(); });
+    handle("bin.delete_transcript", [this] { deleteTranscripts(); });
+    handle("bin.export_subcap", [this] { exportSubCap(); });
+    handle("timeline.create_subcap", [this] { createSubCap(); });
+    handle("script.manage_transcripts", [this] { manageTranscripts(); });
     connect(binContainer_, &BinContainer::commandRequested, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id)) a->trigger();
     });

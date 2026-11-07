@@ -1435,7 +1435,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     * 8.2c (done), PhraseFind AI in the Find window (p.436-441): the index of the project's transcripts, the PhraseFind AI
       button, Score and Transcription columns, the index status, Load into monitor with the mark IN before the
       dialogue, the Search Settings (indexing on/off, Manage Transcripts).
-    * 8.2d, transcripts out (p.450-453; 2026.8 guide p.455-456): the bin's Transcript menu (Export Transcript as .txt,
+    * 8.2d (done), transcripts out (p.450-453; 2026.8 guide p.455-456): the bin's Transcript menu (Export Transcript as .txt,
       Share Transcripts, Delete Transcript, Create SubCap and Export SubCap with the Transcribe window's tracks, Use
       Marks and Limit characters per caption), Manage Transcripts (delete, import). Shared transcript files are ours
       (Avid's .avt is undocumented); peer-to-peer sharing over NEXIS waits for 8.7.

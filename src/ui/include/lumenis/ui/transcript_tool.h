@@ -137,6 +137,8 @@ signals:
     void transcribeRequested(const QStringList& mobs);
     void fontRequested();
     void editRequested(const QString& mob, const lumenis::ui::TranscriptTool::TranscriptEdit& edit);
+    // The fast menu's Delete Transcript (2026.8 guide p.456): the shown transcripts, by MobID.
+    void deleteRequested(const QStringList& mobs);
 
 private:
     struct SpeakerSpan {

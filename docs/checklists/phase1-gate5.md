@@ -300,7 +300,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Add Page |  | p.574 | *later* | ☐ | | |
 | Hold Slates Onscreen |  | p.578 | *later* | ☐ | | |
 | Interpolate Position |  | p.577 | *later* | ☐ | | |
-| Manage Transcripts |  | p.454 | *later* | ☐ | | |
+| Manage Transcripts |  | p.454 | works | ☐ | | |
 | ScriptSync AI |  | p.584 | *later* | ☐ | | |
 | Text Layout |  | p.571 | *later* | ☐ | | |
 
@@ -320,6 +320,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 216 menu commands, 172 of them working with a project open; the
+* 216 menu commands, 173 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

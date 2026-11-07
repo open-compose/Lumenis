@@ -13,6 +13,10 @@
 #include "lumenis/ui/transcript_tool.h"
 #include "lumenis/ui/speaker_names_dialog.h"
 #include "lumenis/ui/find_window.h"
+#include "lumenis/ui/transcript_dialogs.h"
+#include "lumenis/ui/bin_view.h"
+#include "lumenis/model/transcript_export.h"
+#include "lumenis/model/subcap.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/model/group_clip.h"
@@ -22,7 +26,12 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QEvent>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDialog>
+#include <QSaveFile>
 #include <QPlainTextEdit>
 #include <QSet>
 #include <QTimer>
@@ -259,6 +268,7 @@ void MainWindow::setUpTranscriptTool() {
         }
     });
     // Edits from the tool (p.444-446): applied to the clip's transcript in the store, the tool shown again.
+    connect(transcriptTool_, &TranscriptTool::deleteRequested, this, [this](const QStringList& mobs) { deleteTranscripts(mobs); });
     connect(transcriptTool_, &TranscriptTool::editRequested, this,
             [this](const QString& mob, const TranscriptTool::TranscriptEdit& edit) { editTranscript(mob, edit); });
     // "Choosing the Set Font option in the fast menu opens a window to select a Font Family and Size" (p.443).
@@ -308,19 +318,7 @@ void MainWindow::refreshTranscriptTool() {
                             .arg(transcriptGeneration_);
     if (key != transcriptKey_) {
         transcriptKey_ = key;
-        const model::TranscriptStore store;
-        const model::TranscriptFor transcriptFor = [store](const QString& mob) { return store.load(mob); };
-        const model::ShownClipLookup lookup = [this](const QString& binId, const QString& clipId) {
-            return composer_->resolve(binId, clipId);
-        };
-        model::ShownTranscript shown;
-        if (item.kind == model::BinItemKind::Sequence) {
-            shown = model::shownTranscript(model::Sequence::fromItem(item), transcriptTracks_, transcriptFor, lookup);
-        } else if (const auto seq = model::multigroupSequence(item)) {
-            shown = model::shownTranscript(model::Sequence::fromItem(*seq), transcriptTracks_, transcriptFor, lookup);
-        } else {
-            shown = model::shownTranscript(item, transcriptFor);
-        }
+        const model::ShownTranscript shown = shownTranscriptOf(item, transcriptTracks_);
         const TimecodeFormat format = TimecodeFormat::forRate(item.editRate, model::isDropFrame(item));
         const std::int64_t start = state.startFrame();
         transcriptTool_->setFrameRate(item.editRate.toDouble());
@@ -331,6 +329,15 @@ void MainWindow::refreshTranscriptTool() {
     }
     transcriptTool_->setPosition(state.position());
     transcriptTool_->setMarks(state.in(), state.out());
+}
+
+model::ShownTranscript MainWindow::shownTranscriptOf(const model::BinItem& item, const QStringList& tracks) const {
+    const model::TranscriptStore store;
+    const model::TranscriptFor transcriptFor = [store](const QString& mob) { return store.load(mob); };
+    const model::ShownClipLookup lookup = [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); };
+    if (item.kind == model::BinItemKind::Sequence) return model::shownTranscript(model::Sequence::fromItem(item), tracks, transcriptFor, lookup);
+    if (const auto seq = model::multigroupSequence(item)) return model::shownTranscript(model::Sequence::fromItem(*seq), tracks, transcriptFor, lookup);
+    return model::shownTranscript(item, transcriptFor);
 }
 
 bool MainWindow::editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit) {
@@ -468,7 +475,344 @@ void MainWindow::connectPhraseFind(FindWindow& window) {
     source.indexStatus = [this] { return phraseIndexStatus(); };
     source.indexing = [this] { return transcriptionIndexing_; };
     source.setIndexing = [this](bool on) { setTranscriptionIndexing(on); };
+    source.manageTranscripts = [this] { manageTranscripts(); };
     window.setPhraseFind(std::move(source));
+}
+
+// ---------------------------------------------------------------- Transcripts out (8.2d)
+
+namespace {
+
+// A name usable as a file name.
+QString fileNameOf(const QString& name) {
+    QString out = name;
+    for (QChar& c : out) {
+        if (QStringLiteral("\\/:*?\"<>|").contains(c)) c = QLatin1Char('_');
+    }
+    return out.trimmed().isEmpty() ? QStringLiteral("Transcript") : out.trimmed();
+}
+
+QStringList audioTracksOf(const model::BinItem& item) {
+    QStringList out;
+    std::optional<model::BinItem> seqItem;
+    if (item.kind == model::BinItemKind::Sequence) seqItem = item;
+    else seqItem = model::multigroupSequence(item);
+    if (!seqItem) return out;
+    const model::Sequence seq = model::Sequence::fromItem(*seqItem);
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Audio) out << t.name();
+    }
+    return out;
+}
+
+bool hasSequence(const model::BinItem& item) {
+    return item.kind == model::BinItemKind::Sequence || model::multigroupSequence(item).has_value();
+}
+
+// The MobIDs of the transcripts a clip (not a sequence) names: its master clip's, a group's selected angle's.
+QStringList clipMobs(const model::BinItem& item) {
+    if (const auto g = model::groupOf(item); g && !model::isMultigroup(item)) {
+        if (g->selected >= 0 && g->selected < g->angles.size()) {
+            if (const auto s = model::transcriptSource(g->angles[g->selected].clip)) return {s->first};
+        }
+        return {};
+    }
+    if (const auto s = model::transcriptSource(item)) return {s->first};
+    return {};
+}
+
+} // namespace
+
+QString MainWindow::transcriptPath(const QString& kind, const QString& suggested, const QString& filter) {
+    if (transcriptPathHook_) return transcriptPathHook_(kind, suggested);
+    if (kind == QLatin1String("folder")) return QFileDialog::getExistingDirectory(this, tr("Export Transcript"));
+    if (kind == QLatin1String("open")) return QFileDialog::getOpenFileName(this, tr("Import Transcripts"), QString(), filter);
+    return QFileDialog::getSaveFileName(this, tr("Export Transcript"), suggested, filter);
+}
+
+bool MainWindow::chooseTranscribeTracks(TranscribeTracksDialog& dialog) {
+    return transcribeTracksHook_ ? transcribeTracksHook_(dialog) : dialog.exec() == QDialog::Accepted;
+}
+
+// "Right-click on one or more clips in a bin and choose Transcript > Export Transcript ... select a location to save the
+// transcript file" (p.450); for a sequence, "the Transcribe window opens ... select the audio tracks" first (p.451).
+// Ours: several items go into a folder, a file each named after it.
+int MainWindow::exportTranscripts() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    QList<model::BinItem> items;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* item = view->document().bin().item(id)) items << *item;
+    }
+    if (items.isEmpty()) return 0;
+    QString folder;
+    QString single;
+    if (items.size() == 1) {
+        single = transcriptPath(QStringLiteral("save"), fileNameOf(items.first().name) + QStringLiteral(".txt"), tr("Text (*.txt)"));
+        if (single.isEmpty()) return 0;
+    } else {
+        folder = transcriptPath(QStringLiteral("folder"), QString(), QString());
+        if (folder.isEmpty()) return 0;
+    }
+    int written = 0;
+    for (const model::BinItem& item : items) {
+        QStringList tracks;
+        if (hasSequence(item)) {
+            TranscribeTracksDialog dialog(audioTracksOf(item), false, this);
+            if (!chooseTranscribeTracks(dialog)) continue;
+            tracks = dialog.tracks();
+            if (tracks.isEmpty()) continue;
+        }
+        const model::ShownTranscript shown = shownTranscriptOf(item, tracks);
+        if (shown.lines.isEmpty()) {
+            ConsoleLog::instance().append(tr("Export Transcript: \"%1\" has no transcript.").arg(item.name));
+            continue;
+        }
+        const QString text = model::exportedTranscriptText(shown, model::timecodeFormatOf(item), model::startFrameOf(item));
+        const QString path = single.isEmpty() ? QDir(folder).filePath(fileNameOf(item.name) + QStringLiteral(".txt")) : single;
+        QSaveFile file(path);
+        const QByteArray bytes = text.toUtf8();
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+            ConsoleLog::instance().append(tr("Export Transcript: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+            continue;
+        }
+        ++written;
+    }
+    return written;
+}
+
+// "Right-click on a clip or sequence in a bin and choose Transcript > Share Transcripts ... Multiple clips or sequences
+// can be shared at once" (p.451): every transcript they show, with the project's Language Hint.
+bool MainWindow::shareTranscripts() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return false;
+    const model::TranscriptStore store;
+    model::SharedTranscripts shared;
+    shared.languageHint = settings_->value(QStringLiteral("Transcript"), QStringLiteral("languageHint")).toString();
+    QStringList mobs;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* item = view->document().bin().item(id);
+        if (!item) continue;
+        for (const QString& mob : shownTranscriptOf(*item, {}).speakers.keys()) {
+            if (!mobs.contains(mob)) mobs << mob;
+        }
+    }
+    for (const QString& mob : mobs) {
+        if (auto t = store.load(mob)) shared.transcripts << *t;
+    }
+    if (shared.transcripts.isEmpty()) {
+        ConsoleLog::instance().append(tr("Share Transcripts: the selection has no transcripts."));
+        return false;
+    }
+    const QString suffix = QString::fromLatin1(model::kSharedTranscriptsSuffix);
+    const QString path = transcriptPath(QStringLiteral("save"), QStringLiteral("Transcripts.") + suffix,
+                                        tr("Shared transcripts (*.%1)").arg(suffix));
+    if (path.isEmpty()) return false;
+    QSaveFile file(path);
+    const QByteArray bytes = model::writeSharedTranscripts(shared);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+        ConsoleLog::instance().append(tr("Share Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        return false;
+    }
+    return true;
+}
+
+// "Right-click on a clip in a bin. Choose 'Transcript > Delete Transcript' ... The transcript for the selected clip is
+// immediately deleted" (2026.8 guide p.456). With `mobs`, those (the Transcript Tool's and Manage Transcripts').
+int MainWindow::deleteTranscripts(const QStringList& mobs) {
+    QStringList targets = mobs;
+    if (targets.isEmpty()) {
+        BinView* view = binContainer_->activeView();
+        if (!view) return 0;
+        for (const QString& id : view->selectedIds()) {
+            if (const model::BinItem* item = view->document().bin().item(id)) {
+                for (const QString& mob : clipMobs(*item)) {
+                    if (!targets.contains(mob)) targets << mob;
+                }
+            }
+        }
+    }
+    const model::TranscriptStore store;
+    int removed = 0;
+    for (const QString& mob : targets) removed += store.remove(mob) ? 1 : 0;
+    if (removed > 0) {
+        ++transcriptGeneration_;
+        refreshTranscriptTool();
+    }
+    return removed;
+}
+
+// "Right-click on a sequence in a bin and choose Transcript > Export SubCap. The Transcribe window opens ... The Export
+// SubCap window opens ... select a location to save the SubCap file" (p.452): an Avid DS (.txt) or EBU N19 (.stl) file.
+bool MainWindow::exportSubCap() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return false;
+    std::optional<model::BinItem> item;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* found = view->document().bin().item(id);
+        if (found && hasSequence(*found)) {
+            item = *found;
+            break;
+        }
+    }
+    if (!item) return false;
+    TranscribeTracksDialog dialog(audioTracksOf(*item), true, this);
+    if (!chooseTranscribeTracks(dialog) || dialog.tracks().isEmpty()) return false;
+    model::TranscriptCaptionOptions options;
+    options.maxCharacters = dialog.characterLimit();
+    const model::MonitorState* record = nullptr;
+    if (const model::LoadedClip* rec = composer_->state(MonitorId::Record).current(); rec && rec->item.id == item->id)
+        record = &composer_->state(MonitorId::Record);
+    if (dialog.useMarks() && record && record->in() && record->out()) options.range = std::pair{*record->in(), *record->out() + 1};
+    QList<model::Caption> captions = model::transcriptCaptions(shownTranscriptOf(*item, dialog.tracks()), options);
+    if (captions.isEmpty()) {
+        ConsoleLog::instance().append(tr("Export SubCap: \"%1\" has no transcribed dialogue on those tracks.").arg(item->name));
+        return false;
+    }
+    const QString path = transcriptPath(QStringLiteral("save"), fileNameOf(item->name) + QStringLiteral(".txt"),
+                                        tr("Avid DS (*.txt);;EBU N19 (*.stl)"));
+    if (path.isEmpty()) return false;
+    const TimecodeFormat format = model::timecodeFormatOf(*item);
+    const std::int64_t start = model::startFrameOf(*item);
+    QByteArray bytes;
+    if (path.endsWith(QLatin1String(".stl"), Qt::CaseInsensitive)) {
+        // EBU N19 is 25 or 30 frames a second: the same labels at that rate (as the SubCap effect's Export Caption Data).
+        const int fps = format.nominalFps % 30 == 0 ? 30 : 25;
+        const TimecodeFormat stl = TimecodeFormat::forRate(Rational(fps), false);
+        auto relabel = [&](std::int64_t frames) {
+            const auto tc = Timecode::parse(Timecode(frames, format).toString(), stl);
+            return tc ? tc->frameCount() : frames;
+        };
+        for (model::Caption& c : captions) {
+            c.start = relabel(start + c.start);
+            c.end = relabel(start + c.end);
+        }
+        bytes = model::writeStl(captions, fps);
+    } else {
+        for (model::Caption& c : captions) {
+            c.start += start;
+            c.end += start;
+        }
+        bytes = model::writeDsCaptions(captions, format).toUtf8();
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+        ConsoleLog::instance().append(tr("Export SubCap: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        return false;
+    }
+    return true;
+}
+
+// "Right-click inside a sequence and choose Transcript > Create SubCap. The Transcribe window opens ... Select the 'Use
+// Marks' checkbox if you want to generate SubCaps only within a marked section of the timeline" (p.452). Ours: the
+// captions go on a new video track over the sequence, as one undo step.
+bool MainWindow::createSubCap() {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) {
+        ConsoleLog::instance().append(tr("Create SubCap: load a sequence into the Record monitor."));
+        return false;
+    }
+    const model::BinItem item = rec->item;
+    TranscribeTracksDialog dialog(audioTracksOf(item), true, this);
+    if (!chooseTranscribeTracks(dialog) || dialog.tracks().isEmpty()) return false;
+    model::TranscriptCaptionOptions options;
+    options.maxCharacters = dialog.characterLimit();
+    const model::MonitorState& record = composer_->state(MonitorId::Record);
+    if (dialog.useMarks()) {
+        const std::int64_t in = record.in().value_or(0);
+        const std::int64_t out = record.out() ? *record.out() + 1 : std::max<std::int64_t>(item.durationFrames, in + 1);
+        options.range = std::pair{in, out};
+    }
+    const QList<model::Caption> captions = model::transcriptCaptions(shownTranscriptOf(item, dialog.tracks()), options);
+    QString why;
+    const bool ok = timeline_->changeRecordSequence(tr("Create SubCap"), [&](model::Sequence& s) {
+        return model::createSubCapTrack(s, captions, &why).has_value();
+    });
+    if (!ok) ConsoleLog::instance().append(tr("Create SubCap: %1").arg(why.isEmpty() ? tr("the captions could not be made.") : why));
+    return ok;
+}
+
+int MainWindow::importSharedTranscripts(const QString& path, QString* error) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        if (error) *error = tr("%1 cannot be read.").arg(QDir::toNativeSeparators(path));
+        return -1;
+    }
+    QString why;
+    const auto shared = model::readSharedTranscripts(file.readAll(), &why);
+    if (!shared) {
+        if (error) *error = why;
+        return -1;
+    }
+    const QString hint = settings_->value(QStringLiteral("Transcript"), QStringLiteral("languageHint")).toString();
+    if (shared->languageHint != hint) {
+        if (error) *error = tr("The file's Language Hint is not the project's: set the Transcript setting's Language Hint to match first.");
+        return -1;
+    }
+    const model::TranscriptStore store;
+    int saved = 0;
+    for (const model::Transcript& t : shared->transcripts) saved += store.save(t) ? 1 : 0;
+    if (saved > 0) {
+        ++transcriptGeneration_;
+        refreshTranscriptTool();
+    }
+    return saved;
+}
+
+// Manage Transcripts (2026.8 guide p.455-456): "Select the project whose transcripts you want to delete and click
+// Delete ... Click Import, select the .avt file ... When you are finished ... click Done". Ours: the current project's
+// transcribed clips, each deletable; Import reads a shared transcripts file; Export shares them all ("transcripts for an
+// entire project can be exported using the Manage Transcripts window", p.451).
+ManageTranscriptsDialog* MainWindow::manageTranscripts() {
+    if (!project_) return nullptr;
+    QWidget* over = QApplication::activeModalWidget();
+    auto* dialog = new ManageTranscriptsDialog(over ? over : this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    auto refresh = [this, dialog] {
+        const model::TranscriptStore store;
+        QList<ManageTranscriptsDialog::Entry> entries;
+        QSet<QString> seen;
+        for (const auto& [binId, item] : projectClips(*binContainer_, nullptr)) {
+            const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
+            if (seen.contains(mob)) continue;
+            seen.insert(mob);
+            const auto t = store.load(mob);
+            if (!t) continue;
+            entries.append({mob, item.name, t->language, QLocale().toString(t->created.toLocalTime(), QLocale::ShortFormat), t->edited()});
+        }
+        dialog->setEntries(entries);
+    };
+    connect(dialog, &ManageTranscriptsDialog::deleteRequested, this, [this, refresh](const QStringList& mobs) {
+        deleteTranscripts(mobs);
+        refresh();
+    });
+    connect(dialog, &ManageTranscriptsDialog::importRequested, this, [this, refresh] {
+        const QString suffix = QString::fromLatin1(model::kSharedTranscriptsSuffix);
+        const QString path = transcriptPath(QStringLiteral("open"), QString(), tr("Shared transcripts (*.%1)").arg(suffix));
+        if (path.isEmpty()) return;
+        QString why;
+        if (importSharedTranscripts(path, &why) < 0) ConsoleLog::instance().append(tr("Import Transcripts: %1").arg(why));
+        refresh();
+    });
+    connect(dialog, &ManageTranscriptsDialog::exportRequested, this, [this, dialog] {
+        const model::TranscriptStore store;
+        model::SharedTranscripts shared;
+        shared.languageHint = settings_->value(QStringLiteral("Transcript"), QStringLiteral("languageHint")).toString();
+        for (const ManageTranscriptsDialog::Entry& e : dialog->entries()) {
+            if (auto t = store.load(e.mob)) shared.transcripts << *t;
+        }
+        const QString suffix = QString::fromLatin1(model::kSharedTranscriptsSuffix);
+        const QString path = transcriptPath(QStringLiteral("save"), QStringLiteral("Transcripts.") + suffix,
+                                            tr("Shared transcripts (*.%1)").arg(suffix));
+        if (path.isEmpty()) return;
+        QSaveFile file(path);
+        const QByteArray bytes = model::writeSharedTranscripts(shared);
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+            ConsoleLog::instance().append(tr("Manage Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+    });
+    refresh();
+    dialog->open();
+    return dialog;
 }
 
 } // namespace lumenis::ui

@@ -12,6 +12,9 @@
 #include "lumenis/ui/transcript_tool.h"
 #include "lumenis/ui/speaker_names_dialog.h"
 #include "lumenis/ui/find_window.h"
+#include "lumenis/ui/transcript_dialogs.h"
+#include "lumenis/ui/bin_view.h"
+#include "lumenis/model/subcap.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/model/sequence.h"
@@ -430,6 +433,130 @@ private slots:
         QVERIFY(!window.transcriptionIndexing());
         menu.reset(find->settingsMenu(nullptr));
         QCOMPARE(menu->findChild<QAction*>(QStringLiteral("toggleIndexing"))->text(), QStringLiteral("Start PhraseFind AI Indexing"));
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // Transcripts out (p.450-456): Export Transcript, Share Transcripts and Import through Manage Transcripts, Delete
+    // Transcript, Export SubCap and Create SubCap on a sequence with the Transcribe window, Delete in Manage Transcripts.
+    void transcriptsOut() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString wav = dir.filePath(QStringLiteral("talk.wav"));
+        QVERIFY(writeTone(wav, 4.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString binId = bins.newBin();
+        BinDocument* bin = bins.openBin(binId);
+        QCOMPARE(window.linkFiles(binId, {wav}).size(), qsizetype(1));
+        const model::BinItem talk = bin->bin().items.first();
+        const model::TranscriptStore store;
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(talk).toString());
+        t.clipName = talk.name;
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("Roll"), 1.0, 1.4}, {QStringLiteral("camera."), 1.4, 2.0}}},
+                   model::TranscriptLine{2, {{QStringLiteral("Action!"), 2.4, 3.0}}}};
+        QVERIFY(store.save(t));
+        // The file dialogs and the Transcribe window answered here.
+        QStringList asked;
+        QString saveAs = dir.filePath(QStringLiteral("talk.txt"));
+        window.setTranscriptHooks(
+            [&](const QString& kind, const QString&) {
+                asked << kind;
+                return kind == QLatin1String("folder") ? dir.path() : saveAs;
+            },
+            [](TranscribeTracksDialog& d) {
+                d.setTracks({QStringLiteral("A1")});
+                d.setCharacterLimit(0);
+                return true;
+            });
+        BinView* view = bins.viewFor(bin);
+        QVERIFY(view);
+        QCOMPARE(bins.activeView(), view);
+        view->selectIds({talk.id});
+        // The bin's Transcript menu.
+        std::unique_ptr<QMenu> menu(view->contextMenu(QPoint(1, 1), nullptr));
+        auto* transcriptMenu = menu->findChild<QMenu*>(QStringLiteral("binTranscriptMenu"));
+        QVERIFY(transcriptMenu);
+        QVERIFY(transcriptMenu->findChild<QAction*>(QStringLiteral("bin.delete_transcript"))->isEnabled());
+        QVERIFY(!transcriptMenu->findChild<QAction*>(QStringLiteral("bin.export_subcap"))->isEnabled());
+        // Export Transcript.
+        QCOMPARE(window.exportTranscripts(), 1);
+        QFile text(saveAs);
+        QVERIFY(text.open(QIODevice::ReadOnly));
+        const QString exported = QString::fromUtf8(text.readAll());
+        QVERIFY2(exported.contains(QStringLiteral("Speaker 1:\nRoll camera.")), qPrintable(exported));
+        QVERIFY(exported.contains(QStringLiteral("Speaker 2:\nAction!")));
+        // Share Transcripts, Delete Transcript, and Import through Manage Transcripts.
+        saveAs = dir.filePath(QStringLiteral("shared.cttr"));
+        QVERIFY(window.shareTranscripts());
+        QCOMPARE(window.deleteTranscripts(), 1);
+        QVERIFY(!store.has(t.mob));
+        QCOMPARE(window.importSharedTranscripts(saveAs), 1);
+        QVERIFY(store.has(t.mob));
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("languageHint"), QStringLiteral("de"));
+        QString error;
+        QCOMPARE(window.importSharedTranscripts(saveAs, &error), -1); // Language Hints must match
+        QVERIFY(!error.isEmpty());
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("languageHint"), QString());
+
+        // A sequence: the clip from frame 0 on A1 for 100 frames.
+        model::BinItem seqItem;
+        seqItem.id = model::newItemId();
+        seqItem.name = QStringLiteral("Cut");
+        seqItem.kind = model::BinItemKind::Sequence;
+        seqItem.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = talk.id;
+        seg.binId = binId;
+        seg.name = talk.name;
+        seg.sourceIn = 0;
+        seg.length = 100;
+        seg.sourceTrack = QStringLiteral("A1");
+        seq.ensureTrack(QStringLiteral("A1"));
+        seq.track(QStringLiteral("A1"))->segments = {seg};
+        seq.storeIn(seqItem);
+        bin->addItem(seqItem);
+        view->selectIds({seqItem.id});
+        saveAs = dir.filePath(QStringLiteral("cut.txt"));
+        QVERIFY(window.exportSubCap());
+        const auto captions = model::parseDsCaptions(QString::fromUtf8([&] {
+            QFile f(saveAs);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+        }()), model::timecodeFormatOf(seqItem));
+        QVERIFY(captions);
+        QCOMPARE(captions->size(), qsizetype(2));
+        QCOMPARE(captions->at(0).text, QStringLiteral("Roll camera."));
+        // Create SubCap on the Record monitor's sequence: a new V2 with the captions.
+        window.composer().load(MonitorId::Record, binId, seqItem);
+        QVERIFY(window.createSubCap());
+        const model::Sequence after = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
+        const auto made = model::sequenceCaptions(after, {QStringLiteral("V2")});
+        QCOMPARE(made.size(), qsizetype(2));
+        QCOMPARE(made[0].start, std::int64_t(25));
+        QCOMPARE(made[1].text, QStringLiteral("Action!"));
+
+        // Manage Transcripts: the project's transcribed clip, deleted from there.
+        ManageTranscriptsDialog* manage = window.manageTranscripts();
+        QVERIFY(manage);
+        QCOMPARE(manage->entries().size(), qsizetype(1));
+        QCOMPARE(manage->entries().first().clip, talk.name);
+        manage->select({t.mob});
+        manage->findChild<QPushButton*>(QStringLiteral("deleteTranscripts"))->click();
+        QVERIFY(!store.has(t.mob));
+        QVERIFY(manage->entries().isEmpty());
+        manage->accept();
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };

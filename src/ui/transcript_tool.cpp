@@ -512,6 +512,11 @@ QMenu* TranscriptTool::fastMenu(QWidget* parent) {
     });
     QAction* revert = menu->addAction(tr("Revert Transcript"), this, [this] { revertTranscript(); });
     revert->setEnabled(!display_.lines.isEmpty());
+    // "Choose 'Delete Transcript'. The currently loaded transcript is immediately deleted" (2026.8 guide p.456): every
+    // transcript shown.
+    QAction* remove = menu->addAction(tr("Delete Transcript"), this, [this] { emit deleteRequested(shown_.speakers.keys()); });
+    remove->setObjectName(QStringLiteral("deleteTranscript"));
+    remove->setEnabled(!shown_.speakers.isEmpty());
     menu->addSeparator();
     menu->addAction(tr("Set Font..."), this, [this] { emit fontRequested(); });
     // "Transcribe Remaining Clips, if transcripts are missing for some clips in groups, multigroups, or sequences, which

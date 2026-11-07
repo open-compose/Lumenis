@@ -4,6 +4,7 @@
 #include "lumenis/model/phrase_find.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/transcript.h"
+#include "lumenis/model/transcript_export.h"
 #include "lumenis/model/transcript_view.h"
 
 #include <QTemporaryDir>
@@ -297,6 +298,71 @@ private slots:
         QCOMPARE(hits[0].score, 100);
         QVERIFY(findPhrase(bins, transcriptFor, QStringLiteral("elephant"), {}, {}).isEmpty());
         QVERIFY(findPhrase(bins, transcriptFor, QStringLiteral("  ...  "), {}, {}).isEmpty());
+    }
+
+    // Transcripts out (p.450-453): the exported text as an Avid DS caption file with the speaker, captions with a
+    // character limit and marks, Create SubCap's new track, the shared transcripts file.
+    void transcriptsOut() {
+        ShownTranscript shown;
+        auto word = [](const QString& text, std::int64_t frame, std::int64_t end) { return ShownWord{text, frame, end, QStringLiteral("m"), 0, 0}; };
+        ShownLine a;
+        a.speaker = QStringLiteral("Speaker 1");
+        a.words = {word(QStringLiteral("Hello"), 25, 35), word(QStringLiteral("there,"), 35, 45), word(QStringLiteral("friend."), 45, 60)};
+        ShownLine b;
+        b.speaker = QStringLiteral("Ann");
+        b.words = {word(QStringLiteral("Hi."), 100, 110)};
+        shown.lines = {a, b};
+        const lumenis::TimecodeFormat format = lumenis::TimecodeFormat::forRate(lumenis::Rational(25), false);
+        const QString text = exportedTranscriptText(shown, format, 90000); // starts at 01:00:00:00
+        QVERIFY2(text.contains(QStringLiteral("01:00:01:00 01:00:02:10")), qPrintable(text));
+        QVERIFY(text.contains(QStringLiteral("Speaker 1:\nHello there, friend.")));
+        QVERIFY(text.contains(QStringLiteral("Ann:\nHi.")));
+        // It reads back as SubCap captions.
+        const auto back = parseDsCaptions(text, format);
+        QVERIFY(back);
+        QCOMPARE(back->size(), qsizetype(2));
+        QCOMPARE(back->at(0).start, std::int64_t(90025));
+
+        QList<Caption> captions = transcriptCaptions(shown);
+        QCOMPARE(captions.size(), qsizetype(2));
+        QCOMPARE(captions[0].text, QStringLiteral("Hello there, friend."));
+        QCOMPARE(captions[0].end, std::int64_t(60));
+        // 12 characters a row, two rows a caption: "Hello there," / "friend." fits one caption.
+        captions = transcriptCaptions(shown, {12, std::nullopt});
+        QCOMPARE(captions[0].text, QStringLiteral("Hello there,\nfriend."));
+        // 6 characters: three rows, so two captions, the second from "friend.".
+        captions = transcriptCaptions(shown, {6, std::nullopt});
+        QCOMPARE(captions.size(), qsizetype(3));
+        QCOMPARE(captions[1].start, std::int64_t(45));
+        // Use Marks: only [40, 105).
+        captions = transcriptCaptions(shown, {0, std::pair<std::int64_t, std::int64_t>{40, 105}});
+        QCOMPARE(captions.size(), qsizetype(2));
+        QCOMPARE(captions[0].start, std::int64_t(40));
+        QCOMPARE(captions[1].end, std::int64_t(105));
+
+        // Create SubCap: a new V2 with the SubCap effect subdivided at the captions.
+        Sequence seq = Sequence::withDefaultTracks();
+        QString error;
+        QVERIFY(!createSubCapTrack(seq, {}, &error));
+        const auto track = createSubCapTrack(seq, transcriptCaptions(shown), &error);
+        QVERIFY2(track, qPrintable(error));
+        QCOMPARE(*track, QStringLiteral("V2"));
+        const auto made = sequenceCaptions(seq, {*track});
+        QCOMPARE(made.size(), qsizetype(2));
+        QCOMPARE(made[0].start, std::int64_t(25));
+        QCOMPARE(made[1].text, QStringLiteral("Hi."));
+
+        // Sharing.
+        Transcript t;
+        t.mob = QStringLiteral("mob-1");
+        t.lines = {TranscriptLine{1, {{QStringLiteral("Hey"), 0.0, 0.5}}}};
+        const QByteArray file = writeSharedTranscripts({QStringLiteral("en"), {t}});
+        const auto read = readSharedTranscripts(file, &error);
+        QVERIFY2(read, qPrintable(error));
+        QCOMPARE(read->languageHint, QStringLiteral("en"));
+        QCOMPARE(read->transcripts.size(), qsizetype(1));
+        QCOMPARE(read->transcripts[0].lines, t.lines);
+        QVERIFY(!readSharedTranscripts("{}", &error));
     }
 
     // Manage Speaker Names (p.445): renaming, merging and clearing by name, and the project's list.
