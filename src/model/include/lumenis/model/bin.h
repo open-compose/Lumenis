@@ -29,6 +29,7 @@ enum class BinItemKind {
     RenderedEffect,
     Group,
     Title,
+    Script, // a Script window's script (8.3; Editing Guide p.570: "The script appears in a script bin")
 };
 
 // The kind's name in bin files ("masterClip", "subclip", ...); kindFromName() reads it back and

@@ -47,6 +47,7 @@ const std::pair<BinItemKind, const char*> kKinds[] = {
     {BinItemKind::RenderedEffect, "renderedEffect"},
     {BinItemKind::Group, "group"},
     {BinItemKind::Title, "title"},
+    {BinItemKind::Script, "script"},
 };
 
 QString rateText(const Rational& r) {
@@ -622,6 +623,7 @@ QString kindLabel(BinItemKind kind) {
     case BinItemKind::RenderedEffect: return QStringLiteral("Rendered Effects");
     case BinItemKind::Group: return QStringLiteral("Groups");
     case BinItemKind::Title: return QStringLiteral("Titles");
+    case BinItemKind::Script: return QStringLiteral("Scripts");
     }
     return {};
 }
@@ -630,7 +632,7 @@ const QList<BinItemKind>& allKinds() {
     static const QList<BinItemKind> kinds{
         BinItemKind::MasterClip, BinItemKind::Subclip, BinItemKind::AudioClip,      BinItemKind::Sequence,
         BinItemKind::Source,     BinItemKind::Effect,  BinItemKind::MotionEffect,   BinItemKind::RenderedEffect,
-        BinItemKind::Group,      BinItemKind::Title};
+        BinItemKind::Group,      BinItemKind::Title,   BinItemKind::Script};
     return kinds;
 }
 

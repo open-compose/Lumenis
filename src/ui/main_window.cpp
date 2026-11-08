@@ -9,6 +9,9 @@
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/model/script.h"
+#include "lumenis/ui/script_window.h"
+
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
@@ -965,6 +968,11 @@ void MainWindow::createPanels() {
     // Double-click in a bin loads the item (p.394).
     connect(binContainer_, &BinContainer::itemActivated, this, [this](const QString& binId, const QString& itemId) {
         const BinDocument* doc = binContainer_->document(binId);
+        // A script opens in the Script window (p.570).
+        if (const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr; item && model::isScript(*item)) {
+            openScript(binId, itemId);
+            return;
+        }
         // "Ctrl+double-click the Title Effect icon in the bin. The title opens in the Title tool" (p.359).
         if ((QApplication::keyboardModifiers() & Qt::ControlModifier) && reviseTitle(binId, itemId)) return;
         // A Color Correction effect template: "Select the template in the bin ... and then press Enter" in Color
@@ -1669,6 +1677,7 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("ColorInfo"), tr("Color Info"), colorInfo_));
     // Tools > Transcript Tool (p.442; main_window_transcripts.cpp).
     setUpTranscriptTool();
+    setUpScriptWindow();
     // Effects (FX guide p.37, p.83).
     effectPalette_ = new EffectPalette;
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
@@ -8179,6 +8188,13 @@ void MainWindow::installPanelHandlers() {
     handle("bin.export_subcap", [this] { exportSubCap(); });
     handle("timeline.create_subcap", [this] { createSubCap(); });
     handle("timeline.autocut", [this] { autoCut(); });
+    // Scripts (8.3a; p.570-576).
+    handle("file.new.new_script", [this] { newScript(); });
+    handle("file.save_script", [this] { saveScript(); });
+    handle("file.save_a_script_copy_as", [this] { saveScriptCopyAs(); });
+    handle("script.add_scene", [this] { scriptWindow_->askScene(); });
+    handle("script.add_page", [this] { scriptWindow_->askPage(); });
+    handle("script.text_layout", [this] { scriptTextLayout(); });
     handle("script.manage_transcripts", [this] { manageTranscripts(); });
     connect(binContainer_, &BinContainer::commandRequested, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id)) a->trigger();

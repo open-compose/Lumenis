@@ -53,6 +53,7 @@ add_library(lumenis_ui STATIC
     transcript_tool.cpp
     speaker_names_dialog.cpp
     transcript_dialogs.cpp
+    script_window.cpp
     command_palette.cpp
     full_screen.cpp
     keyboard_map.cpp
@@ -64,6 +65,7 @@ add_library(lumenis_ui STATIC
     media_tool.cpp
     main_window.cpp
     main_window_transcripts.cpp
+    main_window_script.cpp
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp
@@ -145,6 +147,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/transcript_tool.h
     include/lumenis/ui/speaker_names_dialog.h
     include/lumenis/ui/transcript_dialogs.h
+    include/lumenis/ui/script_window.h
     include/lumenis/ui/command_palette.h
     include/lumenis/ui/full_screen.h
     include/lumenis/ui/keyboard_map.h

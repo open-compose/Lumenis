@@ -14,6 +14,7 @@
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/transcript.h"
 #include "lumenis/model/transcript_view.h"
+#include "lumenis/model/script.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -66,6 +67,7 @@ class ColorInfoTool;
 class TranscriptTool;
 class SpeakerNamesDialog;
 class TranscribeTracksDialog;
+class ScriptWindow;
 class ManageTranscriptsDialog;
 struct SpeakerNameChange;
 class ConsolidateDialog;
@@ -618,6 +620,18 @@ public:
     // returns how many switches were made.
     bool assignSpeakerAngle(const QString& speaker, int angle);
     int autoCut();
+    // Scripts (8.3a; Editing Guide p.570-576, docs/spec/scriptsync.md). newScript: File > New > New Script, "Open the bin
+    // to which you want to import the script ... Navigate to the script you want to import": a text file into a script
+    // item in the active bin, opened; `path` in place of the file dialog (tests). openScript: a script item in the Script
+    // window (saving the one shown, if changed). saveScript: File > Save Script, the window's script into its item.
+    // saveScriptCopyAs: File > Save a Script Copy As, a new item named `name` (asked when empty) in the same bin, opened.
+    // scriptTextLayout: Script > Text Layout's dialog (or `layout`).
+    bool newScript(const QString& path = {});
+    bool openScript(const QString& binId, const QString& itemId);
+    bool saveScript();
+    bool saveScriptCopyAs(const QString& name = {});
+    bool scriptTextLayout(std::optional<model::ScriptLayout> layout = std::nullopt);
+    ScriptWindow& scriptWindow() const { return *scriptWindow_; }
     // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
     // to match when exporting and importing", p.451).
     int importSharedTranscripts(const QString& path, QString* error = nullptr);
@@ -1031,6 +1045,8 @@ private:
     void setUpTranscriptTool();
     bool transcriptionIndexing_ = true;
     TranscriptPathAsk transcriptPathHook_;
+    ScriptWindow* scriptWindow_ = nullptr;
+    void setUpScriptWindow();
     TranscribeTracksAsk transcribeTracksHook_;
     // The file or folder for transcripts out, through the hook or a file dialog; empty when cancelled.
     QString transcriptPath(const QString& kind, const QString& suggested, const QString& filter);

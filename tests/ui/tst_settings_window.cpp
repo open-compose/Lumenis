@@ -85,7 +85,7 @@ private slots:
                  (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "General", "Media Creation", "Safe Colors", "Bin Layout", "Transcript", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
-                              "Render", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
+                              "Render", "Script", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
             // Bin layouts are Project settings the Settings chapter does not
@@ -311,12 +311,12 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 18);
+        QCOMPARE(list.topLevelItemCount(), 19);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});
         list.duplicateSelection();
-        QTreeWidgetItem* group = list.topLevelItem(12);
+        QTreeWidgetItem* group = list.topLevelItem(13);
         QCOMPARE(group->text(0), QStringLiteral("Timeline"));
         QCOMPARE(group->childCount(), 2);
         QVERIFY(!group->data(0, SettingsList::kEntryRole).isValid());

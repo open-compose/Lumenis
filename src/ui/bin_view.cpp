@@ -105,6 +105,7 @@ GlyphIcon iconFor(model::BinItemKind kind) {
     case K::RenderedEffect: return GlyphIcon::ItemEffect;
     case K::Group: return GlyphIcon::ItemGroup;
     case K::Title: return GlyphIcon::ItemTitle;
+    case K::Script: return GlyphIcon::ItemScript;
     }
     return GlyphIcon::ItemClip;
 }

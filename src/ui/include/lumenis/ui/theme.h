@@ -65,6 +65,7 @@ enum class GlyphIcon {
     ItemGroup,
     ItemTitle,
     ItemSource,
+    ItemScript, // a script item (8.3): a page with lines
     Close, // tab close buttons
     // Source Browser navigation (guide p.313). Our own drawings.
     ArrowBack,

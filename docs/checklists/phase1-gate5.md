@@ -50,7 +50,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
-| New > New Script |  | p.571 | *later* | ☐ | | |
+| New > New Script |  | p.571 | works | ☐ | | |
 | New > Volume for Export |  | p.902 | works | ☐ | | |
 | Open Bin |  | p.296 | works | ☐ | | |
 | Open Selected Bins |  | p.295 | works | ☐ | | |
@@ -61,8 +61,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Save Bin |  | p.299 | works | ☐ | | |
 | Save All |  | p.299 | works | ☐ | | |
 | Save All Bins |  | p.428 | works | ☐ | | |
-| Save Script |  | p.571 | *later* | ☐ | | |
-| Save a Script Copy As |  | p.571 | *later* | ☐ | | |
+| Save Script |  | p.571 | works | ☐ | | |
+| Save a Script Copy As |  | p.571 | works | ☐ | | |
 | Get Position Info |  | p.101 | works | ☐ | | |
 | Reveal File |  | p.360 | works | ☐ | | |
 | Input > Source Browser |  | p.132 | works | ☐ | | |
@@ -296,13 +296,13 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
-| Add Scene |  | p.574 | *later* | ☐ | | |
-| Add Page |  | p.574 | *later* | ☐ | | |
+| Add Scene |  | p.574 | works | ☐ | | |
+| Add Page |  | p.574 | works | ☐ | | |
 | Hold Slates Onscreen |  | p.578 | *later* | ☐ | | |
 | Interpolate Position |  | p.577 | *later* | ☐ | | |
 | Manage Transcripts |  | p.454 | works | ☐ | | |
 | ScriptSync AI |  | p.584 | *later* | ☐ | | |
-| Text Layout |  | p.571 | *later* | ☐ | | |
+| Text Layout |  | p.571 | works | ☐ | | |
 
 ## Extensions menu
 
@@ -320,6 +320,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 216 menu commands, 173 of them working with a project open; the
+* 216 menu commands, 179 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

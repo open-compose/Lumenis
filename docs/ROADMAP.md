@@ -1441,8 +1441,29 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (Avid's .avt is undocumented); peer-to-peer sharing over NEXIS waits for 8.7.
     * 8.2e (done), AutoCut from transcript speakers (2026.8 guide p.451-452): speakers assigned to a group's angles, AutoCut
       on a group segment.
-  * 8.3, ScriptSync (ch.18, p.566-590): the Script window, lined scripts, slates and takes, script marks, ScriptSync AI
-    marking from 8.2's word timings.
+  * 8.3, ScriptSync (ch.18, p.566-590; the Script setting p.1217), in five parts (planned 2026-11-07):
+    * 8.3a (done), scripts and the Script window (p.570-576): File > New > New Script importing a text file into a script item
+      in the active bin, the script kept in the project folder (ours: `.cthscript`; Avid's .avc is undocumented) with
+      the attic and auto-save as bins (p.570); the Script window (a panel) with Save Script, Save a Script Copy As,
+      Close, the asterisk; the Script setting (font, size, left margin, Word Wrap, Show Line Number, background,
+      pre-roll, the slate options stored for 8.3b); Script > Text Layout (left margin, text width, word wrap); Add Scene
+      and Add Page with the Delete dialog's scene and page choices, the Scene and Page menus and the status bar; Edit
+      Mode with cut, copy, paste, typing and Undo Edit Script Text, and the Show Find Tools find and replace.
+    * 8.3b, slates and takes (p.576-582): clips dragged onto selected lines become slates of takes (frames, clip names,
+      Take column numbers); selecting, lassoing, moving slates (Ctrl+drag with their lines), changing a take's length,
+      deleting takes; Show Frames, Show All Takes, Hold Slates Onscreen, Enlarge/Reduce Frame; the representative
+      frame stepped with the arrow keys; double-click and the Play button loading and playing takes; Interpolate
+      Position; off-screen and colour indicators (Set Offscreen, Script > Color, Set Color); Alt+click for the Info
+      window.
+    * 8.3c, script marks (p.582-588): Add Script Mark (the Other tab), double-click at a take and line, the Record
+      button's real-time screening and marking (Tab/Shift+Tab, marks extending takes), loading a marked segment with
+      its IN and the pre-roll, moving and deleting marks, Find Script and Find Bin, splicing a script range
+      (Ctrl+Alt+double-click), the rough cut workflow.
+    * 8.3d, ScriptSync AI (p.584-585) and Create Script from Clip (p.569-570): the dialog (tracks, the skip options,
+      Overwrite existing marks, Sync between first and last mark) aligning script lines with the words of 8.2's
+      transcripts; a script made from clips' transcripts, its lines already marked.
+    * 8.3e, shared scripts (p.589-590): the script lock icons and refresh on shared storage through 3.7's locks, the
+      Cancel choice when closing a locked script; the Find window's Script Text tab and Scripts in Project (p.428-430).
   * 8.4, Dynamic Media Folders and the background services (p.371-377), on the Background Queue.
   * 8.5, FrameFlex and colour adapters (p.527-545): Source Settings, reframing and panning, Reformat, LUTs and CLF
     through OpenColorIO, CDLs, Remove Color Adapters, ACES projects (p.557).

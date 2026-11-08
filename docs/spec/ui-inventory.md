@@ -638,6 +638,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
   a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
+* Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
+  when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
+  the status bar's wording, the editor's own undo.
 * AutoCut (docs/spec/transcripts.md): Assign to Camera Angle on the speaker's right-click menu, kept in the group by
   speaker name; the group's shown transcript; only video tracks switched.
 * Transcripts out (docs/spec/transcripts.md): the exported .txt as an Avid DS caption file with the speaker as its first
@@ -3096,6 +3099,14 @@ Details: docs/spec/bin-locking.md.
   duplicated; it cannot be moved, renamed or deleted. **Ours**: changes to
   its items are refused (the Console says so), rather than made and then
   not saved.
+
+## 20f. Scripts (ch.18, p.566-590; docs/spec/scriptsync.md)
+
+* File > New > New Script, File > Save Script, File > Save a Script Copy As (p.571), 8.3a.
+* The Script window (p.570-576): the AS and AP buttons, Edit Mode, Show Find Tools, the Scene and Page menus, the status
+  bar, the Delete dialog's Delete scene(s) and Delete page break(s); Script > Add Scene, Add Page, Text Layout, 8.3a.
+* The Script setting (p.1217), 8.3a; its slate, take and mark options with 8.3b-8.3c.
+* Later: slates and takes (8.3b), script marks (8.3c), ScriptSync AI (8.3d), shared scripts (8.3e).
 
 ## 20e. Transcripts (ch.14, p.436-453; docs/spec/transcripts.md)
 

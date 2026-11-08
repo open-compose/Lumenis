@@ -868,7 +868,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `manageTranscripts`; tests `tst_transcript transcriptsOut`, `tst_transcripts_ui transcriptsOut`), is done. 8.2e,
   AutoCut (`GroupClip::speakerAngles` from the Transcript Tool's Assign to Camera Angle, `model::autoCut`, the Timeline's
   AutoCut through `MainWindow::autoCut`; tests `tst_group_clip autoCutFromSpeakers`, `tst_transcripts_ui
-  autoCutFromTranscript`, scenario `48-autocut.json`), is done, so 8.2 is. After Phase 7, before Phase 8: 7.6, the owner's report
+  autoCutFromTranscript`, scenario `48-autocut.json`), is done, so 8.2 is.
+  8.3, ScriptSync, is in five parts (ROADMAP). 8.3a, scripts and the Script window (docs/spec/scriptsync.md:
+  `src/model/script.*` with the script kept in its bin item `BinItemKind::Script`; `src/ui/script_window.*` as the
+  "Script" panel; `main_window_script.cpp` with New Script, Save Script, Save a Script Copy As and Text Layout; the
+  "Script" User setting; tests `tst_script`, `tst_script_ui`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

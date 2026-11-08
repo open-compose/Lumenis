@@ -390,6 +390,11 @@ QIcon glyphIcon(GlyphIcon which, QColor color) {
         p.drawRect(QRectF(9, 11, 14, 3));
         p.drawRect(QRectF(14.5, 11, 3, 10));
         break;
+    case GlyphIcon::ItemScript:
+        p.drawRect(QRectF(8, 4, 16, 24));
+        p.setPen(QPen(QColor(0x2a, 0x2a, 0x2a), 1.6));
+        for (int y = 9; y <= 23; y += 4) p.drawLine(QPointF(11, y), QPointF(21, y));
+        break;
     case GlyphIcon::Close:
         p.setPen(QPen(color, 2.6, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(10, 10), QPointF(22, 22));

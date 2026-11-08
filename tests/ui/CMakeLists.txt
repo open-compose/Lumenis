@@ -71,6 +71,7 @@ lumenis_add_test(tst_composer_edit SOURCES tst_composer_edit.cpp LIBS ${ui_test_
 lumenis_add_test(tst_timecode_window SOURCES tst_timecode_window.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_color_info SOURCES tst_color_info.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_find_window SOURCES tst_find_window.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_script_ui SOURCES tst_script_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_transcripts_ui SOURCES tst_transcripts_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_autosequence SOURCES tst_autosequence.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_suite_ui SOURCES tst_audio_suite_ui.cpp LIBS ${ui_test_libs} lumenis::media)
