@@ -57,6 +57,7 @@ add_library(lumenis_media STATIC
     consolidate.cpp
     relink.cpp
     mixdown.cpp
+    dynamic_media_folders.cpp
     surround.cpp
     include/lumenis/media/media.h
     include/lumenis/media/compositor.h
@@ -72,6 +73,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/audio_fx.h
     include/lumenis/media/audio_suite.h
     include/lumenis/media/audio_input.h
+    include/lumenis/media/dynamic_media_folders.h
     include/lumenis/media/clap_host.h
     include/lumenis/media/ofx_host.h
     include/lumenis/media/movie_export.h

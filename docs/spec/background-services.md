@@ -25,6 +25,41 @@ later Dynamic Media Folders) start only while the services are Active; a job alr
 * Always Stop ... upon Exit: the services stop as the main window closes, so that no waiting job starts then (ours: they
   end with the application anyway).
 
+## Dynamic Media Folders and profiles (p.371-375, 8.4b)
+
+"Dynamic Media Folders (DMFs) are user-created folders that allow you to work more efficiently with file-based media"
+(p.371). `media::DynamicMediaFolders` (src/media/dynamic_media_folders.*) holds the folders (path, profile, Enable)
+and the profiles; MainWindow keeps them in `Dynamic_Media_Folders.json` beside the user's settings (ours, as
+Title_Templates are; the guide's service keeps them outside any project) through `main_window_dmf.cpp`.
+
+* A profile's Link Settings (p.373-374), `DmfLinkSettings`:
+  * Link Using: kept; ours links through FFmpeg whatever is chosen.
+  * Bins: Use active bin, or Create a new bin ("This is the default option") with the default naming convention
+    ("<project> <n>", the first number free), the volume's name, or a bin name (`dmfBinName`; the bins are used when
+    the assets are acquired, 8.4c).
+  * Multichannel Audio: the clips' Track Formats, as the Track Formats column writes them ("Stereo A1A2"); the guide
+    edits them in the Multiple Mixes dialog (8.4c).
+  * AIS: Audio Start-Time Option (a Broadcast WAV starts at the frame its time stamp falls in, `alignToFrame`); Reel
+    name for Labroll from the file's name (a numbered still's without its number; digits only give none) or a folder's,
+    one to eight up; Camroll from a DPX file's Input Device; the DPX column as the Labroll prefix and a 7-digit count
+    from 0, from 1, the Start timecode as frames, or the file name's number; Start from the file or the file name (ours:
+    four pairs of digits separated by `: _ . ; -`, or eight digits); Default FPS for numbered stills.
+* Actions (p.374-375), `DmfAction`, run in the list's order:
+  * Copy to Folder: the entry is copied under the folder with its own name; Auto Relink when complete points the clips
+    at the copies. Checkin to Production Management is kept and does nothing (no MediaCentral).
+  * Consolidate and Transcode through `media::consolidate` (2.4a): the clips keep the linked media and ".new" clips
+    take the new (p.376); Skip media files already on the target drive, Convert Audio Sample Rate and Bit Depth, the
+    Video and Audio Drives and Transcode's Video Resolution. Convert Audio Format is kept as a name (our managed audio
+    is MXF PCM); Relink selected clips ... before skipping, Apply Reformatting and Apply color transformations are kept
+    (our clips carry no framing or colour transformations).
+* Watching (ours): every 2 seconds each enabled folder with a profile is looked in; each new entry (a file, or a folder
+  whose files are linked together, so that "each group of consecutive dpx files in that folder" is a master clip,
+  p.376) is queued once it looks the same on two looks (the files' count, size and newest change), because a copy by
+  "a third-party application" (p.371) gives no sign that it has ended. Hidden entries are left out. Each entry is a
+  Background Queue job "Dynamic Media Folder: <entry>" (`media::processDmfEntry`); it is then done, kept in the
+  folder's `done` list, whether it worked or not (a failure is in the error report). What it made waits as an asset,
+  and the indicator shows the green dot.
+
 ## The progress indicator (p.375-376, 8.4a)
 
 `BackgroundIndicator` in the Timeline's toolbar (ours: before the Quick Find field), drawn by us after the guide's table:
@@ -36,6 +71,9 @@ until you generate an error report").
 
 ## Tests
 
+* `tst_dmf`: the folders and profiles through JSON, new entries, bin names, timecode in file names, a DPX folder as one
+  clip with its AIS columns, Copy to Folder with and without Auto Relink, Multichannel, Transcode and cancelling.
 * `tst_background_services`: jobs waiting while stopped and paused, a timed pause ending, the pause extended during play,
   Enable Pausing off, the error report; the indicator's states; Tools > Background Services in the application with its
-  options kept and applied for the next user's settings.
+  options kept and applied for the next user's settings; an enabled folder's file linked and copied in the
+  application, kept beside the user's settings, the green dot and a failing entry's error.

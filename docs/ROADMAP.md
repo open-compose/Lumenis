@@ -1470,7 +1470,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       Launch, Always Stop upon Exit, Enable Pausing; p.376-377), the Background Queue starting jobs only while they are
       active and pausing during playback, the Timeline's progress indicator with its states and Generate Error Report in
       Console (p.375-376).
-    * 8.4b, Dynamic Media Folders and profiles (p.371-375): folders with a profile and Enable, profiles of Link Settings
+    * 8.4b (done), Dynamic Media Folders and profiles (p.371-375): folders with a profile and Enable, profiles of Link Settings
       (Link Using, the bin choices and naming, Multichannel Audio, the AIS options) and ordered Actions (Copy to Folder
       with Auto Relink, Consolidate, Transcode with their options), files added to an enabled folder linked and processed
       on the Background Queue.

@@ -2,6 +2,7 @@
 
 #include "lumenis/media/link.h"
 #include "lumenis/media/consolidate.h"
+#include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -779,6 +780,24 @@ public:
     bool backgroundServices();
     BackgroundServicesDialog::Options backgroundServiceOptions() const;
     void setBackgroundServicesHook(std::function<bool(BackgroundServicesDialog&)> hook) { backgroundServicesHook_ = std::move(hook); }
+    // Dynamic Media Folders (8.4b, p.371-376; main_window_dmf.cpp). The folders and profiles, kept in
+    // dynamicMediaFoldersFile() (empty without a user: then they are not saved). setDynamicMediaFolders keeps new ones
+    // and looks in them at once; scanDynamicMediaFolders is what the timer runs: an enabled folder's entry is queued
+    // on the Background Queue once it looks the same on two scans.
+    const media::DynamicMediaFolders& dynamicMediaFolders() const { return dmf_; }
+    void setDynamicMediaFolders(const media::DynamicMediaFolders& folders);
+    QString dynamicMediaFoldersFile() const;
+    void scanDynamicMediaFolders();
+    // An entry being processed or processed: `ready` once its job has ended, with what it made (the linked clips and
+    // Consolidate's and Transcode's ".new" ones) or its error. Kept until acquired into a bin (8.4c).
+    struct DmfAsset {
+        QString folder;
+        QString entry;
+        bool ready = false;
+        QList<model::BinItem> clips;
+        QString error;
+    };
+    const QList<DmfAsset>& dmfAssets() const { return dmfAssets_; }
     // The media database (p.358): read when a project opens, again with
     // File > Media > Load Media Database and Refresh Media Directories.
     // Managed clips in bins opened after are pointed at their files.
@@ -1200,6 +1219,14 @@ private:
     BackgroundQueue* backgroundQueue_ = nullptr;
     std::function<bool(BackgroundServicesDialog&)> backgroundServicesHook_;
     bool dmfAssetsWaiting_ = false; // Dynamic Media Folder assets to acquire: the indicator's green dot (8.4b-c)
+    media::DynamicMediaFolders dmf_;
+    QList<DmfAsset> dmfAssets_;
+    QHash<QString, QString> dmfSeen_; // entry path -> how it looked on the last scan
+    QTimer* dmfTimer_ = nullptr;
+    void setUpDynamicMediaFolders();
+    void saveDynamicMediaFolders();
+    void queueDmfEntry(const QString& folder, const QString& entry, const media::DmfProfile& profile);
+    void refreshDmfAssets();
     void setUpBackgroundServices();
     void updateBackgroundIndicator();
     void stopBackgroundServicesOnExit();

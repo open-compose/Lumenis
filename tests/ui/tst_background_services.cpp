@@ -1,6 +1,8 @@
 // The background services (8.4a; Editing Guide p.375-377): the Background Queue starting jobs only while the services
 // are active, pausing (explicit, during playback, extended while play goes on), the error report, the Timeline's progress
 // indicator and Tools > Background Services with its options kept in the user's settings.
+#include "lumenis/media/dynamic_media_folders.h"
+#include "lumenis/media/media.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/background_services.h"
 #include "lumenis/ui/command_registry.h"
@@ -13,8 +15,11 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QDir>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <vector>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -155,6 +160,83 @@ private slots:
         emit indicator->errorReportRequested();
         QVERIFY(ConsoleLog::instance().lines().join(QLatin1Char('\n')).contains(QStringLiteral("clip 9: disk full")));
         QCOMPARE(indicator->description(), QStringLiteral("idle"));
+    }
+
+    // Dynamic Media Folders (8.4b, p.371-376): an enabled folder's new file is linked and copied on the Background
+    // Queue once it has looked the same twice; the asset waits with the green dot; the folders are kept for the user.
+    void dynamicMediaFolders() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        BackgroundIndicator* indicator = window.timeline().backgroundIndicator();
+        const QString watched = dir.filePath(QStringLiteral("card"));
+        QVERIFY(QDir().mkpath(watched));
+        {
+            media::WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = QStringLiteral("pcm_s16le");
+            s.channels = 1;
+            s.sampleRate = 48000;
+            media::MediaWriter w;
+            QVERIFY(w.open(watched + QStringLiteral("/VO_1.wav"), s));
+            std::vector<float> v(4800, 0.1f);
+            QVERIFY(w.writeAudio(v.data(), 4800) && w.finish());
+        }
+
+        media::DynamicMediaFolders folders;
+        media::DmfProfile profile;
+        profile.name = QStringLiteral("Copy");
+        media::DmfAction copy;
+        copy.copyTo = dir.filePath(QStringLiteral("share"));
+        profile.actions = {copy};
+        folders.storeProfile(profile);
+        folders.addFolder(watched);
+        folders.folders[0].profile = profile.name;
+        // Not enabled: nothing happens.
+        window.setDynamicMediaFolders(folders);
+        window.scanDynamicMediaFolders();
+        QVERIFY(window.dmfAssets().isEmpty());
+
+        folders.folders[0].enabled = true;
+        window.setDynamicMediaFolders(folders); // the first look
+        QVERIFY(window.dmfAssets().isEmpty());
+        window.scanDynamicMediaFolders(); // the same: queued
+        QCOMPARE(window.dmfAssets().size(), 1);
+        window.scanDynamicMediaFolders(); // not twice
+        QCOMPARE(window.dmfAssets().size(), 1);
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        const MainWindow::DmfAsset& asset = window.dmfAssets()[0];
+        QVERIFY(asset.ready);
+        QVERIFY2(asset.error.isEmpty(), qPrintable(asset.error));
+        QCOMPARE(asset.clips.size(), 1);
+        QCOMPARE(media::linkOf(asset.clips[0])->path, dir.filePath(QStringLiteral("share/VO_1.wav")));
+        QCOMPARE(indicator->description(), QStringLiteral("assets"));
+        QCOMPARE(window.dynamicMediaFolders().folders[0].done, QStringList{QStringLiteral("VO_1.wav")});
+
+        // Kept beside the user's settings, the done entry with them.
+        const QString file = window.dynamicMediaFoldersFile();
+        QVERIFY(file.endsWith(QLatin1String("Dynamic_Media_Folders.json")));
+        const media::DynamicMediaFolders back = media::DynamicMediaFolders::load(file);
+        QCOMPARE(back.folders.size(), 1);
+        QCOMPARE(back.folders[0].done, QStringList{QStringLiteral("VO_1.wav")});
+        QCOMPARE(back.profiles.size(), 1);
+
+        // A file that is not media fails: the error triangle, no green dot from it.
+        QFile notes(watched + QStringLiteral("/notes.txt"));
+        QVERIFY(notes.open(QIODevice::WriteOnly));
+        notes.write("not media");
+        notes.close();
+        window.scanDynamicMediaFolders();
+        window.scanDynamicMediaFolders();
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        QCOMPARE(window.dmfAssets().size(), 2);
+        QVERIFY(!window.dmfAssets()[1].error.isEmpty());
+        QCOMPARE(indicator->description(), QStringLiteral("assets error"));
     }
 };
 

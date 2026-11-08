@@ -641,7 +641,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Background services (docs/spec/background-services.md): services in the application (no separate process or taskbar
   icon), a running job finishing when they stop, Always Start ... at Launch on to start with, Pause in minutes (10), the
   pause during playback rechecked each second, the options in the user's Interface setting, the indicator drawn by us
-  before the Quick Find field.
+  before the Quick Find field. Dynamic Media Folders: kept in Dynamic_Media_Folders.json beside the user's settings,
+  looked in every 2 seconds, an entry taken once it looks the same twice, an entry done whether it worked or not,
+  Link Using kept with FFmpeg linking, Start from four pairs of digits or eight digits in the file name, Checkin,
+  Convert Audio Format, Relink before skipping, Apply Reformatting and Apply color transformations kept without effect.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

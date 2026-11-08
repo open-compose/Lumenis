@@ -69,6 +69,7 @@ add_library(lumenis_ui STATIC
     main_window_transcripts.cpp
     main_window_script.cpp
     main_window_services.cpp
+    main_window_dmf.cpp
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp

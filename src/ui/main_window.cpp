@@ -335,6 +335,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     connect(settings_, &Settings::userChanged, this, &MainWindow::refreshSendToMenu);
     // The background services (8.4a) read their options from the user's settings, so they start after these exist.
     setUpBackgroundServices();
+    setUpDynamicMediaFolders();
 }
 
 MainWindow::~MainWindow() {
