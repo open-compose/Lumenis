@@ -381,6 +381,8 @@
     {"id": "other.add_alt_key", "text": "Add Alt Key", "palette": "other"},
     {"id": "other.add_control_key", "text": "Add Control Key", "palette": "other"},
     {"id": "other.add_option_key", "text": "Add Option Key", "palette": "other"},
+    {"id": "other.add_script_mark", "text": "Add Script Mark", "palette": "other"},
+    {"id": "other.find_script", "text": "Find Script", "palette": "other"},
     {"id": "workspace.w1", "text": "W1", "palette": "workspaces"},
     {"id": "workspace.w2", "text": "W2", "palette": "workspaces"},
     {"id": "workspace.w3", "text": "W3", "palette": "workspaces"},

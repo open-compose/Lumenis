@@ -3,7 +3,9 @@
 // Delete dialog, Edit Mode with the numbers following the lines, Find and Replace, Text Layout, Save Script into the
 // bin item, Save a Script Copy As, reopening by double-click. Slates and takes (8.3b, p.576-582): clips dropped from a
 // bin, the tabs' Take numbers, selecting, Delete Takes, the arrow keys, Set Offscreen and Set Color, moving slates,
-// loading and playing takes with Interpolate Position, the Script menu's options and Enlarge/Reduce Frame.
+// loading and playing takes with Interpolate Position, the Script menu's options and Enlarge/Reduce Frame. Script marks
+// (8.3c, p.582-588): Add Script Mark, the Record button's screening, cueing with the Pre-roll, moving and deleting marks,
+// Find Script, Find Bin, splicing a script range.
 #include "lumenis/model/script.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_dock.h"
@@ -74,7 +76,7 @@ private slots:
         // Add Scene and Add Page on the selected line through the AS and AP buttons (p.574).
         w.setAskHooks([](const QString& title, const QString&) -> std::optional<QString> {
             return title == QLatin1String("Add Scene") ? QStringLiteral("33") : QStringLiteral("12");
-        }, [](bool, bool, int) { return std::optional<ScriptDeleteChoice>(ScriptDeleteChoice{true, false, false}); });
+        }, [](bool, bool, int, int) { return std::optional<ScriptDeleteChoice>(ScriptDeleteChoice{true, false, false, false}); });
         w.selectLines(0, 0);
         w.findChild<QToolButton*>(QStringLiteral("addScene"))->click();
         w.selectLines(1, 2);
@@ -306,8 +308,8 @@ private slots:
         composer.stop();
 
         // Delete Takes (p.579-580); the clips stay in the bin. The slate goes with its last take.
-        w.setAskHooks({}, [](bool, bool, int takes) {
-            return takes > 0 ? std::optional<ScriptDeleteChoice>(ScriptDeleteChoice{false, false, true}) : std::nullopt;
+        w.setAskHooks({}, [](bool, bool, int takes, int) {
+            return takes > 0 ? std::optional<ScriptDeleteChoice>(ScriptDeleteChoice{false, false, true, false}) : std::nullopt;
         });
         w.selectTakes({take1});
         w.askDelete();
@@ -317,6 +319,136 @@ private slots:
         w.askDelete();
         QVERIFY(w.script().slates.isEmpty());
         QCOMPARE(bin->bin().items.size(), qsizetype(4));
+    }
+
+    void scriptMarks() {
+        QTemporaryDir dir;
+        const QString text = dir.filePath(QStringLiteral("Scene 33.txt"));
+        {
+            QFile f(text);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("INT. DINER - NIGHT\nMARY SUE\nCoffee?\nWAITRESS\nComing right up.\nMARY SUE\nThanks.\nEND\n");
+        }
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1400, 800);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        window.settings().setValue(QStringLiteral("Script"), QStringLiteral("preRoll"), 1);
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString binId = bins.newBin();
+        BinDocument* bin = bins.openBin(binId);
+        QVERIFY(bin);
+        QStringList clipIds;
+        for (int i = 1; i <= 2; ++i) {
+            model::BinItem clip;
+            clip.id = model::newItemId();
+            clip.kind = model::BinItemKind::MasterClip;
+            clip.name = QStringLiteral("33/%1").arg(i);
+            clip.durationFrames = 200;
+            clip.editRate = Rational(25);
+            clip.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1"));
+            bin->addItem(clip);
+            clipIds << clip.id;
+        }
+        QVERIFY(window.newScript(text));
+        ScriptWindow& w = window.scriptWindow();
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* textView = qobject_cast<QAbstractScrollArea*>(w.findChild<QWidget*>(QStringLiteral("scriptText")));
+        QVERIFY(textView);
+        w.selectLines(1, 6);
+        QVERIFY(w.linkClips({{binId, clipIds[0], QStringLiteral("33/1"), QStringLiteral("1")},
+                             {binId, clipIds[1], QStringLiteral("33/2"), QStringLiteral("2")}}));
+        const QString take1 = w.script().slates.first().takes[0].id;
+        const QString take2 = w.script().slates.first().takes[1].id;
+        Composer& composer = window.composer();
+
+        // "Double-click in the Script window at the intersection of a take and the line of dialog ... the clip loads into
+        // the Source monitor" (p.583); Add Script Mark syncs the line to the position, and play stops.
+        QTest::mouseDClick(textView->viewport(), Qt::LeftButton, Qt::NoModifier, w.takeLinePoint(take1, 2) + QPoint(0, -3));
+        QCOMPARE(w.markTake(), take1);
+        QCOMPARE(w.selectedLines()->first, 2);
+        QCOMPARE(composer.state(MonitorId::Source).current()->item.id, clipIds[0]);
+        composer.moveTo(MonitorId::Source, 60);
+        commands.action(QStringLiteral("other.add_script_mark"))->trigger();
+        QCOMPARE(model::takeOf(w.script(), take1)->marks.value(2), 60);
+        w.selectLines(4, 4);
+        composer.moveTo(MonitorId::Source, 120);
+        QVERIFY(window.addScriptMark());
+        QCOMPARE(model::takeOf(w.script(), take1)->marks.value(4), 120);
+
+        // Double-click on a mark: the take cued there with an IN at the mark, the Pre-roll (1 second) before it (p.585,
+        // p.589).
+        composer.moveTo(MonitorId::Source, 0);
+        QTest::mouseDClick(textView->viewport(), Qt::LeftButton, Qt::NoModifier, w.takeLinePoint(take1, 4));
+        QCOMPARE(composer.state(MonitorId::Source).in(), std::optional<std::int64_t>(120));
+        QCOMPARE(composer.state(MonitorId::Source).current()->position, 95);
+
+        // Find Script: the clip at frame 130 is at the script from line 5 (the mark at 120) to the take's end.
+        w.selectLines(0, 0);
+        composer.moveTo(MonitorId::Source, 130);
+        commands.action(QStringLiteral("other.find_script"))->trigger();
+        QCOMPARE(*w.selectedLines(), (std::pair{4, 6}));
+        QCOMPARE(w.selectedTakes(), QStringList{take1});
+
+        // The Record button screens the selected takes, the first in green; a click on a line marks the playing take
+        // there; past the take's lines it extends the take (p.584).
+        w.selectTakes({take2});
+        w.findChild<QToolButton*>(QStringLiteral("recordTakes"))->click();
+        QVERIFY(w.isRecording());
+        QCOMPARE(w.recordingTake(), take2);
+        QVERIFY(composer.isClipLooping());
+        composer.moveTo(MonitorId::Source, 40);
+        const int top7 = w.takeLinePoint(take2, 7).y() - 2;
+        QTest::mouseClick(textView->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(30, top7));
+        QCOMPARE(model::takeOf(w.script(), take2)->marks.value(7), composer.state(MonitorId::Source).current()->position);
+        QCOMPARE(model::takeOf(w.script(), take2)->last, 7);
+        composer.stop();
+        QVERIFY(!w.isRecording());
+
+        // Ctrl+drag moves a mark to another line; the frame stays (p.586).
+        const QPoint mark = w.takeLinePoint(take1, 2);
+        const QPoint to = w.takeLinePoint(take1, 3);
+        QTest::mousePress(textView->viewport(), Qt::LeftButton, Qt::ControlModifier, mark);
+        QTest::mouseMove(textView->viewport(), to);
+        QTest::mouseRelease(textView->viewport(), Qt::LeftButton, Qt::ControlModifier, to);
+        QCOMPARE(model::takeOf(w.script(), take1)->marks.value(3), 60);
+        QVERIFY(!model::takeOf(w.script(), take1)->marks.contains(2));
+
+        // Ctrl+Alt+double-click splices the marked range into the sequence (p.588): lines 3-4 are frames 60-119.
+        w.selectLines(3, 3);
+        QTest::mouseDClick(textView->viewport(), Qt::LeftButton, Qt::ControlModifier | Qt::AltModifier,
+                           w.takeLinePoint(take1, 3) + QPoint(0, 3));
+        const model::LoadedClip* record = composer.state(MonitorId::Record).current();
+        QVERIFY(record);
+        const model::Sequence seq = model::Sequence::fromItem(record->item);
+        QVERIFY(!seq.tracks().isEmpty());
+        QCOMPARE(seq.duration(), std::int64_t(60)); // the first edit makes a sequence (p.463)
+
+        // Find Bin: the takes' clips selected in their bin (p.586-587).
+        w.selectTakes({take1, take2});
+        QCOMPARE(window.findScriptBins({*model::takeOf(w.script(), take1), *model::takeOf(w.script(), take2)}), 2);
+        QCOMPARE(bins.viewFor(bin)->selectedIds().size(), qsizetype(2));
+
+        // Delete: a selected mark goes with Delete 1 mark(s) (p.586).
+        int asked = -1;
+        w.setAskHooks({}, [&](bool, bool, int, int marks) {
+            asked = marks;
+            return std::optional<ScriptDeleteChoice>(ScriptDeleteChoice{false, false, false, true});
+        });
+        w.selectMark(take1, 3);
+        w.askDelete();
+        QCOMPARE(asked, 1);
+        QVERIFY(!model::takeOf(w.script(), take1)->marks.contains(3));
+        QCOMPARE(model::takeOf(w.script(), take1)->marks.size(), qsizetype(1));
     }
 };
 

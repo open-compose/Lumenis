@@ -153,6 +153,46 @@ private slots:
         QCOMPARE(replaceInScript(s, QStringLiteral("coffee"), QStringLiteral("tea")), 2);
         QCOMPARE(s.lines, QStringList({"tea?", "More tea.", "No."}));
     }
+
+    // Script marks (p.582-588).
+    void scriptMarks() {
+        Script s = scriptFromText(QStringLiteral("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"));
+        addSlate(s, 2, 6, {{QStringLiteral("b"), QStringLiteral("c1"), QStringLiteral("33/1"), QStringLiteral("1")}});
+        const QString t = s.slates[0].takes[0].id;
+        QVERIFY(!addScriptMark(s, QStringLiteral("nope"), 3, 10));
+        QVERIFY(addScriptMark(s, t, 3, 40));
+        QVERIFY(addScriptMark(s, t, 5, 90));
+        QVERIFY(addScriptMark(s, t, 3, 30)); // replaces the line's mark
+        QCOMPARE(takeOf(s, t)->marks.value(3), 30);
+        // A line past the take's end extends it (p.584).
+        QVERIFY(addScriptMark(s, t, 8, 150));
+        QCOMPARE(takeOf(s, t)->last, 8);
+        // Find Script: the frame's lines.
+        QCOMPARE(scriptLinesAt(*takeOf(s, t), 10), std::nullopt);
+        QCOMPARE(scriptLinesAt(*takeOf(s, t), 30), (std::pair{3, 4}));
+        QCOMPARE(scriptLinesAt(*takeOf(s, t), 100), (std::pair{5, 7}));
+        QCOMPARE(scriptLinesAt(*takeOf(s, t), 200), (std::pair{8, 8}));
+        // The marked frames of a range: lines 4-5 run from line 3's mark to before line 8's.
+        QCOMPARE(markedFrames(*takeOf(s, t), 4, 5, 300), (std::pair<std::int64_t, std::int64_t>{30, 149}));
+        QCOMPARE(markedFrames(*takeOf(s, t), 8, 8, 300), (std::pair<std::int64_t, std::int64_t>{150, 299}));
+        QCOMPARE(markedFrames(*takeOf(s, t), 2, 2, 300), std::nullopt); // before every mark
+        QCOMPARE(markedFrames(*takeOf(s, t), 2, 3, 300), (std::pair<std::int64_t, std::int64_t>{30, 89}));
+        // Moving a mark keeps its frame (p.586); the JSON keeps the marks.
+        QVERIFY(moveScriptMark(s, t, 5, 6));
+        QCOMPARE(takeOf(s, t)->marks.value(6), 90);
+        QVERIFY(!takeOf(s, t)->marks.contains(5));
+        QCOMPARE(Script::fromJson(s.toJson()), s);
+        // Lines inserted above move the marks with their lines.
+        replaceLines(s, 0, 0, {QStringLiteral("new")});
+        QCOMPARE(takeOf(s, t)->marks.value(4), 30);
+        // Delete Mark(s) on a region of the take.
+        QCOMPARE(countScriptMarks(s, {t}, 0, 6), 1);
+        QCOMPARE(deleteScriptMarks(s, {t}, 0, 6), 1);
+        QCOMPARE(takeOf(s, t)->marks.size(), qsizetype(2));
+        // Shortening the take drops marks outside it.
+        setTakeLines(s, t, 3, 7);
+        QCOMPARE(takeOf(s, t)->marks.size(), qsizetype(1));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestScript)

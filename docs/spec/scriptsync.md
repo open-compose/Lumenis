@@ -35,7 +35,7 @@ All Takes, Show Line Number, Interpolate Position, Hold Slates Onscreen, Script 
 Rows, White). "Changes that you make to the Script Settings window will only apply to newly created scripts" (p.570):
 the font, size, left margin and Word Wrap are taken when a script is imported; Show Line Number and the background when
 a script is opened, as are Take Coloring, Show Frames, Show All Takes, Interpolate Position and Hold Slates Onscreen
-(8.3b; the Script menu changes them for the open window only, p.570). Pre-roll is dimmed until 8.3c.
+(8.3b; the Script menu changes them for the open window only, p.570), and Pre-roll (8.3c, p.588-589).
 
 ## The Script window (p.570-576)
 
@@ -99,17 +99,44 @@ Take column), the lines it covers, its representative frame, and its off-screen 
 * Alt+click on a tab: the guide opens the Info window (p.572). Ours: the Info window is not built yet, so the clip's
   name, bin, take, lines and length go to the Console.
 
+## Script marks (p.582-589, 8.3c)
+
+A take's marks (`ScriptTake::marks`) sync script lines to clip frames: "When you place a mark in the script, an IN point
+also appears in the clip when you load it into a monitor" (p.582). A mark is drawn as a small bar across the take's line
+in the middle of its line (p.583).
+
+* Add Script Mark (the Command Palette's Other tab, p.582-583): after a double-click at a take and a line (which selects
+  the take, highlights the line and loads the clip), the take's line is synced to the Source monitor's position; play
+  stops. Ours: the take is the one last loaded from the window and the line the first selected one; without the take's
+  clip in the Source monitor the Console says so.
+* The Record button (p.583-584): the selected takes (without any, the takes over the selected lines, "load all the
+  coverage for a range of lines", p.585) play one after another in the Source monitor (the Composer's clip loop, so Tab
+  and Shift+Tab step takes and the space bar stops); the playing take's line is green. A click on a line marks the
+  playing take there at the playing frame; a line with a mark gets the new frame; a line outside the take extends it.
+  The Play button plays the same takes without marking.
+* Double-click on a mark (p.585): the take is loaded, cued to the mark with an IN there; the Script setting's Pre-roll
+  (seconds) puts the position that much earlier ("The pre-roll is included when you access the script mark", p.589).
+* Moving and deleting (p.586): Ctrl+drag a mark to another line of the take (the frame stays); a click selects a mark,
+  and Delete offers "Delete 1 mark(s)"; with takes selected, the marks on the selected lines are counted instead.
+* Find Script (the Other tab, p.586): from the Source monitor's clip and position, the take whose mark is the last at or
+  before it; the lines from that mark to the line before the next mark are selected. Find Bin (toolbar, p.586-587): the
+  selected takes' bins are opened and their clips selected.
+* Splicing a Script Range (p.588): Ctrl+Alt+double-click on a take splices the clip from the mark at or before the
+  selected lines' first line to the frame before the next mark after them (the clip's end without one) at the Record
+  monitor's IN or position; the first edit makes a sequence. A range before every mark splices nothing (ours).
+
 ## Later
 
-* 8.3c: script marks, Find Script and Find Bin, splicing a script range.
 * 8.3d: ScriptSync AI and Create Script from Clip.
 * 8.3e: shared scripts' locks; the Find window's Script Text tab.
 
 ## Tests
 
 * `tst_script`: importing text, scene and page numbers, the script item, editing with the numbers following the lines,
-  find and replace; slates and takes (adding, moving, lines, frames, indicators, Interpolate Position, JSON).
+  find and replace; slates and takes (adding, moving, lines, frames, indicators, Interpolate Position, JSON); script marks
+  (adding, extending, Find Script's lines, marked frames, moving, deleting, through line edits).
 * `tst_script_ui`: New Script into the active bin, AS/AP, the status bar and menus, Edit Mode, Find and Replace, the
   Delete dialog, Text Layout, Save Script, reopening, Save a Script Copy As; dropping clips, tabs, Ctrl+click and the
   lasso, the arrow keys, Set Offscreen and Set Color, Show All Takes and Show Frames, Enlarge Frame, moving slates,
-  loading and playing takes, Delete Takes.
+  loading and playing takes, Delete Takes; `scriptMarks`: Add Script Mark, cueing with the Pre-roll, Find Script, the Record
+  button marking the playing take, moving a mark, splicing a script range, Find Bin, Delete mark(s).

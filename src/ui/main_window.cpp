@@ -8202,6 +8202,8 @@ void MainWindow::installPanelHandlers() {
     handle("script.add_scene", [this] { scriptWindow_->askScene(); });
     handle("script.add_page", [this] { scriptWindow_->askPage(); });
     handle("script.text_layout", [this] { scriptTextLayout(); });
+    handle("other.add_script_mark", [this] { addScriptMark(); });
+    handle("other.find_script", [this] { findScript(); });
     for (const char* id : {"script.show_frames", "script.show_all_takes", "script.hold_slates_onscreen", "script.interpolate_position"})
         handle(id, [this, id] { setScriptSlateOption(QString::fromLatin1(id)); });
     for (const auto& [id, color] : scriptIndicatorColors()) commands_.setHandler(id, [this, cid = id] { setScriptSlateOption(cid); });

@@ -99,6 +99,12 @@ QJsonObject Script::toJson() const {
                 if (!t.take.isEmpty()) to.insert(QStringLiteral("take"), t.take);
                 if (!t.offscreen.isEmpty()) to.insert(QStringLiteral("offscreen"), ranges(t.offscreen));
                 if (!t.colors.isEmpty()) to.insert(QStringLiteral("colors"), ranges(t.colors));
+                if (!t.marks.isEmpty()) {
+                    QJsonObject marks;
+                    for (auto it = t.marks.cbegin(); it != t.marks.cend(); ++it)
+                        marks.insert(QString::number(it.key()), static_cast<qint64>(it.value()));
+                    to.insert(QStringLiteral("marks"), marks);
+                }
                 takes.append(to);
             }
             a.append(QJsonObject{{QStringLiteral("id"), s.id},
@@ -153,6 +159,12 @@ Script Script::fromJson(const QJsonObject& o) {
             t.frame = std::max<qint64>(0, to.value(QStringLiteral("frame")).toInteger());
             t.offscreen = ranges(to.value(QStringLiteral("offscreen")));
             t.colors = ranges(to.value(QStringLiteral("colors")));
+            const QJsonObject marks = to.value(QStringLiteral("marks")).toObject();
+            for (auto it = marks.constBegin(); it != marks.constEnd(); ++it) {
+                bool ok = false;
+                const int line = it.key().toInt(&ok);
+                if (ok && line >= t.first && line <= t.last) t.marks.insert(line, std::max<qint64>(0, it.value().toInteger()));
+            }
             if (!t.id.isEmpty()) slate.takes << t;
         }
         slate.active = std::clamp(so.value(QStringLiteral("active")).toInt(), 0, std::max(0, static_cast<int>(slate.takes.size()) - 1));
@@ -251,6 +263,10 @@ void replaceLines(Script& script, int from, int to, const QStringList& replaceme
                     r.last = std::clamp(shift(r.last, true), r.first, lastLine);
                 }
             }
+            QMap<int, std::int64_t> marks;
+            for (auto it = t.marks.cbegin(); it != t.marks.cend(); ++it)
+                marks.insert(std::clamp(shift(it.key(), false), t.first, t.last), it.value());
+            t.marks = marks;
         }
     }
     script.lines = script.lines.mid(0, from) + rows + script.lines.mid(to);
@@ -434,6 +450,9 @@ void moveSlate(Script& script, const QString& slateId, int lines, int x, bool wi
                     r.last += d;
                 }
             }
+            QMap<int, std::int64_t> marks;
+            for (auto it = t.marks.cbegin(); it != t.marks.cend(); ++it) marks.insert(it.key() + d, it.value());
+            t.marks = marks;
         }
         return;
     }
@@ -454,6 +473,7 @@ void setTakeLines(Script& script, const QString& takeId, int first, int last) {
         }
         *list = kept;
     }
+    t->marks.removeIf([&](const QMap<int, std::int64_t>::iterator& it) { return it.key() < t->first || it.key() > t->last; });
 }
 
 void stepTakeFrames(Script& script, const QStringList& takeIds, std::int64_t frames) {
@@ -525,6 +545,78 @@ std::int64_t interpolatedFrame(const ScriptTake& take, int line, double fraction
     const int lines = take.last - take.first + 1;
     const double at = (std::clamp(line, take.first, take.last) - take.first + std::clamp(fraction, 0.0, 1.0)) / lines;
     return std::clamp<std::int64_t>(static_cast<std::int64_t>(at * static_cast<double>(clipFrames)), 0, std::max<std::int64_t>(0, clipFrames - 1));
+}
+
+bool addScriptMark(Script& script, const QString& takeId, int line, std::int64_t frame) {
+    ScriptTake* t = takeIn(script, takeId);
+    if (!t || script.lines.isEmpty()) return false;
+    line = std::clamp(line, 0, lastLine(script));
+    t->first = std::min(t->first, line);
+    t->last = std::max(t->last, line);
+    t->marks.insert(line, std::max<std::int64_t>(0, frame));
+    return true;
+}
+
+bool moveScriptMark(Script& script, const QString& takeId, int from, int to) {
+    ScriptTake* t = takeIn(script, takeId);
+    if (!t || !t->marks.contains(from)) return false;
+    to = std::clamp(to, t->first, t->last);
+    if (to == from) return false;
+    const std::int64_t frame = t->marks.take(from);
+    t->marks.insert(to, frame);
+    return true;
+}
+
+int deleteScriptMarks(Script& script, const QStringList& takeIds, int first, int last) {
+    int n = 0;
+    for (const QString& id : takeIds) {
+        if (ScriptTake* t = takeIn(script, id))
+            n += static_cast<int>(t->marks.removeIf([&](const QMap<int, std::int64_t>::iterator& it) {
+                return it.key() >= first && it.key() <= last;
+            }));
+    }
+    return n;
+}
+
+int countScriptMarks(const Script& script, const QStringList& takeIds, int first, int last) {
+    int n = 0;
+    for (const QString& id : takeIds) {
+        if (const ScriptTake* t = takeOf(script, id))
+            for (auto it = t->marks.cbegin(); it != t->marks.cend(); ++it) n += it.key() >= first && it.key() <= last ? 1 : 0;
+    }
+    return n;
+}
+
+std::optional<std::pair<int, int>> scriptLinesAt(const ScriptTake& take, std::int64_t frame) {
+    // Marks by frame; the line of the last one at or before the frame, to the line before the next one by frame.
+    std::optional<std::pair<int, std::int64_t>> at;
+    std::optional<std::pair<int, std::int64_t>> next;
+    for (auto it = take.marks.cbegin(); it != take.marks.cend(); ++it) {
+        if (it.value() <= frame && (!at || it.value() >= at->second)) at = std::pair{it.key(), it.value()};
+    }
+    if (!at) return std::nullopt;
+    for (auto it = take.marks.cbegin(); it != take.marks.cend(); ++it) {
+        if (it.value() > frame && it.key() > at->first && (!next || it.value() < next->second)) next = std::pair{it.key(), it.value()};
+    }
+    return std::pair{at->first, next ? std::max(at->first, next->first - 1) : take.last};
+}
+
+std::optional<std::pair<std::int64_t, std::int64_t>> markedFrames(const ScriptTake& take, int first, int last,
+                                                                  std::int64_t clipFrames) {
+    if (take.marks.isEmpty()) return std::nullopt;
+    const auto in = take.marks.upperBound(first);
+    std::int64_t start = 0;
+    if (in != take.marks.cbegin()) {
+        start = std::prev(in).value();
+    } else if (in != take.marks.cend() && in.key() <= last) {
+        start = in.value(); // the range begins before every mark: from its first mark
+    } else {
+        return std::nullopt;
+    }
+    const auto after = take.marks.upperBound(last);
+    std::int64_t end = after == take.marks.cend() ? clipFrames - 1 : after.value() - 1;
+    end = std::max(start, std::min(end, std::max<std::int64_t>(start, clipFrames - 1)));
+    return std::pair{start, end};
 }
 
 } // namespace lumenis::model

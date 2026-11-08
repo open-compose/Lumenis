@@ -1,6 +1,7 @@
 // MainWindow's scripts (8.3; Editing Guide ch.18, docs/spec/scriptsync.md): File > New > New Script, the Script window
 // panel showing a script item, Save Script, Save a Script Copy As and Script > Text Layout; the slates' clips and frames,
-// loading and playing takes and the Script menu's slate options (8.3b, p.576-582).
+// loading and playing takes and the Script menu's slate options (8.3b, p.576-582); script marks, screening, Find Script,
+// Find Bin and splicing a script range (8.3c, p.582-588).
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/model/script.h"
@@ -53,6 +54,35 @@ void MainWindow::setUpScriptWindow() {
             if (const model::BinItem* item = scriptTakeItem(t)) clips << Composer::LoopClip{t.binId, *item};
         if (!clips.isEmpty()) composer_->playClipLoop(clips, true);
     });
+    // Script marks (8.3c). The playing clip's position while screening.
+    scriptWindow_->setSourcePosition([this]() -> std::optional<std::pair<QString, std::int64_t>> {
+        const model::LoadedClip* c = composer_->state(MonitorId::Source).current();
+        if (!c) return std::nullopt;
+        return std::pair{c->item.id, c->position};
+    });
+    // "Click the Record button ... Media Composer loads the clip into the Source monitor, and the clip begins to play ... As
+    // each take reaches its end, Media Composer automatically loads and plays the next take ... To stop the playback
+    // loop: Press the space bar" (p.584): the Composer's clip loop, Tab and Shift+Tab included.
+    connect(scriptWindow_, &ScriptWindow::recordRequested, this, [this](const QList<model::ScriptTake>& takes) {
+        QList<Composer::LoopClip> clips;
+        for (const model::ScriptTake& t : takes)
+            if (const model::BinItem* item = scriptTakeItem(t)) clips << Composer::LoopClip{t.binId, *item};
+        if (clips.isEmpty()) {
+            scriptWindow_->setRecordingTake({});
+            return;
+        }
+        scriptRecordTakes_ = takes;
+        composer_->playClipLoop(clips, true);
+        followScriptRecording();
+    });
+    connect(composer_, &Composer::changed, this, &MainWindow::followScriptRecording);
+    // "When the playback reaches the selected line of dialog, click the Add Script Mark button ... The line is marked in the
+    // Script window with a small horizontal bar, and play stops" (p.583).
+    connect(scriptWindow_, &ScriptWindow::scriptMarkAdded, this, [this] {
+        if (!scriptWindow_->isRecording()) composer_->stop();
+    });
+    connect(scriptWindow_, &ScriptWindow::findBinRequested, this, &MainWindow::findScriptBins);
+    connect(scriptWindow_, &ScriptWindow::spliceRequested, this, &MainWindow::spliceScriptRange);
     connect(scriptWindow_, &ScriptWindow::takeInfoRequested, this, [this](const model::ScriptTake& take) {
         // Ours: the Info window (p.572) is not built; its clip's details go to the Console.
         const model::BinItem* item = scriptTakeItem(take);
@@ -85,10 +115,120 @@ bool MainWindow::loadScriptTake(const model::ScriptTake& take, int line, double 
     }
     const model::BinItem clip = *item;
     composer_->load(MonitorId::Source, take.binId, clip);
+    if (line >= 0 && take.marks.contains(line)) {
+        // "Double-click the script mark ... Media Composer loads the take into the Source monitor, cues it to the synced
+        // line of dialog, and places an IN point at the sync location" (p.585); "The pre-roll is included when you access
+        // the script mark" (p.589).
+        const std::int64_t in = take.marks.value(line);
+        model::MonitorState& s = composer_->state(MonitorId::Source);
+        s.clearBoth();
+        s.setPosition(in);
+        s.markIn();
+        composer_->moveTo(MonitorId::Source, std::max<std::int64_t>(0, in - scriptPreRollFrames()));
+        return true;
+    }
     const std::int64_t frame = line >= 0 && scriptWindow_->slateOptions().interpolatePosition
                                    ? model::interpolatedFrame(take, line, fraction, clip.durationFrames)
                                    : take.frame;
     composer_->moveTo(MonitorId::Source, frame);
+    return true;
+}
+
+// The Script setting's Pre-roll (seconds) in frames at the project's rate.
+std::int64_t MainWindow::scriptPreRollFrames() const {
+    const int seconds = settings_->value(QStringLiteral("Script"), QStringLiteral("preRoll")).toInt();
+    const Rational rate = project_ ? project_->settings.format.editRate : Rational(25);
+    return static_cast<std::int64_t>(std::llround(seconds * rate.toDouble()));
+}
+
+// The take screening plays now: the Source monitor's clip among the Record button's takes; none once the loop stopped.
+void MainWindow::followScriptRecording() {
+    if (!scriptWindow_->isRecording()) return;
+    if (!composer_->isClipLooping()) {
+        scriptWindow_->setRecordingTake({});
+        scriptRecordTakes_.clear();
+        return;
+    }
+    const model::LoadedClip* c = composer_->state(MonitorId::Source).current();
+    for (const model::ScriptTake& t : std::as_const(scriptRecordTakes_)) {
+        if (c && t.clipId == c->item.id) {
+            scriptWindow_->setRecordingTake(t.id);
+            return;
+        }
+    }
+}
+
+// Add Script Mark (the Other tab, p.582-583): the Script window's selected line of the take last loaded, synced to the
+// Source monitor's position when it shows that take's clip.
+bool MainWindow::addScriptMark() {
+    if (!scriptWindow_->isOpen()) return false;
+    const model::ScriptTake* take = model::takeOf(scriptWindow_->script(), scriptWindow_->markTake());
+    const model::LoadedClip* c = composer_->state(MonitorId::Source).current();
+    if (!take || !c || c->item.id != take->clipId) {
+        ConsoleLog::instance().append(tr("Add Script Mark: load a take from the Script window first."));
+        return false;
+    }
+    return scriptWindow_->addScriptMark(c->position);
+}
+
+// Find Script (the Other tab, p.586): "The Script window scrolls to and highlights the portion of script that most
+// closely matches the clip location".
+bool MainWindow::findScript() {
+    const model::LoadedClip* c = composer_->state(MonitorId::Source).current();
+    if (!scriptWindow_->isOpen() || !c) return false;
+    const model::Script script = scriptWindow_->script();
+    for (const model::ScriptSlate& s : script.slates) {
+        for (const model::ScriptTake& t : s.takes) {
+            if (t.clipId != c->item.id) continue;
+            if (const auto lines = model::scriptLinesAt(t, c->position)) {
+                scriptWindow_->showTakeLines(t.id, lines->first, lines->second);
+                if (Panel* p = panels_->panel(QStringLiteral("Script"))) panels_->showPanel(p);
+                return true;
+            }
+        }
+    }
+    ConsoleLog::instance().append(tr("Find Script: no script mark in the open script matches the clip's position."));
+    return false;
+}
+
+// Find Bin (p.586-587): "Media Composer searches through bins linked to the project, opens the bin containing the linked
+// clips, and highlights them in the bin."
+int MainWindow::findScriptBins(const QList<model::ScriptTake>& takes) {
+    QHash<QString, QStringList> byBin;
+    for (const model::ScriptTake& t : takes)
+        if (scriptTakeItem(t)) byBin[t.binId] << t.clipId;
+    int found = 0;
+    for (auto it = byBin.cbegin(); it != byBin.cend(); ++it) {
+        BinDocument* doc = binContainer_->openBin(it.key());
+        BinView* view = doc ? binContainer_->viewFor(doc) : nullptr;
+        if (!view) continue;
+        view->selectIds(it.value());
+        found += static_cast<int>(it.value().size());
+    }
+    if (found == 0) ConsoleLog::instance().append(tr("Find Bin: the takes' clips are not in their bins."));
+    return found;
+}
+
+// Splicing a Script Range (p.588): the marked section of the take's clip over script lines [first, last] spliced into the
+// sequence at the Record monitor's IN or position.
+bool MainWindow::spliceScriptRange(const model::ScriptTake& take, int first, int last) {
+    const model::BinItem* item = scriptTakeItem(take);
+    const auto frames = item ? model::markedFrames(take, first, last, item->durationFrames) : std::nullopt;
+    if (!frames) {
+        ConsoleLog::instance().append(tr("Splice: the take has no script marks for those lines."));
+        return false;
+    }
+    composer_->load(MonitorId::Source, take.binId, *item);
+    model::MonitorState& s = composer_->state(MonitorId::Source);
+    s.clearBoth();
+    s.setPosition(frames->second);
+    s.markOut();
+    s.setPosition(frames->first);
+    s.markIn();
+    composer_->moveTo(MonitorId::Source, frames->first);
+    QAction* splice = commands_.action(QStringLiteral("edit.splice_in"));
+    if (!splice) return false;
+    splice->trigger();
     return true;
 }
 

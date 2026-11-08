@@ -52,7 +52,7 @@ struct SlateGeometry {
 
 // What a point in the viewport is on.
 struct SlateHit {
-    enum Kind { None, Box, Tab, Line } kind = None;
+    enum Kind { None, Box, Tab, Line, Mark } kind = None;
     QString slateId;
     QString takeId;
     int line = -1;          // the script line under the point (Line)
@@ -198,6 +198,14 @@ public:
                         if (line < take->first) h.fraction = 0.0;
                         if (line > take->last) h.fraction = 1.0;
                     }
+                    // A script mark's bar is in the middle of its line (p.583).
+                    if (const model::ScriptTake* take = model::takeOf(window_.script_, t.id); take && take->marks.contains(h.line)) {
+                        const auto [lt, lb] = lineSpan(h.line);
+                        if (std::abs(p.y() - (lt + lb) / 2) <= 4) {
+                            h.kind = SlateHit::Mark;
+                            return h;
+                        }
+                    }
                     if (std::abs(p.y() - t.top) <= kEndGrab) h.end = -1;
                     else if (std::abs(p.y() - t.bottom) <= kEndGrab) h.end = 1;
                     return h;
@@ -251,6 +259,9 @@ protected:
         const bool shift = e->modifiers().testFlag(Qt::ShiftModifier);
         const bool alt = e->modifiers().testFlag(Qt::AltModifier);
         if (e->button() != Qt::LeftButton || (h.kind == SlateHit::None && p.x() < slateBase())) {
+            // "As you hear a line of dialog ... click the matching line in the Script window. A script mark appears at that
+            // location in the take, and the clip continues to play" (p.584).
+            if (e->button() == Qt::LeftButton && window_.isRecording()) window_.markPlayingLine(lineAt(p.y()).first);
             QTextEdit::mousePressEvent(e);
             return;
         }
@@ -275,6 +286,15 @@ protected:
             drag_.kind = Drag::Slate;
             drag_.slateId = h.slateId;
             drag_.withTakes = ctrl;
+            break;
+        case SlateHit::Mark:
+            // "Click once on a script mark to select it"; Ctrl+drag moves it (p.586).
+            window_.selectMark(h.takeId, h.line);
+            if (ctrl) {
+                drag_.kind = Drag::Mark;
+                drag_.takeId = h.takeId;
+                drag_.end = h.line;
+            }
             break;
         case SlateHit::Line:
             if (ctrl && h.end != 0) {
@@ -322,6 +342,8 @@ protected:
             const auto [top, bottom] = lineSpan(line);
             const int lines = static_cast<int>(std::lround(static_cast<double>(p.y() - d.start.y()) / std::max(1, bottom - top)));
             window_.moveSlate(d.slateId, lines, p.x() - d.start.x(), d.withTakes);
+        } else if (d.kind == Drag::Mark) {
+            window_.moveScriptMark(d.takeId, d.end, lineAt(p.y()).first);
         } else if (d.kind == Drag::TakeEnd) {
             if (const model::ScriptTake* t = model::takeOf(window_.script_, d.takeId)) {
                 const int line = lineAt(p.y()).first;
@@ -361,8 +383,15 @@ protected:
             for (const QString& t : ids)
                 if (t != id) window_.loadTake(t);
             if (!id.isEmpty()) window_.loadTake(id);
+        } else if (e->modifiers().testFlag(Qt::ControlModifier) && e->modifiers().testFlag(Qt::AltModifier)) {
+            // "Press the Ctrl and Alt keys ... Double-click the preferred take within the range of dialog that is marked
+            // with script marks. The marked section of the clip is spliced into the sequence" (p.588).
+            window_.spliceTake(h.takeId, h.line);
         } else {
-            // "Double-click any line in the take to select the take and load it into a monitor" (p.580).
+            // "Double-click any line in the take to select the take and load it into a monitor" (p.580); "Double-click in
+            // the Script window at the intersection of a take and the line of dialog ... the selected line of the dialog
+            // is highlighted" (p.583); on a mark, the take is cued there (p.585).
+            window_.selectLines(h.line, h.line);
             window_.loadTake(h.takeId, h.line, h.fraction);
         }
     }
@@ -431,6 +460,7 @@ private:
 
     // Selects a take (the slate shows it from now on); `add` toggles it in the selection (Ctrl+click, p.580).
     void pick(const QString& takeId, bool add) {
+        window_.selectedMark_.reset();
         QStringList ids = add ? window_.selectedTakes_ : QStringList();
         if (add && ids.contains(takeId)) ids.removeAll(takeId);
         else ids << takeId;
@@ -471,6 +501,17 @@ private:
         // The beginning and end marks.
         p.drawLine(g.x - 4, g.bottom, g.x + 4, g.bottom);
     }
+    // "The line is marked in the Script window with a small horizontal bar" (p.583); a selected mark is drawn larger.
+    void paintMarks(QPainter& p, const model::ScriptTake& take, const SlateGeometry::Take& g) {
+        for (auto it = take.marks.cbegin(); it != take.marks.cend(); ++it) {
+            const auto [top, bottom] = lineSpan(it.key());
+            const int y = (top + bottom) / 2;
+            if (y < 0 || y > viewport()->height()) continue;
+            const bool sel = window_.selectedMark_ && window_.selectedMark_->first == take.id && window_.selectedMark_->second == it.key();
+            const int half = sel ? 8 : 6;
+            p.fillRect(QRect(g.x - half, y - (sel ? 2 : 1), 2 * half + 1, sel ? 5 : 3), palette().color(QPalette::BrightText));
+        }
+    }
     void paintSlates() {
         if (window_.script_.slates.isEmpty()) return;
         QPainter p(viewport());
@@ -486,7 +527,10 @@ private:
             for (const SlateGeometry::Take& t : g.takes) {
                 if (const model::ScriptTake* take = model::takeOf(window_.script_, t.id)) {
                     const bool sel = window_.selectedTakes_.contains(t.id);
-                    paintTakeLine(p, *take, t, sel ? selected : takeColor, sel ? 3 : 2);
+                    // "The first selected take changes to green in the Script window" while screening (p.584).
+                    const bool playing = t.id == window_.recordingTake_;
+                    paintTakeLine(p, *take, t, playing ? QColor(40, 190, 70) : (sel ? selected : takeColor), sel || playing ? 3 : 2);
+                    paintMarks(p, *take, t);
                 }
             }
             if (g.box.bottom() < 0 || g.box.top() > viewport()->height()) continue;
@@ -532,7 +576,7 @@ private:
     }
 
     struct Drag {
-        enum Kind { None, Slate, TakeEnd, Lasso } kind = None;
+        enum Kind { None, Slate, TakeEnd, Lasso, Mark } kind = None;
         QPoint start;
         QPoint now;
         QString slateId;
@@ -574,6 +618,10 @@ ScriptWindow::ScriptWindow(QWidget* parent) : QWidget(parent) {
     // "click the Play button at the top of the Script window" (p.581), Set Offscreen (p.581) and Set Color (p.582).
     // Ours: lettered like the other buttons.
     connect(tool(QStringLiteral("\u25B6"), QStringLiteral("playTakes"), tr("Play")), &QToolButton::clicked, this, &ScriptWindow::playSelected);
+    // "Click the Record button in the Script window toolbar" (p.583-584), "Click the Find Bin button in the Script window
+    // toolbar" (p.586). Ours: a dot and lettered.
+    connect(tool(QStringLiteral("\u25CF"), QStringLiteral("recordTakes"), tr("Record")), &QToolButton::clicked, this, &ScriptWindow::recordSelected);
+    connect(tool(tr("FB"), QStringLiteral("findBin"), tr("Find Bin")), &QToolButton::clicked, this, &ScriptWindow::findBins);
     offscreenButton_ = tool(tr("OS"), QStringLiteral("setOffscreen"), tr("Set Offscreen"));
     offscreenButton_->setCheckable(true);
     connect(offscreenButton_, &QToolButton::clicked, this, [this] { setOffscreen(); });
@@ -642,6 +690,10 @@ void ScriptWindow::open(const QString& binId, const QString& itemId, const QStri
     name_ = name;
     script_ = script;
     selectedTakes_.clear();
+    selectedMark_.reset();
+    markTake_.clear();
+    recordTakes_.clear();
+    recordingTake_.clear();
     view_->clearFrames();
     setEditMode(false);
     rebuild();
@@ -877,10 +929,13 @@ void ScriptWindow::askDelete() {
         hasPages = hasPages || script_.pages.contains(l);
     }
     const int takes = static_cast<int>(selectedTakes_.size());
-    if (!hasScenes && !hasPages && takes == 0) return;
+    // "Click once on a script mark to select it. You can select multiple script marks for removal by highlighting an entire
+    // region of text and selecting the takes containing the script marks" (p.586).
+    const int marks = selectedMark_ ? 1 : model::countScriptMarks(script_, selectedTakes_, sel->first, sel->second);
+    if (!hasScenes && !hasPages && takes == 0 && marks == 0) return;
     std::optional<ScriptDeleteChoice> choice;
     if (askDelete_) {
-        choice = askDelete_(hasScenes, hasPages, takes);
+        choice = askDelete_(hasScenes, hasPages, takes, marks);
     } else {
         QDialog d(this);
         d.setWindowTitle(tr("Delete"));
@@ -895,17 +950,31 @@ void ScriptWindow::askDelete() {
         auto* takeBox = new QCheckBox(tr("Delete Takes"), &d);
         takeBox->setEnabled(takes > 0);
         takeBox->setChecked(takes > 0 && !hasScenes && !hasPages);
+        // "Select Delete 1 mark(s), and click OK" (p.586).
+        auto* markBox = new QCheckBox(tr("Delete %1 mark(s)").arg(marks), &d);
+        markBox->setEnabled(marks > 0);
+        markBox->setChecked(marks > 0 && selectedMark_.has_value());
+        if (markBox->isChecked()) takeBox->setChecked(false);
         v->addWidget(scenes);
         v->addWidget(pages);
         v->addWidget(takeBox);
+        v->addWidget(markBox);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
         connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
         connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
         v->addWidget(buttons);
-        if (d.exec() == QDialog::Accepted) choice = ScriptDeleteChoice{scenes->isChecked(), pages->isChecked(), takeBox->isChecked()};
+        if (d.exec() == QDialog::Accepted)
+            choice = ScriptDeleteChoice{scenes->isChecked(), pages->isChecked(), takeBox->isChecked(), markBox->isChecked()};
     }
     if (!choice) return;
     deleteNumbers(choice->scenes, choice->pages);
+    if (choice->marks) {
+        // "When you remove a script mark, you do not delete the marked portion of the take, only the sync point" (p.586).
+        const int n = selectedMark_ ? model::deleteScriptMarks(script_, {selectedMark_->first}, selectedMark_->second, selectedMark_->second)
+                                    : model::deleteScriptMarks(script_, selectedTakes_, sel->first, sel->second);
+        selectedMark_.reset();
+        if (n > 0) scriptChanged();
+    }
     if (choice->takes && model::deleteTakes(script_, selectedTakes_) > 0) {
         // "When you delete slates and takes from the Script window, the captured source clips remain in the source
         // bins" (p.579).
@@ -1136,21 +1205,117 @@ void ScriptWindow::loadTake(const QString& takeId, int line, double fraction) {
     const model::ScriptTake* take = model::takeOf(script_, takeId);
     if (!take) return;
     model::setActiveTake(script_, takeId);
+    markTake_ = takeId; // Add Script Mark marks the take last loaded (p.583)
     if (!selectedTakes_.contains(takeId)) selectTakes({takeId});
     view_->viewport()->update();
     emit takeLoadRequested(*take, line, fraction);
 }
 
 void ScriptWindow::playSelected() {
+    const QList<model::ScriptTake> takes = takesOverSelection();
+    if (!takes.isEmpty()) emit takesPlayRequested(takes);
+}
+
+// The selected takes; without any, "all the coverage for a range of lines": the takes over the selected lines (p.585).
+QList<model::ScriptTake> ScriptWindow::takesOverSelection() const {
     QList<model::ScriptTake> takes;
     for (const QString& id : selectedTakes_)
         if (const model::ScriptTake* t = model::takeOf(script_, id)) takes << *t;
-    if (!takes.isEmpty()) emit takesPlayRequested(takes);
+    if (!takes.isEmpty()) return takes;
+    const auto sel = selectedLines();
+    if (!sel) return takes;
+    for (const model::ScriptSlate& s : script_.slates)
+        for (const model::ScriptTake& t : s.takes)
+            if (t.first <= sel->second && t.last >= sel->first) takes << t;
+    return takes;
+}
+
+bool ScriptWindow::addScriptMark(std::int64_t frame) {
+    const auto sel = selectedLines();
+    const model::ScriptTake* take = model::takeOf(script_, markTake_);
+    if (!sel || !take) return false;
+    if (!model::addScriptMark(script_, markTake_, sel->first, frame)) return false;
+    scriptChanged();
+    emit scriptMarkAdded(*model::takeOf(script_, markTake_), sel->first);
+    return true;
+}
+
+void ScriptWindow::selectMark(const QString& takeId, int line) {
+    const model::ScriptTake* t = model::takeOf(script_, takeId);
+    if (t && t->marks.contains(line)) selectedMark_ = std::pair{takeId, line};
+    else selectedMark_.reset();
+    view_->viewport()->update();
+}
+
+void ScriptWindow::moveScriptMark(const QString& takeId, int from, int to) {
+    if (!model::moveScriptMark(script_, takeId, from, to)) return;
+    if (selectedMark_ && selectedMark_->first == takeId && selectedMark_->second == from) selectedMark_->second =
+        model::takeOf(script_, takeId)->marks.contains(to) ? to : from;
+    scriptChanged();
+}
+
+void ScriptWindow::recordSelected() {
+    const QList<model::ScriptTake> takes = takesOverSelection();
+    if (takes.isEmpty()) return;
+    recordTakes_.clear();
+    for (const model::ScriptTake& t : takes) recordTakes_ << t.id;
+    recordingTake_ = recordTakes_.first();
+    view_->viewport()->update();
+    emit recordRequested(takes);
+}
+
+void ScriptWindow::setRecordingTake(const QString& takeId) {
+    if (takeId.isEmpty()) recordTakes_.clear();
+    if (recordingTake_ == takeId) return;
+    recordingTake_ = takeId;
+    view_->viewport()->update();
+}
+
+bool ScriptWindow::markPlayingLine(int line) {
+    if (!isRecording() || recordingTake_.isEmpty() || !sourcePosition_) return false;
+    const model::ScriptTake* take = model::takeOf(script_, recordingTake_);
+    const auto at = sourcePosition_();
+    if (!take || !at || at->first != take->clipId) return false;
+    // "Click a line in the script before or after the range of the existing take line to add the mark and extend the take
+    // line to include the new line" (p.584).
+    if (!model::addScriptMark(script_, recordingTake_, line, at->second)) return false;
+    scriptChanged();
+    return true;
+}
+
+void ScriptWindow::showTakeLines(const QString& takeId, int first, int last) {
+    if (!model::takeOf(script_, takeId)) return;
+    // "The Script window scrolls to and highlights the portion of script that most closely matches the clip location".
+    selectLines(first, last);
+    selectTakes({takeId});
+}
+
+void ScriptWindow::findBins() {
+    const QList<model::ScriptTake> takes = takesOverSelection();
+    if (!takes.isEmpty()) emit findBinRequested(takes);
+}
+
+void ScriptWindow::spliceTake(const QString& takeId, int line) {
+    const model::ScriptTake* take = model::takeOf(script_, takeId);
+    if (!take) return;
+    auto sel = selectedLines();
+    if (!sel || line < sel->first || line > sel->second) sel = std::pair{line, line};
+    emit spliceRequested(*take, sel->first, sel->second);
 }
 
 QRect ScriptWindow::slateRect(const QString& slateId) const {
     for (const SlateGeometry& g : view_->slateGeometry())
         if (g.slateId == slateId) return g.box;
+    return {};
+}
+
+QPoint ScriptWindow::takeLinePoint(const QString& takeId, int line) const {
+    for (const SlateGeometry& g : view_->slateGeometry())
+        for (const SlateGeometry::Take& t : g.takes)
+            if (t.id == takeId) {
+                const auto [top, bottom] = view_->lineSpan(line);
+                return {t.x, (top + bottom) / 2};
+            }
     return {};
 }
 

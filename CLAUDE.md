@@ -876,7 +876,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `ScriptTake` with `addSlate`, `moveSlate`, `toggleOffscreen` ...; the window's slates drawn over the text, drops of bin
   items, selection, drags, Delete Takes, Set Offscreen/Set Color, `takeLoadRequested`/`takesPlayRequested` handled by
   `MainWindow::loadScriptTake` and `playClipLoop`; Script > Color, Show Frames, Show All Takes; tests `tst_script
-  slatesAndTakes`, `tst_script_ui slatesAndTakes`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  slatesAndTakes`, `tst_script_ui slatesAndTakes`), is done. 8.3c, script marks (`ScriptTake::marks`, `model::addScriptMark`/
+  `scriptLinesAt`/`markedFrames`; the window's marks, Record button screening through `playClipLoop`, Find Bin; `MainWindow::
+  addScriptMark`/`findScript`/`findScriptBins`/`spliceScriptRange`, `other.add_script_mark`/`other.find_script`, the
+  Pre-roll; tests `tst_script scriptMarks`, `tst_script_ui scriptMarks`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

@@ -1455,7 +1455,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       frame stepped with the arrow keys; double-click and the Play button loading and playing takes; Interpolate
       Position; off-screen and colour indicators (Set Offscreen, Script > Color, Set Color); Alt+click for the Info
       window.
-    * 8.3c, script marks (p.582-588): Add Script Mark (the Other tab), double-click at a take and line, the Record
+    * 8.3c (done), script marks (p.582-588): Add Script Mark (the Other tab), double-click at a take and line, the Record
       button's real-time screening and marking (Tab/Shift+Tab, marks extending takes), loading a marked segment with
       its IN and the pre-roll, moving and deleting marks, Find Script and Find Bin, splicing a script range
       (Ctrl+Alt+double-click), the rough cut workflow.

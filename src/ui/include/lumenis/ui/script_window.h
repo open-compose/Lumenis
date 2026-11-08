@@ -15,6 +15,11 @@
 //   moves it (Ctrl: with its lines); Ctrl+dragging a take's end changes its lines; Left/Right step the selected takes'
 //   frames; Delete offers Delete Takes; double-click loads a take (takeLoadRequested); the Play button plays the
 //   selected ones (takesPlayRequested).
+// * Script marks (8.3c; p.582-588): small bars across a take's line at the lines synced to clip frames. Add Script Mark
+//   marks the selected line of the take last loaded; the Record button screens the selected takes (or those over the
+//   selected lines) and a click on a line marks it at the playing frame; a click selects a mark, Ctrl+drag moves it,
+//   Delete offers Delete mark(s); double-click on a mark cues its take there; Ctrl+Alt+double-click splices the marked
+//   range (spliceRequested); Find Bin shows the selected takes' clips in their bins.
 // * Changes mark the window modified (an asterisk in its title, p.570); MainWindow saves the script into its bin item
 //   (File > Save Script).
 
@@ -43,6 +48,7 @@ struct ScriptDeleteChoice {
     bool scenes = false;
     bool pages = false;
     bool takes = false;
+    bool marks = false;
 };
 
 // How slates show (the Script setting and Script menu, p.578, p.1217).
@@ -138,13 +144,43 @@ public:
     void loadTake(const QString& takeId, int line = -1, double fraction = 0.0);
     // The Play button (p.581): takesPlayRequested with the selected takes.
     void playSelected();
-    // Where things are drawn in the text view's viewport (tests): a slate's box, a take's tab.
+    // Where things are drawn in the text view's viewport (tests): a slate's box, a take's tab, a take's line at a script
+    // line (its middle), empty when not drawn.
     QRect slateRect(const QString& slateId) const;
     QRect takeTabRect(const QString& takeId) const;
+    QPoint takeLinePoint(const QString& takeId, int line) const;
+
+    // Script marks (8.3c). The take marks go to: the one last loaded from the window (double-click), and the playing
+    // clip's position as MainWindow gives it while screening.
+    QString markTake() const { return markTake_; }
+    using SourcePosition = std::function<std::optional<std::pair<QString, std::int64_t>>()>; // clip id, frame
+    void setSourcePosition(SourcePosition position) { sourcePosition_ = std::move(position); }
+    // Add Script Mark (p.582-583): the first selected line of the mark take synced to `frame`. False without either.
+    bool addScriptMark(std::int64_t frame);
+    // A mark selected with a click (p.586), as {take, line}; selectMark selects one (empty take: none).
+    std::optional<std::pair<QString, int>> selectedMark() const { return selectedMark_; }
+    void selectMark(const QString& takeId, int line);
+    void moveScriptMark(const QString& takeId, int from, int to);
+    // The Record button (p.583-586): screening the selected takes, else the takes over the selected lines.
+    void recordSelected();
+    // MainWindow says what screening plays now (empty: screening ended); the take is drawn green.
+    void setRecordingTake(const QString& takeId);
+    bool isRecording() const { return !recordTakes_.isEmpty(); }
+    QString recordingTake() const { return recordingTake_; }
+    // While screening, a click on line `line` marks the playing take there ("A script mark appears at that location in
+    // the take, and the clip continues to play", p.584).
+    bool markPlayingLine(int line);
+    // Find Script (p.586): selects the take and its lines.
+    void showTakeLines(const QString& takeId, int first, int last);
+    // Find Bin (p.586-587): findBinRequested with the selected takes.
+    void findBins();
+    // Ctrl+Alt+double-click (p.588): spliceRequested for the take over the selected lines (or `line` alone when it is
+    // outside them).
+    void spliceTake(const QString& takeId, int line);
 
     // Test hooks: the Add Scene/Add Page dialog's answer, and the Delete dialog's choices.
     using AskNumber = std::function<std::optional<QString>(const QString& title, const QString& current)>;
-    using AskDelete = std::function<std::optional<ScriptDeleteChoice>(bool hasScenes, bool hasPages, int takes)>;
+    using AskDelete = std::function<std::optional<ScriptDeleteChoice>(bool hasScenes, bool hasPages, int takes, int marks)>;
     void setAskHooks(AskNumber number, AskDelete remove) {
         askNumber_ = std::move(number);
         askDelete_ = std::move(remove);
@@ -167,6 +203,13 @@ signals:
     void takesPlayRequested(const QList<model::ScriptTake>& takes);
     // Alt+click on a take's tab: the Info window for its clip (p.572).
     void takeInfoRequested(const model::ScriptTake& take);
+    // The Record button: screen these takes one after another (p.583).
+    void recordRequested(const QList<model::ScriptTake>& takes);
+    // A script mark was added (play stops after Add Script Mark, p.583).
+    void scriptMarkAdded(const model::ScriptTake& take, int line);
+    void findBinRequested(const QList<model::ScriptTake>& takes);
+    // Splicing a Script Range (p.588): the take over script lines [first, last].
+    void spliceRequested(const model::ScriptTake& take, int first, int last);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -204,6 +247,12 @@ private:
     ClipResolver clipResolver_;
     FrameProvider frameProvider_;
     QStringList selectedTakes_;
+    QString markTake_;
+    SourcePosition sourcePosition_;
+    std::optional<std::pair<QString, int>> selectedMark_;
+    QStringList recordTakes_;
+    QString recordingTake_;
+    QList<model::ScriptTake> takesOverSelection() const;
     QString indicatorColor_ = QStringLiteral("#d2c832");
     void scriptChanged();
     friend class ScriptTextView;

@@ -53,6 +53,9 @@ struct ScriptTake {
     std::int64_t frame = 0; // the representative frame in the slate (p.581), a clip frame
     QList<ScriptRange> offscreen;
     QList<ScriptRange> colors;
+    // Script marks (p.582-586): "When you place a mark in the script, an IN point also appears in the clip": the clip
+    // frame synced to each marked line.
+    QMap<int, std::int64_t> marks;
     bool operator==(const ScriptTake&) const = default;
 };
 
@@ -148,6 +151,26 @@ QString colorAt(const ScriptTake& take, int line);
 // in the Source monitor": the clip frame for a point `fraction` (0-1) of the way down line `line` of the take, for a
 // clip of `clipFrames` frames.
 std::int64_t interpolatedFrame(const ScriptTake& take, int line, double fraction, std::int64_t clipFrames);
+
+// Script marks (p.582-588). addScriptMark: line `line` of the take synced to clip frame `frame`; "Click a line that
+// already contains a mark to replace the previous mark ... Click a line in the script before or after the range of the
+// existing take line to add the mark and extend the take line to include the new line" (p.584). False without the take.
+bool addScriptMark(Script& script, const QString& takeId, int line, std::int64_t frame);
+// "When you move a script mark up or down, the mark in the source clip remains at the same frame but is resynced to a new
+// line in the script" (p.586): kept within the take's lines; a mark already on `to` is replaced.
+bool moveScriptMark(Script& script, const QString& takeId, int from, int to);
+// Delete Mark(s) (p.586): the takes' marks on lines [first, last]; how many went.
+int deleteScriptMarks(Script& script, const QStringList& takeIds, int first, int last);
+int countScriptMarks(const Script& script, const QStringList& takeIds, int first, int last);
+// Find Script (p.586): the lines of the take "that most closely matches the clip location" `frame`: from the last mark at
+// or before it to the line before the next mark (the take's last line after the last mark); nothing before the first mark
+// or without marks.
+std::optional<std::pair<int, int>> scriptLinesAt(const ScriptTake& take, std::int64_t frame);
+// The clip frames a script range covers (Splicing a Script Range, p.588): from the mark at or before `first` (or the first
+// mark inside the range) to the frame before the first mark after `last` (or the clip's end, `clipFrames` - 1). Nothing
+// when no mark is at or before the range's end.
+std::optional<std::pair<std::int64_t, std::int64_t>> markedFrames(const ScriptTake& take, int first, int last,
+                                                                  std::int64_t clipFrames);
 
 // Find and Replace in the Script window (p.575-576).
 struct ScriptMatch {

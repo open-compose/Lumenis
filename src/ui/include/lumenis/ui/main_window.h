@@ -638,6 +638,13 @@ public:
     // Position (toggled) and Color > colour (chosen), by command id. scriptIndicatorColors: Color's commands and colours.
     bool loadScriptTake(const model::ScriptTake& take, int line = -1, double fraction = 0.0);
     void setScriptSlateOption(const QString& commandId);
+    // Script marks (8.3c, p.582-588). addScriptMark: Add Script Mark at the Source monitor's position. findScript: Find
+    // Script. findScriptBins: Find Bin, the takes' clips selected in their opened bins; how many. spliceScriptRange: the
+    // take's marked frames over script lines [first, last] spliced into the sequence.
+    bool addScriptMark();
+    bool findScript();
+    int findScriptBins(const QList<model::ScriptTake>& takes);
+    bool spliceScriptRange(const model::ScriptTake& take, int first, int last);
     static QList<std::pair<QString, QString>> scriptIndicatorColors();
     // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
     // to match when exporting and importing", p.451).
@@ -1055,6 +1062,9 @@ private:
     ScriptWindow* scriptWindow_ = nullptr;
     const model::BinItem* scriptTakeItem(const model::ScriptTake& take) const;
     void applyScriptSettings();
+    std::int64_t scriptPreRollFrames() const;
+    void followScriptRecording();
+    QList<model::ScriptTake> scriptRecordTakes_; // the Record button's takes while screening
     void refreshScriptMenu();
     void setUpScriptWindow();
     TranscribeTracksAsk transcribeTracksHook_;
