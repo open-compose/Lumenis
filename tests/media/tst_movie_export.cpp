@@ -54,6 +54,21 @@ class TestMovieExport : public QObject {
     Q_OBJECT
 
 private slots:
+    // The encoders this build must have (LUMENIS_REQUIRE_ENCODERS, set by scripts/get-ffmpeg.ps1 in CI for the Windows
+    // GPL build): the owner's Windows build had no H.264 or H.265 encoder, and the export tests skipped where they
+    // should have failed (2026-11-08; BUILDING.md "Export says there is no H.264 encoder").
+    void requiredEncoders() {
+        const QStringList required = qEnvironmentVariable("LUMENIS_REQUIRE_ENCODERS").split(QLatin1Char(','), Qt::SkipEmptyParts);
+        if (required.isEmpty()) QSKIP("LUMENIS_REQUIRE_ENCODERS is not set");
+        for (const QString& encoder : required) {
+            bool found = false;
+            for (const MovieCompression& c : movieCompressions()) {
+                if (c.encoder == encoder.trimmed() && movieCompressionAvailable(c)) found = true;
+            }
+            QVERIFY2(found, qPrintable(QStringLiteral("FFmpeg has no usable %1 encoder").arg(encoder)));
+        }
+    }
+
     void scaling() {
         QImage wide(160, 90, QImage::Format_RGB32);
         wide.fill(Qt::white);

@@ -901,8 +901,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `BinItem::sourceSettings` and `Segment::spatial`; `src/media/frame_flex.*` drawing them through
   `MainWindow::adaptedFrame`; the Link Options' Reformatting option; Refresh Sequence > Aspect Ratio and Reformatting
   Options and All FrameFlex; tests `tst_frame_flex`, `tst_frameflex_ui`, scenario `49-spatial-adapter.json`), is done.
-  The owner's report that Export to File makes no movie on Windows 11 is in Phase 9; a failed export now says why in a
-  message. After Phase 7, before Phase 8: 7.6, the owner's report
+  8.5b1, the Source Settings dialog's FrameFlex tab (`src/ui/source_settings_dialog.*` with `FramingViewer`,
+  `MainWindow::sourceSettings` from the bin's and Source monitor's right-click `bin.source_settings`; test
+  `tst_frameflex_ui sourceSettingsDialog`), is done.
+  The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
+  encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
+  (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md
+  "Export says there is no H.264 encoder"). Error messages everywhere is in Phase 9 (owner's request). After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

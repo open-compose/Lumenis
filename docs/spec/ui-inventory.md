@@ -651,7 +651,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Reformatting and FrameFlex (docs/spec/frameflex.md): clips without a Reformat attribute pillarboxed or letterboxed as
   before 8.5a; the column changed through its right-click menu; FrameFlex X and Y in pixels from the centre, Size as the
   box's width over the image's, Z Rotation anticlockwise; the green dot only for a FrameFlex box; Show Adapters >
-  Spatial dimmed until 8.5b.
+  Spatial dimmed until 8.5b. Source Settings: the box's colours (Yellow, Red, Green, Blue, White), the rotation handle
+  18 pixels above the top edge, OK applying, Image and Frame aspect 0 meaning the image's own.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

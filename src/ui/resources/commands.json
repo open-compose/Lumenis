@@ -285,6 +285,7 @@
     {"id": "fx.scratch_removal", "text": "Scratch Removal", "palette": "fx"},
     {"id": "composer.update_group", "text": "Update Group"},
     {"id": "bin.commit_multicam_edits", "text": "Commit Multicam Edits"},
+    {"id": "bin.source_settings", "text": "Source Settings"},
     {"id": "bin.export_transcript", "text": "Export Transcript"},
     {"id": "bin.create_script_from_clip", "text": "Create Script from Clip"},
     {"id": "bin.share_transcripts", "text": "Share Transcripts"},

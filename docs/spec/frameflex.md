@@ -41,10 +41,27 @@ Reformatting). 8.5a is the data and the picture; 8.5b the Source Settings dialog
   All FrameFlex including creative framing also replaces boxes changed in the sequence (`SpatialAdapter::creative`, set
   from 8.5b by the Effect Editor). `model::refreshSpatialAdapters`.
 
+## The Source Settings dialog's FrameFlex tab (p.527-535; 8.5b1)
+
+* Opened from the bin's right-click Source Settings on master clips and subclips ("Select one or more clips in the bin,
+  right-click and choose Source Settings", p.529) and from the Source monitor's ("Right clicking on the clip in the Source
+  monitor, selecting Source Settings", p.316), command `bin.source_settings`; `SourceSettingsDialog` in
+  `src/ui/source_settings_dialog.*`, run by `MainWindow::sourceSettings`.
+* Show Viewers (p.529): the top viewer (`FramingViewer`) shows the first clip's frame with the framing box; dragging inside
+  it moves it, a corner resizes it, the handle above its top edge rotates it ("use the center handlebar in the top viewer
+  to rotate the image", p.532). The bottom viewer "displays the framed area as it would appear within the actual project
+  frame" (p.531).
+* The fields (p.529-530): Raster Dimension, Image Size with the button that sets it to the raster (p.531), Image, Pixel
+  and Frame aspect ratio, X, Y, Size, Z Rotation with Rotate Left and Rotate Right (90 degrees, p.532), Size matches
+  project raster, Color, Reset and the Reformat menu; Revert ("Reverses any changes you made since the last time the
+  Apply button was clicked") and Apply. Apply sets the settings on every selected clip; ours: OK applies too, Cancel
+  leaves what was applied.
+
 ## Tests
 
 * `tst_frame_flex`: the attribute's texts, adapters from clips through JSON and bins, Size matches project raster, the
   four Reformat options and boxes (moved, turned, with an Image Size), Refresh Sequence with creative framing.
 * `tst_frameflex_ui`: linking with Center Keep Size, the column changed, the Source monitor's picture, the segment's
-  adapter, a box set after the edit and Refresh Sequence; a failed Export to File's message.
+  adapter, a box set after the edit and Refresh Sequence; the Source Settings dialog's fields, buttons, drag, Revert and
+  Apply on two clips; a failed Export to File's message.
 * Scenario `49-spatial-adapter.json`.

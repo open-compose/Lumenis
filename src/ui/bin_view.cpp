@@ -2268,6 +2268,19 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             promote->setEnabled(!document_.isReadOnly());
         }
     }
+    // "Select one or more clips in the bin, right-click and choose Source Settings" (p.529; 8.5b1).
+    {
+        bool clips = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            clips = clips || (item && (item->kind == model::BinItemKind::MasterClip || item->kind == model::BinItemKind::Subclip));
+        }
+        if (clips) {
+            QAction* settings = menu->addAction(tr("Source Settings"), this, [this] { emit commandRequested(QStringLiteral("bin.source_settings")); });
+            settings->setObjectName(QStringLiteral("sourceSettings"));
+            settings->setEnabled(!document_.isReadOnly());
+        }
+    }
     // "Right-click on a template in the bin and choose Edit Template" (FX Guide p.320).
     if (selectedIds().size() == 1) {
         const model::BinItem* item = document_.bin().item(selectedIds().first());

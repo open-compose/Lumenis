@@ -22,8 +22,8 @@ FFmpeg's source is available from https://ffmpeg.org. Development builds
 use the platform's FFmpeg:
 * the Linux distribution's packages;
 * Homebrew on macOS;
-* an LGPL shared build from BtbN/FFmpeg-Builds on Windows
-  (`scripts/get-ffmpeg.ps1`).
+* a GPL shared build from BtbN/FFmpeg-Builds on Windows (`scripts/get-ffmpeg.ps1`; it has the x264 and x265
+  encoders, GPL-2.0-or-later; `-Variant lgpl` gets the LGPL build).
 
 Some of these are built with GPL parts. That is compatible with this
 project's GPL-3.0-or-later licence. Official releases will ship an LGPL-only

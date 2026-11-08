@@ -1486,12 +1486,15 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       segments drawn from whole frames (Stretch, Pillarbox/Letterbox, Center Crop, Center Keep Size; the box's position,
       size, rotation, Image Size and aspect ratios), the green dot, Refresh Sequence > Aspect Ratio and Reformatting
       Options and All FrameFlex including creative framing.
-    * 8.5b, the Source Settings dialog (p.527-533, p.545): from the bin's, the Source monitor's and the Timeline's
-      right-click Source Settings; Show Viewers with the top viewer's box, its handles and rotation, and the bottom
-      viewer's result; the FrameFlex tab's fields, Size matches project raster, Image Size = raster, Rotate left/right,
-      Reset, Revert and Apply on every selected clip; the Playback Rate tab (the motion adapter's rate). Panning: the
-      FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the Layout button's bypass and
-      Alt+Layout reset (p.533), creative framing.
+    * 8.5b, the Source Settings dialog and panning, in two parts:
+      * 8.5b1 (done), the dialog's FrameFlex tab (p.527-535): from the bin's and the Source monitor's right-click Source
+        Settings (p.316, p.529); Show Viewers with the top viewer's box, moved, resized and rotated by dragging, and the
+        bottom viewer's result; the fields, Size matches project raster, Image Size = raster, Rotate Left/Right, Reset,
+        Revert, Apply and OK on every selected clip.
+      * 8.5b2, the Timeline's right-click Source Settings, the Playback Rate tab (p.545: the clip's original rate or the
+        project's, with Refresh Sequence > Motion Adapters/Timewarps), and panning: the FrameFlex effect in the Effect
+        Editor with keyframed boxes in the Record monitor, the Layout button's bypass and Alt+Layout reset (p.533),
+        creative framing for All FrameFlex.
     * 8.5c, colour adapters (p.536-541, p.544): the Color Encoding tab (Source color space, Auto, the transformation
       list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
       (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public
@@ -1533,12 +1536,17 @@ decision, 2026-10-27):
   only the button worked). Go through commands.json, menus.json, keyboard.json and command_palette.json against the
   handlers, list the guides' names that differ for one item in docs/spec/ui-inventory.md, and add a test that fails
   when a command reaches nothing unless it is listed as dimmed on purpose;
-* Export to File of a sequence as MOV or MP4 makes no file on Windows 11 (owner's report, 2026-11-08): File > Output >
-  Export to File, the options set, Save, and nothing is written and nothing said, with or without In and Out marks;
-  the Options button opens the Settings window, which may not be what the guide means (p.865-869). The reasons went
-  only to the Console; since 2026-11-08 a failed export also says why in a message (`MainWindow::exportToFile`), which
-  is what to look at first. Then: reproduce on Windows (the FFmpeg build's encoders, the path), fix the cause, add a
-  BUILDING.md entry and a test, and check the Options button against the guide;
+* Export to File of a sequence as MOV or MP4 made no file on Windows 11 (owner's report, 2026-11-08). Found: the
+  Windows FFmpeg (BtbN's LGPL build) had no H.264 or H.265 encoder and the reason went only to the Console. Fixed:
+  a failed export says why in a message; `scripts/get-ffmpeg.ps1` fetches the GPL build with libx264 and libx265 and
+  checks them; CI requires them (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`); BUILDING.md "Export
+  says there is no H.264 encoder". Left: check the Options button (it opens the Settings window) against the guide
+  (p.865-869);
+* error messages everywhere (owner's request, 2026-11-08): whatever fails, is missing or cannot be done tells the
+  user in a message, not only the Console. Go through every place that writes a failure to the Console (`ConsoleLog`)
+  or returns quietly (commands that do nothing, missing media, files that cannot be read or written, missing encoders,
+  tools and plug-ins), show a message there (non-modal where a test or script may run it), and add a test that a
+  failed command with no message is caught;
 * anything else later found not to fit another area.
 
 ### Phase 10 — Hardening

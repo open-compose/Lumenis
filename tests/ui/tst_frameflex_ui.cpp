@@ -13,9 +13,16 @@
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
+#include "lumenis/ui/source_settings_dialog.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QLabel>
+#include <QDoubleSpinBox>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QDir>
 #include <QMessageBox>
 #include <QTemporaryDir>
@@ -138,6 +145,98 @@ private slots:
         // The Source monitor shows the clip's new framing too.
         composer.loadDefault(binId, clip);
         QVERIFY(isBlue(composer.pictureAt(MonitorId::Source, 0, QSize(128, 128)).pixelColor(5, 64)));
+    }
+
+    // The Source Settings dialog's FrameFlex tab (p.529-535): fields, buttons and the top viewer's drags change the box,
+    // the bottom viewer shows the result, Revert goes back to what was applied, Apply sets every selected clip.
+    void sourceSettingsDialog() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("halves.mov"));
+        QVERIFY(writeHalves(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 128;
+        project.settings.format.height = 128;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie, movie});
+        QCOMPARE(ids.size(), 2);
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds(ids);
+
+        bool checked = false;
+        window.setSourceSettingsHook([&](SourceSettingsDialog& d) {
+            checked = true;
+            // Opened with the clip's settings: Center Keep Size, no box; the raster shown.
+            if (d.adapter().reformat != model::Reformat::CenterKeepSize || d.adapter().frameFlex) return false;
+            if (d.findChild<QLabel*>(QStringLiteral("rasterDimension"))->text() != QLatin1String("64 x 32")) return false;
+            if (!d.viewersShown()) return false;
+            // Size matches project raster: the box is 128 wide in a 64-wide image, square.
+            d.sizeMatchesRaster();
+            if (!d.adapter().frameFlex || std::abs(d.adapter().frameFlex->size - 2.0) > 1e-6) return false;
+            d.reset();
+            if (d.adapter().frameFlex) return false;
+            // The fields: a square box on the right half, Stretch.
+            d.findChild<QComboBox*>(QStringLiteral("reformat"))->setCurrentIndex(0);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("frameAspect"))->setValue(1.0);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("framingSize"))->setValue(0.5);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("framingX"))->setValue(16);
+            const QImage result = d.resultImage();
+            if (!isBlue(result.pixelColor(5, result.height() / 2)) || !isBlue(result.pixelColor(result.width() - 5, result.height() / 2)))
+                return false;
+            // Rotate left and right by 90 degrees.
+            d.rotate(90);
+            if (std::abs(d.adapter().frameFlex->rotation - 90) > 1e-6) return false;
+            d.rotate(-90);
+            // Dragging inside the box in the top viewer moves it left.
+            FramingViewer* v = d.framingViewer();
+            v->resize(400, 240);
+            const QPoint from = v->toWidget(QPointF(48, 16)).toPoint();
+            const QPoint to = v->toWidget(QPointF(40, 16)).toPoint();
+            QTest::mousePress(v, Qt::LeftButton, {}, from);
+            QTest::mouseMove(v, to);
+            QTest::mouseRelease(v, Qt::LeftButton, {}, to);
+            if (std::abs(d.adapter().frameFlex->x - 8) > 1.5) return false;
+            // Revert: back to the clip's settings (nothing applied yet), then the box again, applied.
+            d.revert();
+            if (d.adapter().frameFlex) return false;
+            d.findChild<QComboBox*>(QStringLiteral("reformat"))->setCurrentIndex(0);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("frameAspect"))->setValue(1.0);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("framingSize"))->setValue(0.5);
+            d.findChild<QDoubleSpinBox*>(QStringLiteral("framingX"))->setValue(16);
+            d.apply();
+            return true;
+        });
+        // The bin's right-click Source Settings.
+        commands.action(QStringLiteral("bin.source_settings"))->trigger();
+        settle();
+        QVERIFY(checked);
+        for (const QString& id : ids) {
+            const model::BinItem* clip = bin->bin().item(id);
+            QCOMPARE(model::cellText(*clip, QLatin1String(model::kReformatHeading)), QStringLiteral("Stretch"));
+            const auto flex = model::frameFlexOf(*clip);
+            QVERIFY(flex && std::abs(flex->x - 16) < 1e-6 && std::abs(flex->size - 0.5) < 1e-6);
+        }
+        // The Source monitor shows the new framing.
+        window.composer().loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(isBlue(window.composer().pictureAt(MonitorId::Source, 0, QSize(128, 128)).pixelColor(5, 64)));
+        // A cancelled dialog changes nothing.
+        window.setSourceSettingsHook([](SourceSettingsDialog& d) {
+            d.reset();
+            return false;
+        });
+        QVERIFY(!window.sourceSettings());
+        QVERIFY(model::frameFlexOf(*bin->bin().item(ids.first())));
     }
 
     // Export to File's failure goes into a message, not only the Console (owner's report, 2026-11-08).

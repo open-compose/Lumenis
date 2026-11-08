@@ -14,7 +14,7 @@ namespaces, module ABI symbols) is not user-visible and does not change.
 | Ninja | yes | yes | yes |
 | Qt | 6.8 LTS | 6.8 LTS | 6.8 LTS, or your distribution's Qt 6.4 or later |
 | Installer tools | (built in) | WiX Toolset 3.14 (installed by the bootstrap script) | dpkg-dev, rpm (optional), curl, file |
-| FFmpeg 6.0 or later | Homebrew `ffmpeg` | LGPL shared build from `scripts\get-ffmpeg.ps1` (set `FFMPEG_ROOT`) | `libavcodec-dev` and the other FFmpeg development packages |
+| FFmpeg 6.0 or later | Homebrew `ffmpeg` | GPL shared build from `scripts\get-ffmpeg.ps1` (set `FFMPEG_ROOT`; it has the H.264 and H.265 encoders) | `libavcodec-dev` and the other FFmpeg development packages |
 | OpenColorIO 2.1 or later (optional) | Homebrew `opencolorio` | vcpkg `opencolorio` (set `OpenColorIO_ROOT`) | `libopencolorio-dev` |
 
 Qt 6.8 LTS is the version release builds ship with. Qt 6.4 is the oldest
@@ -498,6 +498,20 @@ This needs reportlab. It writes:
   fillable form that Preview can tick, type into and save.
 
 Remake them after the checklist changes.
+
+### Export says there is no H.264 encoder
+
+On Windows, File > Output > Export to File as MOV, MP4 or MXF with H.264 or H.265 made no file (owner's report,
+2026-11-08). The FFmpeg that `scripts\get-ffmpeg.ps1` fetched was BtbN's LGPL build, which has no H.264 or H.265
+encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now:
+* `scripts\get-ffmpeg.ps1` fetches the GPL build (`-Variant gpl`, the default) and stops if either encoder is missing.
+  Run it again on a PC set up before this; it downloads the GPL build beside the old one and prints its folder. Set
+  `FFMPEG_ROOT` to that folder and configure again (`cmake --preset ...`), or run `scripts\bootstrap-windows.ps1`.
+* In CI the script sets `LUMENIS_REQUIRE_ENCODERS=libx264,libx265`, and `tst_movie_export requiredEncoders` fails
+  when this build cannot use them (the export tests used to skip quietly).
+* A failed export says why in a message as well as in the Console.
+
+To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
 ### "FFmpeg 6.0 or later was not found"
 

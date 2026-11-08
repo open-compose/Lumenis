@@ -2806,6 +2806,13 @@ QMenu* Composer::contextMenu() {
     // The Clipboard into the Source monitor (p.480).
     QAction* clipboard = menu->addAction(tr("Clipboard Contents"));
     connect(clipboard, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("edit.clipboard_contents")); });
+    // "Right clicking on the clip in the Source monitor, selecting Source Settings" (p.316; 8.5b1): the loaded clip's.
+    const model::LoadedClip* source = state(MonitorId::Source).current();
+    if (source && (source->item.kind == model::BinItemKind::MasterClip || source->item.kind == model::BinItemKind::Subclip)) {
+        QAction* settings = menu->addAction(tr("Source Settings"));
+        settings->setObjectName(QStringLiteral("sourceSettings"));
+        connect(settings, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("bin.source_settings")); });
+    }
     return menu;
 }
 

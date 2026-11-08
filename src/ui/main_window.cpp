@@ -105,6 +105,7 @@
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/relink_dialog.h"
 #include "lumenis/ui/settings.h"
+#include "lumenis/ui/source_settings_dialog.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/theme.h"
@@ -3156,6 +3157,55 @@ QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, 
     const QImage full = frames_->frame(clip, frame, QSize());
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
     return media::spatialAdaptedImage(full, *spatial, raster, want.isValid() ? want : raster);
+}
+
+// Source Settings (8.5b1; p.527-535): the clips selected in the active bin, or the Source monitor's clip, in the dialog;
+// Apply sets each one's Reformat attribute and FrameFlex box ("Click Apply to propogate the settings to all clips that you
+// selected in the bin", p.540) and updates the monitors.
+bool MainWindow::sourceSettings() {
+    if (!project_) return false;
+    struct Chosen {
+        QString bin;
+        QString id;
+    };
+    QList<Chosen> chosen;
+    model::BinItem first;
+    auto isClip = [](const model::BinItem& i) {
+        return i.kind == model::BinItemKind::MasterClip || i.kind == model::BinItemKind::Subclip;
+    };
+    if (BinView* view = binContainer_->activeView()) {
+        for (const QString& id : view->selectedIds()) {
+            const model::BinItem* item = view->document().bin().item(id);
+            if (!item || !isClip(*item)) continue;
+            if (chosen.isEmpty()) first = *item;
+            chosen.append({view->document().nodeId(), id});
+        }
+    }
+    if (chosen.isEmpty()) {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+        if (!loaded || !isClip(loaded->item)) return false;
+        const auto stored = composer_->resolve(loaded->binId, loaded->item.id);
+        first = stored.value_or(loaded->item);
+        chosen.append({loaded->binId, first.id});
+    }
+    const QImage frame = media::isLinked(first) && !frames_->isOffline(first) ? frames_->frame(first, 0, QSize()) : QImage();
+    const QSize raster(project_->settings.format.width, project_->settings.format.height);
+    const model::SpatialAdapter adapter = model::spatialAdapterOf(first).value_or(model::SpatialAdapter{});
+    SourceSettingsDialog dialog(first.name, frame.isNull() ? QImage(raster, QImage::Format_RGB32) : frame, raster, adapter,
+                                static_cast<int>(chosen.size()), this);
+    dialog.setApplier([this, chosen](const model::SpatialAdapter& a) {
+        for (const Chosen& c : chosen) {
+            BinDocument* doc = binContainer_->document(c.bin);
+            const model::BinItem* found = doc ? doc->bin().item(c.id) : nullptr;
+            if (!found) continue;
+            model::BinItem item = *found;
+            item.fields.insert(QLatin1String(model::kReformatHeading), model::reformatText(a.reformat));
+            model::setFrameFlex(item, a.frameFlex);
+            item.modified = QDateTime::currentDateTimeUtc();
+            storeClip(c.bin, item);
+        }
+    });
+    return sourceSettingsHook_ ? sourceSettingsHook_(dialog) : dialog.exec() == QDialog::Accepted;
 }
 
 // Without a project, the edit rate stays the LinkOptions default.
@@ -8254,6 +8304,7 @@ void MainWindow::installPanelHandlers() {
         storeClip(binId, item);
     });
     handle("bin.commit_multicam_edits", [this] { commitMulticamEdits(); });
+    handle("bin.source_settings", [this] { sourceSettings(); });
     // The Transcript menus (8.2d; p.450-453, 2026.8 guide p.455-456).
     handle("bin.export_transcript", [this] { exportTranscripts(); });
     handle("bin.share_transcripts", [this] { shareTranscripts(); });

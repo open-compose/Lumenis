@@ -66,6 +66,7 @@ enum class MonitorId;
 class BackgroundQueue;
 class DmfProfileEditor;
 class DynamicMediaFoldersWindow;
+class SourceSettingsDialog;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ColorInfoTool;
@@ -704,6 +705,10 @@ public:
     // Refresh Sequence > Aspect Ratio and Reformatting Options (`creative` false) and All FrameFlex including creative
     // framing (8.5a, p.478). Returns how many segments changed.
     int refreshSpatialAdapters(bool creative);
+    // Source Settings (8.5b1, p.527-535) for the clips selected in the active bin, or the Source monitor's clip; the hook
+    // answers for tests (true for OK). False when there is no clip or it was cancelled.
+    bool sourceSettings();
+    void setSourceSettingsHook(std::function<bool(SourceSettingsDialog&)> hook) { sourceSettingsHook_ = std::move(hook); }
     // The Effect Palette's template bins (FX Guide p.37-38): every open bin's video effect templates
     // (model::effectTemplateOf), in the order the bins were opened.
     void refreshTemplateBins();
@@ -1241,6 +1246,7 @@ private:
     QHash<QString, QString> dmfSeen_; // entry path -> how it looked on the last scan
     QTimer* dmfTimer_ = nullptr;
     DynamicMediaFoldersWindow* dmfWindow_ = nullptr;
+    std::function<bool(SourceSettingsDialog&)> sourceSettingsHook_;
     std::function<bool(DmfProfileEditor&)> dmfProfileEditorHook_;
     void refreshDmfWindow();
     void setUpDynamicMediaFolders();
