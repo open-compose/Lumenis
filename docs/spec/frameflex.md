@@ -72,12 +72,44 @@ Reformatting). 8.5a is the data and the picture; 8.5b the Source Settings dialog
   now at the project's rate lose their adapter. "There is no automatic ripple" (p.545): the segments keep their length.
   Ours: a clip set back to its original rate gets adapters in new edits; Refresh does not add them to old segments.
 
+## Panning a shot (p.533-534; 8.5b3)
+
+* "When the clip is placed on the Timeline, a green dot will appear on it and you can open the Effect Editor to change
+  the framing box and animate it" (p.533): a segment whose spatial adapter has a box shows the FrameFlex effect
+  (`SpatialAdapter::framing`, `model::framingEffect`; the Effect Editor reaches it as `EffectTarget::Spatial` through
+  `model::effectAt` and `effectFor`). Its parameter group "FrameFlex" has X, Y, Size and Z Rotation, keyframeable as any
+  effect's, and the Reformat menu ("The reformat image option is also available in the Effect Editor", p.534). Ours: the
+  effect is not in the Effect Palette, and a segment with a segment effect shows that effect; its FrameFlex effect waits
+  until the effect is removed. The sliders' ranges are the Source Settings fields' (ours).
+* "The Record viewer becomes your workspace to adjust the framing parameters ... The record viewer displays the frame and
+  the framing box" (p.533): in Effect mode the segment shows its whole image, pillarboxed or letterboxed (ours), with the
+  box's outline, a "move" handle, four corner handles and a rotation handle above the top edge
+  (`media::framingPreviewAdapter`, `framingOutline`, `framingHandles`; MainWindow draws the segment `EffectEditor::
+  framingSegment` names that way). "drag the handles on the corners of the image to resize it, or click and drag to move
+  the entire box. Media Composer automatically creates a new keyframe on this frame" (p.533): a drag
+  (`media::dragFraming`) sets keyframes at the position on the parameters it changes, or on the selected keyframes.
+* Playing, or outside Effect mode, the box at each frame (`model::framingAt`, `adapterAt`) frames the picture. Ours: the
+  frame into the segment is counted from its source IN, so a motion effect's speed is not taken into account.
+* "If you need to disable this effect, click the Layout button. When the button is gray, the effect is bypassed" (p.534):
+  the Layout button above the parameter groups (`EffectEditor::layoutButton`, `setFramingBypassed`, one undo step); the
+  whole image then fits the frame by the Reformat menu. "If you need to reset any keyframe to the original framing
+  dimensions, move the position bar to the respective keyframe, then press ALT and click the Layout button" (p.534):
+  `EffectEditor::resetFraming`, `model::resetFramingAt`, the keyframes at the position taking the clip's box (ours:
+  without keyframes, the values do).
+* Changing the effect makes the segment's framing creative (`model::keepFramingChange`): Refresh Sequence > Aspect Ratio
+  and Reformatting Options leaves it and All FrameFlex including creative framing replaces it with the clip's (p.478).
+  Remove Effect leaves the adapter.
+
 ## Tests
 
 * `tst_frame_flex`: the attribute's texts, adapters from clips through JSON and bins, Size matches project raster, the
-  four Reformat options and boxes (moved, turned, with an Image Size), Refresh Sequence with creative framing.
+  four Reformat options and boxes (moved, turned, with an Image Size), Refresh Sequence with creative framing; the
+  FrameFlex effect's keyframes, Reformat menu, bypass, reset and `effectAt`; the Effect Preview's outline, handles and
+  drags.
 * `tst_frameflex_ui`: linking with Center Keep Size, the column changed, the Source monitor's picture, the segment's
   adapter, a box set after the edit and Refresh Sequence; the Source Settings dialog's fields, buttons, drag, Revert and
   Apply on two clips; the Playback Rate tab from the Timeline, the clip's frames and duration, Refresh Sequence dropping
-  the adapter, and back; a failed Export to File's message.
+  the adapter, and back; panning a shot (the Effect Editor's FrameFlex effect, the whole image and box in the Effect
+  Preview, drags making keyframes, the animation played, Layout and Alt+Layout, Refresh Sequence and creative framing,
+  Remove Effect); a failed Export to File's message.
 * Scenario `49-spatial-adapter.json`.

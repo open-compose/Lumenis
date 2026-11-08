@@ -2175,6 +2175,7 @@ std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& t
         std::int64_t start = 0;
         const int i = t->segmentAt(position, &start);
         if (i >= 0 && t->segments.at(i).effect) return EffectRef{name, start, EffectTarget::Segment};
+        if (i >= 0 && t->segments.at(i).spatial && t->segments.at(i).spatial->frameFlex) return EffectRef{name, start, EffectTarget::Spatial};
     }
     return std::nullopt;
 }
@@ -2198,6 +2199,7 @@ const Effect* effectFor(const Sequence& sequence, const EffectRef& ref) {
     const Segment* s = segmentForEffect(sequence, ref);
     if (!s) return nullptr;
     if (ref.target == EffectTarget::Transition) return s->transition ? &s->transition->effect : nullptr;
+    if (ref.target == EffectTarget::Spatial) return s->spatial && s->spatial->frameFlex ? &s->spatial->framing : nullptr;
     return s->effect ? &*s->effect : nullptr;
 }
 

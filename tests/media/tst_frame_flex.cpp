@@ -1,7 +1,8 @@
 // The Reformat attribute, FrameFlex boxes and spatial adapters (Editing Guide p.475-478, p.527-535; 8.5a,
 // docs/spec/frameflex.md): the data through JSON and bins, the adapter a clip gives its segments, Refresh Sequence, and
-// the pictures the four Reformat options and a box make.
+// the pictures the four Reformat options and a box make; the FrameFlex effect that pans a shot (8.5b3, p.533-534).
 #include "lumenis/media/frame_flex.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
 #include <QImage>
@@ -140,6 +141,93 @@ private slots:
         a.frameFlex = f;
         out = media::spatialAdaptedImage(source, a, QSize(100, 100), QSize(100, 100));
         QVERIFY(near(out.pixel(5, 50), kBlue) && near(out.pixel(95, 50), kBlue));
+    }
+
+    // The FrameFlex effect (p.533-534): a segment's box as an effect, keyframed, bypassed and reset; found by effectAt.
+    void framingEffect() {
+        BinItem clip;
+        clip.id = QStringLiteral("c1");
+        FrameFlex flex;
+        flex.x = 50;
+        flex.size = 0.5;
+        flex.frameAspect = 1.0;
+        setFrameFlex(clip, flex);
+        auto a = spatialAdapterOf(clip);
+        QVERIFY(a && isFramingEffect(a->framing));
+        // Without keyframes, the box all through.
+        QVERIFY(framingAt(*a, 0, 11) == flex);
+        // Keyframes on X at the first and last frames: halfway at frame 5.
+        const EffectSpan span(11);
+        setKeyframe(a->framing, QLatin1String(kFramingParameters), QStringLiteral("X"), 0.0, span, 50.0);
+        setKeyframe(a->framing, QLatin1String(kFramingParameters), QStringLiteral("X"), 1.0, span, -50.0);
+        QVERIFY(std::abs(framingAt(*a, 5, 11)->x) < 1e-6);
+        QVERIFY(std::abs(framingAt(*a, 10, 11)->x + 50) < 1e-6);
+        // The Reformat menu decides how the box fits.
+        QJsonObject group = a->framing.parameters.value(QLatin1String(kFramingParameters)).toObject();
+        group.insert(QStringLiteral("Reformat"), QStringLiteral("Center Crop"));
+        a->framing.parameters.insert(QLatin1String(kFramingParameters), group);
+        QCOMPARE(adapterAt(*a, 0, 11).reformat, Reformat::CenterCrop);
+        keepFramingChange(*a);
+        QVERIFY(a->creative && a->reformat == Reformat::CenterCrop);
+        // JSON keeps it; an adapter from before 8.5b3 makes its effect from the box.
+        QVERIFY(SpatialAdapter::fromJson(a->toJson()) == *a);
+        QJsonObject old = a->toJson();
+        old.remove(QStringLiteral("framing"));
+        QVERIFY(isFramingEffect(SpatialAdapter::fromJson(old).framing));
+        // The Layout button bypasses the box.
+        setFramingBypassed(a->framing, true);
+        QVERIFY(framingBypassed(a->framing) && !framingAt(*a, 5, 11));
+        QVERIFY(!adapterAt(*a, 5, 11).frameFlex);
+        setFramingBypassed(a->framing, false);
+        // Alt+Layout: the keyframe at the last frame goes back to the box's X.
+        QVERIFY(resetFramingAt(a->framing, flex, 1.0, 11));
+        QVERIFY(std::abs(framingAt(*a, 10, 11)->x - 50) < 1e-6);
+        QVERIFY(!resetFramingAt(a->framing, flex, 1.0, 11));
+        QVERIFY(!resetFramingAt(a->framing, flex, 0.5, 11)); // no keyframe there
+
+        // The Effect Editor finds it on a segment without an effect.
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment s;
+        s.clipId = clip.id;
+        s.binId = QStringLiteral("b");
+        s.sourceTrack = QStringLiteral("V1");
+        s.length = 11;
+        s.spatial = *a;
+        seq.track(QStringLiteral("V1"))->segments = {s};
+        const auto ref = effectAt(seq, {QStringLiteral("V1")}, 3);
+        QVERIFY(ref && ref->target == EffectTarget::Spatial);
+        Effect* e = effectFor(seq, *ref);
+        QVERIFY(e && isFramingEffect(*e));
+        // Remove Effect leaves it.
+        QVERIFY(removeEffect(seq, QStringLiteral("V1"), 3, EffectTarget::Spatial).isEmpty());
+        // A segment effect comes first.
+        seq.track(QStringLiteral("V1"))->segments[0].effect = Effect{QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}};
+        QCOMPARE(effectAt(seq, {QStringLiteral("V1")}, 3)->target, EffectTarget::Segment);
+    }
+
+    // The box over the Effect Preview's whole picture and dragging it (p.533).
+    void framingDrags() {
+        const QSize source(200, 100);
+        FrameFlex f;
+        f.x = 50;
+        f.size = 0.5;
+        f.frameAspect = 1.0;
+        const QSizeF out(200, 200); // the 2:1 image letterboxed: 200 x 100 from y = 50
+        const QPolygonF outline = media::framingOutline(source, f, QSize(200, 200), out);
+        QCOMPARE(outline.size(), 4);
+        QCOMPARE(outline.boundingRect().toRect(), QRect(100, 50, 100, 100));
+        const auto handles = media::framingHandles(source, f, QSize(200, 200), out);
+        QCOMPARE(handles.size(), 6);
+        QCOMPARE(handles.at(0).id, QStringLiteral("move"));
+        QVERIFY(handles.last().id == QLatin1String("rotZ") && handles.last().at.y() < 50);
+        // Moving by 40 preview pixels moves the box 40 image pixels; a corner twice as far from the centre doubles it;
+        // the rotation handle turned a quarter about the centre turns the box a quarter.
+        FrameFlex moved = media::dragFraming(source, f, QStringLiteral("move"), QPointF(150, 100), QPointF(110, 100), QSize(200, 200), out);
+        QVERIFY(std::abs(moved.x - 10) < 1e-6 && std::abs(moved.y) < 1e-6);
+        moved = media::dragFraming(source, f, QStringLiteral("corner3"), QPointF(200, 150), QPointF(250, 200), QSize(200, 200), out);
+        QVERIFY(std::abs(moved.size - 1.0) < 1e-6);
+        moved = media::dragFraming(source, f, QStringLiteral("rotZ"), QPointF(150, 40), QPointF(210, 100), QSize(200, 200), out);
+        QVERIFY(std::abs(std::abs(moved.rotation) - 90) < 1e-6);
     }
 
     // Refresh Sequence (p.478): segments take their clip's attribute; framing changed in the sequence stays unless All

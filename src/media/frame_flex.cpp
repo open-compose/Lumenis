@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace lumenis::media {
 
@@ -94,6 +95,88 @@ QImage spatialAdaptedImage(const QImage& source, const model::SpatialAdapter& ad
     p.setTransform(t);
     p.drawImage(QPointF(0, 0), source);
     return result;
+}
+
+model::SpatialAdapter framingPreviewAdapter(const model::FrameFlex& flex) {
+    model::FrameFlex whole = flex;
+    whole.x = 0;
+    whole.y = 0;
+    whole.size = 1;
+    whole.rotation = 0;
+    whole.frameAspect = 0;
+    model::SpatialAdapter a;
+    a.reformat = model::Reformat::Letterbox;
+    a.frameFlex = whole;
+    return a;
+}
+
+namespace {
+
+QTransform previewTransform(QSize source, const model::FrameFlex& flex, QSize projectRaster, QSizeF out) {
+    return spatialTransform(source, framingPreviewAdapter(flex), projectRaster, out.toSize());
+}
+
+QPointF centreOf(const QPolygonF& box) {
+    QPointF c;
+    const qsizetype n = std::min<qsizetype>(box.size(), 4);
+    for (qsizetype i = 0; i < n; ++i) c += box.at(i);
+    return n > 0 ? c / static_cast<double>(n) : c;
+}
+
+} // namespace
+
+QPolygonF framingOutline(QSize source, const model::FrameFlex& flex, QSize projectRaster, QSizeF out) {
+    if (source.isEmpty()) return {};
+    const QPolygonF box = frameFlexBox(source, flex);
+    const QTransform t = previewTransform(source, flex, projectRaster, out);
+    QPolygonF shown;
+    for (qsizetype i = 0; i < std::min<qsizetype>(box.size(), 4); ++i) shown << t.map(box.at(i));
+    return shown;
+}
+
+QList<FramingHandle> framingHandles(QSize source, const model::FrameFlex& flex, QSize projectRaster, QSizeF out) {
+    const QPolygonF shown = framingOutline(source, flex, projectRaster, out);
+    if (shown.size() < 4) return {};
+    QList<FramingHandle> handles;
+    const QPointF centre = centreOf(shown);
+    handles << FramingHandle{QStringLiteral("move"), centre, std::nullopt};
+    for (int i = 0; i < 4; ++i) handles << FramingHandle{QStringLiteral("corner%1").arg(i + 1), shown.at(i), std::nullopt};
+    // The rotation handle: out from the top edge's middle, 4% of the picture's width away.
+    const QPointF top = (shown.at(0) + shown.at(1)) / 2;
+    QPointF up = top - centre;
+    const double length = std::hypot(up.x(), up.y());
+    up = length > 1e-9 ? up / length : QPointF(0, -1);
+    handles << FramingHandle{QStringLiteral("rotZ"), top + up * (out.width() * 0.04), top};
+    return handles;
+}
+
+model::FrameFlex dragFraming(QSize source, const model::FrameFlex& start, const QString& id, QPointF from, QPointF to,
+                             QSize projectRaster, QSizeF out) {
+    if (source.isEmpty()) return start;
+    bool invertible = false;
+    const QTransform back = previewTransform(source, start, projectRaster, out).inverted(&invertible);
+    if (!invertible) return start;
+    const QPointF a = back.map(from);
+    const QPointF b = back.map(to);
+    const QSize image = start.imageSize.isEmpty() ? source : start.imageSize;
+    const double sx = static_cast<double>(image.width()) / source.width();
+    const double sy = static_cast<double>(image.height()) / source.height();
+    const QPointF centre = centreOf(frameFlexBox(source, start));
+    model::FrameFlex f = start;
+    if (id == QLatin1String("move")) {
+        f.x = start.x + (b.x() - a.x()) * sx;
+        f.y = start.y + (b.y() - a.y()) * sy;
+    } else if (id.startsWith(QLatin1String("corner"))) {
+        const double before = std::hypot(a.x() - centre.x(), a.y() - centre.y());
+        if (before > 1e-6) f.size = std::clamp(start.size * std::hypot(b.x() - centre.x(), b.y() - centre.y()) / before, 0.01, 10.0);
+    } else if (id == QLatin1String("rotZ")) {
+        // Screen y runs down, so an anticlockwise turn is a falling angle.
+        const double a0 = std::atan2(a.y() - centre.y(), a.x() - centre.x());
+        const double a1 = std::atan2(b.y() - centre.y(), b.x() - centre.x());
+        const double degrees = start.rotation - (a1 - a0) * 180.0 / std::numbers::pi;
+        f.rotation = std::fmod(degrees + 540.0, 360.0) - 180.0;
+    }
+    return f;
 }
 
 } // namespace lumenis::media

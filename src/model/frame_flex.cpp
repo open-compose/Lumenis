@@ -2,6 +2,7 @@
 // docs/spec/frameflex.md). Drawing them is media::spatialAdaptedImage's.
 #include "lumenis/model/frame_flex.h"
 
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
 #include <cmath>
@@ -10,6 +11,14 @@ namespace lumenis::model {
 
 namespace {
 const QString kFrameFlexKey = QStringLiteral("frameFlex");
+const QString kFramingKey = QStringLiteral("framing");
+const QString kX = QStringLiteral("X");
+const QString kY = QStringLiteral("Y");
+const QString kSize = QStringLiteral("Size");
+const QString kRotation = QStringLiteral("Z Rotation");
+const QString kReformat = QStringLiteral("Reformat");
+const QString kBypass = QStringLiteral("Bypass");
+QString framingGroup() { return QString::fromLatin1(kFramingParameters); }
 } // namespace
 
 QString reformatText(Reformat r) {
@@ -104,6 +113,7 @@ QJsonObject SpatialAdapter::toJson() const {
     QJsonObject o{{QStringLiteral("reformat"), reformatText(reformat)}};
     if (frameFlex) o.insert(kFrameFlexKey, frameFlex->toJson());
     if (creative) o.insert(QStringLiteral("creative"), true);
+    if (frameFlex) o.insert(kFramingKey, framing.toJson());
     return o;
 }
 
@@ -112,6 +122,12 @@ SpatialAdapter SpatialAdapter::fromJson(const QJsonObject& json) {
     a.reformat = reformatFromText(json.value(QStringLiteral("reformat")).toString()).value_or(Reformat::Letterbox);
     if (json.value(kFrameFlexKey).isObject()) a.frameFlex = FrameFlex::fromJson(json.value(kFrameFlexKey).toObject());
     a.creative = json.value(QStringLiteral("creative")).toBool();
+    // A segment from before 8.5b3 takes the effect of its box.
+    if (a.frameFlex) {
+        a.framing = json.value(kFramingKey).isObject() ? Effect::fromJson(json.value(kFramingKey).toObject())
+                                                       : framingEffect(*a.frameFlex, a.reformat);
+        if (!isFramingEffect(a.framing)) a.framing = framingEffect(*a.frameFlex, a.reformat);
+    }
     return a;
 }
 
@@ -124,6 +140,7 @@ std::optional<SpatialAdapter> spatialAdapterOf(const BinItem& item) {
     SpatialAdapter a;
     a.reformat = reformat.value_or(Reformat::Letterbox);
     a.frameFlex = flex;
+    if (flex) a.framing = framingEffect(*flex, a.reformat);
     return a;
 }
 
@@ -147,6 +164,90 @@ int refreshSpatialAdapters(Sequence& sequence, const std::function<std::optional
         }
     }
     return changed;
+}
+
+Effect framingEffect(const FrameFlex& flex, Reformat reformat) {
+    Effect e{QString::fromLatin1(kFramingCategory), QString::fromLatin1(kFramingName), {}};
+    e.parameters.insert(framingGroup(), QJsonObject{{kX, flex.x},
+                                                    {kY, flex.y},
+                                                    {kSize, flex.size},
+                                                    {kRotation, flex.rotation},
+                                                    {kReformat, reformatText(reformat)}});
+    return e;
+}
+
+bool isFramingEffect(const Effect& effect) {
+    return effect.category == QLatin1String(kFramingCategory) && effect.name == QLatin1String(kFramingName);
+}
+
+bool framingBypassed(const Effect& effect) {
+    return effect.parameters.value(framingGroup()).toObject().value(kBypass).toBool();
+}
+
+void setFramingBypassed(Effect& effect, bool bypassed) {
+    QJsonObject group = effect.parameters.value(framingGroup()).toObject();
+    if (bypassed) {
+        group.insert(kBypass, true);
+    } else {
+        group.remove(kBypass);
+    }
+    effect.parameters.insert(framingGroup(), group);
+}
+
+std::optional<FrameFlex> framingAt(const SpatialAdapter& adapter, double offset, std::int64_t length) {
+    if (!adapter.frameFlex) return std::nullopt;
+    FrameFlex f = *adapter.frameFlex;
+    if (!isFramingEffect(adapter.framing)) return f;
+    if (framingBypassed(adapter.framing)) return std::nullopt;
+    const EffectSpan span(std::max<std::int64_t>(length, 1));
+    const double t = span.timeOf(offset);
+    const QString g = framingGroup();
+    f.x = numberAt(adapter.framing, g, kX, t, span).value_or(f.x);
+    f.y = numberAt(adapter.framing, g, kY, t, span).value_or(f.y);
+    f.size = numberAt(adapter.framing, g, kSize, t, span).value_or(f.size);
+    if (f.size <= 0.0) f.size = 0.01;
+    f.rotation = numberAt(adapter.framing, g, kRotation, t, span).value_or(f.rotation);
+    return f;
+}
+
+SpatialAdapter adapterAt(const SpatialAdapter& adapter, double offset, std::int64_t length) {
+    SpatialAdapter a = adapter;
+    a.frameFlex = framingAt(adapter, offset, length);
+    if (isFramingEffect(adapter.framing)) {
+        a.reformat = reformatFromText(adapter.framing.parameters.value(framingGroup()).toObject().value(kReformat).toString())
+                         .value_or(adapter.reformat);
+    }
+    return a;
+}
+
+bool resetFramingAt(Effect& effect, const FrameFlex& original, double t, std::int64_t length) {
+    const EffectSpan span(std::max<std::int64_t>(length, 1));
+    const QString g = framingGroup();
+    const QList<std::pair<QString, double>> values{{kX, original.x}, {kY, original.y}, {kSize, original.size}, {kRotation, original.rotation}};
+    const Effect before = effect;
+    bool keyframed = false;
+    for (const auto& [name, value] : values) keyframed = keyframed || !keyframesOf(effect, g, name).keys.isEmpty();
+    for (const auto& [name, value] : values) {
+        if (keyframed) {
+            ParameterKeyframes keys = keyframesOf(effect, g, name);
+            const int i = keyframeAt(keys, t, span);
+            if (i < 0) continue;
+            keys.keys[i].value = value;
+            setKeyframes(effect, g, name, keys);
+        } else {
+            QJsonObject group = effect.parameters.value(g).toObject();
+            group.insert(name, value);
+            effect.parameters.insert(g, group);
+        }
+    }
+    return effect.parameters != before.parameters;
+}
+
+void keepFramingChange(SpatialAdapter& adapter) {
+    adapter.creative = true;
+    if (const auto r = reformatFromText(adapter.framing.parameters.value(framingGroup()).toObject().value(kReformat).toString())) {
+        adapter.reformat = *r;
+    }
 }
 
 } // namespace lumenis::model

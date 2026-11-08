@@ -1163,6 +1163,9 @@ private:
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
     QImage adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial) const;
+    // While the Record monitor's Effect Preview is composed: the segment whose FrameFlex effect the Effect Editor shows,
+    // drawn whole under its box (EffectEditor::framingSegment; 8.5b3).
+    std::optional<model::Segment> framingPreview_;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
     void startSound(MonitorId monitor, int speed);

@@ -750,8 +750,12 @@ void MainWindow::createPanels() {
             // The Effect Preview shows Pan and Scan's original picture with its wire frame; "To see the results
             // of the Pan and Scan effect while in Effect mode, click the Play button" (FX Guide p.234).
             c.effectPreview = monitor == MonitorId::Record && composer_->effectPreview().on && !composer_->isPlaying();
+            // The FrameFlex effect in the Effect Preview: its segment shows the whole image under the box (p.533).
+            framingPreview_.reset();
+            if (c.effectPreview && effectEditor_) framingPreview_ = effectEditor_->framingSegment();
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
+            framingPreview_.reset();
             if (image.isNull() && missing && offline) *offline = true;
             // A fast-saved title, or one whose precomputes are gone, is "media offline" (FX Guide p.358).
             if (missing && offline && loaded->item.kind == model::BinItemKind::Title) *offline = true;
@@ -1739,6 +1743,12 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // The FrameFlex effect's box is drawn over the segment's whole source frame (8.5b3).
+    effectEditor_->setFramingSource([this](const model::Segment& segment) -> QSize {
+        auto clip = composer_->resolve(segment.binId, segment.clipId);
+        if (!clip || !media::isLinked(*clip) || frames_->isOffline(*clip)) return {};
+        return frames_->frame(model::clipForSegment(*clip, segment), segment.sourceIn, QSize()).size();
+    });
     // "The Avid Titler+ Dashboard and the Effect Editor open" (FX Guide p.303; the Dashboard comes in 6.8b).
     // Ours: in Effect mode, whose Effect Preview the title is edited in (titler_tool.h).
     connect(timeline_, &Timeline::titlerApplied, this, [this] { openTitleEditing(); });
@@ -6121,7 +6131,15 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         }
         if (!clip || !media::isLinked(*clip)) return QImage();
         if (frames_->isOffline(*clip)) return std::nullopt;
-        return adaptedFrame(*clip, clipFrame, want, segment.spatial);
+        if (!segment.spatial) return adaptedFrame(*clip, clipFrame, want, std::nullopt);
+        if (framingPreview_ && segment == *framingPreview_ && segment.spatial->frameFlex) {
+            return adaptedFrame(*clip, clipFrame, want, media::framingPreviewAdapter(*segment.spatial->frameFlex));
+        }
+        // The FrameFlex effect's box at the frame (p.533): frames into the segment, counted from its source IN (ours:
+        // a motion effect's speed is not taken into account).
+        const double offset = std::clamp(static_cast<double>(clipFrame - segment.sourceIn), 0.0,
+                                         static_cast<double>(std::max<std::int64_t>(segment.length - 1, 0)));
+        return adaptedFrame(*clip, clipFrame, want, model::adapterAt(*segment.spatial, offset, segment.length));
     };
     // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
     c.burnIn.sequence = loaded.item;

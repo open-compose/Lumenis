@@ -1,16 +1,19 @@
 // Reformatting and FrameFlex in the application (Editing Guide p.475-478, p.527-535; 8.5a, docs/spec/frameflex.md):
 // linked clips take the Link setting's Reformat attribute, the Source monitor and edited segments show a clip's
-// FrameFlex box, Refresh Sequence brings changed attributes into a sequence; and a failed Export to File says why
+// FrameFlex box, Refresh Sequence brings changed attributes into a sequence, the FrameFlex effect pans a shot (8.5b3,
+// p.533-534); and a failed Export to File says why
 // (owner's report, 2026-11-08).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/frame_flex.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
@@ -25,6 +28,7 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QDir>
 #include <QMessageBox>
 #include <QTemporaryDir>
@@ -147,6 +151,139 @@ private slots:
         // The Source monitor shows the clip's new framing too.
         composer.loadDefault(binId, clip);
         QVERIFY(isBlue(composer.pictureAt(MonitorId::Source, 0, QSize(128, 128)).pixelColor(5, 64)));
+    }
+
+    // Panning a shot (p.533-534): the FrameFlex effect in the Effect Editor, the box dragged in the Record monitor making
+    // keyframes, the Layout button's bypass and Alt+Layout's reset, and Refresh Sequence's creative framing (p.478).
+    void panningShot() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("halves.mov"));
+        QVERIFY(writeHalves(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 128;
+        project.settings.format.height = 128;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        // "you need to apply a FrameFlex source adapter to the clip in the bin" (p.533): a square box on the right half.
+        model::BinItem clip = *bin->bin().item(ids.first());
+        QVERIFY(bin->setField(clip.id, QLatin1String(model::kReformatHeading), QStringLiteral("Stretch")));
+        clip = *bin->bin().item(clip.id);
+        model::FrameFlex flex;
+        flex.x = 16;
+        flex.size = 0.5;
+        flex.frameAspect = 1.0;
+        model::setFrameFlex(clip, flex);
+        bin->replaceItem(clip);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, clip);
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        QVERIFY(composer.state(MonitorId::Record).current());
+        auto segment = [&] {
+            return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0);
+        };
+        auto picture = [&](std::int64_t frame) { return composer.pictureAt(MonitorId::Record, frame, QSize(128, 128)); };
+        QVERIFY(isBlue(picture(0).pixelColor(5, 64)));
+
+        // "Select the clip on the Timeline and click the Effect Mode button ... Select and expand the FrameFlex effect."
+        Timeline& timeline = window.timeline();
+        EffectEditor& editor = window.effectEditor();
+        composer.setActiveMonitor(MonitorId::Record);
+        composer.moveTo(MonitorId::Record, 0);
+        timeline.setEffectMode(true);
+        settle();
+        editor.refresh();
+        QCOMPARE(editor.effectName(), QStringLiteral("FrameFlex"));
+        QVERIFY(editor.categories().contains(QStringLiteral("FrameFlex")));
+        QVERIFY(editor.layoutButton() && editor.layoutButton()->isChecked());
+        // "The record viewer displays the frame and the framing box": the whole image, letterboxed, and the box's outline
+        // and handles over its right half.
+        QImage shown = picture(0);
+        QVERIFY(isRed(shown.pixelColor(5, 64)));
+        QVERIFY(isBlue(shown.pixelColor(122, 64)));
+        QVERIFY(isBlack(shown.pixelColor(64, 10)));
+        const Composer::EffectPreview& preview = composer.effectPreview();
+        QCOMPARE(preview.outline.size(), 4);
+        QVERIFY(preview.outline.at(0).x() > 0.45 && preview.outline.at(1).x() > 0.95);
+        QVERIFY(std::any_of(preview.handles.begin(), preview.handles.end(), [](const auto& h) { return h.id == QLatin1String("rotZ"); }));
+
+        // "Adjust the size and/or position of the framing box ... Media Composer automatically creates a new keyframe on this
+        // frame": a little to the right at the first frame, then to the left half at the last.
+        emit composer.effectHandleDragged(QStringLiteral("move"), QPointF(0.75, 0.5), QPointF(0.76, 0.5), true, false);
+        settle();
+        QVERIFY(segment().spatial->creative);
+        composer.moveTo(MonitorId::Record, 9);
+        settle();
+        editor.refresh();
+        emit composer.effectHandleDragged(QStringLiteral("move"), QPointF(0.75, 0.5), QPointF(0.25, 0.5), false, false);
+        emit composer.effectHandleDragged(QStringLiteral("move"), QPointF(0.75, 0.5), QPointF(0.25, 0.5), true, false);
+        settle();
+        const model::Effect framing = segment().spatial->framing;
+        QCOMPARE(model::keyframesOf(framing, QStringLiteral("FrameFlex"), QStringLiteral("X")).keys.size(), 2);
+        QVERIFY(model::keyframesOf(framing, QStringLiteral("FrameFlex"), QStringLiteral("Y")).keys.isEmpty());
+        // "Click the play button to see the results of your animation": the box pans from the blue half to the red one.
+        timeline.setEffectMode(false);
+        settle();
+        QVERIFY(isBlue(picture(0).pixelColor(5, 64)));
+        QVERIFY(isRed(picture(9).pixelColor(122, 64)));
+
+        // "click the Layout button. When the button is gray, the effect is bypassed": the whole image, stretched.
+        timeline.setEffectMode(true);
+        composer.moveTo(MonitorId::Record, 9);
+        settle();
+        editor.refresh();
+        QVERIFY(editor.layoutButton());
+        editor.layoutButton()->click();
+        settle();
+        QVERIFY(model::framingBypassed(segment().spatial->framing));
+        timeline.setEffectMode(false);
+        settle();
+        QVERIFY(isRed(picture(9).pixelColor(5, 64)) && isBlue(picture(9).pixelColor(122, 64)));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QVERIFY(!model::framingBypassed(segment().spatial->framing));
+
+        // "press ALT and click the Layout button": the keyframe at the position goes back to the clip's box.
+        timeline.setEffectMode(true);
+        composer.moveTo(MonitorId::Record, 9);
+        settle();
+        editor.refresh();
+        QVERIFY(editor.resetFraming());
+        settle();
+        timeline.setEffectMode(false);
+        settle();
+        QVERIFY(isBlue(picture(9).pixelColor(5, 64)));
+        QVERIFY(!editor.resetFraming());
+
+        // Creative framing stays through Refresh Sequence > Aspect Ratio and Reformatting Options, and goes with All
+        // FrameFlex including creative framing (p.478).
+        composer.setActiveMonitor(MonitorId::Record);
+        commands.action(QStringLiteral("clip.refresh_sequence.aspect_ratio_reformatting"))->trigger();
+        settle();
+        QCOMPARE(model::keyframesOf(segment().spatial->framing, QStringLiteral("FrameFlex"), QStringLiteral("X")).keys.size(), 2);
+        commands.action(QStringLiteral("clip.refresh_sequence.all_frameflex"))->trigger();
+        settle();
+        QVERIFY(model::keyframesOf(segment().spatial->framing, QStringLiteral("FrameFlex"), QStringLiteral("X")).keys.isEmpty());
+        QVERIFY(!segment().spatial->creative);
+        // Remove Effect leaves the adapter.
+        QVERIFY(!timeline.removeEffectAtPosition());
+        QVERIFY(segment().spatial && segment().spatial->frameFlex);
     }
 
     // The Source Settings dialog's FrameFlex tab (p.529-535): fields, buttons and the top viewer's drags change the box,

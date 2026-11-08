@@ -1486,15 +1486,15 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       segments drawn from whole frames (Stretch, Pillarbox/Letterbox, Center Crop, Center Keep Size; the box's position,
       size, rotation, Image Size and aspect ratios), the green dot, Refresh Sequence > Aspect Ratio and Reformatting
       Options and All FrameFlex including creative framing.
-    * 8.5b, the Source Settings dialog and panning, in two parts:
+    * 8.5b (done), the Source Settings dialog and panning, in three parts:
       * 8.5b1 (done), the dialog's FrameFlex tab (p.527-535): from the bin's and the Source monitor's right-click Source
         Settings (p.316, p.529); Show Viewers with the top viewer's box, moved, resized and rotated by dragging, and the
         bottom viewer's result; the fields, Size matches project raster, Image Size = raster, Rotate Left/Right, Reset,
         Revert, Apply and OK on every selected clip.
       * 8.5b2 (done), the Timeline's right-click Source Settings (p.542, p.545) and the Playback Rate tab (p.545: the
         clip's original rate or the project's, with Refresh Sequence > Motion Adapters/Timewarps dropping the adapters).
-      * 8.5b3, panning: the FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the Layout
-        button's bypass and Alt+Layout reset (p.533), creative framing for All FrameFlex.
+      * 8.5b3 (done), panning: the FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the
+        Layout button's bypass and Alt+Layout reset (p.533-534), creative framing for All FrameFlex.
     * 8.5c, colour adapters (p.536-541, p.544): the Color Encoding tab (Source color space, Auto, the transformation
       list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
       (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public

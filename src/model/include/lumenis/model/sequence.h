@@ -2,6 +2,7 @@
 
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
+#include "lumenis/model/effect.h"
 #include "lumenis/model/frame_flex.h"
 
 #include <QHash>
@@ -45,20 +46,7 @@ QStringList parseTrackList(const QString& text);
 // p.624 says 64).
 inline constexpr int kMaxTracks = 99;
 
-// An effect in a sequence (FX guide ch. 2): its category and name in the
-// Effect Palette (p.37) and the parameter values changed in the Effect
-// Editor (p.83), by parameter category and name.
-struct Effect {
-    QString category; // "Blend"
-    QString name;     // "Dissolve"
-    // Parameter category -> {parameter name -> value}; empty when every parameter has its default.
-    QJsonObject parameters;
-
-    // {category, name, parameters?}; fromJson() takes missing members as empty.
-    QJsonObject toJson() const;
-    static Effect fromJson(const QJsonObject& o);
-    bool operator==(const Effect&) const = default;
-};
+// model::Effect, an effect in a sequence, is in lumenis/model/effect.h.
 
 // A speed change on a segment: the imports' speed changes (an EDL's M2 line, an OTIO
 // LinearTimeWarp or FreezeFrame) and Fit to Fill's Variable Speed effect. An effect of category
@@ -789,7 +777,9 @@ QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int6
 // Where an effect from the Effect Palette can go (FX guide p.456-490).
 // Segment effects go on video segments, transitions on the cuts of
 // video and audio tracks; never on data tracks (p.44).
-enum class EffectTarget { Segment, Transition };
+// Spatial: a segment's FrameFlex effect, its spatial adapter's (lumenis/model/frame_flex.h; Editing Guide p.533), which
+// the Effect Editor shows like a segment effect; not a target for the Effect Palette.
+enum class EffectTarget { Segment, Transition, Spatial };
 
 // Puts a segment effect on the segment at `frame`, replacing any there.
 // Video tracks only; false on any other track, a locked track or past the end of the track.
@@ -835,7 +825,8 @@ struct EffectRef {
 };
 // The effect the Effect Editor shows at `position` (p.83-84): on the first
 // of `tracks` (selected tracks, top down) with a transition spanning the
-// position or a segment effect under it.
+// position or a segment effect under it, else a segment with a FrameFlex box
+// (its EffectTarget::Spatial; ours: a segment effect comes first).
 std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
 // The effect an EffectRef names.
 // Null when the reference no longer names an effect. Pointers are valid until the track changes.

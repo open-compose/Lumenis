@@ -654,7 +654,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Spatial dimmed until 8.5b. Source Settings: the box's colours (Yellow, Red, Green, Blue, White), the rotation handle
   18 pixels above the top edge, OK applying, Image and Frame aspect 0 meaning the image's own. Playback Rate: only
   clips without sound, the menu's texts "Original: <rate> fps" and "Project: <rate> fps", Refresh Sequence only
-  dropping adapters.
+  dropping adapters. Panning (8.5b3): the FrameFlex effect left out of the Effect Palette, a segment effect shown before
+  it, its sliders' ranges, the whole image pillarboxed or letterboxed in the Effect Preview, the rotation handle 4% of the
+  picture's width above the box, the box drawn while bypassed, the Layout button lettered above the groups, Alt+Layout
+  without keyframes resetting the values, frames counted from the source IN under a motion effect.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

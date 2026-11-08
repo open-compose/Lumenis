@@ -1,11 +1,13 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/effect.h"
 
 #include <QJsonObject>
 #include <QSize>
 #include <QString>
 
+#include <cstdint>
 #include <functional>
 #include <optional>
 
@@ -65,12 +67,17 @@ FrameFlex sizeMatchingRaster(FrameFlex flex, QSize imageRaster, QSize projectRas
 
 // What a segment shows of its clip's picture: the Reformat attribute and the FrameFlex box ("A Spatial Adapter effect is
 // applied either when the clip is reframed, or reformatted to fit within the project frame size", p.528). `creative` is
-// set once the box is changed in the sequence (8.5b: keyframes in the Effect Editor, p.533), so that only Refresh
-// Sequence > All FrameFlex including creative framing (p.478) replaces it.
+// set once the box is changed in the sequence (keyframes in the Effect Editor, p.533), so that only Refresh Sequence >
+// All FrameFlex including creative framing (p.478) replaces it.
 struct SpatialAdapter {
     Reformat reformat = Reformat::Letterbox;
+    // The clip's box as the segment took it: the "original framing dimensions" that Alt+Layout goes back to (p.534).
     std::optional<FrameFlex> frameFlex;
     bool creative = false;
+    // With a box, the FrameFlex effect the Effect Editor shows for the segment ("Select and expand the FrameFlex effect",
+    // p.533; framingEffect()): its X, Y, Size and Z Rotation, kept and keyframed as any effect's parameters, the
+    // Reformat menu and the Layout button's bypass. Empty without a box.
+    Effect framing;
     QJsonObject toJson() const;
     static SpatialAdapter fromJson(const QJsonObject& json);
     bool operator==(const SpatialAdapter&) const = default;
@@ -78,6 +85,32 @@ struct SpatialAdapter {
 
 // The adapter a segment from the clip takes: none when the clip has neither a Reformat attribute nor a box.
 std::optional<SpatialAdapter> spatialAdapterOf(const BinItem& item);
+
+// ---- Panning a shot (p.533-534; 8.5b3)
+// The FrameFlex effect: category kFramingCategory, name kFramingName, its parameters in the parameter category
+// kFramingParameters ("X", "Y", "Size", "Z Rotation", "Reformat", and "Bypass" set by the Layout button). Ours: the
+// effect is not in the Effect Palette; it comes with a clip's FrameFlex box.
+inline constexpr char kFramingCategory[] = "Spatial Adapter";
+inline constexpr char kFramingName[] = "FrameFlex";
+inline constexpr char kFramingParameters[] = "FrameFlex";
+// The effect of a box and Reformat attribute, without keyframes.
+Effect framingEffect(const FrameFlex& flex, Reformat reformat);
+bool isFramingEffect(const Effect& effect);
+// "If you need to disable this effect, click the Layout button. When the button is gray, the effect is bypassed" (p.534):
+// the box is not used, the whole image fits the frame by the Reformat attribute.
+bool framingBypassed(const Effect& effect);
+void setFramingBypassed(Effect& effect, bool bypassed);
+// The box `offset` frames into a segment of `length` frames: the adapter's box with the effect's X, Y, Size and Z
+// Rotation at that time (keyframes interpolated). Nothing without a box, or when bypassed.
+std::optional<FrameFlex> framingAt(const SpatialAdapter& adapter, double offset, std::int64_t length);
+// The adapter as it draws that frame: the box framingAt() gives and the effect's Reformat menu.
+SpatialAdapter adapterAt(const SpatialAdapter& adapter, double offset, std::int64_t length);
+// Alt+Layout: "reset any keyframe to the original framing dimensions" (p.534): the keyframes at time `t` of the effect
+// (within half a frame) take `original`'s X, Y, Size and Z Rotation; without keyframes at all, the stored values do. False
+// when nothing changed. `length` is the segment's.
+bool resetFramingAt(Effect& effect, const FrameFlex& original, double t, std::int64_t length);
+// After the effect changed in the Effect Editor: the adapter is creative framing and takes the Reformat menu.
+void keepFramingChange(SpatialAdapter& adapter);
 
 // Clip > Refresh Sequence (p.478): segments whose clip's Reformat attribute or box changed take the clip's (Aspect Ratio
 // and Reformatting Options); with `creative`, segments whose box was changed in the sequence too (All FrameFlex including

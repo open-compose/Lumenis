@@ -60,6 +60,7 @@ add_library(lumenis_model STATIC
     structure.cpp
     include/lumenis/model/bin.h
     include/lumenis/model/bin_lock.h
+    include/lumenis/model/effect.h
     include/lumenis/model/frame_flex.h
     include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h

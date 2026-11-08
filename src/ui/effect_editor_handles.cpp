@@ -2,11 +2,13 @@
 // "Direct manipulation"): the 3D handle buttons and Outline/Path, the overlay it gives the Composer's Effect
 // Preview monitor, and handle drags turned into the shown effect's values. The geometry is media's
 // (effect_handles.h); this file keeps the Effect Editor's ways of storing values (keyframes, ranges, one undo
-// step per drag). Also Pan and Scan's wire frame actions (6.7b1, p.235-236, p.564; docs/spec/pan-scan.md).
+// step per drag). Also Pan and Scan's wire frame actions (6.7b1, p.235-236, p.564; docs/spec/pan-scan.md) and the
+// FrameFlex effect's box and Layout button (8.5b3; Editing Guide p.533-534; docs/spec/frameflex.md).
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/frame_flex.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/titler_tool.h"
@@ -58,10 +60,14 @@ void EffectEditor::syncHandleButtons() {
         for (QToolButton* b : std::as_const(handleButtons_)) b->setChecked(false);
     }
     // An OFX plug-in's overlay shows with Outline/Path too (p.162).
-    outline_->setEnabled(current_ && (media::hasEffectOutline(*current_) || media::ofxHasOverlay(*current_)));
+    outline_->setEnabled(current_ && (media::hasEffectOutline(*current_) || media::ofxHasOverlay(*current_) || model::isFramingEffect(*current_)));
 }
 
 void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const {
+    if (model::isFramingEffect(effect)) {
+        fillFramingOverlay(effect, preview);
+        return;
+    }
     if (model::isTitlerEffect(effect)) {
         if (titler_) titler_->fillOverlay(preview);
         return;
@@ -104,7 +110,8 @@ void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPrev
 
 void EffectEditor::putValue(model::Effect& effect, const QString& category, const QString& parameter, const QJsonValue& value) const {
     model::ParameterKeyframes keys = model::keyframesOf(effect, category, parameter);
-    if (keys.keys.isEmpty()) {
+    // The FrameFlex box: "Media Composer automatically creates a new keyframe on this frame" (p.533).
+    if (keys.keys.isEmpty() && !model::isFramingEffect(effect)) {
         QJsonObject group = effect.parameters.value(category).toObject();
         group.insert(parameter, value);
         effect.parameters.insert(category, group);
@@ -129,6 +136,7 @@ void EffectEditor::putValue(model::Effect& effect, const QString& category, cons
 bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
     if (id.startsWith(QLatin1String("track:"))) return dragTrackerBox(id, from, to, finished);
     if (id.startsWith(QLatin1String("trackpoint:"))) return dragTrackPoint(id, from, to, finished, shift);
+    if (current_ && model::isFramingEffect(*current_)) return dragFraming(id, from, to, finished);
     if (!shown_ || !current_ || !timeline_.isEffectMode() || !media::hasEffectOutline(*current_)) {
         handleStart_.reset();
         return false;
@@ -164,6 +172,123 @@ bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPoi
     }
     const QJsonObject parameters = edited.parameters;
     return changeShown(tr("Modify Effect"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+// ---------------------------------------------------------------- The FrameFlex effect (8.5b3)
+
+namespace {
+
+// The box `effect` gives `segment` at `offset` frames into it.
+std::optional<model::FrameFlex> framingOf(const model::Segment& segment, const model::Effect& effect, double offset) {
+    if (!segment.spatial) return std::nullopt;
+    model::SpatialAdapter a = *segment.spatial;
+    a.framing = effect;
+    // Bypassed or not, the box is drawn to work on (ours).
+    model::setFramingBypassed(a.framing, false);
+    return model::framingAt(a, offset, segment.length);
+}
+
+} // namespace
+
+std::optional<model::Segment> EffectEditor::framingSegment() const {
+    if (!shown_ || shown_->target != model::EffectTarget::Spatial || !current_) return std::nullopt;
+    auto segment = model::segmentFor(recordSequence(), model::SegmentRef{shown_->track, shown_->frame});
+    if (!segment || !segment->spatial) return std::nullopt;
+    if (preview_) segment->spatial->framing = *preview_;
+    return segment;
+}
+
+QSize EffectEditor::framingSourceSize() const {
+    const auto segment = framingSegment();
+    QSize size = segment && framingSource_ ? framingSource_(*segment) : QSize();
+    if (size.isEmpty()) size = previewSize().toSize();
+    return size;
+}
+
+void EffectEditor::fillFramingOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const {
+    const auto segment = framingSegment();
+    if (!segment) return;
+    const auto box = framingOf(*segment, effect, span_.frameOf(positionTime()));
+    if (!box) return;
+    const QSizeF size = previewSize();
+    const QSize source = framingSourceSize();
+    for (const QPointF& c : media::framingOutline(source, *box, size.toSize(), size)) preview.outline << fraction(c, size);
+    for (const media::FramingHandle& h : media::framingHandles(source, *box, size.toSize(), size)) {
+        preview.handles << Composer::EffectPreview::Handle{h.id, fraction(h.at, size),
+                                                           h.from ? std::optional<QPointF>(fraction(*h.from, size)) : std::nullopt};
+    }
+}
+
+bool EffectEditor::dragFraming(const QString& id, const QPointF& from, const QPointF& to, bool finished) {
+    const auto segment = framingSegment();
+    if (!shown_ || !current_ || !segment || !timeline_.isEffectMode()) {
+        handleStart_.reset();
+        return false;
+    }
+    if (!handleStart_) handleStart_ = *current_;
+    const model::Effect start = *handleStart_;
+    if (finished) handleStart_.reset();
+    const double t = positionTime();
+    const auto box = framingOf(*segment, start, span_.frameOf(t));
+    if (!box) return false;
+    const QSizeF size = previewSize();
+    const QPointF a(from.x() * size.width(), from.y() * size.height());
+    const QPointF b(to.x() * size.width(), to.y() * size.height());
+    const model::FrameFlex moved = media::dragFraming(framingSourceSize(), *box, id, a, b, size.toSize(), size);
+    model::Effect edited = start;
+    const QString group = QString::fromLatin1(model::kFramingParameters);
+    const QList<std::pair<QString, std::pair<double, double>>> values{{QStringLiteral("X"), {box->x, moved.x}},
+                                                                      {QStringLiteral("Y"), {box->y, moved.y}},
+                                                                      {QStringLiteral("Size"), {box->size, moved.size}},
+                                                                      {QStringLiteral("Z Rotation"), {box->rotation, moved.rotation}}};
+    QString first;
+    for (const auto& [name, change] : values) {
+        if (std::abs(change.first - change.second) < 1e-9) continue;
+        QJsonValue value = change.second;
+        if (const EffectParameter* info = parameterInfo(group + QLatin1Char('/') + name)) {
+            value = info->fromSlider(info->sliderPosition(std::clamp(change.second, info->min, info->max)));
+        }
+        putValue(edited, group, name, value);
+        if (first.isEmpty()) first = name;
+    }
+    if (!first.isEmpty()) setActiveParameter(group + QLatin1Char('/') + first);
+    if (!finished) {
+        preview_ = edited;
+        syncValues(edited);
+        syncPreview();
+        timeline_.composer().refreshDisplay();
+        return edited.parameters != start.parameters;
+    }
+    preview_.reset();
+    if (edited.parameters == start.parameters) {
+        syncValues(start);
+        syncPreview();
+        timeline_.composer().refreshDisplay();
+        return false;
+    }
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Modify Effect"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::setFramingBypassed(bool bypassed) {
+    if (!shown_ || !current_ || !model::isFramingEffect(*current_)) return false;
+    if (model::framingBypassed(*current_) == bypassed) {
+        if (layout_) layout_->setChecked(!bypassed);
+        return false;
+    }
+    const bool done = changeShown(bypassed ? tr("Bypass FrameFlex") : tr("Enable FrameFlex"),
+                                  [&](model::Effect& e) { model::setFramingBypassed(e, bypassed); });
+    if (layout_ && current_) layout_->setChecked(!model::framingBypassed(*current_));
+    return done;
+}
+
+bool EffectEditor::resetFraming() {
+    const auto segment = framingSegment();
+    if (!segment || !segment->spatial->frameFlex || !current_) return false;
+    model::Effect edited = *current_;
+    if (!model::resetFramingAt(edited, *segment->spatial->frameFlex, positionTime(), segment->length)) return false;
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Reset Framing"), [&](model::Effect& e) { e.parameters = parameters; });
 }
 
 // ---------------------------------------------------------------- Pan and Scan

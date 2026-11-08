@@ -133,6 +133,38 @@ const Catalog& catalog() {
                 list << p;
             }
         }
+        // The FrameFlex effect (Editing Guide p.533-534; lumenis/model/frame_flex.h): the box's X, Y, Size and Z Rotation as
+        // the Source Settings' FrameFlex tab has them (p.530-531; ranges ours, as that tab's), and "The reformat image
+        // option is also available in the Effect Editor" (p.534).
+        {
+            QList<EffectParameter>& list = c[QString::fromLatin1(model::kFramingParameters)];
+            auto slider = [&](const QString& name, double min, double max, int decimals, double value) {
+                EffectParameter p;
+                p.name = name;
+                p.text = name;
+                p.kind = QStringLiteral("slider");
+                p.min = min;
+                p.max = max;
+                p.decimals = decimals;
+                p.defaultValue = value;
+                list << p;
+            };
+            slider(QStringLiteral("X"), -16384, 16384, 1, 0.0);
+            slider(QStringLiteral("Y"), -16384, 16384, 1, 0.0);
+            slider(QStringLiteral("Size"), 0.01, 10, 2, 1.0);
+            slider(QStringLiteral("Z Rotation"), -180, 180, 1, 0.0);
+            EffectParameter reformat;
+            reformat.name = QStringLiteral("Reformat");
+            reformat.text = reformat.name;
+            reformat.kind = QStringLiteral("menu");
+            reformat.keyframeable = false;
+            for (model::Reformat r : {model::Reformat::Stretch, model::Reformat::Letterbox, model::Reformat::CenterCrop,
+                                      model::Reformat::CenterKeepSize}) {
+                reformat.options << model::reformatText(r);
+            }
+            reformat.defaultValue = model::reformatText(model::Reformat::Letterbox);
+            list << reformat;
+        }
         // A colour correction's sliders in Color Correction mode (FX Guide p.685; lumenis/model/correction_effect.h).
         for (const model::CorrectionParameter& cp : model::correctionParameters()) {
             EffectParameter p;
@@ -848,6 +880,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     }
     groupBodies_.clear();
     titlerPanel_ = nullptr;
+    layout_ = nullptr;
     openers_.clear();
     controls_.clear();
     trackingControls_.clear();
@@ -888,6 +921,26 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         titlerPanel_ = new TitlerPanel(*titler_, false, this);
         groups_->insertWidget(0, titlerPanel_);
     }
+    // The FrameFlex effect's Layout button (p.534): gray when the effect is bypassed; Alt+click resets the keyframe at the
+    // position to the original framing.
+    if (model::isFramingEffect(*effect) && level_ == 0) {
+        layout_ = new QToolButton(body_);
+        layout_->setObjectName(QStringLiteral("effectEditor:layout"));
+        layout_->setText(tr("Layout"));
+        layout_->setCheckable(true);
+        layout_->setChecked(!model::framingBypassed(*effect));
+        layout_->setToolTip(tr("Layout: click to bypass the FrameFlex effect; Alt+click resets the keyframe to the original framing"));
+        connect(layout_, &QToolButton::clicked, this, [this] {
+            const bool alt = QGuiApplication::keyboardModifiers() & Qt::AltModifier;
+            if (alt) {
+                layout_->setChecked(!layout_->isChecked()); // Alt+click is no toggle
+                resetFraming();
+            } else {
+                setFramingBypassed(!layout_->isChecked());
+            }
+        });
+        groups_->insertWidget(0, layout_);
+    }
     // A classic Title effect: "Click the Edit Title button" (FX Guide p.372) opens it in the Title Tool.
     if (model::isClassicTitleEffect(*effect) && level_ == 0) {
         auto* edit = new QPushButton(tr("Edit Title"), body_);
@@ -901,6 +954,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     const EffectInfo* info = EffectCatalog::builtin().find(effect->category, effect->name);
     const QStringList categories = info                                  ? info->parameters
                                    : model::isCorrectionModeEffect(*effect) ? model::correctionParameterCategories()
+                                   : model::isFramingEffect(*effect)        ? QStringList{QString::fromLatin1(model::kFramingParameters)}
                                                                           : QStringList();
     int at = 0;
     // A row of controls with its keyframe track at the right, behind a graph opener's place.

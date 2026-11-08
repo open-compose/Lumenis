@@ -539,6 +539,26 @@ public:
     // window named "nestedOrderRefused", not modal); false then.
     bool moveNestedEffect(int from, int to);
 
+    // ---- The FrameFlex effect (Editing Guide p.533-534; 8.5b3, docs/spec/frameflex.md)
+    // A segment's spatial adapter with a box shows as the FrameFlex effect (model::EffectTarget::Spatial). In Effect mode
+    // the Record monitor shows the whole image with the box over it (media::framingPreviewAdapter); dragging the box, its
+    // corners or its rotation handle sets keyframes at the position ("Media Composer automatically creates a new keyframe
+    // on this frame", p.533).
+    // The Layout button: "If you need to disable this effect, click the Layout button. When the button is gray, the effect
+    // is bypassed" (p.534). One undo step; false when no FrameFlex effect is shown or nothing changes.
+    bool setFramingBypassed(bool bypassed);
+    // Alt+Layout: "reset any keyframe to the original framing dimensions" (p.534), the keyframe at the position (or, with
+    // none, the values) taking the clip's box. One undo step; false when nothing changes.
+    bool resetFraming();
+    QToolButton* layoutButton() const { return layout_; }
+    // The size of a segment's source frames, for the box over the picture (MainWindow resolves the clip); without it the
+    // project's raster.
+    using FramingSource = std::function<QSize(const model::Segment&)>;
+    void setFramingSource(FramingSource source) { framingSource_ = std::move(source); }
+    // The shown FrameFlex effect's segment as the Record monitor's sequence has it, with a drag previewed on it; nothing
+    // when none is shown. MainWindow shows that segment's whole image in the Effect Preview.
+    std::optional<model::Segment> framingSegment() const;
+
     // ---- Effect templates (p.52-54; docs/spec/effect-templates.md)
     // "Drag the effect icon from the Effect Editor to a bin": the template of the effect shown, with its
     // source media when `withSource` (Alt held, a segment effect only); nothing when blank.
@@ -668,6 +688,13 @@ private:
     QWidget* shapeTrackerControl(QWidget* parent);
     TitlerDashboard* titlerDashboard_ = nullptr;
     TitlerPanel* titlerPanel_ = nullptr;
+    QToolButton* layout_ = nullptr;
+    FramingSource framingSource_;
+    // The shown FrameFlex effect's source frame size and the box (with no keyframes) it starts from; empty otherwise.
+    QSize framingSourceSize() const;
+    // The overlay and drags of the FrameFlex effect (effect_editor_handles.cpp).
+    void fillFramingOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const;
+    bool dragFraming(const QString& id, const QPointF& from, const QPointF& to, bool finished);
     PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)
     bool showTrackingData_ = true;
     bool tracking_ = false;

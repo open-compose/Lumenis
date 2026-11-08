@@ -6658,7 +6658,9 @@ int Timeline::fadeEffects(std::int64_t up, std::int64_t down) {
 
 bool Timeline::removeEffectAtPosition() {
     message_.clear();
-    const auto ref = currentEffect();
+    auto ref = currentEffect();
+    // A FrameFlex effect is not removed: "Remove Effect leaves it" (spatial adapters are not effects, p.469).
+    if (ref && ref->target == model::EffectTarget::Spatial) ref.reset();
     if (!ref) {
         // No video effect: the Audio EQ (p.741) and AudioSuite effects there on the selected audio
         // tracks.
@@ -7230,6 +7232,14 @@ bool Timeline::changeEffect(const model::EffectRef& ref, const QString& descript
         // A SubCap effect's change goes to the others on its track or in the sequence as its Synchronize tab says
         // (FX Guide p.384-385).
         if (model::isSubCap(*e) && ref.target == model::EffectTarget::Segment) model::synchronizeSubCap(seq, ref.track, ref.frame, before);
+        if (ref.target == model::EffectTarget::Spatial) {
+            // The FrameFlex effect changed in the sequence is creative framing, and its Reformat menu the adapter's (p.478,
+            // p.534).
+            if (*e == before) return false;
+            model::Track* track = seq.track(ref.track);
+            const int i = track ? track->segmentAt(ref.frame) : -1;
+            if (i >= 0 && track->segments[i].spatial) model::keepFramingChange(*track->segments[i].spatial);
+        }
         seq.storeIn(item);
         return true;
     });

@@ -906,6 +906,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_frameflex_ui sourceSettingsDialog`), is done. 8.5b2, the Timeline's Source Settings and the Playback Rate tab
   (`Timeline::sourceSettingsRequested`, `MainWindow::sourceSettingsFor`; `Link::conformed` through
   `media::setPlaybackAtProjectRate`, Refresh Sequence dropping adapters; test `tst_frameflex_ui playbackRate`), is done.
+  8.5b3, panning (the FrameFlex effect: `SpatialAdapter::framing` with `model::framingEffect`/`framingAt`/`adapterAt`,
+  `EffectTarget::Spatial` in `effectAt`/`effectFor`, `model::Effect` now in `effect.h`; the box over the whole image in the
+  Effect Preview through `media::framingPreviewAdapter`/`framingHandles`/`dragFraming` and `EffectEditor::framingSegment`;
+  the Layout button `EffectEditor::setFramingBypassed`/`resetFraming`; tests `tst_frame_flex framingEffect`,
+  `tst_frameflex_ui panningShot`), is done, so 8.5b is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md
