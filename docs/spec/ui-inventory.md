@@ -640,7 +640,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
-  the status bar's wording, the editor's own undo.
+  the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above
+  their line, new ones beside those over the same lines, a top margin for them), blue take lines, Script > Color's six
+  colours, lettered OS/SC buttons, Shift+arrows stepping ten frames, Alt+click writing to the Console in place of the Info
+  window, a slate's Shift+click adding its active take.
 * AutoCut (docs/spec/transcripts.md): Assign to Camera Angle on the speaker's right-click menu, kept in the group by
   speaker name; the group's shown transcript; only video tracks switched.
 * Transcripts out (docs/spec/transcripts.md): the exported .txt as an Avid DS caption file with the speaker as its first
@@ -3105,8 +3108,11 @@ Details: docs/spec/bin-locking.md.
 * File > New > New Script, File > Save Script, File > Save a Script Copy As (p.571), 8.3a.
 * The Script window (p.570-576): the AS and AP buttons, Edit Mode, Show Find Tools, the Scene and Page menus, the status
   bar, the Delete dialog's Delete scene(s) and Delete page break(s); Script > Add Scene, Add Page, Text Layout, 8.3a.
-* The Script setting (p.1217), 8.3a; its slate, take and mark options with 8.3b-8.3c.
-* Later: slates and takes (8.3b), script marks (8.3c), ScriptSync AI (8.3d), shared scripts (8.3e).
+* The Script setting (p.1217), 8.3a; its slate and take options 8.3b; Pre-roll with 8.3c.
+* Slates and takes (p.576-582), 8.3b: clips dropped from bins, the Play, Set Offscreen and Set Color buttons, Delete
+  Takes; Script > Color (p.582), Show All Takes, Show Frames (p.578), Hold Slates Onscreen (p.578), Interpolate Position
+  (p.577); Edit > Enlarge Frame and Reduce Frame on slates (p.578).
+* Later: script marks (8.3c), ScriptSync AI (8.3d), shared scripts (8.3e).
 
 ## 20e. Transcripts (ch.14, p.436-453; docs/spec/transcripts.md)
 

@@ -1,5 +1,7 @@
-// The Script window (lumenis/ui/script_window.h; Editing Guide p.570-576).
+// The Script window (lumenis/ui/script_window.h; Editing Guide p.570-582).
 #include "lumenis/ui/script_window.h"
+
+#include "lumenis/ui/bin_dock.h"
 
 #include <QAbstractTextDocumentLayout>
 #include <QComboBox>
@@ -11,19 +13,52 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMimeData>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QScrollBar>
 #include <QTextBlock>
+#include <QTextFrame>
 #include <QTextEdit>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace lumenis::ui {
 
 namespace {
 constexpr int kRightMargin = 60; // the page numbers' column (ours)
+constexpr int kSlateGap = 8;     // between slates side by side (ours)
+constexpr int kFrameWidth = 96;  // a slate's frame at Enlarge/Reduce Frame's 1.0 (ours; 16:9)
+constexpr int kEndGrab = 5;      // how near a take's end Ctrl+drag takes hold of it (pixels, ours)
+
+// Where a slate and its takes are drawn, in viewport coordinates.
+struct SlateGeometry {
+    QString slateId;
+    QRect box;   // the frame and clip name
+    QRect frame; // empty without Show Frames
+    QRect name;
+    struct Take {
+        QString id;
+        QRect tab;
+        int x = 0; // the take line's column
+        int top = 0;
+        int bottom = 0;
+    };
+    QList<Take> takes;
+};
+
+// What a point in the viewport is on.
+struct SlateHit {
+    enum Kind { None, Box, Tab, Line } kind = None;
+    QString slateId;
+    QString takeId;
+    int line = -1;          // the script line under the point (Line)
+    double fraction = 0.0;  // how far down that line
+    int end = 0;            // -1 the take's beginning mark, 1 its end mark, 0 neither (Line)
+};
 } // namespace
 
 // The text with its margins: scene (and line) numbers on the left, page numbers on the right, shaded rows.
@@ -67,6 +102,125 @@ public:
     int blockTop(const QTextBlock& b) const {
         return static_cast<int>(document()->documentLayout()->blockBoundingRect(b).top()) - verticalScrollBar()->value();
     }
+    // A script line's top and bottom in viewport coordinates (clamped to the script).
+    std::pair<int, int> lineSpan(int line) const {
+        const QTextBlock b = document()->findBlockByNumber(std::clamp(line, 0, std::max(0, document()->blockCount() - 1)));
+        const QRectF r = document()->documentLayout()->blockBoundingRect(b);
+        const int top = static_cast<int>(r.top()) - verticalScrollBar()->value();
+        return {top, top + std::max(1, static_cast<int>(r.height()))};
+    }
+    // The script line at viewport height `y`, and how far down it `y` is.
+    std::pair<int, double> lineAt(int y) const {
+        const int pos = document()->documentLayout()->hitTest(QPointF(1, y + verticalScrollBar()->value()), Qt::FuzzyHit);
+        const int line = document()->findBlock(std::max(0, pos)).blockNumber();
+        const auto [top, bottom] = lineSpan(line);
+        return {std::max(0, line), std::clamp(static_cast<double>(y - top) / std::max(1, bottom - top), 0.0, 1.0)};
+    }
+    // Where slates start: "A slate frame appears above the text, with one or more of the takes covering the scene as
+    // lines" (p.576), moved "to avoid blocking words" (p.578). Ours: halfway across the visible text column.
+    int slateBase() const {
+        const int text = window_.script_.layout.wordWrap ? window_.script_.layout.textWidth
+                                                         : static_cast<int>(document()->idealWidth());
+        return std::min(text, viewport()->width()) / 2 - horizontalScrollBar()->value();
+    }
+    // The slates as drawn now.
+    QList<SlateGeometry> slateGeometry() const {
+        QList<SlateGeometry> out;
+        const model::Script& s = window_.script_;
+        const ScriptSlateOptions& o = window_.slateOptions_;
+        const QFontMetrics fm = fontMetrics();
+        const int frameW = o.showFrames ? std::max(24, static_cast<int>(kFrameWidth * o.frameScale)) : 0;
+        const int frameH = frameW * 9 / 16;
+        const int nameH = fm.height() + 2;
+        const int tabW = std::max(22, fm.horizontalAdvance(QStringLiteral("000")) + 6);
+        const int tabH = fm.height() + 2;
+        const int base = slateBase();
+        for (const model::ScriptSlate& slate : s.slates) {
+            SlateGeometry g;
+            g.slateId = slate.id;
+            // "Show only one take for each nonactive slate" (p.578): a slate is active while one of its takes is selected.
+            const bool active = std::any_of(slate.takes.cbegin(), slate.takes.cend(),
+                                            [&](const model::ScriptTake& t) { return window_.selectedTakes_.contains(t.id); });
+            QList<int> shown;
+            for (int i = 0; i < slate.takes.size(); ++i)
+                if (o.showAllTakes || active || i == slate.active) shown << i;
+            const int width = std::max({frameW, static_cast<int>(shown.size()) * tabW, 60});
+            // "A slate frame appears above the text" (p.576): the tabs end where the slate's line begins, though not above
+            // the script's first line.
+            const int documentTop = -verticalScrollBar()->value();
+            int top = std::max(documentTop, lineSpan(slate.line).first - (frameH + nameH + tabH));
+            if (o.holdSlates && top < 0) {
+                // "as you scroll a script ... each slate remains on screen as long as the take lines to which it is linked
+                // remain on screen" (p.577).
+                int last = 0;
+                for (const model::ScriptTake& t : slate.takes) last = std::max(last, lineSpan(t.last).second);
+                top = std::max(top, std::min(0, last - (frameH + nameH + tabH)));
+            }
+            g.box = QRect(base + slate.x, top, width, frameH + nameH);
+            if (frameW > 0) g.frame = QRect(g.box.left() + (width - frameW) / 2, top, frameW, frameH);
+            g.name = QRect(g.box.left(), top + frameH, width, nameH);
+            for (int k = 0; k < shown.size(); ++k) {
+                const model::ScriptTake& t = slate.takes[shown[k]];
+                SlateGeometry::Take gt;
+                gt.id = t.id;
+                gt.tab = QRect(g.box.left() + k * tabW, g.box.bottom() + 1, tabW, tabH);
+                gt.x = gt.tab.center().x();
+                const auto first = lineSpan(t.first);
+                const auto last = lineSpan(t.last);
+                // The line runs down from the tab when the slate stands over the take's lines, else over its lines.
+                gt.top = gt.tab.bottom() >= first.first && gt.tab.bottom() < last.second ? gt.tab.bottom() + 1 : first.first;
+                gt.bottom = last.second;
+                g.takes << gt;
+            }
+            out << g;
+        }
+        return out;
+    }
+    SlateHit hitAt(const QPoint& p) const {
+        SlateHit h;
+        const QList<SlateGeometry> geometry = slateGeometry();
+        // Slates are drawn last-on-top, so the last one under the point wins.
+        for (auto g = geometry.crbegin(); g != geometry.crend(); ++g) {
+            for (const SlateGeometry::Take& t : g->takes) {
+                if (t.tab.contains(p)) return SlateHit{SlateHit::Tab, g->slateId, t.id, -1, 0.0, 0};
+            }
+            if (g->box.contains(p)) return SlateHit{SlateHit::Box, g->slateId, {}, -1, 0.0, 0};
+        }
+        for (auto g = geometry.crbegin(); g != geometry.crend(); ++g) {
+            for (const SlateGeometry::Take& t : g->takes) {
+                if (std::abs(p.x() - t.x) <= 4 && p.y() >= t.top - kEndGrab && p.y() <= t.bottom + kEndGrab) {
+                    h = SlateHit{SlateHit::Line, g->slateId, t.id, -1, 0.0, 0};
+                    const auto [line, fraction] = lineAt(p.y());
+                    h.line = line;
+                    h.fraction = fraction;
+                    if (const model::ScriptTake* take = model::takeOf(window_.script_, t.id)) {
+                        h.line = std::clamp(line, take->first, take->last);
+                        if (line < take->first) h.fraction = 0.0;
+                        if (line > take->last) h.fraction = 1.0;
+                    }
+                    if (std::abs(p.y() - t.top) <= kEndGrab) h.end = -1;
+                    else if (std::abs(p.y() - t.bottom) <= kEndGrab) h.end = 1;
+                    return h;
+                }
+            }
+        }
+        return h;
+    }
+    void clearFrames() { frames_.clear(); }
+    // A slate's height with its tabs, as the options draw it.
+    int slateHeight() const {
+        const ScriptSlateOptions& o = window_.slateOptions_;
+        const int frameW = o.showFrames ? std::max(24, static_cast<int>(kFrameWidth * o.frameScale)) : 0;
+        return frameW * 9 / 16 + 2 * (fontMetrics().height() + 2);
+    }
+    // Room above the first line for slates standing over it (ours): the document's top margin while there are slates.
+    void updateTopMargin() {
+        const int margin = window_.script_.slates.isEmpty() ? 0 : slateHeight();
+        QTextFrameFormat f = document()->rootFrame()->frameFormat();
+        if (static_cast<int>(f.topMargin()) == margin) return;
+        f.setTopMargin(margin);
+        document()->rootFrame()->setFrameFormat(f);
+    }
 
 protected:
     void resizeEvent(QResizeEvent* e) override {
@@ -88,6 +242,158 @@ protected:
             }
         }
         QTextEdit::paintEvent(e);
+        paintSlates();
+    }
+    void mousePressEvent(QMouseEvent* e) override {
+        const QPoint p = e->position().toPoint();
+        const SlateHit h = hitAt(p);
+        const bool ctrl = e->modifiers().testFlag(Qt::ControlModifier);
+        const bool shift = e->modifiers().testFlag(Qt::ShiftModifier);
+        const bool alt = e->modifiers().testFlag(Qt::AltModifier);
+        if (e->button() != Qt::LeftButton || (h.kind == SlateHit::None && p.x() < slateBase())) {
+            QTextEdit::mousePressEvent(e);
+            return;
+        }
+        drag_ = {};
+        drag_.start = p;
+        drag_.now = p;
+        const model::ScriptSlate* slate = nullptr;
+        for (const model::ScriptSlate& s : window_.script_.slates)
+            if (s.id == h.slateId) slate = &s;
+        switch (h.kind) {
+        case SlateHit::Tab:
+            if (alt) {
+                // "Press the Alt key ... and click the Takes tab" opens the Info window (p.572).
+                if (const model::ScriptTake* t = model::takeOf(window_.script_, h.takeId)) emit window_.takeInfoRequested(*t);
+                return;
+            }
+            pick(h.takeId, ctrl || shift);
+            break;
+        case SlateHit::Box:
+            // "Click a slate to select it. Shift+click additional slates to select all the active takes" (p.578).
+            if (slate && !slate->takes.isEmpty()) pick(slate->takes[std::clamp(slate->active, 0, static_cast<int>(slate->takes.size()) - 1)].id, shift || ctrl);
+            drag_.kind = Drag::Slate;
+            drag_.slateId = h.slateId;
+            drag_.withTakes = ctrl;
+            break;
+        case SlateHit::Line:
+            if (ctrl && h.end != 0) {
+                // "Notice the movement icon that appears when you place the pointer at either end of the take" (p.581).
+                drag_.kind = Drag::TakeEnd;
+                drag_.takeId = h.takeId;
+                drag_.end = h.end;
+                break;
+            }
+            pick(h.takeId, ctrl || shift);
+            break;
+        case SlateHit::None:
+            // "Drag a lasso through a region of the script containing slates" (p.578).
+            if (!ctrl && !shift) window_.selectTakes({});
+            drag_.kind = Drag::Lasso;
+            break;
+        }
+        viewport()->update();
+    }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        if (drag_.kind == Drag::None) {
+            const SlateHit h = hitAt(e->position().toPoint());
+            viewport()->setCursor(h.kind == SlateHit::Line && h.end != 0 && e->modifiers().testFlag(Qt::ControlModifier)
+                                      ? Qt::SizeVerCursor
+                                      : (h.kind == SlateHit::None ? Qt::IBeamCursor : Qt::ArrowCursor));
+            QTextEdit::mouseMoveEvent(e);
+            return;
+        }
+        drag_.now = e->position().toPoint();
+        viewport()->update();
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        if (drag_.kind == Drag::None) {
+            QTextEdit::mouseReleaseEvent(e);
+            return;
+        }
+        const Drag d = drag_;
+        drag_ = {};
+        const QPoint p = e->position().toPoint();
+        if (d.kind == Drag::Slate && (p - d.start).manhattanLength() >= 3) {
+            // The slate moves by the drag's distance in lines (the slate itself may stand above the first line).
+            int line = 0;
+            for (const model::ScriptSlate& s : window_.script_.slates)
+                if (s.id == d.slateId) line = s.line;
+            const auto [top, bottom] = lineSpan(line);
+            const int lines = static_cast<int>(std::lround(static_cast<double>(p.y() - d.start.y()) / std::max(1, bottom - top)));
+            window_.moveSlate(d.slateId, lines, p.x() - d.start.x(), d.withTakes);
+        } else if (d.kind == Drag::TakeEnd) {
+            if (const model::ScriptTake* t = model::takeOf(window_.script_, d.takeId)) {
+                const int line = lineAt(p.y()).first;
+                window_.setTakeLines(d.takeId, d.end < 0 ? line : t->first, d.end > 0 ? line : t->last);
+            }
+        } else if (d.kind == Drag::Lasso) {
+            const QRect lasso = QRect(d.start, p).normalized();
+            QStringList ids = e->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier) ? window_.selectedTakes_ : QStringList();
+            // "All slates and takes within the lasso are selected" (p.578).
+            for (const SlateGeometry& g : slateGeometry()) {
+                const bool slateIn = lasso.intersects(g.box);
+                for (const SlateGeometry::Take& t : g.takes) {
+                    if ((slateIn || lasso.intersects(t.tab) || lasso.intersects(QRect(t.x - 2, t.top, 5, t.bottom - t.top)))
+                        && !ids.contains(t.id))
+                        ids << t.id;
+                }
+            }
+            window_.selectTakes(ids);
+        }
+        viewport()->update();
+    }
+    void mouseDoubleClickEvent(QMouseEvent* e) override {
+        const SlateHit h = hitAt(e->position().toPoint());
+        if (h.kind == SlateHit::None) {
+            QTextEdit::mouseDoubleClickEvent(e);
+            return;
+        }
+        drag_ = {};
+        if (h.kind == SlateHit::Tab || h.kind == SlateHit::Box) {
+            QString id = h.takeId;
+            if (id.isEmpty()) {
+                for (const model::ScriptSlate& s : window_.script_.slates)
+                    if (s.id == h.slateId && !s.takes.isEmpty()) id = s.takes[std::clamp(s.active, 0, static_cast<int>(s.takes.size()) - 1)].id;
+            }
+            // "Select multiple takes, and then double-click any take you selected" loads them all (p.581).
+            const QStringList ids = window_.selectedTakes_.contains(id) ? window_.selectedTakes_ : QStringList{id};
+            for (const QString& t : ids)
+                if (t != id) window_.loadTake(t);
+            if (!id.isEmpty()) window_.loadTake(id);
+        } else {
+            // "Double-click any line in the take to select the take and load it into a monitor" (p.580).
+            window_.loadTake(h.takeId, h.line, h.fraction);
+        }
+    }
+    void dragEnterEvent(QDragEnterEvent* e) override {
+        if (e->mimeData()->hasFormat(binItemsMime())) {
+            e->acceptProposedAction();
+            return;
+        }
+        QTextEdit::dragEnterEvent(e);
+    }
+    void dragMoveEvent(QDragMoveEvent* e) override {
+        if (e->mimeData()->hasFormat(binItemsMime())) {
+            e->acceptProposedAction();
+            return;
+        }
+        QTextEdit::dragMoveEvent(e);
+    }
+    void dropEvent(QDropEvent* e) override {
+        if (!e->mimeData()->hasFormat(binItemsMime())) {
+            QTextEdit::dropEvent(e);
+            return;
+        }
+        // "Select the portion of the script that is covered by the first clip or clips ... and drag them to the
+        // highlighted text" (p.576); "Drag the clip to the slate" adds a take to it (p.580).
+        const QStringList rows = QString::fromUtf8(e->mimeData()->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (rows.size() < 2 || !window_.clipResolver_) return;
+        QList<model::ScriptClip> clips;
+        for (qsizetype i = 1; i < rows.size(); ++i)
+            if (auto clip = window_.clipResolver_(rows.first(), rows[i])) clips << *clip;
+        const SlateHit h = hitAt(e->position().toPoint());
+        if (window_.linkClips(clips, h.kind == SlateHit::Box || h.kind == SlateHit::Tab ? h.slateId : QString())) e->acceptProposedAction();
     }
     bool eventFilter(QObject* watched, QEvent* event) override {
         if (event->type() == QEvent::Paint && (watched == left_ || watched == right_)) {
@@ -123,11 +429,125 @@ private:
         }
     }
 
+    // Selects a take (the slate shows it from now on); `add` toggles it in the selection (Ctrl+click, p.580).
+    void pick(const QString& takeId, bool add) {
+        QStringList ids = add ? window_.selectedTakes_ : QStringList();
+        if (add && ids.contains(takeId)) ids.removeAll(takeId);
+        else ids << takeId;
+        model::setActiveTake(window_.script_, takeId);
+        window_.selectTakes(ids);
+    }
+    QImage frameOf(const model::ScriptTake& take, QSize size) {
+        if (!window_.frameProvider_ || size.isEmpty()) return {};
+        const QString key = QStringLiteral("%1/%2/%3").arg(take.id).arg(take.frame).arg(size.width());
+        auto it = frames_.find(key);
+        if (it == frames_.end()) it = frames_.insert(key, window_.frameProvider_(take, size));
+        return *it;
+    }
+    // A take's line from `top` to `bottom` at `x`: straight, jagged where it is off-screen dialog (p.581), with its colour
+    // ranges beside it (p.582).
+    void paintTakeLine(QPainter& p, const model::ScriptTake& take, const SlateGeometry::Take& g, const QColor& color, int width) {
+        for (const model::ScriptRange& r : take.colors) {
+            const int top = std::max(g.top, lineSpan(r.first).first);
+            const int bottom = std::min(g.bottom, lineSpan(r.last).second);
+            if (bottom > top) p.fillRect(QRect(g.x - 4, top, 9, bottom - top), QColor(r.color));
+        }
+        p.setPen(QPen(color, width));
+        for (int line = take.first; line <= take.last; ++line) {
+            const auto [lt, lb] = lineSpan(line);
+            const int top = std::max(g.top, lt);
+            const int bottom = std::min(g.bottom, lb);
+            if (bottom <= top || bottom < 0 || top > viewport()->height()) continue;
+            if (model::isOffscreen(take, line)) {
+                // "a jagged line next to the dialog indicate off-screen dialog" (p.581).
+                QPolygon zig;
+                int side = -3;
+                for (int y = top; y <= bottom; y += 4, side = -side) zig << QPoint(g.x + side, y);
+                p.drawPolyline(zig);
+            } else {
+                p.drawLine(g.x, top, g.x, bottom);
+            }
+        }
+        // The beginning and end marks.
+        p.drawLine(g.x - 4, g.bottom, g.x + 4, g.bottom);
+    }
+    void paintSlates() {
+        if (window_.script_.slates.isEmpty()) return;
+        QPainter p(viewport());
+        p.setFont(font());
+        const QList<SlateGeometry> geometry = slateGeometry();
+        const QColor takeColor(window_.slateOptions_.takeColor);
+        const QColor selected(220, 40, 40); // "The outline of the take changes to red" (p.580)
+        for (const SlateGeometry& g : geometry) {
+            const model::ScriptSlate* slate = nullptr;
+            for (const model::ScriptSlate& s : window_.script_.slates)
+                if (s.id == g.slateId) slate = &s;
+            if (!slate) continue;
+            for (const SlateGeometry::Take& t : g.takes) {
+                if (const model::ScriptTake* take = model::takeOf(window_.script_, t.id)) {
+                    const bool sel = window_.selectedTakes_.contains(t.id);
+                    paintTakeLine(p, *take, t, sel ? selected : takeColor, sel ? 3 : 2);
+                }
+            }
+            if (g.box.bottom() < 0 || g.box.top() > viewport()->height()) continue;
+            const int active = std::clamp(slate->active, 0, static_cast<int>(slate->takes.size()) - 1);
+            const model::ScriptTake& shown = slate->takes[active];
+            p.fillRect(g.box, palette().color(QPalette::Base));
+            if (!g.frame.isEmpty()) {
+                const QImage img = frameOf(shown, g.frame.size());
+                if (img.isNull()) p.fillRect(g.frame, palette().color(QPalette::Dark));
+                else p.drawImage(g.frame, img);
+            }
+            p.setPen(palette().color(QPalette::WindowText));
+            p.drawText(g.name.adjusted(3, 0, -3, 0), Qt::AlignLeft | Qt::AlignVCenter,
+                       fontMetrics().elidedText(shown.clipName, Qt::ElideRight, g.name.width() - 6));
+            p.setPen(palette().color(QPalette::Mid));
+            p.drawRect(g.box.adjusted(0, 0, -1, -1));
+            for (const SlateGeometry::Take& t : g.takes) {
+                const model::ScriptTake* take = model::takeOf(window_.script_, t.id);
+                if (!take) continue;
+                const bool sel = window_.selectedTakes_.contains(t.id);
+                p.fillRect(t.tab, take->id == shown.id ? palette().color(QPalette::Button) : palette().color(QPalette::Base));
+                p.setPen(QPen(sel ? selected : palette().color(QPalette::Mid), sel ? 2 : 1));
+                p.drawRect(t.tab.adjusted(0, 0, -1, -1));
+                p.setPen(palette().color(QPalette::WindowText));
+                // "Numbers in the Take column appear in the tabs for each take" (p.580).
+                p.drawText(t.tab, Qt::AlignCenter, take->take);
+            }
+        }
+        // The drags: the slate's outline where it goes, the lasso.
+        if (drag_.kind == Drag::Slate) {
+            for (const SlateGeometry& g : geometry) {
+                if (g.slateId != drag_.slateId) continue;
+                p.setPen(QPen(palette().color(QPalette::Highlight), 1, Qt::DashLine));
+                p.drawRect(g.box.translated(drag_.now - drag_.start));
+            }
+        } else if (drag_.kind == Drag::Lasso) {
+            p.setPen(QPen(palette().color(QPalette::Highlight), 1, Qt::DashLine));
+            p.drawRect(QRect(drag_.start, drag_.now).normalized());
+        } else if (drag_.kind == Drag::TakeEnd) {
+            p.setPen(QPen(selected, 1, Qt::DashLine));
+            p.drawLine(0, drag_.now.y(), viewport()->width(), drag_.now.y());
+        }
+    }
+
+    struct Drag {
+        enum Kind { None, Slate, TakeEnd, Lasso } kind = None;
+        QPoint start;
+        QPoint now;
+        QString slateId;
+        QString takeId;
+        bool withTakes = false;
+        int end = 0;
+    };
+
     ScriptWindow& window_;
     QWidget* left_ = nullptr;
     QWidget* right_ = nullptr;
     bool lineNumbers_ = false;
     bool rows_ = true;
+    Drag drag_;
+    QHash<QString, QImage> frames_; // the slates' frames, by take, frame and width
 };
 
 ScriptWindow::ScriptWindow(QWidget* parent) : QWidget(parent) {
@@ -151,6 +571,15 @@ ScriptWindow::ScriptWindow(QWidget* parent) : QWidget(parent) {
     connect(findButton_, &QToolButton::toggled, this, &ScriptWindow::setFindToolsShown);
     connect(tool(tr("AS"), QStringLiteral("addScene"), tr("Add Scene")), &QToolButton::clicked, this, &ScriptWindow::askScene);
     connect(tool(tr("AP"), QStringLiteral("addPage"), tr("Add Page")), &QToolButton::clicked, this, &ScriptWindow::askPage);
+    // "click the Play button at the top of the Script window" (p.581), Set Offscreen (p.581) and Set Color (p.582).
+    // Ours: lettered like the other buttons.
+    connect(tool(QStringLiteral("\u25B6"), QStringLiteral("playTakes"), tr("Play")), &QToolButton::clicked, this, &ScriptWindow::playSelected);
+    offscreenButton_ = tool(tr("OS"), QStringLiteral("setOffscreen"), tr("Set Offscreen"));
+    offscreenButton_->setCheckable(true);
+    connect(offscreenButton_, &QToolButton::clicked, this, [this] { setOffscreen(); });
+    colorButton_ = tool(tr("SC"), QStringLiteral("setColor"), tr("Set Color"));
+    colorButton_->setCheckable(true);
+    connect(colorButton_, &QToolButton::clicked, this, [this] { setColor(); });
     bar->addSpacing(8);
     bar->addWidget(new QLabel(tr("Scene"), this));
     scenes_ = new QComboBox(this);
@@ -198,6 +627,7 @@ ScriptWindow::ScriptWindow(QWidget* parent) : QWidget(parent) {
     connect(view_, &QTextEdit::textChanged, this, &ScriptWindow::textEdited);
     connect(view_, &QTextEdit::cursorPositionChanged, this, &ScriptWindow::refreshStatus);
     connect(view_, &QTextEdit::selectionChanged, this, &ScriptWindow::expandSelectionToLines);
+    connect(view_, &QTextEdit::selectionChanged, this, &ScriptWindow::refreshIndicatorButtons);
     status_ = new QLabel(this);
     status_->setObjectName(QStringLiteral("scriptStatus"));
     v->addWidget(status_);
@@ -211,6 +641,8 @@ void ScriptWindow::open(const QString& binId, const QString& itemId, const QStri
     itemId_ = itemId;
     name_ = name;
     script_ = script;
+    selectedTakes_.clear();
+    view_->clearFrames();
     setEditMode(false);
     rebuild();
     setEnabled(true);
@@ -223,6 +655,8 @@ void ScriptWindow::close() {
     itemId_.clear();
     name_.clear();
     script_ = {};
+    selectedTakes_.clear();
+    view_->clearFrames();
     rebuild();
     setEnabled(false);
     setModified(false);
@@ -259,6 +693,7 @@ void ScriptWindow::rebuild() {
         view_->setLineWrapMode(QTextEdit::NoWrap);
     }
     view_->document()->clearUndoRedoStacks();
+    view_->updateTopMargin();
     view_->layoutMargins();
     updating_ = false;
     refreshMenus();
@@ -287,6 +722,9 @@ void ScriptWindow::setEditMode(bool on) {
         editButton_->setChecked(on);
     }
     view_->setReadOnly(!on);
+    // Clips are dropped on the script in and out of Edit Mode (a read-only text edit takes none by itself).
+    view_->setAcceptDrops(true);
+    view_->viewport()->setAcceptDrops(true);
     view_->setTextInteractionFlags(on ? Qt::TextEditorInteraction : (Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard));
     view_->setStyleSheet(on ? QStringLiteral("QTextEdit#scriptText { border: 2px solid #8a3cc8; }") : QString());
 }
@@ -438,10 +876,11 @@ void ScriptWindow::askDelete() {
         hasScenes = hasScenes || script_.scenes.contains(l);
         hasPages = hasPages || script_.pages.contains(l);
     }
-    if (!hasScenes && !hasPages) return;
-    std::optional<std::pair<bool, bool>> choice;
+    const int takes = static_cast<int>(selectedTakes_.size());
+    if (!hasScenes && !hasPages && takes == 0) return;
+    std::optional<ScriptDeleteChoice> choice;
     if (askDelete_) {
-        choice = askDelete_(hasScenes, hasPages);
+        choice = askDelete_(hasScenes, hasPages, takes);
     } else {
         QDialog d(this);
         d.setWindowTitle(tr("Delete"));
@@ -452,15 +891,27 @@ void ScriptWindow::askDelete() {
         scenes->setChecked(hasScenes);
         pages->setEnabled(hasPages);
         pages->setChecked(hasPages);
+        // "Select Delete Takes, and click OK" (p.579-580).
+        auto* takeBox = new QCheckBox(tr("Delete Takes"), &d);
+        takeBox->setEnabled(takes > 0);
+        takeBox->setChecked(takes > 0 && !hasScenes && !hasPages);
         v->addWidget(scenes);
         v->addWidget(pages);
+        v->addWidget(takeBox);
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
         connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
         connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
         v->addWidget(buttons);
-        if (d.exec() == QDialog::Accepted) choice = std::pair{scenes->isChecked(), pages->isChecked()};
+        if (d.exec() == QDialog::Accepted) choice = ScriptDeleteChoice{scenes->isChecked(), pages->isChecked(), takeBox->isChecked()};
     }
-    if (choice) deleteNumbers(choice->first, choice->second);
+    if (!choice) return;
+    deleteNumbers(choice->scenes, choice->pages);
+    if (choice->takes && model::deleteTakes(script_, selectedTakes_) > 0) {
+        // "When you delete slates and takes from the Script window, the captured source clips remain in the source
+        // bins" (p.579).
+        selectedTakes_.clear();
+        scriptChanged();
+    }
 }
 
 bool ScriptWindow::goToScene(const QString& number) {
@@ -561,11 +1012,167 @@ void ScriptWindow::refreshStatus() {
     pages_->setCurrentIndex(pages_->findText(p));
 }
 
+void ScriptWindow::scriptChanged() {
+    view_->updateTopMargin();
+    view_->clearFrames();
+    view_->viewport()->update();
+    refreshIndicatorButtons();
+    setModified(true);
+}
+
+void ScriptWindow::setSlateOptions(const ScriptSlateOptions& options) {
+    slateOptions_ = options;
+    view_->updateTopMargin();
+    view_->clearFrames();
+    view_->viewport()->update();
+}
+
+bool ScriptWindow::linkClips(const QList<model::ScriptClip>& clips, const QString& slateId) {
+    const auto sel = selectedLines();
+    if (!sel || clips.isEmpty()) return false;
+    QStringList added;
+    const bool toSlate = std::any_of(script_.slates.cbegin(), script_.slates.cend(),
+                                     [&](const model::ScriptSlate& s) { return s.id == slateId; });
+    if (toSlate) {
+        for (const model::ScriptClip& clip : clips) {
+            const QString id = model::addTake(script_, slateId, sel->first, sel->second, clip);
+            if (!id.isEmpty()) added << id;
+        }
+    } else {
+        // Ours: a new slate stands right of the slates already over its lines.
+        const int top = view_->lineSpan(sel->first).first;
+        const int bottom = view_->lineSpan(sel->second).second;
+        int x = 0;
+        for (const SlateGeometry& g : view_->slateGeometry()) {
+            int reach = g.box.bottom();
+            for (const SlateGeometry::Take& t : g.takes) reach = std::max(reach, t.bottom);
+            if (g.box.top() < bottom && reach > top) x = std::max(x, g.box.right() + 1 + kSlateGap - view_->slateBase());
+        }
+        const QString id = model::addSlate(script_, sel->first, sel->second, clips);
+        if (!id.isEmpty()) script_.slates.last().x = x;
+        for (const model::ScriptSlate& s : script_.slates)
+            if (s.id == id)
+                for (const model::ScriptTake& t : s.takes) added << t.id;
+    }
+    if (added.isEmpty()) return false;
+    selectedTakes_ = added;
+    scriptChanged();
+    return true;
+}
+
+void ScriptWindow::selectTakes(const QStringList& takeIds) {
+    QStringList ids;
+    for (const QString& id : takeIds)
+        if (model::takeOf(script_, id) && !ids.contains(id)) ids << id;
+    selectedTakes_ = ids;
+    view_->viewport()->update();
+    refreshIndicatorButtons();
+}
+
+void ScriptWindow::selectSlate(const QString& slateId) {
+    QStringList ids = selectedTakes_;
+    for (const model::ScriptSlate& s : script_.slates)
+        if (s.id == slateId)
+            for (const model::ScriptTake& t : s.takes)
+                if (!ids.contains(t.id)) ids << t.id;
+    selectTakes(ids);
+}
+
+void ScriptWindow::moveSlate(const QString& slateId, int lines, int x, bool withTakes) {
+    const model::Script before = script_;
+    model::moveSlate(script_, slateId, lines, x, withTakes);
+    if (script_ != before) scriptChanged();
+}
+
+void ScriptWindow::setTakeLines(const QString& takeId, int first, int last) {
+    const model::Script before = script_;
+    model::setTakeLines(script_, takeId, first, last);
+    if (script_ != before) scriptChanged();
+}
+
+void ScriptWindow::stepFrames(std::int64_t frames) {
+    if (selectedTakes_.isEmpty()) return;
+    const model::Script before = script_;
+    model::stepTakeFrames(script_, selectedTakes_, frames);
+    if (script_ != before) scriptChanged();
+}
+
+bool ScriptWindow::setOffscreen() {
+    const auto sel = selectedLines();
+    if (!sel || selectedTakes_.isEmpty()) {
+        refreshIndicatorButtons();
+        return false;
+    }
+    const bool on = model::toggleOffscreen(script_, selectedTakes_, sel->first, sel->second);
+    scriptChanged();
+    return on;
+}
+
+bool ScriptWindow::setColor() {
+    const auto sel = selectedLines();
+    if (!sel || selectedTakes_.isEmpty()) {
+        refreshIndicatorButtons();
+        return false;
+    }
+    const bool on = model::toggleColor(script_, selectedTakes_, sel->first, sel->second, indicatorColor_);
+    scriptChanged();
+    return on;
+}
+
+// "The first take in the selected region determines the color indicator status that displays in the Set Color button"
+// (p.582); the Set Offscreen button the same (ours).
+void ScriptWindow::refreshIndicatorButtons() {
+    if (!offscreenButton_ || !colorButton_) return;
+    const auto sel = selectedLines();
+    const model::ScriptTake* first = selectedTakes_.isEmpty() ? nullptr : model::takeOf(script_, selectedTakes_.first());
+    const QSignalBlocker a(offscreenButton_);
+    const QSignalBlocker b(colorButton_);
+    offscreenButton_->setChecked(first && sel && model::isOffscreen(*first, sel->first));
+    colorButton_->setChecked(first && sel && !model::colorAt(*first, sel->first).isEmpty());
+    colorButton_->setStyleSheet(QStringLiteral("QToolButton#setColor { border-bottom: 3px solid %1; }").arg(indicatorColor_));
+}
+
+void ScriptWindow::loadTake(const QString& takeId, int line, double fraction) {
+    const model::ScriptTake* take = model::takeOf(script_, takeId);
+    if (!take) return;
+    model::setActiveTake(script_, takeId);
+    if (!selectedTakes_.contains(takeId)) selectTakes({takeId});
+    view_->viewport()->update();
+    emit takeLoadRequested(*take, line, fraction);
+}
+
+void ScriptWindow::playSelected() {
+    QList<model::ScriptTake> takes;
+    for (const QString& id : selectedTakes_)
+        if (const model::ScriptTake* t = model::takeOf(script_, id)) takes << *t;
+    if (!takes.isEmpty()) emit takesPlayRequested(takes);
+}
+
+QRect ScriptWindow::slateRect(const QString& slateId) const {
+    for (const SlateGeometry& g : view_->slateGeometry())
+        if (g.slateId == slateId) return g.box;
+    return {};
+}
+
+QRect ScriptWindow::takeTabRect(const QString& takeId) const {
+    for (const SlateGeometry& g : view_->slateGeometry())
+        for (const SlateGeometry::Take& t : g.takes)
+            if (t.id == takeId) return t.tab;
+    return {};
+}
+
 bool ScriptWindow::eventFilter(QObject* watched, QEvent* event) {
     if (watched == view_ && event->type() == QEvent::KeyPress && !editMode_) {
         const auto* k = static_cast<QKeyEvent*>(event);
         if (k->key() == Qt::Key_Delete || k->key() == Qt::Key_Backspace) {
             askDelete();
+            return true;
+        }
+        // "Press the appropriate arrow keys or step keys on the keyboard to advance the footage displayed in the slate"
+        // (p.581): Left and Right a frame, with Shift ten (ours, as the step keys elsewhere).
+        if ((k->key() == Qt::Key_Left || k->key() == Qt::Key_Right) && !selectedTakes_.isEmpty()) {
+            const int step = k->modifiers().testFlag(Qt::ShiftModifier) ? 10 : 1;
+            stepFrames(k->key() == Qt::Key_Left ? -step : step);
             return true;
         }
         // "Press the Up Arrow or Down Arrow key to move your line selection up or down by one line" (p.571).

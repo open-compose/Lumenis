@@ -632,6 +632,13 @@ public:
     bool saveScriptCopyAs(const QString& name = {});
     bool scriptTextLayout(std::optional<model::ScriptLayout> layout = std::nullopt);
     ScriptWindow& scriptWindow() const { return *scriptWindow_; }
+    // Slates and takes (8.3b, p.576-582). loadScriptTake: a take's clip into the Source monitor, at its representative
+    // frame, or with Interpolate Position at the double-clicked line (`line` >= 0, `fraction` down it); false when the
+    // clip is gone. setScriptSlateOption: the Script menu's Show Frames, Show All Takes, Hold Slates Onscreen, Interpolate
+    // Position (toggled) and Color > colour (chosen), by command id. scriptIndicatorColors: Color's commands and colours.
+    bool loadScriptTake(const model::ScriptTake& take, int line = -1, double fraction = 0.0);
+    void setScriptSlateOption(const QString& commandId);
+    static QList<std::pair<QString, QString>> scriptIndicatorColors();
     // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
     // to match when exporting and importing", p.451).
     int importSharedTranscripts(const QString& path, QString* error = nullptr);
@@ -1046,6 +1053,9 @@ private:
     bool transcriptionIndexing_ = true;
     TranscriptPathAsk transcriptPathHook_;
     ScriptWindow* scriptWindow_ = nullptr;
+    const model::BinItem* scriptTakeItem(const model::ScriptTake& take) const;
+    void applyScriptSettings();
+    void refreshScriptMenu();
     void setUpScriptWindow();
     TranscribeTracksAsk transcribeTracksHook_;
     // The file or folder for transcripts out, through the hook or a file dialog; empty when cancelled.

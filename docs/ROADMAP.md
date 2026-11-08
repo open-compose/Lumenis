@@ -1449,7 +1449,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       pre-roll, the slate options stored for 8.3b); Script > Text Layout (left margin, text width, word wrap); Add Scene
       and Add Page with the Delete dialog's scene and page choices, the Scene and Page menus and the status bar; Edit
       Mode with cut, copy, paste, typing and Undo Edit Script Text, and the Show Find Tools find and replace.
-    * 8.3b, slates and takes (p.576-582): clips dragged onto selected lines become slates of takes (frames, clip names,
+    * 8.3b (done), slates and takes (p.576-582): clips dragged onto selected lines become slates of takes (frames, clip names,
       Take column numbers); selecting, lassoing, moving slates (Ctrl+drag with their lines), changing a take's length,
       deleting takes; Show Frames, Show All Takes, Hold Slates Onscreen, Enlarge/Reduce Frame; the representative
       frame stepped with the arrow keys; double-click and the Play button loading and playing takes; Interpolate

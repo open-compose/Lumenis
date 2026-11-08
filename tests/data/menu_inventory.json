@@ -1123,6 +1123,37 @@
           "page": 574
         },
         {
+          "text": "Color",
+          "page": 582,
+          "note": "The guide gives Script > Color > color without listing the colours; ours are six",
+          "items": [
+            {
+              "text": "Red",
+              "page": 582
+            },
+            {
+              "text": "Orange",
+              "page": 582
+            },
+            {
+              "text": "Yellow",
+              "page": 582
+            },
+            {
+              "text": "Green",
+              "page": 582
+            },
+            {
+              "text": "Blue",
+              "page": 582
+            },
+            {
+              "text": "Purple",
+              "page": 582
+            }
+          ]
+        },
+        {
           "text": "Hold Slates Onscreen",
           "page": 578
         },
@@ -1137,6 +1168,14 @@
         {
           "text": "ScriptSync AI",
           "page": 584
+        },
+        {
+          "text": "Show All Takes",
+          "page": 578
+        },
+        {
+          "text": "Show Frames",
+          "page": 578
         },
         {
           "text": "Text Layout",

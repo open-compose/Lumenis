@@ -392,10 +392,24 @@
       "items": [
         "script.add_scene",
         "script.add_page",
+        {
+          "id": "script_color",
+          "title": "Color",
+          "items": [
+            "script.color.red",
+            "script.color.orange",
+            "script.color.yellow",
+            "script.color.green",
+            "script.color.blue",
+            "script.color.purple"
+          ]
+        },
         "script.hold_slates_onscreen",
         "script.interpolate_position",
         "script.manage_transcripts",
         "script.scriptsync_ai",
+        "script.show_all_takes",
+        "script.show_frames",
         "script.text_layout"
       ]
     },

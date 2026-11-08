@@ -75,6 +75,40 @@ QJsonObject Script::toJson() const {
     if (!layout.font.isEmpty()) o.insert(QStringLiteral("font"), layout.font);
     if (!scenes.isEmpty()) o.insert(QStringLiteral("scenes"), marksToJson(scenes));
     if (!pages.isEmpty()) o.insert(QStringLiteral("pages"), marksToJson(pages));
+    if (!slates.isEmpty()) {
+        auto ranges = [](const QList<ScriptRange>& list) {
+            QJsonArray a;
+            for (const ScriptRange& r : list) {
+                QJsonObject ro{{QStringLiteral("first"), r.first}, {QStringLiteral("last"), r.last}};
+                if (!r.color.isEmpty()) ro.insert(QStringLiteral("color"), r.color);
+                a.append(ro);
+            }
+            return a;
+        };
+        QJsonArray a;
+        for (const ScriptSlate& s : slates) {
+            QJsonArray takes;
+            for (const ScriptTake& t : s.takes) {
+                QJsonObject to{{QStringLiteral("id"), t.id},
+                               {QStringLiteral("binId"), t.binId},
+                               {QStringLiteral("clipId"), t.clipId},
+                               {QStringLiteral("clipName"), t.clipName},
+                               {QStringLiteral("first"), t.first},
+                               {QStringLiteral("last"), t.last},
+                               {QStringLiteral("frame"), static_cast<qint64>(t.frame)}};
+                if (!t.take.isEmpty()) to.insert(QStringLiteral("take"), t.take);
+                if (!t.offscreen.isEmpty()) to.insert(QStringLiteral("offscreen"), ranges(t.offscreen));
+                if (!t.colors.isEmpty()) to.insert(QStringLiteral("colors"), ranges(t.colors));
+                takes.append(to);
+            }
+            a.append(QJsonObject{{QStringLiteral("id"), s.id},
+                                 {QStringLiteral("line"), s.line},
+                                 {QStringLiteral("x"), s.x},
+                                 {QStringLiteral("active"), s.active},
+                                 {QStringLiteral("takes"), takes}});
+        }
+        o.insert(QStringLiteral("slates"), a);
+    }
     return o;
 }
 
@@ -89,6 +123,41 @@ Script Script::fromJson(const QJsonObject& o) {
     s.layout.wordWrap = o.value(QStringLiteral("wordWrap")).toBool(true);
     s.layout.font = o.value(QStringLiteral("font")).toString();
     s.layout.fontSize = std::clamp(o.value(QStringLiteral("fontSize")).toInt(12), 4, 144);
+    const int last = std::max(0, count - 1);
+    auto ranges = [last](const QJsonValue& v) {
+        QList<ScriptRange> out;
+        for (const QJsonValue& r : v.toArray()) {
+            const QJsonObject ro = r.toObject();
+            ScriptRange range{std::clamp(ro.value(QStringLiteral("first")).toInt(), 0, last),
+                              std::clamp(ro.value(QStringLiteral("last")).toInt(), 0, last), ro.value(QStringLiteral("color")).toString()};
+            if (range.last >= range.first) out << range;
+        }
+        return out;
+    };
+    for (const QJsonValue& v : o.value(QStringLiteral("slates")).toArray()) {
+        const QJsonObject so = v.toObject();
+        ScriptSlate slate;
+        slate.id = so.value(QStringLiteral("id")).toString();
+        slate.line = std::clamp(so.value(QStringLiteral("line")).toInt(), 0, last);
+        slate.x = so.value(QStringLiteral("x")).toInt();
+        for (const QJsonValue& tv : so.value(QStringLiteral("takes")).toArray()) {
+            const QJsonObject to = tv.toObject();
+            ScriptTake t;
+            t.id = to.value(QStringLiteral("id")).toString();
+            t.binId = to.value(QStringLiteral("binId")).toString();
+            t.clipId = to.value(QStringLiteral("clipId")).toString();
+            t.clipName = to.value(QStringLiteral("clipName")).toString();
+            t.take = to.value(QStringLiteral("take")).toString();
+            t.first = std::clamp(to.value(QStringLiteral("first")).toInt(), 0, last);
+            t.last = std::clamp(to.value(QStringLiteral("last")).toInt(), t.first, last);
+            t.frame = std::max<qint64>(0, to.value(QStringLiteral("frame")).toInteger());
+            t.offscreen = ranges(to.value(QStringLiteral("offscreen")));
+            t.colors = ranges(to.value(QStringLiteral("colors")));
+            if (!t.id.isEmpty()) slate.takes << t;
+        }
+        slate.active = std::clamp(so.value(QStringLiteral("active")).toInt(), 0, std::max(0, static_cast<int>(slate.takes.size()) - 1));
+        if (!slate.id.isEmpty() && !slate.takes.isEmpty()) s.slates << slate;
+    }
     return s;
 }
 
@@ -162,6 +231,28 @@ void replaceLines(Script& script, int from, int to, const QStringList& replaceme
     const auto newCount = static_cast<int>(rows.size());
     shiftMarks(script.scenes, from, to, newCount);
     shiftMarks(script.pages, from, to, newCount);
+    // Lines and take ranges: before the span they stay, after it they move by the change; inside it they shrink to what
+    // is left (ours).
+    const int delta = newCount - (to - from);
+    auto shift = [&](int line, bool end) {
+        if (line < from) return line;
+        if (line >= to) return line + delta;
+        return end ? from + std::max(0, newCount - 1) : from;
+    };
+    const int lastLine = std::max(0, static_cast<int>(script.lines.size()) + delta - 1);
+    for (ScriptSlate& s : script.slates) {
+        s.line = std::clamp(shift(s.line, false), 0, lastLine);
+        for (ScriptTake& t : s.takes) {
+            t.first = std::clamp(shift(t.first, false), 0, lastLine);
+            t.last = std::clamp(shift(t.last, true), t.first, lastLine);
+            for (QList<ScriptRange>* list : {&t.offscreen, &t.colors}) {
+                for (ScriptRange& r : *list) {
+                    r.first = std::clamp(shift(r.first, false), 0, lastLine);
+                    r.last = std::clamp(shift(r.last, true), r.first, lastLine);
+                }
+            }
+        }
+    }
     script.lines = script.lines.mid(0, from) + rows + script.lines.mid(to);
 }
 
@@ -200,6 +291,240 @@ int replaceInScript(Script& script, const QString& text, const QString& replacem
         n += static_cast<int>(before);
     }
     return n;
+}
+
+// ---------------------------------------------------------------- slates and takes (8.3b)
+
+namespace {
+
+int lastLine(const Script& s) { return std::max(0, static_cast<int>(s.lines.size()) - 1); }
+
+ScriptTake makeTake(const Script& s, int first, int last, const ScriptClip& clip) {
+    ScriptTake t;
+    t.id = newItemId();
+    t.binId = clip.binId;
+    t.clipId = clip.clipId;
+    t.clipName = clip.name;
+    t.take = clip.take;
+    t.first = std::clamp(std::min(first, last), 0, lastLine(s));
+    t.last = std::clamp(std::max(first, last), t.first, lastLine(s));
+    return t;
+}
+
+ScriptTake* takeIn(Script& s, const QString& id, ScriptSlate** slate = nullptr) {
+    for (ScriptSlate& sl : s.slates) {
+        for (ScriptTake& t : sl.takes) {
+            if (t.id == id) {
+                if (slate) *slate = &sl;
+                return &t;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// Adds [first, last] to (on) or takes it out of (off) a take's ranges of one colour (empty: off-screen).
+void markRange(QList<ScriptRange>& ranges, int first, int last, const QString& color, bool on) {
+    QList<ScriptRange> out;
+    for (const ScriptRange& r : ranges) {
+        if (r.color != color || r.last < first || r.first > last) {
+            out << r;
+            continue;
+        }
+        // The part outside [first, last] stays.
+        if (r.first < first) out.append({r.first, first - 1, r.color});
+        if (r.last > last) out.append({last + 1, r.last, r.color});
+    }
+    if (on) {
+        // A colour replaces any other colour on those lines.
+        if (!color.isEmpty()) {
+            QList<ScriptRange> kept;
+            for (const ScriptRange& r : out) {
+                if (r.last < first || r.first > last) {
+                    kept << r;
+                    continue;
+                }
+                if (r.first < first) kept.append({r.first, first - 1, r.color});
+                if (r.last > last) kept.append({last + 1, r.last, r.color});
+            }
+            out = kept;
+        }
+        out.append({first, last, color});
+    }
+    std::sort(out.begin(), out.end(), [](const ScriptRange& a, const ScriptRange& b) { return a.first < b.first; });
+    ranges = out;
+}
+
+} // namespace
+
+QString addSlate(Script& script, int first, int last, const QList<ScriptClip>& clips) {
+    if (clips.isEmpty() || script.lines.isEmpty()) return {};
+    ScriptSlate slate;
+    slate.id = newItemId();
+    for (const ScriptClip& c : clips) slate.takes << makeTake(script, first, last, c);
+    slate.line = slate.takes.first().first;
+    script.slates << slate;
+    return slate.id;
+}
+
+QString addTake(Script& script, const QString& slateId, int first, int last, const ScriptClip& clip) {
+    for (ScriptSlate& s : script.slates) {
+        if (s.id != slateId) continue;
+        s.takes << makeTake(script, first, last, clip);
+        return s.takes.last().id;
+    }
+    return {};
+}
+
+const ScriptSlate* slateOf(const Script& script, const QString& takeId) {
+    for (const ScriptSlate& s : script.slates) {
+        for (const ScriptTake& t : s.takes) {
+            if (t.id == takeId) return &s;
+        }
+    }
+    return nullptr;
+}
+
+const ScriptTake* takeOf(const Script& script, const QString& takeId) {
+    for (const ScriptSlate& s : script.slates) {
+        for (const ScriptTake& t : s.takes) {
+            if (t.id == takeId) return &t;
+        }
+    }
+    return nullptr;
+}
+
+int deleteTakes(Script& script, const QStringList& takeIds) {
+    int n = 0;
+    for (ScriptSlate& s : script.slates) {
+        const QString active = s.takes.isEmpty() ? QString() : s.takes.value(s.active).id;
+        n += static_cast<int>(s.takes.removeIf([&](const ScriptTake& t) { return takeIds.contains(t.id); }));
+        const auto at = std::find_if(s.takes.cbegin(), s.takes.cend(), [&](const ScriptTake& t) { return t.id == active; });
+        s.active = at == s.takes.cend() ? 0 : static_cast<int>(at - s.takes.cbegin());
+    }
+    script.slates.removeIf([](const ScriptSlate& s) { return s.takes.isEmpty(); });
+    return n;
+}
+
+void moveSlate(Script& script, const QString& slateId, int lines, int x, bool withTakes) {
+    const int end = lastLine(script);
+    for (ScriptSlate& s : script.slates) {
+        if (s.id != slateId) continue;
+        s.x = std::max(0, s.x + x);
+        if (!withTakes) {
+            s.line = std::clamp(s.line + lines, 0, end);
+            return;
+        }
+        // "As you move the slate, the takes continue to cover the same number of lines in the script": the move stops
+        // where the first or last take would leave the script.
+        int lo = s.line;
+        int hi = s.line;
+        for (const ScriptTake& t : s.takes) {
+            lo = std::min(lo, t.first);
+            hi = std::max(hi, t.last);
+        }
+        const int d = std::clamp(lines, -lo, end - hi);
+        s.line += d;
+        for (ScriptTake& t : s.takes) {
+            t.first += d;
+            t.last += d;
+            for (QList<ScriptRange>* list : {&t.offscreen, &t.colors}) {
+                for (ScriptRange& r : *list) {
+                    r.first += d;
+                    r.last += d;
+                }
+            }
+        }
+        return;
+    }
+}
+
+void setTakeLines(Script& script, const QString& takeId, int first, int last) {
+    ScriptTake* t = takeIn(script, takeId);
+    if (!t) return;
+    t->first = std::clamp(std::min(first, last), 0, lastLine(script));
+    t->last = std::clamp(std::max(first, last), t->first, lastLine(script));
+    // Indicators outside the new lines go.
+    for (QList<ScriptRange>* list : {&t->offscreen, &t->colors}) {
+        QList<ScriptRange> kept;
+        for (ScriptRange r : *list) {
+            r.first = std::max(r.first, t->first);
+            r.last = std::min(r.last, t->last);
+            if (r.last >= r.first) kept << r;
+        }
+        *list = kept;
+    }
+}
+
+void stepTakeFrames(Script& script, const QStringList& takeIds, std::int64_t frames) {
+    for (const QString& id : takeIds) {
+        ScriptSlate* slate = nullptr;
+        ScriptTake* t = takeIn(script, id, &slate);
+        if (!t) continue;
+        t->frame = std::max<std::int64_t>(0, t->frame + frames);
+    }
+    if (!takeIds.isEmpty()) setActiveTake(script, takeIds.first());
+}
+
+void setActiveTake(Script& script, const QString& takeId) {
+    for (ScriptSlate& s : script.slates) {
+        for (int i = 0; i < s.takes.size(); ++i) {
+            if (s.takes[i].id == takeId) s.active = i;
+        }
+    }
+}
+
+bool isOffscreen(const ScriptTake& take, int line) {
+    return std::any_of(take.offscreen.cbegin(), take.offscreen.cend(), [line](const ScriptRange& r) { return line >= r.first && line <= r.last; });
+}
+
+QString colorAt(const ScriptTake& take, int line) {
+    for (const ScriptRange& r : take.colors) {
+        if (line >= r.first && line <= r.last) return r.color;
+    }
+    return {};
+}
+
+bool toggleOffscreen(Script& script, const QStringList& takeIds, int first, int last) {
+    const ScriptTake* lead = takeIds.isEmpty() ? nullptr : takeOf(script, takeIds.first());
+    if (!lead) return false;
+    const int a = std::max(std::min(first, last), lead->first);
+    const bool on = !isOffscreen(*lead, std::clamp(a, lead->first, lead->last));
+    for (const QString& id : takeIds) {
+        ScriptTake* t = takeIn(script, id);
+        if (!t) continue;
+        const int f = std::max(std::min(first, last), t->first);
+        const int l = std::min(std::max(first, last), t->last);
+        if (l >= f) markRange(t->offscreen, f, l, QString(), on);
+    }
+    return on;
+}
+
+bool toggleColor(Script& script, const QStringList& takeIds, int first, int last, const QString& color) {
+    const ScriptTake* lead = takeIds.isEmpty() ? nullptr : takeOf(script, takeIds.first());
+    if (!lead || color.isEmpty()) return false;
+    // "The first take in the selected region determines the color indicator status" (p.582).
+    const int a = std::clamp(std::min(first, last), lead->first, lead->last);
+    const bool on = colorAt(*lead, a) != color;
+    for (const QString& id : takeIds) {
+        ScriptTake* t = takeIn(script, id);
+        if (!t) continue;
+        const int f = std::max(std::min(first, last), t->first);
+        const int l = std::min(std::max(first, last), t->last);
+        if (l < f) continue;
+        if (on) {
+            markRange(t->colors, f, l, color, true);
+        } else {
+            markRange(t->colors, f, l, color, false);
+        }
+    }
+    return on;
+}
+
+std::int64_t interpolatedFrame(const ScriptTake& take, int line, double fraction, std::int64_t clipFrames) {
+    const int lines = take.last - take.first + 1;
+    const double at = (std::clamp(line, take.first, take.last) - take.first + std::clamp(fraction, 0.0, 1.0)) / lines;
+    return std::clamp<std::int64_t>(static_cast<std::int64_t>(at * static_cast<double>(clipFrames)), 0, std::max<std::int64_t>(0, clipFrames - 1));
 }
 
 } // namespace lumenis::model

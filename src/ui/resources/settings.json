@@ -835,13 +835,13 @@
             {"key": "fontSize", "type": "int", "label": "Size", "min": 6, "max": 72, "default": 12, "page": 1217},
             {"key": "leftMargin", "type": "int", "label": "Left Margin (pixels)", "min": 0, "max": 600, "default": 40, "page": 1217},
             {"key": "wordWrap", "type": "bool", "label": "Word Wrap", "default": true, "page": 1217},
-            {"key": "takeColoring", "type": "color", "label": "Take Coloring", "default": "#3c78d2", "page": 1217, "later": true},
+            {"key": "takeColoring", "type": "color", "label": "Take Coloring", "default": "#3c78d2", "page": 1217},
             {"key": "preRoll", "type": "int", "label": "Pre-roll (seconds)", "min": 0, "max": 30, "default": 0, "page": 1217, "later": true},
-            {"key": "showFrames", "type": "bool", "label": "Show Frames", "default": true, "page": 1217, "later": true},
-            {"key": "showAllTakes", "type": "bool", "label": "Show All Takes", "default": true, "page": 1217, "later": true},
+            {"key": "showFrames", "type": "bool", "label": "Show Frames", "default": true, "page": 1217},
+            {"key": "showAllTakes", "type": "bool", "label": "Show All Takes", "default": true, "page": 1217},
             {"key": "showLineNumbers", "type": "bool", "label": "Show Line Number", "default": false, "page": 1217},
-            {"key": "interpolatePosition", "type": "bool", "label": "Interpolate Position", "default": false, "page": 1217, "later": true},
-            {"key": "holdSlates", "type": "bool", "label": "Hold Slates Onscreen", "default": false, "page": 1217, "later": true},
+            {"key": "interpolatePosition", "type": "bool", "label": "Interpolate Position", "default": false, "page": 1217},
+            {"key": "holdSlates", "type": "bool", "label": "Hold Slates Onscreen", "default": false, "page": 1217},
             {"key": "background", "type": "choice", "style": "menu", "label": "Script Window Background", "default": "rows", "page": 1217,
              "choices": [{"value": "rows", "label": "Interface Setting: Rows"}, {"value": "white", "label": "White"}]}
           ]

@@ -1348,6 +1348,13 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
                 return;
             }
             const Panel* active = panels_->activePanel();
+            // "Select Edit > Enlarge Frame or Edit > Reduce Frame" enlarges or reduces the slates (p.578).
+            if (!binsActive() && active && active->id() == QLatin1String("Script")) {
+                ScriptSlateOptions o = scriptWindow_->slateOptions();
+                o.frameScale = std::clamp(o.frameScale * (steps > 0 ? 1.25 : 0.8), 0.25, 4.0);
+                scriptWindow_->setSlateOptions(o);
+                return;
+            }
             if (!binsActive() && active && active->id() == QLatin1String("Timeline")) {
                 timeline_->resizeTracks(steps);
                 return;
@@ -8195,6 +8202,9 @@ void MainWindow::installPanelHandlers() {
     handle("script.add_scene", [this] { scriptWindow_->askScene(); });
     handle("script.add_page", [this] { scriptWindow_->askPage(); });
     handle("script.text_layout", [this] { scriptTextLayout(); });
+    for (const char* id : {"script.show_frames", "script.show_all_takes", "script.hold_slates_onscreen", "script.interpolate_position"})
+        handle(id, [this, id] { setScriptSlateOption(QString::fromLatin1(id)); });
+    for (const auto& [id, color] : scriptIndicatorColors()) commands_.setHandler(id, [this, cid = id] { setScriptSlateOption(cid); });
     handle("script.manage_transcripts", [this] { manageTranscripts(); });
     connect(binContainer_, &BinContainer::commandRequested, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id)) a->trigger();

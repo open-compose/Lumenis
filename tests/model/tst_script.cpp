@@ -62,6 +62,80 @@ private slots:
         QCOMPARE(s.scenes.value(1), QStringLiteral("2"));
     }
 
+    // Slates and takes (p.576-582): clips linked to lines, takes added and deleted, slates moved with and without their
+    // lines, take lengths, representative frames, off-screen and colour indicators, kept in the item and through edits.
+    void slatesAndTakes() {
+        Script s = scriptFromText(QStringLiteral("0\n1\n2\n3\n4\n5\n6\n7\n8\n9"));
+        QVERIFY(addSlate(s, 2, 5, {}).isEmpty());
+        const QString slate = addSlate(s, 5, 2, {{QStringLiteral("b"), QStringLiteral("c1"), QStringLiteral("33/1"), QStringLiteral("1")},
+                                                 {QStringLiteral("b"), QStringLiteral("c2"), QStringLiteral("33/2"), QStringLiteral("2")}});
+        QVERIFY(!slate.isEmpty());
+        QCOMPARE(s.slates.size(), qsizetype(1));
+        QCOMPARE(s.slates[0].line, 2);
+        const QString t1 = s.slates[0].takes[0].id;
+        const QString t2 = s.slates[0].takes[1].id;
+        QCOMPARE(s.slates[0].takes[0].first, 2);
+        QCOMPARE(s.slates[0].takes[0].last, 5);
+        QCOMPARE(s.slates[0].takes[1].take, QStringLiteral("2"));
+        const QString t3 = addTake(s, slate, 3, 8, {QStringLiteral("b"), QStringLiteral("c3"), QStringLiteral("33A/1"), {}});
+        QCOMPARE(slateOf(s, t3)->id, slate);
+        QCOMPARE(takeOf(s, t3)->last, 8);
+
+        // Moved alone, the lines stay; with Ctrl, they move too, stopping at the script's end.
+        moveSlate(s, slate, 3, 40, false);
+        QCOMPARE(s.slates[0].line, 5);
+        QCOMPARE(s.slates[0].x, 40);
+        QCOMPARE(takeOf(s, t1)->first, 2);
+        moveSlate(s, slate, 5, 0, true);
+        QCOMPARE(takeOf(s, t3)->last, 9); // only 1 line further: t3 reaches the last line
+        QCOMPARE(takeOf(s, t1)->first, 3);
+        moveSlate(s, slate, -1, 0, true);
+
+        setTakeLines(s, t2, 6, 1);
+        QCOMPARE(takeOf(s, t2)->first, 1);
+        QCOMPARE(takeOf(s, t2)->last, 6);
+
+        stepTakeFrames(s, {t2}, 5);
+        stepTakeFrames(s, {t2}, -9);
+        QCOMPARE(takeOf(s, t2)->frame, std::int64_t(0));
+        QCOMPARE(s.slates[0].active, 1);
+
+        // Off-screen: toggled by the first take; colours replace each other.
+        QVERIFY(toggleOffscreen(s, {t1, t2}, 3, 4));
+        QVERIFY(isOffscreen(*takeOf(s, t1), 3));
+        QVERIFY(isOffscreen(*takeOf(s, t2), 4));
+        QVERIFY(!isOffscreen(*takeOf(s, t2), 5));
+        QVERIFY(!toggleOffscreen(s, {t1}, 3, 3));
+        QVERIFY(!isOffscreen(*takeOf(s, t1), 3));
+        QVERIFY(isOffscreen(*takeOf(s, t1), 4));
+        QVERIFY(toggleColor(s, {t2}, 2, 5, QStringLiteral("#d2c832")));
+        QVERIFY(toggleColor(s, {t2}, 3, 3, QStringLiteral("#c83232")));
+        QCOMPARE(colorAt(*takeOf(s, t2), 2), QStringLiteral("#d2c832"));
+        QCOMPARE(colorAt(*takeOf(s, t2), 3), QStringLiteral("#c83232"));
+        QVERIFY(!toggleColor(s, {t2}, 3, 3, QStringLiteral("#c83232")));
+        QCOMPARE(colorAt(*takeOf(s, t2), 3), QString());
+
+        // Interpolate Position: line 4 of 1-6 halfway down is 3.5 lines of 6 into a 120-frame clip.
+        QCOMPARE(interpolatedFrame(*takeOf(s, t2), 4, 0.5, 120), std::int64_t(70));
+
+        // Kept in the item.
+        const Script back = Script::fromJson(s.toJson());
+        QCOMPARE(back, s);
+
+        // Edits move the takes with their lines.
+        Script e = s;
+        replaceLines(e, 0, 0, {QStringLiteral("new")});
+        QCOMPARE(takeOf(e, t1)->first, takeOf(s, t1)->first + 1);
+        QCOMPARE(e.slates[0].line, s.slates[0].line + 1);
+
+        // Deleting takes; a slate without takes goes.
+        QCOMPARE(deleteTakes(s, {t1, t3}), 2);
+        QCOMPARE(s.slates[0].takes.size(), qsizetype(1));
+        QCOMPARE(s.slates[0].active, 0);
+        QCOMPARE(deleteTakes(s, {t2}), 1);
+        QVERIFY(s.slates.isEmpty());
+    }
+
     void findAndReplace() {
         Script s = scriptFromText(QStringLiteral("Coffee?\nMore coffee.\nNo."));
         auto m = findInScript(s, QStringLiteral("coffee"), 0, 0);

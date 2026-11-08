@@ -298,10 +298,18 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 |---|---|---|---|---|---|---|
 | Add Scene |  | p.574 | works | ☐ | | |
 | Add Page |  | p.574 | works | ☐ | | |
-| Hold Slates Onscreen |  | p.578 | *later* | ☐ | | |
-| Interpolate Position |  | p.577 | *later* | ☐ | | |
+| Color > Red |  | p.582 | works | ☐ | | |
+| Color > Orange |  | p.582 | works | ☐ | | |
+| Color > Yellow |  | p.582 | works | ☐ | | |
+| Color > Green |  | p.582 | works | ☐ | | |
+| Color > Blue |  | p.582 | works | ☐ | | |
+| Color > Purple |  | p.582 | works | ☐ | | |
+| Hold Slates Onscreen |  | p.578 | works | ☐ | | |
+| Interpolate Position |  | p.577 | works | ☐ | | |
 | Manage Transcripts |  | p.454 | works | ☐ | | |
 | ScriptSync AI |  | p.584 | *later* | ☐ | | |
+| Show All Takes |  | p.578 | works | ☐ | | |
+| Show Frames |  | p.578 | works | ☐ | | |
 | Text Layout |  | p.571 | works | ☐ | | |
 
 ## Extensions menu
@@ -320,6 +328,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 216 menu commands, 179 of them working with a project open; the
+* 224 menu commands, 189 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
