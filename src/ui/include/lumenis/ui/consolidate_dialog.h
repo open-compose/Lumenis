@@ -81,6 +81,7 @@ private:
     QWidget* consolidateBox_ = nullptr;
     QComboBox* resolution_ = nullptr;
     QComboBox* raster_ = nullptr;
+    QCheckBox* applyColorEncoding_ = nullptr;
     QPushButton* go_ = nullptr;
     QRadioButton* background_ = nullptr;
 };

@@ -1,6 +1,7 @@
 #include "lumenis/media/managed.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/color_transform.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 
@@ -242,7 +243,22 @@ public:
                                   (creation_.raster.height() - picture.height()) / 2),
                            picture);
         for (std::int64_t f = in_; f < out_; ++f) {
-            bool ok = writer.writeVideoFrom(reader, link_.fileFrame(f, clip_.editRate), target);
+            bool ok = false;
+            if (creation_.colorTransformations.isEmpty()) {
+                ok = writer.writeVideoFrom(reader, link_.fileFrame(f, clip_.editRate), target);
+            } else {
+                // The clip's colour adapter applied (p.544): through an 8-bit picture, the transformations' domain.
+                const QImage frame = reader.frame(link_.fileFrame(f, clip_.editRate));
+                if (!frame.isNull()) {
+                    QImage shown(creation_.raster, QImage::Format_RGBA8888);
+                    shown.fill(Qt::black);
+                    QPainter p(&shown);
+                    p.setRenderHint(QPainter::SmoothPixmapTransform);
+                    p.drawImage(QRectF(target), applyColorTransformations(frame, creation_.colorTransformations));
+                    p.end();
+                    ok = writer.writeVideo(shown);
+                }
+            }
             // A frame that cannot be read is black.
             if (!ok && writer.lastError().isEmpty()) ok = writer.writeVideo(fitted(QImage(), creation_.raster));
             if (!ok) {

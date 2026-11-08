@@ -3,6 +3,7 @@
 // media::spatialAdaptedImage; Apply hands it to MainWindow for the selected clips.
 #include "lumenis/ui/source_settings_dialog.h"
 
+#include "lumenis/media/color_transform.h"
 #include "lumenis/media/frame_flex.h"
 
 #include <QCheckBox>
@@ -13,6 +14,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
@@ -282,6 +284,46 @@ SourceSettingsDialog::SourceSettingsDialog(const QString& clipName, const QImage
     playbackNote_->setWordWrap(true);
     rateForm->addRow(playbackNote_);
     tabs->addTab(rateTab, tr("Playback Rate"));
+    // Color Encoding (p.537-540).
+    auto* colorTab = new QWidget;
+    auto* colorLayout = new QVBoxLayout(colorTab);
+    auto* spaceRow = new QHBoxLayout;
+    spaceRow->addWidget(new QLabel(tr("Source color space")));
+    sourceSpace_ = new QComboBox;
+    sourceSpace_->setObjectName(QStringLiteral("sourceColorSpace"));
+    sourceSpace_->addItems(model::sourceColorSpaces());
+    spaceRow->addWidget(sourceSpace_, 1);
+    auto* autoButton = new QPushButton(tr("Auto"));
+    autoButton->setObjectName(QStringLiteral("colorAuto"));
+    connect(autoButton, &QPushButton::clicked, this, &SourceSettingsDialog::autoTransformations);
+    spaceRow->addWidget(autoButton);
+    colorLayout->addLayout(spaceRow);
+    colorLayout->addWidget(new QLabel(tr("Color transformations")));
+    transformations_ = new QListWidget;
+    transformations_->setObjectName(QStringLiteral("colorTransformations"));
+    transformations_->setDragDropMode(QAbstractItemView::InternalMove);
+    connect(transformations_->model(), &QAbstractItemModel::rowsMoved, this, &SourceSettingsDialog::colorChanged);
+    colorLayout->addWidget(transformations_, 1);
+    auto* addRow = new QHBoxLayout;
+    transformationChoice_ = new QComboBox;
+    transformationChoice_->setObjectName(QStringLiteral("transformationChoice"));
+    transformationChoice_->addItems(media::colorTransformationNames());
+    addRow->addWidget(transformationChoice_, 1);
+    auto* addButton = new QPushButton(tr("Add"));
+    addButton->setObjectName(QStringLiteral("addTransformation"));
+    connect(addButton, &QPushButton::clicked, this, [this] { addTransformation(transformationChoice_->currentText()); });
+    addRow->addWidget(addButton);
+    auto* deleteButton = new QPushButton(tr("Delete"));
+    deleteButton->setObjectName(QStringLiteral("deleteTransformation"));
+    connect(deleteButton, &QPushButton::clicked, this, [this] { deleteTransformation(transformations_->currentRow()); });
+    addRow->addWidget(deleteButton);
+    colorLayout->addLayout(addRow);
+    bypass_ = new QCheckBox(tr("Bypass all color transformations"));
+    bypass_->setObjectName(QStringLiteral("bypassColor"));
+    colorLayout->addWidget(bypass_);
+    connect(sourceSpace_, &QComboBox::currentIndexChanged, this, &SourceSettingsDialog::colorChanged);
+    connect(bypass_, &QCheckBox::toggled, this, &SourceSettingsDialog::colorChanged);
+    tabs->addTab(colorTab, tr("Color Encoding"));
     layout->addWidget(tabs);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -365,7 +407,7 @@ void SourceSettingsDialog::refresh() {
 QImage SourceSettingsDialog::resultImage() const {
     if (frame_.isNull() || raster_.isEmpty()) return {};
     const QSize shown = raster_.scaled(QSize(320, 180), Qt::KeepAspectRatio);
-    return media::spatialAdaptedImage(frame_, adapter(), raster_, shown);
+    return media::spatialAdaptedImage(shownFrame(), adapter(), raster_, shown);
 }
 
 void SourceSettingsDialog::setViewersShown(bool shown) {
@@ -418,13 +460,83 @@ bool SourceSettingsDialog::playbackAtProjectRate() const {
 
 void SourceSettingsDialog::revert() {
     fill(applied_);
+    fillColor(appliedColor_);
     if (playbackRate_->count() > 1) playbackRate_->setCurrentIndex(appliedRate_ ? 1 : 0);
 }
 
 void SourceSettingsDialog::apply() {
     applied_ = adapter();
     appliedRate_ = playbackAtProjectRate();
-    if (applier_) applier_(applied_, appliedRate_);
+    appliedColor_ = colorEncoding();
+    if (applier_) applier_(applied_, appliedRate_, appliedColor_);
+}
+
+void SourceSettingsDialog::setColorEncoding(const model::ColorEncoding& encoding) {
+    appliedColor_ = encoding;
+    fillColor(encoding);
+}
+
+void SourceSettingsDialog::fillColor(const model::ColorEncoding& encoding) {
+    filling_ = true;
+    int space = sourceSpace_->findText(encoding.sourceSpace);
+    if (space < 0) {
+        // A space the menu does not list, kept as it is.
+        sourceSpace_->addItem(encoding.sourceSpace);
+        space = sourceSpace_->count() - 1;
+    }
+    sourceSpace_->setCurrentIndex(space);
+    transformations_->clear();
+    transformations_->addItems(encoding.transformations);
+    bypass_->setChecked(encoding.bypass);
+    filling_ = false;
+    colorChanged();
+}
+
+model::ColorEncoding SourceSettingsDialog::colorEncoding() const {
+    model::ColorEncoding e;
+    e.sourceSpace = sourceSpace_->currentText();
+    for (int i = 0; i < transformations_->count(); ++i) e.transformations << transformations_->item(i)->text();
+    e.bypass = bypass_->isChecked();
+    return e;
+}
+
+void SourceSettingsDialog::addTransformation(const QString& name) {
+    if (name.isEmpty()) return;
+    transformations_->addItem(name);
+    transformations_->setCurrentRow(transformations_->count() - 1);
+    colorChanged();
+}
+
+void SourceSettingsDialog::deleteTransformation(int row) {
+    if (row < 0 || row >= transformations_->count()) return;
+    delete transformations_->takeItem(row);
+    colorChanged();
+}
+
+void SourceSettingsDialog::moveTransformation(int from, int to) {
+    const int n = transformations_->count();
+    if (from < 0 || from >= n || to < 0 || to >= n || from == to) return;
+    QListWidgetItem* item = transformations_->takeItem(from);
+    transformations_->insertItem(to, item);
+    transformations_->setCurrentRow(to);
+    colorChanged();
+}
+
+void SourceSettingsDialog::autoTransformations() {
+    model::ColorEncoding e = colorEncoding();
+    e.transformations = model::autoTransformations(e.sourceSpace);
+    fillColor(e);
+}
+
+QImage SourceSettingsDialog::shownFrame() const {
+    return media::applyColorTransformations(frame_, colorEncoding().applied());
+}
+
+// "The selection is added to the Color transformations list and applied to the image in the viewer" (p.539).
+void SourceSettingsDialog::colorChanged() {
+    if (filling_) return;
+    framing_->setFrame(shownFrame());
+    refresh();
 }
 
 } // namespace lumenis::ui

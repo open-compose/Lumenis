@@ -26,6 +26,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSpinBox>
@@ -353,6 +354,46 @@ private slots:
         QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
         settle();
         QVERIFY(segment().color == e);
+
+        // The Color Encoding tab (p.537-540; 8.5c2), from the Timeline's Source Settings: Auto, Add, dragging, Delete,
+        // Bypass, Revert and Apply onto the clip.
+        bool asked = false;
+        window.setSourceSettingsHook([&](SourceSettingsDialog& d) {
+            if (!(d.colorEncoding() == e)) return false;
+            auto* list = d.findChild<QListWidget*>(QStringLiteral("colorTransformations"));
+            if (!list || list->count() != 1) return false;
+            const QColor before = d.shownFrame().pixelColor(5, 16);
+            d.findChild<QComboBox*>(QStringLiteral("sourceColorSpace"))->setCurrentText(QStringLiteral("Canon C-Log"));
+            d.autoTransformations();
+            if (d.colorEncoding().transformations != QStringList{QStringLiteral("Canon C-Log to REC709")}) return false;
+            auto* choice = d.findChild<QComboBox*>(QStringLiteral("transformationChoice"));
+            choice->setCurrentText(QStringLiteral("Levels scaling (full range to video levels)"));
+            d.findChild<QPushButton*>(QStringLiteral("addTransformation"))->click();
+            if (list->count() != 2) return false;
+            // "Transformations are applied cumulatively starting from top to bottom": the levels first.
+            d.moveTransformation(1, 0);
+            if (d.colorEncoding().transformations.first() != QLatin1String("Levels scaling (full range to video levels)")) return false;
+            list->setCurrentRow(1);
+            d.findChild<QPushButton*>(QStringLiteral("deleteTransformation"))->click();
+            if (d.colorEncoding().transformations != QStringList{QStringLiteral("Levels scaling (full range to video levels)")}) return false;
+            // The viewer shows the transformation: full red becomes video-level red.
+            if (std::abs(d.shownFrame().pixelColor(5, 16).red() - 235) > 3 || before.red() < 250) return false;
+            d.findChild<QCheckBox*>(QStringLiteral("bypassColor"))->setChecked(true);
+            if (d.shownFrame().pixelColor(5, 16).red() < 250) return false;
+            // Revert: back to what was applied.
+            d.revert();
+            if (!(d.colorEncoding() == e)) return false;
+            d.addTransformation(QStringLiteral("Levels scaling (full range to video levels)"));
+            d.apply();
+            asked = true;
+            return true;
+        });
+        QVERIFY(window.sourceSettingsForSegment(model::SegmentRef{QStringLiteral("V1"), 0}));
+        QVERIFY(asked);
+        const auto stored = model::colorEncodingOf(*bin->bin().item(clip.id));
+        QVERIFY(stored && stored->transformations.size() == 2);
+        QCOMPARE(model::cellText(*bin->bin().item(clip.id), QLatin1String(model::kColorTransformationsHeading)),
+                 QStringLiteral("Gamma 2.6 to Linear, Levels scaling (full range to video levels)"));
     }
 
     // The Source Settings dialog's FrameFlex tab (p.529-535): fields, buttons and the top viewer's drags change the box,

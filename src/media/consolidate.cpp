@@ -2,6 +2,7 @@
 
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/color_adapter.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -108,7 +109,12 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         }
         MediaCreation creation = options.creation;
         creation.raster = rasterFor(clip, options.raster, options.creation.raster);
-        return transcodeClip(clip, in, out, creation, error);
+        const auto encoding = model::colorAdapterOf(clip);
+        if (options.applyColorEncoding && encoding) creation.colorTransformations = encoding->applied();
+        auto made = transcodeClip(clip, in, out, creation, error);
+        // The new clip has the colours in its media, or keeps the clip's encoding to apply them itself.
+        if (made) model::setColorEncoding(*made, creation.colorTransformations.isEmpty() ? model::colorEncodingOf(clip) : std::nullopt);
+        return made;
     };
 
     for (const model::BinItem& item : selection) {
@@ -216,6 +222,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 s.sourceMob = it->mobId;
                 s.binId = binId;
                 s.sourceIn -= it->from;
+                // Colours transcoded into the media are not applied again (p.544).
+                if (!copy && options.applyColorEncoding) s.color.reset();
             }
         }
         model::BinItem relinked = item;

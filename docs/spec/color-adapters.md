@@ -49,15 +49,37 @@ from 0 to 1:
   Adapters puts them back.
 * Both work on the sequences selected in the active bin, else the Record monitor's (`MainWindow::refreshSequences`).
 
-## Left for 8.5c2
+## The Color Encoding tab (p.537-540; 8.5c2)
 
-The Source Settings dialog's Color Encoding tab (Source color space, Auto, the transformation list with Add, Delete and
-dragging, Bypass all color transformations, Revert, the viewer) and Transcode's "Apply source transformations > Color
-encoding" (p.544).
+* The Source Settings dialog's tab (`SourceSettingsDialog::setColorEncoding`/`colorEncoding`): the Source color space
+  menu, Auto (`autoTransformations`, the list becomes `model::autoTransformations` of the space), the Color
+  transformations list, the drop-down of `media::colorTransformationNames()` with Add, Delete for the selected row,
+  dragging rows to reorder ("change the order in which they are applied by selecting and dragging the transformation up
+  or down in the list", p.540; `moveTransformation`), and Bypass all color transformations.
+* "The selection is added to the Color transformations list and applied to the image in the viewer" (p.539): both
+  viewers show `shownFrame()`, the frame through the list (as it is when bypassed).
+* Revert goes back to the last Apply with the other tabs; "Click Apply to propogate the settings to all clips that you
+  selected in the bin" (p.540): the Applier sets each clip's encoding (`model::setColorEncoding`) and its column. The
+  dialog opens with the first clip's encoding. Ours: a source space the menu does not list stays as it is. The Color
+  Management Settings button and the LUTs are 8.5d's.
+
+## Transcode (p.544; 8.5c2)
+
+* The Consolidate/Transcode dialog's "Apply source transformations: Color encoding" (`ConsolidateOptions::
+  applyColorEncoding`; Frame Flex stays dimmed, ours): "Select this option if you want to transcode clips with their
+  applied color adapters". Each clip's colour adapter goes into its new media (`MediaCreation::colorTransformations`,
+  through an 8-bit picture), so the new clip has no encoding and the new sequence's segments no adapter.
+* Off, "the adapters are bypassed during the sequence transcode only. The source transformations still remain on the
+  clips in the bin": the media is the source's colours, and the new clip keeps the clip's encoding (so it plays as
+  before). "The transcode operation only applies source transformations that were made on the clip (from the bin)"
+  (p.513): the clip's encoding, not the segments' adapters.
 
 ## Tests
 
 * `tst_color_adapter`: the encoding with its column and JSON, Auto, bypass; segments' adapters, Refresh Sequence and
   Remove Color Adapters; each built-in transformation's values, their order, a registered one.
 * `tst_frameflex_ui colorAdapters`: the Source monitor's and the Record monitor's pictures, Refresh Sequence > Color
-  Adapters, Remove Color Adapters and its undo.
+  Adapters, Remove Color Adapters and its undo; the Color Encoding tab's Auto, Add, reorder, Delete, viewer, Bypass,
+  Revert and Apply onto the clip.
+* `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
+  encoding and the segment's adapter.

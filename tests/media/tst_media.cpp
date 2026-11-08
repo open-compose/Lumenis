@@ -1,11 +1,13 @@
 #include "lumenis/ext/codec.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
+#include "lumenis/media/color_transform.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/media/relink.h"
+#include "lumenis/model/color_adapter.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -465,6 +467,73 @@ private slots:
         QVERIFY(a.open(linkOf(*music)->path));
         QCOMPARE(a.info().length, music->durationFrames * 1920);
         QVERIFY(std::abs(a.samples(20000, 1)[0] - 0.3f) < 2e-3f);
+    }
+
+    // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the
+    // new media and the new clip and segments have none; off, the new clip keeps the encoding.
+    void transcodeColorEncoding() {
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Graded.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 10));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        model::ColorEncoding e;
+        e.transformations = {QStringLiteral("Gamma 2.6 to Linear")};
+        model::setColorEncoding(*clip, e);
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = clip->id;
+        a.binId = QStringLiteral("bin1");
+        a.sourceTrack = QStringLiteral("V1");
+        a.sourceIn = 2;
+        a.length = 5;
+        a.color = e;
+        sequence.track(QStringLiteral("V1"))->segments = {a};
+        model::BinItem seq;
+        seq.id = model::newItemId();
+        seq.kind = model::BinItemKind::Sequence;
+        seq.name = QStringLiteral("Cut 1");
+        seq.editRate = Rational(25);
+        sequence.storeIn(seq);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == clip->id) return *clip;
+            return std::nullopt;
+        };
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        options.handles = 0;
+        options.creation.raster = QSize(256, 144);
+        options.creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        options.creation.videoDrive = dir.path();
+        // Off: the adapters are bypassed; the new clip keeps the encoding, the segment its adapter.
+        ConsolidateResult r = consolidate({seq}, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.added.size(), 1);
+        QVERIFY(model::colorEncodingOf(r.added.first()) == e);
+        QVERIFY(model::Sequence::fromItem(r.changed.first()).track(QStringLiteral("V1"))->segments.at(0).color == e);
+        FrameCache cache;
+        const QColor plain = colourOf(4);
+        QVERIFY(near(cache.frame(r.added.first(), 2), plain, 14));
+        // On: the colours are in the media.
+        options.applyColorEncoding = true;
+        r = consolidate({seq}, QStringLiteral("bin1"), lookup, {QStringLiteral("Graded.new.01")}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(!model::colorEncodingOf(r.added.first()));
+        QVERIFY(!model::Sequence::fromItem(r.changed.first()).track(QStringLiteral("V1"))->segments.at(0).color);
+        const auto graded = media::transformColor(
+            {static_cast<double>(plain.redF()), static_cast<double>(plain.greenF()), static_cast<double>(plain.blueF())}, e.transformations);
+        const QColor want = QColor::fromRgbF(static_cast<float>(graded[0]), static_cast<float>(graded[1]), static_cast<float>(graded[2]));
+        QVERIFY(near(cache.frame(r.added.first(), 2), want, 14));
     }
 
     void consolidateSequences() {

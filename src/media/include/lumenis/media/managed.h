@@ -119,6 +119,9 @@ struct MediaCreation {
     // The folder under "Avid MediaFiles/MXF" the picture goes in, when not the one mxfFolder()
     // chooses: background renders go in "__bg.1" (FX Guide p.59). Only renderedVideoClip() reads it.
     QString folder;
+    // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the colour transformations
+    // (media::applyColorTransformations) each frame goes through before it is written. Empty: the picture as it is.
+    QStringList colorTransformations;
 };
 // Whether `rate` is a pullup or pulldown of `nominal` (times 1001/1000 or 1000/1001, to the sample):
 // 48048 and 47952 for 48 kHz, 44144 and 44056 for 44.1 kHz.

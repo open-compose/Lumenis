@@ -37,6 +37,12 @@ struct ConsolidateOptions {
     // a quarter or a sixteenth of it; never below kMinimumRaster.
     enum class Raster { Project, Source, SourceQuarter, SourceSixteenth };
     Raster raster = Raster::Project;
+    // Transcode's "Apply source transformations > Color encoding - Select this option if you want to transcode clips
+    // with their applied color adapters" (p.544; 8.5c2): the clips' colour transformations go into the new media, so
+    // the new clips and the new sequences' segments have none. Off, "the adapters are bypassed during the sequence
+    // transcode only. The source transformations still remain on the clips in the bin": the new clips keep the
+    // encoding.
+    bool applyColorEncoding = false;
     MediaCreation creation; // its raster is the project's
 };
 

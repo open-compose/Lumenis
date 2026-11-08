@@ -3230,7 +3230,9 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
         dialog.setPlaybackRates(QString::fromStdString(frameRateText(own)) + tr(" fps"),
                                 QString::fromStdString(frameRateText(projectRate)) + tr(" fps"), conformed, allowed, why);
     }
-    dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate) {
+    // Color Encoding (p.537-540): the first clip's.
+    dialog.setColorEncoding(model::colorEncodingOf(first).value_or(model::ColorEncoding{}));
+    dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate, const model::ColorEncoding& color) {
         for (const auto& [bin, id] : chosen) {
             BinDocument* doc = binContainer_->document(bin);
             const model::BinItem* stored = doc ? doc->bin().item(id) : nullptr;
@@ -3238,6 +3240,8 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
             model::BinItem item = *stored;
             item.fields.insert(QLatin1String(model::kReformatHeading), model::reformatText(a.reformat));
             model::setFrameFlex(item, a.frameFlex);
+            // "Click Apply to propogate the settings to all clips that you selected in the bin" (p.540).
+            model::setColorEncoding(item, color);
             QString why;
             if (media::playsAtProjectRate(item) != atProjectRate && !media::setPlaybackAtProjectRate(item, atProjectRate, &why)) {
                 ConsoleLog::instance().append(tr("Source Settings: %1").arg(why));

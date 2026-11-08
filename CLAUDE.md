@@ -915,7 +915,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   column, `Segment::color`, `refreshColorAdapters`/`removeColorAdapters` behind Refresh Sequence > Color Adapters and Remove
   Color Adapters; the transformations in `src/media/color_transform.*` with `media::registerColorTransformation` for
   providers; `MainWindow::adaptedFrame`/`refreshSequences`; tests `tst_color_adapter`, `tst_frameflex_ui colorAdapters`), is
-  done.
+  done. 8.5c2, the Source Settings' Color Encoding tab (`SourceSettingsDialog::setColorEncoding`/`autoTransformations`/
+  `moveTransformation`/`shownFrame`, the Applier's encoding) and Transcode's Apply source transformations > Color encoding
+  (`ConsolidateOptions::applyColorEncoding`, `MediaCreation::colorTransformations`; test `tst_media
+  transcodeColorEncoding`), is done, so 8.5c is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md
