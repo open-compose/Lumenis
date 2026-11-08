@@ -1,3 +1,4 @@
+#include "lumenis/ui/background_services.h"
 #include "lumenis/ui/timeline.h"
 
 #include "lumenis/ui/correction_monitors.h"
@@ -2292,6 +2293,10 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         std::unique_ptr<QMenu> menu(viewMenu(QApplication::keyboardModifiers() & Qt::AltModifier, viewButton));
         menu->exec(viewButton->mapToGlobal(QPoint(0, -menu->sizeHint().height())));
     });
+    // The background services' progress indicator (p.375-376, 8.4a); MainWindow sets its state. Ours: placed before the
+    // Quick Find field.
+    backgroundIndicator_ = new BackgroundIndicator(toolbar_);
+    bar->addWidget(backgroundIndicator_);
     // The Timeline Quick Find field with its drop-down menu, and the Find to the left and right buttons (p.645-646).
     search_ = new QLineEdit(toolbar_);
     search_->setObjectName(QStringLiteral("timelineSearch"));

@@ -5,6 +5,7 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QWidget>
 
@@ -22,7 +23,12 @@ namespace lumenis::ui {
 // priority first.
 //
 // MainWindow owns one and adds a job per clip when Consolidate/Transcode runs in the background; its
-// finished() signal puts the new clips in their bin. All functions are called on the UI thread; only
+// finished() signal puts the new clips in their bin.
+//
+// The background services (p.376-377, 8.4a): jobs start only while the services are active. "Stop: Immediately stops
+// the background services ... Pause: Allows you to explicitly pause the background services for the specified amount of
+// time ... it can be automatically performed during critical UI operations such as playback" (p.377). Ours: the services
+// run in the application (there is no separate service or taskbar icon), and a job already running finishes. All functions are called on the UI thread; only
 // the Work runs on the worker thread. The queue polls the worker every 100 ms while a job runs.
 class BackgroundQueue : public QObject {
     Q_OBJECT
@@ -68,12 +74,34 @@ public:
     QList<Job> jobs() const;
     // Whether a job is running or waiting.
     bool isBusy() const;
-    // Runs the queue until every job is done (tests).
+    // Runs the queue until every job is done, or none can start because the services are not active (tests).
     void waitForIdle();
+
+    // The background services' state (p.376-377): Active, Stopped (Inactive), or Paused (explicitly for a time, or
+    // automatically while `autoPause` holds with pausing enabled).
+    enum class ServiceState { Active, Stopped, Paused };
+    ServiceState serviceState() const;
+    void startServices();
+    void stopServices();
+    // Pause for `ms` milliseconds; "If the pause time period ends and you are in the middle of a play operation, the
+    // pause time period is extended" (p.377).
+    void pauseServices(int ms);
+    // "Enable Pausing of Background Service": off clears any pause ("the pause state is cleared out and background
+    // services will resume").
+    void setPausingEnabled(bool on);
+    bool pausingEnabled() const { return pausingEnabled_; }
+    // Playback (and other critical operations) going on: an automatic pause while pausing is enabled.
+    void setAutoPause(bool on);
+    // Jobs that failed since the last error report (the indicator's yellow triangle, p.376).
+    bool hasErrors() const { return !errors_.isEmpty(); }
+    // "Generate Error Report in Console": the failures, one per line, and the triangle cleared.
+    QString takeErrorReport();
 
 signals:
     // Jobs were added, changed state or made progress (at least every poll while one runs).
     void changed();
+    // The services started, stopped, paused or resumed, or the errors changed.
+    void servicesChanged();
     // A job's result, on the UI thread, to put in its bin. It also fires for a cancelled or failed
     // job, with whatever it made before it stopped.
     void finished(const QString& binId, const media::ConsolidateResult& result);
@@ -104,6 +132,13 @@ private:
     int running_ = -1; // the running job's id
     int nextId_ = 1;
     QTimer timer_;
+    bool active_ = true;
+    bool paused_ = false; // an explicit pause, until pauseTimer_ ends it
+    bool autoPause_ = false;
+    bool pausingEnabled_ = true;
+    QTimer pauseTimer_;
+    QStringList errors_;
+    bool canStart() const;
 };
 
 // Tools > Background Queue Window (p.356-357): each job's name, a Cancel

@@ -333,6 +333,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     if (auto* sendToMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menu:file_output_send_to")))
         connect(sendToMenu, &QMenu::aboutToShow, this, &MainWindow::refreshSendToMenu);
     connect(settings_, &Settings::userChanged, this, &MainWindow::refreshSendToMenu);
+    // The background services (8.4a) read their options from the user's settings, so they start after these exist.
+    setUpBackgroundServices();
 }
 
 MainWindow::~MainWindow() {
@@ -1390,6 +1392,7 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
 void MainWindow::closeEvent(QCloseEvent* event) {
     // Where each workspace was left, for the next session.
     writeWorkspaces();
+    stopBackgroundServicesOnExit();
     QMainWindow::closeEvent(event);
     if (event->isAccepted()) {
         emit closed();
@@ -8203,6 +8206,7 @@ void MainWindow::installPanelHandlers() {
     handle("script.add_page", [this] { scriptWindow_->askPage(); });
     handle("script.text_layout", [this] { scriptTextLayout(); });
     handle("other.add_script_mark", [this] { addScriptMark(); });
+    handle("tools.background_services", [this] { backgroundServices(); });
     handle("script.scriptsync_ai", [this] { scriptSyncAI(); });
     handle("bin.create_script_from_clip", [this] { createScriptFromClips(); });
     handle("other.find_script", [this] { findScript(); });

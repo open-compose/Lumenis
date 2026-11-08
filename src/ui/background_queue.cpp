@@ -27,6 +27,73 @@ namespace lumenis::ui {
 BackgroundQueue::BackgroundQueue(QObject* parent) : QObject(parent) {
     timer_.setInterval(100);
     connect(&timer_, &QTimer::timeout, this, &BackgroundQueue::poll);
+    pauseTimer_.setSingleShot(true);
+    connect(&pauseTimer_, &QTimer::timeout, this, [this] {
+        // The pause ends, unless play goes on: then it is extended (p.377), checked again in a second (ours).
+        if (autoPause_ && pausingEnabled_) {
+            pauseTimer_.start(1000);
+            return;
+        }
+        paused_ = false;
+        emit servicesChanged();
+        startNext();
+    });
+}
+
+BackgroundQueue::ServiceState BackgroundQueue::serviceState() const {
+    if (!active_) return ServiceState::Stopped;
+    if (pausingEnabled_ && (paused_ || autoPause_)) return ServiceState::Paused;
+    return ServiceState::Active;
+}
+
+bool BackgroundQueue::canStart() const { return serviceState() == ServiceState::Active; }
+
+void BackgroundQueue::startServices() {
+    // "Start: Immediately starts the background services if they are currently stopped" (p.377); a pause ends too.
+    active_ = true;
+    paused_ = false;
+    pauseTimer_.stop();
+    emit servicesChanged();
+    startNext();
+}
+
+void BackgroundQueue::stopServices() {
+    active_ = false;
+    paused_ = false;
+    pauseTimer_.stop();
+    emit servicesChanged();
+}
+
+void BackgroundQueue::pauseServices(int ms) {
+    if (!active_ || !pausingEnabled_) return;
+    paused_ = true;
+    pauseTimer_.start(std::max(1, ms));
+    emit servicesChanged();
+}
+
+void BackgroundQueue::setPausingEnabled(bool on) {
+    if (pausingEnabled_ == on) return;
+    pausingEnabled_ = on;
+    if (!on) {
+        paused_ = false;
+        pauseTimer_.stop();
+    }
+    emit servicesChanged();
+    startNext();
+}
+
+void BackgroundQueue::setAutoPause(bool on) {
+    if (autoPause_ == on) return;
+    autoPause_ = on;
+    emit servicesChanged();
+    if (!on) startNext();
+}
+
+QString BackgroundQueue::takeErrorReport() {
+    const QString report = errors_.join(QLatin1Char('\n'));
+    errors_.clear();
+    emit servicesChanged();
+    return report;
 }
 
 BackgroundQueue::~BackgroundQueue() {
@@ -102,7 +169,7 @@ bool BackgroundQueue::isBusy() const {
 
 // Polls by hand, since tests have no event loop running the timer.
 void BackgroundQueue::waitForIdle() {
-    while (isBusy()) {
+    while (running_ >= 0 || (canStart() && isBusy())) {
         poll();
         QCoreApplication::processEvents();
         QThread::msleep(10);
@@ -111,6 +178,11 @@ void BackgroundQueue::waitForIdle() {
 
 void BackgroundQueue::startNext() {
     if (running_ >= 0) return;
+    // Nothing starts while the services are stopped or paused (p.376-377).
+    if (!canStart()) {
+        timer_.stop();
+        return;
+    }
     // The highest priority first, then in order (p.357).
     Entry* next = nullptr;
     for (Entry& e : entries_) {
@@ -160,6 +232,8 @@ void BackgroundQueue::poll() {
         } else if (!result.error.isEmpty()) {
             e->job.state = State::Failed;
             e->job.message = result.error;
+            errors_ << QStringLiteral("%1: %2").arg(e->job.name, result.error);
+            emit servicesChanged();
         } else {
             e->job.state = State::Completed;
             e->job.message = tr("Completed");

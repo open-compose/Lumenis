@@ -638,6 +638,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
   a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
+* Background services (docs/spec/background-services.md): services in the application (no separate process or taskbar
+  icon), a running job finishing when they stop, Always Start ... at Launch on to start with, Pause in minutes (10), the
+  pause during playback rechecked each second, the options in the user's Interface setting, the indicator drawn by us
+  before the Quick Find field.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above
@@ -3142,6 +3146,11 @@ Details: docs/spec/bin-locking.md.
   the Transcript setting's Manage Transcripts button (2026.8 guide p.455), 8.2d.
 * The Timeline's right-click AutoCut on a group segment and the Transcript Tool's Assign to Camera Angle (2026.8 guide
   p.451-452), 8.2e.
+
+## 20g. Background services (ch.12, p.371-377; docs/spec/background-services.md)
+
+* Tools > Background Services (p.376-377) with its dialog, and the Timeline's progress indicator with its right-click
+  menu (p.375-376), 8.4a. Tools > Dynamic Media Folders (p.372) with 8.4b-8.4c.
 
 ## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

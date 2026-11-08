@@ -48,6 +48,8 @@ struct OfxPluginInfo;
 
 namespace lumenis::ui {
 
+class BackgroundIndicator;
+
 class ClipColorDialog;
 class CorrectionManageDialog;
 class SequenceMap;
@@ -429,6 +431,8 @@ public:
     bool isModifyingExpertSelection() const { return modifyingExpert_; }
     void cancelExpertSelection();
     bool toggleExpertTarget(const QString& track, std::int64_t frame);
+    // The background services' progress indicator in the toolbar (p.375-376, 8.4a).
+    BackgroundIndicator* backgroundIndicator() const { return backgroundIndicator_; }
     const QList<Composer::PlaybackRange>& playbackIndicators() const { return indicators_; }
     const model::TrackPatch& patch() const { return patch_; }
     // The undo history of the record sequence's changes.
@@ -1556,6 +1560,7 @@ private:
     Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
+    BackgroundIndicator* backgroundIndicator_ = nullptr;
     QList<Composer::PlaybackRange> indicators_;
     QList<model::RenderTarget> expert_;
     bool modifyingExpert_ = false;

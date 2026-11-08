@@ -16,6 +16,7 @@
 #include "lumenis/model/transcript_view.h"
 #include "lumenis/model/script.h"
 #include "lumenis/model/script_sync.h"
+#include "lumenis/ui/background_services.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -773,6 +774,11 @@ public:
     media::MediaCreation mediaCreation(const QString& tab) const;
     // Background Consolidate and Transcode (p.356-357).
     BackgroundQueue& backgroundQueue() const { return *backgroundQueue_; }
+    // The background services (8.4a, p.375-377). backgroundServices: Tools > Background Services' dialog (or the hook's
+    // answer), its options kept on OK; false when cancelled. The options as stored.
+    bool backgroundServices();
+    BackgroundServicesDialog::Options backgroundServiceOptions() const;
+    void setBackgroundServicesHook(std::function<bool(BackgroundServicesDialog&)> hook) { backgroundServicesHook_ = std::move(hook); }
     // The media database (p.358): read when a project opens, again with
     // File > Media > Load Media Database and Refresh Media Directories.
     // Managed clips in bins opened after are pointed at their files.
@@ -1192,6 +1198,11 @@ private:
     std::function<std::optional<bool>()> copyingMediaHook_;
     media::MediaDatabase mediaDb_;
     BackgroundQueue* backgroundQueue_ = nullptr;
+    std::function<bool(BackgroundServicesDialog&)> backgroundServicesHook_;
+    bool dmfAssetsWaiting_ = false; // Dynamic Media Folder assets to acquire: the indicator's green dot (8.4b-c)
+    void setUpBackgroundServices();
+    void updateBackgroundIndicator();
+    void stopBackgroundServicesOnExit();
     // Puts a finished job's clips and sequences in its bin.
     void applyConsolidate(const QString& binId, const media::ConsolidateResult& result);
     // Puts a changed clip back in its bin and the monitors.

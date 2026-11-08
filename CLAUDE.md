@@ -885,7 +885,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   scriptSyncAndCreateScript`), is done. 8.3e, shared scripts and the Find window's Script Text (the script lock icon from
   the bin's lock through `MainWindow::updateScriptLock`/`scriptLockClicked`, `ScriptLock`, `MainWindow::closeScript` with
   Save Script As / Don't Save / Cancel; `model::findScriptText`/`scriptTakeBins`, `FindWindow::setScriptSource`; tests
-  `tst_script findInScripts`, `tst_script_ui sharedScripts`), is done, so 8.3 is. After Phase 7, before Phase 8: 7.6, the owner's report
+  `tst_script findInScripts`, `tst_script_ui sharedScripts`), is done, so 8.3 is.
+  8.4, Dynamic Media Folders and the background services, is in three parts (ROADMAP). 8.4a, the background services
+  (docs/spec/background-services.md: `BackgroundQueue::ServiceState` with start/stop/pause and the pause during playback,
+  `src/ui/background_services.*` with the Timeline's `BackgroundIndicator` and `BackgroundServicesDialog`,
+  `main_window_services.cpp`; test `tst_background_services`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

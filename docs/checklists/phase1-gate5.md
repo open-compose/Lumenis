@@ -241,7 +241,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio Track Effect |  | p.791 | works | ☐ | | |
 | AudioSuite |  | p.797 | works | ☐ | | |
 | Background Queue Window |  | p.358 | works | ☐ | | |
-| Background Services |  | p.376 | *later* | ☐ | | |
+| Background Services |  | p.376 | works | ☐ | | |
 | Calculator | Ctrl+2 | p.100 | works | ☐ | | |
 | Command Palette | Ctrl+3 | p.98 | works | ☐ | | |
 | Console | Ctrl+6 | p.101 | works | ☐ | | |
@@ -328,6 +328,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 224 menu commands, 190 of them working with a project open; the
+* 224 menu commands, 191 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

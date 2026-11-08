@@ -7,6 +7,7 @@ add_library(lumenis_ui STATIC
     audio_groups.cpp
     audio_tools.cpp
     background_queue.cpp
+    background_services.cpp
     bin_container.cpp
     bin_dialogs.cpp
     bin_dock.cpp
@@ -67,6 +68,7 @@ add_library(lumenis_ui STATIC
     main_window.cpp
     main_window_transcripts.cpp
     main_window_script.cpp
+    main_window_services.cpp
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp
@@ -107,6 +109,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/audio_track_effect.h
     include/lumenis/ui/audio_tools.h
     include/lumenis/ui/background_queue.h
+    include/lumenis/ui/background_services.h
     include/lumenis/ui/bin_container.h
     include/lumenis/ui/bin_dialogs.h
     include/lumenis/ui/bin_dock.h
