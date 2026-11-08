@@ -83,8 +83,15 @@ public:
     void revert();
     void apply();
 
-    // Apply's settings for the clips; OK applies first.
-    void setApplier(std::function<void(const model::SpatialAdapter&)> applier) { applier_ = std::move(applier); }
+    // The Playback Rate tab (p.545): the clip's original rate and the project's as the menu shows them, which one it plays
+    // at, and whether it can change (with why not).
+    void setPlaybackRates(const QString& original, const QString& project, bool atProjectRate, bool allowed,
+                          const QString& whyNot = {});
+    bool playbackAtProjectRate() const;
+
+    // Apply's settings for the clips (the adapter and whether they play at the project's rate); OK applies first.
+    using Applier = std::function<void(const model::SpatialAdapter&, bool atProjectRate)>;
+    void setApplier(Applier applier) { applier_ = std::move(applier); }
 
 private:
     void fill(const model::SpatialAdapter& adapter);
@@ -92,7 +99,10 @@ private:
     QImage frame_;
     QSize raster_;
     model::SpatialAdapter applied_;
-    std::function<void(const model::SpatialAdapter&)> applier_;
+    Applier applier_;
+    bool appliedRate_ = false;
+    QComboBox* playbackRate_ = nullptr;
+    QLabel* playbackNote_ = nullptr;
     bool filling_ = false;
     QCheckBox* showViewers_ = nullptr;
     QWidget* viewers_ = nullptr;

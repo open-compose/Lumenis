@@ -176,7 +176,7 @@ std::optional<model::BinItem> makeSubclip(const model::Bin& bin, const model::Bi
 // clamps to the file's frames.
 std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) const {
     std::int64_t f = clipFrame;
-    if (clipRate.num() > 0 && !(rate == clipRate)) {
+    if (clipRate.num() > 0 && !(rate == clipRate) && !conformed) {
         // The file frame showing at the clip frame's time.
         f = rescaleDown(clipFrame, clipRate.den() * rate.num(), clipRate.num() * rate.den());
     }
@@ -201,6 +201,7 @@ QJsonObject Link::toJson() const {
     for (int n : streamChannels) perStream.append(n);
     o.insert(QStringLiteral("streamChannels"), perStream);
     if (unlinked) o.insert(QStringLiteral("unlinked"), true);
+    if (conformed) o.insert(QStringLiteral("conformed"), true);
     if (!mediaId.isEmpty()) {
         o.insert(QStringLiteral("mediaId"), mediaId);
         o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
@@ -228,6 +229,7 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     // Links made before this was kept: one stream holds every channel.
     if (l.streamChannels.isEmpty() && l.audioStreams.size() == 1) l.streamChannels << l.channels;
     l.unlinked = json.value(QStringLiteral("unlinked")).toBool();
+    l.conformed = json.value(QStringLiteral("conformed")).toBool();
     l.mediaId = json.value(QStringLiteral("mediaId")).toString();
     for (const QJsonValue& v : json.value(QStringLiteral("audioPaths")).toArray()) l.audioPaths << v.toString();
     l.first = json.value(QStringLiteral("first")).toInteger();
@@ -730,6 +732,35 @@ bool relinkClip(model::BinItem& item, const QString& path, QString* error) {
     item.link = fresh->link;
     for (const char* heading : {"Source File", "Source Path", "Drive", "Plug-In"}) {
         item.fields.insert(QString::fromLatin1(heading), fresh->fields.value(QString::fromLatin1(heading)));
+    }
+    return true;
+}
+
+bool playsAtProjectRate(const model::BinItem& clip) {
+    return clip.link.value(QStringLiteral("conformed")).toBool();
+}
+
+bool setPlaybackAtProjectRate(model::BinItem& clip, bool projectRate, QString* error) {
+    auto l = linkOf(clip);
+    if (!l || l->videoStream < 0 || l->frames <= 1 || ImageSequence::fromSpec(l->path)) {
+        if (error) *error = QObject::tr("%1 has no moving picture of its own rate.").arg(clip.name);
+        return false;
+    }
+    if (l->channels > 0) {
+        if (error) *error = QObject::tr("%1 has sound, which would not follow a new playback rate.").arg(clip.name);
+        return false;
+    }
+    if (l->conformed == projectRate) return true;
+    l->conformed = projectRate;
+    const std::int64_t frames = std::max<std::int64_t>(l->frames - l->first, 1);
+    // One clip frame per file frame, or the file's frames at their own time in the clip's frames.
+    clip.durationFrames = projectRate ? frames
+                                      : std::max<std::int64_t>(rescaleUp(frames, clip.editRate.num() * l->rate.den(),
+                                                                         clip.editRate.den() * l->rate.num()), 1);
+    clip.link = l->toJson();
+    const QString start = clip.fields.value(QStringLiteral("Start"));
+    if (const auto tc = Timecode::parse(start.toStdString(), TimecodeFormat::forRate(clip.editRate, false))) {
+        clip.fields.insert(QStringLiteral("End"), timecodeText(tc->frameCount() + clip.durationFrames, clip.editRate));
     }
     return true;
 }

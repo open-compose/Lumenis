@@ -4702,6 +4702,15 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
         editTitle->setEnabled(!showSource_ && seg && seg->effect && model::isClassicTitleEffect(*seg->effect));
     }
     if (segment) connect(editTitle, &QAction::triggered, this, [this, ref = *segment] { emit editTitleRequested(ref); });
+    // "On the Timeline, or in the bin, select the clip that you want to change, right-click and choose Source Settings"
+    // (p.542, p.545).
+    QAction* sourceSettings = menu->addAction(tr("Source Settings"));
+    sourceSettings->setObjectName(QStringLiteral("timeline:sourceSettings"));
+    {
+        const auto seg = segment ? model::segmentFor(recordSequenceOf(composer_), *segment) : std::nullopt;
+        sourceSettings->setEnabled(!showSource_ && seg && !seg->isFiller() && !seg->clipId.isEmpty() && segment->track.startsWith(QLatin1Char('V')));
+    }
+    if (segment) connect(sourceSettings, &QAction::triggered, this, [this, ref = *segment] { emit sourceSettingsRequested(ref); });
     // "Select a classic Avid Title Tool clip in the Timeline and right-click on it ... choose Promote Titles > Avid
     // Titler+" (FX Guide p.326).
     QMenu* promote = menu->addMenu(tr("Promote Titles"));

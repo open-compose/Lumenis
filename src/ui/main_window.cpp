@@ -1756,6 +1756,7 @@ void MainWindow::createTools() {
     connect(effectEditor_, &EffectEditor::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
     connect(effectEditor_, &EffectEditor::subcapActionRequested, this, [this](const QString& action) { subcapAction(action); });
     connect(timeline_, &Timeline::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
+    connect(timeline_, &Timeline::sourceSettingsRequested, this, [this](const model::SegmentRef& ref) { sourceSettingsForSegment(ref); });
     connect(composer_, &Composer::changed, this, [this] { checkTitleTemplate(); });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.
@@ -3163,46 +3164,72 @@ QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, 
 // Apply sets each one's Reformat attribute and FrameFlex box ("Click Apply to propogate the settings to all clips that you
 // selected in the bin", p.540) and updates the monitors.
 bool MainWindow::sourceSettings() {
-    if (!project_) return false;
-    struct Chosen {
-        QString bin;
-        QString id;
-    };
-    QList<Chosen> chosen;
-    model::BinItem first;
+    QList<QPair<QString, QString>> chosen;
     auto isClip = [](const model::BinItem& i) {
         return i.kind == model::BinItemKind::MasterClip || i.kind == model::BinItemKind::Subclip;
     };
     if (BinView* view = binContainer_->activeView()) {
         for (const QString& id : view->selectedIds()) {
             const model::BinItem* item = view->document().bin().item(id);
-            if (!item || !isClip(*item)) continue;
-            if (chosen.isEmpty()) first = *item;
-            chosen.append({view->document().nodeId(), id});
+            if (item && isClip(*item)) chosen.append({view->document().nodeId(), id});
         }
     }
     if (chosen.isEmpty()) {
         const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
         if (!loaded || !isClip(loaded->item)) return false;
-        const auto stored = composer_->resolve(loaded->binId, loaded->item.id);
-        first = stored.value_or(loaded->item);
-        chosen.append({loaded->binId, first.id});
+        chosen.append({loaded->binId, model::isAdapted(loaded->item) ? model::unadaptedClip(loaded->item).id : loaded->item.id});
     }
+    return sourceSettingsFor(chosen);
+}
+
+// The Timeline's right-click Source Settings (p.542, p.545, "On the Timeline, or in the bin, select the clip ... right-click and
+// choose Source Settings"): the segment's clip.
+bool MainWindow::sourceSettingsForSegment(const model::SegmentRef& ref) {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return false;
+    const auto seg = model::segmentFor(model::Sequence::fromItem(rec->item), ref);
+    if (!seg || seg->isFiller() || seg->clipId.isEmpty()) return false;
+    return sourceSettingsFor({{seg->binId, seg->clipId}});
+}
+
+bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen) {
+    if (!project_ || chosen.isEmpty()) return false;
+    const auto found = composer_->resolve(chosen.first().first, chosen.first().second);
+    if (!found || (found->kind != model::BinItemKind::MasterClip && found->kind != model::BinItemKind::Subclip)) return false;
+    const model::BinItem first = *found;
     const QImage frame = media::isLinked(first) && !frames_->isOffline(first) ? frames_->frame(first, 0, QSize()) : QImage();
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
     const model::SpatialAdapter adapter = model::spatialAdapterOf(first).value_or(model::SpatialAdapter{});
     SourceSettingsDialog dialog(first.name, frame.isNull() ? QImage(raster, QImage::Format_RGB32) : frame, raster, adapter,
                                 static_cast<int>(chosen.size()), this);
-    dialog.setApplier([this, chosen](const model::SpatialAdapter& a) {
-        for (const Chosen& c : chosen) {
-            BinDocument* doc = binContainer_->document(c.bin);
-            const model::BinItem* found = doc ? doc->bin().item(c.id) : nullptr;
-            if (!found) continue;
-            model::BinItem item = *found;
+    // Playback Rate (p.545): the clip's own rate and the project's, for a clip whose rates differ.
+    {
+        const Rational projectRate = project_->settings.format.editRate;
+        const auto link = media::linkOf(first);
+        const bool conformed = media::playsAtProjectRate(first);
+        const Rational own = link ? link->rate : first.editRate;
+        model::BinItem probe = first;
+        QString why;
+        const bool differs = link && !(own == projectRate);
+        const bool allowed = differs && media::setPlaybackAtProjectRate(probe, !conformed, &why);
+        if (!differs) why = tr("The clip plays at the project's rate.");
+        dialog.setPlaybackRates(QString::fromStdString(frameRateText(own)) + tr(" fps"),
+                                QString::fromStdString(frameRateText(projectRate)) + tr(" fps"), conformed, allowed, why);
+    }
+    dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate) {
+        for (const auto& [bin, id] : chosen) {
+            BinDocument* doc = binContainer_->document(bin);
+            const model::BinItem* stored = doc ? doc->bin().item(id) : nullptr;
+            if (!stored) continue;
+            model::BinItem item = *stored;
             item.fields.insert(QLatin1String(model::kReformatHeading), model::reformatText(a.reformat));
             model::setFrameFlex(item, a.frameFlex);
+            QString why;
+            if (media::playsAtProjectRate(item) != atProjectRate && !media::setPlaybackAtProjectRate(item, atProjectRate, &why)) {
+                ConsoleLog::instance().append(tr("Source Settings: %1").arg(why));
+            }
             item.modified = QDateTime::currentDateTimeUtc();
-            storeClip(c.bin, item);
+            storeClip(bin, item);
         }
     });
     return sourceSettingsHook_ ? sourceSettingsHook_(dialog) : dialog.exec() == QDialog::Accepted;

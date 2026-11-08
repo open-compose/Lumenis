@@ -48,6 +48,9 @@ struct Link {
     // Clip > Modify > Unlink Media (p.368): the clip shows Media Offline
     // until it is relinked.
     bool unlinked = false;
+    // Source Settings' Playback Rate set to the project's (p.545; 8.5b2, setPlaybackAtProjectRate): the file's frames
+    // play one to a clip frame, at the clip's rate, rather than at their own time.
+    bool conformed = false;
     // Managed media (Avid MediaFiles, Editing Guide ch.12; media/managed.h):
     // every track its own file. `path` is the picture's (or, without one,
     // A1's); audioPaths holds each of audioStreams' files. The id is the
@@ -123,6 +126,15 @@ QStringList groupStills(const QStringList& paths, const Rational& rate);
 // Probes and links every file, numbered stills as sequences; the ones that
 // are not media are skipped and counted in `skipped`.
 QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& options, int* skipped = nullptr);
+
+// Source Settings' Playback Rate (p.545; 8.5b2, docs/spec/frameflex.md): "If a clip's frame rate was previously converted
+// to the project's frame rate, you can reset the clip to the original frame rate ... Alternatively, you may want to
+// convert the clip's frame rate to match the project frame rate." With `projectRate` the clip's file frames play one per
+// clip frame (Link::conformed), its duration the file's frame count; without it they play at their own time again, the
+// duration back in the clip's frames. Its End column follows. Ours: only clips without sound, whose sound would not
+// follow (false with `error`), and only linked clips with a picture of their own rate.
+bool setPlaybackAtProjectRate(model::BinItem& clip, bool projectRate, QString* error = nullptr);
+bool playsAtProjectRate(const model::BinItem& clip);
 
 // A Broadcast WAV file's time reference (its "bext" chunk, which FFmpeg reads as "time_reference":
 // samples since midnight at the file's rate); nothing when it records none. A linked clip without a

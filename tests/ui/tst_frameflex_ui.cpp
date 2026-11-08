@@ -3,7 +3,9 @@
 // FrameFlex box, Refresh Sequence brings changed attributes into a sequence; and a failed Export to File says why
 // (owner's report, 2026-11-08).
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/frame_flex.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
@@ -237,6 +239,89 @@ private slots:
         });
         QVERIFY(!window.sourceSettings());
         QVERIFY(model::frameFlexOf(*bin->bin().item(ids.first())));
+    }
+
+    // The Playback Rate tab (p.545): a 25 fps clip in a 30 fps project plays its frames one by one at 30 fps once set to
+    // the project's rate, from the Timeline's right-click Source Settings too; Refresh Sequence > Motion Adapters/Timewarps
+    // then drops the segment's adapter.
+    void playbackRate() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("halves.mov"));
+        QVERIFY(writeHalves(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(30);
+        project.settings.format.width = 128;
+        project.settings.format.height = 128;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        model::BinItem clip = *bin->bin().item(ids.first());
+        QCOMPARE(clip.durationFrames, std::int64_t{12}); // 10 frames at 25 fps = 0.4 s = 12 frames at 30
+        // Edited into a sequence with its motion adapter.
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, clip);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        auto segment = [&] {
+            return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0);
+        };
+        QVERIFY(segment().adapter);
+
+        // The Timeline's right-click Source Settings on the segment: the Playback Rate menu, set to the project's.
+        bool asked = false;
+        window.setSourceSettingsHook([&](SourceSettingsDialog& d) {
+            auto* rate = d.findChild<QComboBox*>(QStringLiteral("playbackRate"));
+            if (!rate || !rate->isEnabled() || rate->count() != 2 || d.playbackAtProjectRate()) return false;
+            if (!rate->itemText(0).contains(QStringLiteral("25")) || !rate->itemText(1).contains(QStringLiteral("30"))) return false;
+            rate->setCurrentIndex(1);
+            d.apply();
+            asked = true;
+            return true;
+        });
+        QVERIFY(window.sourceSettingsForSegment(model::SegmentRef{QStringLiteral("V1"), 0}));
+        QVERIFY(asked);
+        clip = *bin->bin().item(ids.first());
+        QVERIFY(media::playsAtProjectRate(clip));
+        QCOMPARE(clip.durationFrames, std::int64_t{10});
+        QVERIFY(!model::isMixedRate(clip, Rational(30)));
+        QCOMPARE(media::linkOf(clip)->fileFrame(7, clip.editRate), std::int64_t{7});
+        // "select Clip > Refresh Sequence > Motion Adapters/Timewarps".
+        composer.setActiveMonitor(MonitorId::Record);
+        commands.action(QStringLiteral("clip.refresh_sequence.motion_adapters_timewarps"))->trigger();
+        settle();
+        QVERIFY(!segment().adapter);
+
+        // Back to the original rate.
+        window.setSourceSettingsHook([](SourceSettingsDialog& d) {
+            if (!d.playbackAtProjectRate()) return false;
+            d.findChild<QComboBox*>(QStringLiteral("playbackRate"))->setCurrentIndex(0);
+            d.apply();
+            return true;
+        });
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds(ids);
+        QVERIFY(window.sourceSettings());
+        clip = *bin->bin().item(ids.first());
+        QVERIFY(!media::playsAtProjectRate(clip));
+        QCOMPARE(clip.durationFrames, std::int64_t{12});
+
+        // A clip at the project's rate has nothing to change.
+        QString why;
+        model::BinItem still = clip;
+        still.link = QJsonObject{};
+        QVERIFY(!media::setPlaybackAtProjectRate(still, true, &why));
+        QVERIFY(!why.isEmpty());
     }
 
     // Export to File's failure goes into a message, not only the Console (owner's report, 2026-11-08).

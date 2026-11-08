@@ -270,6 +270,18 @@ SourceSettingsDialog::SourceSettingsDialog(const QString& clipName, const QImage
     }
     form->addRow(tr("Reformat"), reformat_);
     tabs->addTab(flexTab, tr("FrameFlex"));
+    // Playback Rate (p.545): "Select the desired Playback Frame Rate".
+    auto* rateTab = new QWidget;
+    auto* rateForm = new QFormLayout(rateTab);
+    playbackRate_ = new QComboBox;
+    playbackRate_->setObjectName(QStringLiteral("playbackRate"));
+    playbackRate_->setEnabled(false);
+    rateForm->addRow(tr("Playback Frame Rate"), playbackRate_);
+    playbackNote_ = new QLabel;
+    playbackNote_->setObjectName(QStringLiteral("playbackNote"));
+    playbackNote_->setWordWrap(true);
+    rateForm->addRow(playbackNote_);
+    tabs->addTab(rateTab, tr("Playback Rate"));
     layout->addWidget(tabs);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
@@ -389,13 +401,30 @@ void SourceSettingsDialog::reset() {
     fill(a);
 }
 
+void SourceSettingsDialog::setPlaybackRates(const QString& original, const QString& project, bool atProjectRate, bool allowed,
+                                            const QString& whyNot) {
+    playbackRate_->clear();
+    playbackRate_->addItem(tr("Original: %1").arg(original), false);
+    playbackRate_->addItem(tr("Project: %1").arg(project), true);
+    playbackRate_->setCurrentIndex(atProjectRate ? 1 : 0);
+    playbackRate_->setEnabled(allowed);
+    playbackNote_->setText(whyNot);
+    appliedRate_ = atProjectRate;
+}
+
+bool SourceSettingsDialog::playbackAtProjectRate() const {
+    return playbackRate_->currentData().toBool();
+}
+
 void SourceSettingsDialog::revert() {
     fill(applied_);
+    if (playbackRate_->count() > 1) playbackRate_->setCurrentIndex(appliedRate_ ? 1 : 0);
 }
 
 void SourceSettingsDialog::apply() {
     applied_ = adapter();
-    if (applier_) applier_(applied_);
+    appliedRate_ = playbackAtProjectRate();
+    if (applier_) applier_(applied_, appliedRate_);
 }
 
 } // namespace lumenis::ui

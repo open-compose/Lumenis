@@ -1375,6 +1375,8 @@ signals:
     void correctedSequenceCreated(const QString& binId, const model::BinItem& sequence);
     // "Right-click and select Edit Title" on a classic title (FX Guide p.372): the segment to revise in the Title Tool.
     void editTitleRequested(const model::SegmentRef& segment);
+    // The right-click Source Settings on a clip's segment (Editing Guide p.542, p.545; 8.5b2).
+    void sourceSettingsRequested(const model::SegmentRef& segment);
     // ExpertRender's highlighting was cancelled (a click in TC1, p.145).
     void expertSelectionCancelled();
     // The shown item, the selection, the patch or Trim mode changed.

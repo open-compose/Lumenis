@@ -708,6 +708,10 @@ public:
     // Source Settings (8.5b1, p.527-535) for the clips selected in the active bin, or the Source monitor's clip; the hook
     // answers for tests (true for OK). False when there is no clip or it was cancelled.
     bool sourceSettings();
+    // The same for a Record monitor segment's clip (the Timeline's right-click Source Settings, 8.5b2), and for given
+    // clips (bin, item id).
+    bool sourceSettingsForSegment(const model::SegmentRef& ref);
+    bool sourceSettingsFor(const QList<QPair<QString, QString>>& clips);
     void setSourceSettingsHook(std::function<bool(SourceSettingsDialog&)> hook) { sourceSettingsHook_ = std::move(hook); }
     // The Effect Palette's template bins (FX Guide p.37-38): every open bin's video effect templates
     // (model::effectTemplateOf), in the order the bins were opened.

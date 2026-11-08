@@ -1491,10 +1491,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         Settings (p.316, p.529); Show Viewers with the top viewer's box, moved, resized and rotated by dragging, and the
         bottom viewer's result; the fields, Size matches project raster, Image Size = raster, Rotate Left/Right, Reset,
         Revert, Apply and OK on every selected clip.
-      * 8.5b2, the Timeline's right-click Source Settings, the Playback Rate tab (p.545: the clip's original rate or the
-        project's, with Refresh Sequence > Motion Adapters/Timewarps), and panning: the FrameFlex effect in the Effect
-        Editor with keyframed boxes in the Record monitor, the Layout button's bypass and Alt+Layout reset (p.533),
-        creative framing for All FrameFlex.
+      * 8.5b2 (done), the Timeline's right-click Source Settings (p.542, p.545) and the Playback Rate tab (p.545: the
+        clip's original rate or the project's, with Refresh Sequence > Motion Adapters/Timewarps dropping the adapters).
+      * 8.5b3, panning: the FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the Layout
+        button's bypass and Alt+Layout reset (p.533), creative framing for All FrameFlex.
     * 8.5c, colour adapters (p.536-541, p.544): the Color Encoding tab (Source color space, Auto, the transformation
       list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
       (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public

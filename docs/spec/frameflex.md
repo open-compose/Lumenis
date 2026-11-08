@@ -57,11 +57,27 @@ Reformatting). 8.5a is the data and the picture; 8.5b the Source Settings dialog
   Apply button was clicked") and Apply. Apply sets the settings on every selected clip; ours: OK applies too, Cancel
   leaves what was applied.
 
+## The Playback Rate tab and the Timeline (p.542, p.545; 8.5b2)
+
+* The Timeline's right-click Source Settings on a video segment opens the dialog for its clip ("On the Timeline, or in
+  the bin, select the clip ... right-click and choose Source Settings", p.542, p.545; `Timeline::sourceSettingsRequested`,
+  `MainWindow::sourceSettingsForSegment`).
+* Playback Rate: "Select the desired Playback Frame Rate" (p.545), the clip's original rate or the project's. At the
+  project's rate the clip's file frames play one per frame (`Link::conformed`, `media::setPlaybackAtProjectRate`): its
+  duration becomes the file's frame count and it is no longer a mixed rate clip. Back at its original rate it plays its
+  frames at their own time again. Ours: only clips without sound (their sound would not follow), and only linked clips
+  with a moving picture; the menu is dimmed with the reason otherwise.
+* "If you applied this change to a clip in a bin, and want to update all instances of this clip that may already be on
+  your Timeline, you need to select Clip > Refresh Sequence > Motion Adapters/Timewarps" (p.545): segments of a clip
+  now at the project's rate lose their adapter. "There is no automatic ripple" (p.545): the segments keep their length.
+  Ours: a clip set back to its original rate gets adapters in new edits; Refresh does not add them to old segments.
+
 ## Tests
 
 * `tst_frame_flex`: the attribute's texts, adapters from clips through JSON and bins, Size matches project raster, the
   four Reformat options and boxes (moved, turned, with an Image Size), Refresh Sequence with creative framing.
 * `tst_frameflex_ui`: linking with Center Keep Size, the column changed, the Source monitor's picture, the segment's
   adapter, a box set after the edit and Refresh Sequence; the Source Settings dialog's fields, buttons, drag, Revert and
-  Apply on two clips; a failed Export to File's message.
+  Apply on two clips; the Playback Rate tab from the Timeline, the clip's frames and duration, Refresh Sequence dropping
+  the adapter, and back; a failed Export to File's message.
 * Scenario `49-spatial-adapter.json`.

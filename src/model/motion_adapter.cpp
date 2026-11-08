@@ -141,7 +141,8 @@ bool hasFieldMotion(const BinItem& clip) {
 
 Rational clipFrameRate(const BinItem& clip) {
     if (const auto a = adapterOf(clip)) return a->clipRate;
-    if (hasFieldMotion(clip) && !clip.link.isEmpty()) {
+    // A clip conformed to the project's rate (Source Settings' Playback Rate, p.545) plays its frames at its own rate.
+    if (hasFieldMotion(clip) && !clip.link.isEmpty() && !clip.link.value(QStringLiteral("conformed")).toBool()) {
         const QString path = clip.link.value(QStringLiteral("path")).toString();
         const qint64 frames = clip.link.value(QStringLiteral("frames")).toInteger();
         // A still lasts one frame; a sequence of images runs at the clip's rate (its path holds the
@@ -306,6 +307,13 @@ int refreshMotionAdapters(Sequence& sequence, const std::function<std::optional<
             if (!s.adapter) continue;
             const auto clip = resolve(s.binId, s.clipId);
             if (!clip) continue;
+            // A clip set to play at the project's rate in its Source Settings (p.545) needs no adapter for its rate:
+            // "select Clip > Refresh Sequence > Motion Adapters/Timewarps". Ours: the segment keeps its length.
+            if (clip->link.value(QStringLiteral("conformed")).toBool() && !(s.adapter->clipRate == s.adapter->sequenceRate)) {
+                s.adapter.reset();
+                ++changed;
+                continue;
+            }
             const FieldMotionAttribute now = clipFieldMotion(*clip, interlacedProject);
             if (s.adapter->fieldMotion == fieldMotionText(now)) continue;
             const auto before = fieldMotionFromText(s.adapter->fieldMotion);
