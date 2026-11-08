@@ -882,7 +882,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Pre-roll; tests `tst_script scriptMarks`, `tst_script_ui scriptMarks`), is done. 8.3d, ScriptSync AI and Create Script from Clip
   (`src/model/script_sync.*` aligning script words with the transcript's, `src/ui/script_sync_dialog.*`, `MainWindow::
   scriptSyncAI`/`createScriptFromClips`, `Script::fromClips`; tests `tst_script scriptSync`, `tst_script_ui
-  scriptSyncAndCreateScript`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  scriptSyncAndCreateScript`), is done. 8.3e, shared scripts and the Find window's Script Text (the script lock icon from
+  the bin's lock through `MainWindow::updateScriptLock`/`scriptLockClicked`, `ScriptLock`, `MainWindow::closeScript` with
+  Save Script As / Don't Save / Cancel; `model::findScriptText`/`scriptTakeBins`, `FindWindow::setScriptSource`; tests
+  `tst_script findInScripts`, `tst_script_ui sharedScripts`), is done, so 8.3 is. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

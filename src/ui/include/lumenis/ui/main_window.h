@@ -654,6 +654,12 @@ public:
     // transcripts (those clips are queued). setScriptSyncHook: tests answer the dialog (true: OK).
     int scriptSyncAI();
     bool createScriptFromClips();
+    // Shared scripts (8.3e, p.589-590). closeScript: closes the Script window, saving a changed script, or for one someone
+    // else holds asking Save Script As / Don't Save / Cancel; false when cancelled. scriptLockClicked: the script lock
+    // icon. setCloseScriptHook: tests answer that question (0 Save Script As, 1 Don't Save, 2 Cancel).
+    bool closeScript();
+    void scriptLockClicked(bool alt);
+    void setCloseScriptHook(std::function<int()> ask) { closeScriptHook_ = std::move(ask); }
     using ScriptSyncAsk = std::function<bool(ScriptSyncDialog&)>;
     void setScriptSyncHook(ScriptSyncAsk ask) { scriptSyncHook_ = std::move(ask); }
     static QList<std::pair<QString, QString>> scriptIndicatorColors();
@@ -1078,6 +1084,9 @@ private:
     QList<model::ScriptTake> scriptRecordTakes_; // the Record button's takes while screening
     model::ScriptSyncOptions scriptSyncOptions_; // the ScriptSync AI dialog's last choices (ours: kept for the session)
     ScriptSyncAsk scriptSyncHook_;
+    std::function<int()> closeScriptHook_;
+    QMetaObject::Connection scriptLockConnection_; // the open script's bin's lockChanged
+    void updateScriptLock();
     void refreshScriptMenu();
     void setUpScriptWindow();
     TranscribeTracksAsk transcribeTracksHook_;

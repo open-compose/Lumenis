@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QRegularExpression>
+#include <QSet>
 
 #include <algorithm>
 
@@ -619,6 +620,35 @@ std::optional<std::pair<std::int64_t, std::int64_t>> markedFrames(const ScriptTa
     std::int64_t end = after == take.marks.cend() ? clipFrames - 1 : after.value() - 1;
     end = std::max(start, std::min(end, std::max<std::int64_t>(start, clipFrames - 1)));
     return std::pair{start, end};
+}
+
+QList<ScriptTextHit> findScriptText(const QList<FindBin>& bins, const QString& text, const TextFindOptions& options) {
+    QList<ScriptTextHit> out;
+    if (text.isEmpty()) return out;
+    for (const FindBin& b : bins) {
+        for (const BinItem& item : b.bin.items) {
+            const auto script = scriptOf(item);
+            if (!script) continue;
+            for (int l = 0; l < script->lines.size(); ++l)
+                if (textMatches(script->lines.at(l), text, options)) out << ScriptTextHit{b.id, item.id, item.name, l, script->lines.at(l)};
+        }
+    }
+    return out;
+}
+
+QList<FindBin> scriptTakeBins(const QList<FindBin>& bins) {
+    QSet<QString> takes;
+    for (const FindBin& b : bins)
+        for (const BinItem& item : b.bin.items)
+            if (const auto script = scriptOf(item))
+                for (const ScriptSlate& s : script->slates)
+                    for (const ScriptTake& t : s.takes) takes.insert(t.binId + QLatin1Char('/') + t.clipId);
+    QList<FindBin> out;
+    for (FindBin b : bins) {
+        b.bin.items.removeIf([&](const BinItem& item) { return !takes.contains(b.id + QLatin1Char('/') + item.id); });
+        if (!b.bin.items.isEmpty()) out << b;
+    }
+    return out;
 }
 
 } // namespace lumenis::model

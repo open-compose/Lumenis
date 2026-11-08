@@ -7,6 +7,8 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QGuiApplication>
+#include <QHash>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -631,6 +633,12 @@ ScriptWindow::ScriptWindow(QWidget* parent) : QWidget(parent) {
     colorButton_ = tool(tr("SC"), QStringLiteral("setColor"), tr("Set Color"));
     colorButton_->setCheckable(true);
     connect(colorButton_, &QToolButton::clicked, this, [this] { setColor(); });
+    // The script lock icon (p.589): shown for scripts on shared storage only.
+    lockButton_ = tool(QStringLiteral("\u25A0"), QStringLiteral("scriptLock"), tr("Script lock"));
+    lockButton_->hide();
+    connect(lockButton_, &QToolButton::clicked, this, [this] {
+        emit lockClicked(QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier));
+    });
     bar->addSpacing(8);
     bar->addWidget(new QLabel(tr("Scene"), this));
     scenes_ = new QComboBox(this);
@@ -721,7 +729,25 @@ void ScriptWindow::markSaved() { setModified(false); }
 
 QString ScriptWindow::title() const {
     if (!isOpen()) return tr("Script");
-    return name_ + (modified_ ? QStringLiteral("*") : QString());
+    return name_ + (modified_ ? QStringLiteral("*") : QString()) + (lock_ == ScriptLock::Modified ? tr(" (modified)") : QString());
+}
+
+void ScriptWindow::setLock(ScriptLock lock, const QString& holder) {
+    const bool changed = lock_ != lock;
+    lock_ = lock;
+    // The icon's colours (p.589): red locked by another, yellow changed by the holder, blue released, green ours. Ours:
+    // dark red for a protected bin.
+    static const QHash<int, QString> colors{{int(ScriptLock::Mine), QStringLiteral("#3cb446")},
+                                            {int(ScriptLock::Others), QStringLiteral("#d23c3c")},
+                                            {int(ScriptLock::Modified), QStringLiteral("#d2c832")},
+                                            {int(ScriptLock::Released), QStringLiteral("#3c78d2")},
+                                            {int(ScriptLock::Protected), QStringLiteral("#8c1e1e")}};
+    lockButton_->setVisible(lock != ScriptLock::None);
+    lockButton_->setStyleSheet(lock == ScriptLock::None ? QString()
+                                                        : QStringLiteral("QToolButton#scriptLock { color: %1; }").arg(colors.value(int(lock))));
+    lockButton_->setProperty("lockColor", colors.value(int(lock)));
+    lockButton_->setToolTip(holder.isEmpty() ? tr("Script lock") : tr("Script lock: %1").arg(holder));
+    if (changed) emit titleChanged(title());
 }
 
 void ScriptWindow::setModified(bool on) {

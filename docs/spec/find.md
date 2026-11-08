@@ -27,7 +27,9 @@ Code:
 
 * The search runs over "Bins in Project", "Scripts in Project", "Bins and Scripts in Project" or
   "Current Bin".
-  * Scripts in Project is dimmed; Bins and Scripts searches the bins (no scripts yet).
+  * Scripts in Project (8.3e) searches the clips the project's scripts link as takes (ours: the guide says only that
+    clips are searched "in the current bin and script opened ... or all bins and scripts", p.440); Bins and Scripts
+    searches the bins, which hold those clips too.
 * "Current Bin: The system searches for the text criteria in the last active bin. The system then
   selects the first occurrence in the bin. Press Ctrl+G ... to take you to the next occurrence."
   * Nothing is listed in the Results (p.430).
@@ -48,7 +50,13 @@ Code:
 
 ## Script Text (p.429-430)
 
-* Dimmed until scripts exist (ScriptSync, Phase 9).
+* "Select this option if you want the system to search through your scripts. Then choose to search in the current
+  script opened in your project or all scripts in the project regardless if they are opened or not" (p.440): Current
+  Script (the Script window's) or Scripts in Project (8.3e, `model::findScriptText`).
+* "Whole words only: Available when you select Script Text ... if you enter 'eat,' the system will only find eat. Not
+  eating, eats, neat" (p.441): the tab's own Whole Words only; Ignore Case is shared.
+* The Results list Script, Line and Text (ours: the guide does not name them); a double-click opens the script in the
+  Script window with the line selected. The filter rows narrow the hits by their text (ours).
 
 ## Timeline and Monitors (p.430-431)
 

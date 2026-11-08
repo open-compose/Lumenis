@@ -8325,7 +8325,10 @@ void MainWindow::installPanelHandlers() {
     handle("windows.next_tab", [this] { panels_->cycleTabs(); });
     // File > Close closes the active window.
     handle("file.close", [this] {
-        if (Panel* p = panels_->activePanel()) panels_->closePanel(p);
+        Panel* p = panels_->activePanel();
+        // The Script window closes its script first (a locked, changed one asks, p.590).
+        if (p && p->id() == QLatin1String("Script") && !closeScript()) return;
+        if (p) panels_->closePanel(p);
     });
     handle("tools.timeline", [this] { panels_->showPanel(panels_->panel(QStringLiteral("Timeline"))); });
     handle("file.get_position_info", [this] { positionInfo(); });
@@ -8341,6 +8344,19 @@ void MainWindow::installPanelHandlers() {
         if (!findWindow_) {
             findWindow_ = new FindWindow(*binContainer_, *composer_, *timeline_, this);
             connectPhraseFind(*findWindow_);
+            // The Script Text tab (8.3e): the Script window's script, and opening a script at a line.
+            findWindow_->setScriptSource({[this]() -> std::optional<std::pair<QString, QString>> {
+                                              if (!scriptWindow_->isOpen()) return std::nullopt;
+                                              return std::pair{scriptWindow_->binId(), scriptWindow_->itemId()};
+                                          },
+                                          [this](const QString& binId, const QString& itemId, int line) {
+                                              if (scriptWindow_->itemId() != itemId || scriptWindow_->binId() != binId) {
+                                                  if (!binContainer_->document(binId)) binContainer_->openBin(binId);
+                                                  if (!openScript(binId, itemId)) return;
+                                              }
+                                              scriptWindow_->selectLines(line, line);
+                                              if (Panel* p = panels_->panel(QStringLiteral("Script"))) panels_->showPanel(p);
+                                          }});
             connect(findWindow_, &FindWindow::showInBin, this, [this](const QString& binId, const QString& itemId) {
                 if (BinDocument* doc = binContainer_->openBin(binId)) {
                     if (BinView* view = binContainer_->viewFor(doc)) view->selectIds({itemId});

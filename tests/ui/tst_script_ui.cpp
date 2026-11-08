@@ -6,9 +6,15 @@
 // loading and playing takes with Interpolate Position, the Script menu's options and Enlarge/Reduce Frame. Script marks
 // (8.3c, p.582-588): Add Script Mark, the Record button's screening, cueing with the Pre-roll, moving and deleting marks,
 // Find Script, Find Bin, splicing a script range. ScriptSync AI and Create Script from Clip (8.3d, p.569-570, p.584-585).
+// Shared scripts' lock icon and closing a locked script, the Find window's Script Text (8.3e, p.429-430, p.589-590).
+#include "lumenis/core/project_format.h"
+#include "lumenis/model/project_bins.h"
+#include "lumenis/model/project_store.h"
 #include "lumenis/model/script.h"
 #include "lumenis/model/transcript.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/find_window.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/panels.h"
@@ -24,6 +30,9 @@
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QTableWidget>
+#include <QTabWidget>
 #include <QMimeData>
 #include <QTemporaryDir>
 #include <QTest>
@@ -540,6 +549,122 @@ private slots:
         QCOMPARE(loaded->item.id, clip.id);
         QCOMPARE(window.composer().state(MonitorId::Source).in(), std::optional<std::int64_t>(50));
         qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // Two users on one shared project (as tst_bin_locking): ed's Bin Container holds the bin with the script; the
+    // application is asst's (p.589-590).
+    void sharedScripts() {
+        qputenv("LUMENIS_SHARED_BINS", "all");
+        QTemporaryDir dir;
+        model::ProjectSettings ps;
+        ps.name = QStringLiteral("Show");
+        ps.format = projectFormatPresets().front();
+        const model::ProjectEntry project = *model::ProjectStore(dir.path()).create(ps);
+        BinContainer ed;
+        ed.setLockUser(QStringLiteral("ed"));
+        ed.setProject(project.folder, ps.name, Rational(25));
+        const QString binId = ed.bins()->bins().first()->id;
+        BinDocument* edDoc = ed.document(binId);
+        QVERIFY(edDoc);
+        const model::BinItem item = model::scriptItem(QStringLiteral("Scene 33"), model::scriptFromText(QStringLiteral("One.\nTwo.\nThree.")));
+        edDoc->addItem(item);
+        QVERIFY(ed.saveBin(edDoc));
+
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("asst"));
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        BinDocument* doc = bins.document(binId) ? bins.document(binId) : bins.openBin(binId);
+        QVERIFY(doc);
+        QCOMPARE(doc->lockState(), BinDocument::LockState::Others);
+        QVERIFY(window.openScript(binId, item.id));
+        ScriptWindow& w = window.scriptWindow();
+        // Red: ed holds it.
+        auto* lock = w.findChild<QToolButton*>(QStringLiteral("scriptLock"));
+        QVERIFY(lock && !lock->isHidden());
+        QCOMPARE(w.lock(), ScriptLock::Others);
+        QCOMPARE(lock->property("lockColor").toString(), QStringLiteral("#d23c3c"));
+        QVERIFY(w.isLockedByOther());
+
+        // ed saves a change: yellow, "(modified)" in the title; a click refreshes the script and turns it red (p.589).
+        model::BinItem changed = *edDoc->bin().item(item.id);
+        model::setScript(changed, model::scriptFromText(QStringLiteral("One.\nTwo, changed.\nThree.")));
+        edDoc->replaceItem(changed);
+        QVERIFY(ed.saveBin(edDoc));
+        {
+            QFile f(edDoc->path());
+            QVERIFY(f.open(QIODevice::ReadWrite));
+            QVERIFY(f.setFileTime(QDateTime::currentDateTime().addSecs(5), QFileDevice::FileModificationTime));
+        }
+        bins.pollLocks();
+        QCOMPARE(w.lock(), ScriptLock::Modified);
+        QVERIFY(w.title().endsWith(QStringLiteral("(modified)")));
+        lock->click();
+        QCOMPARE(w.lock(), ScriptLock::Others);
+        QCOMPARE(w.script().lines.at(1), QStringLiteral("Two, changed."));
+
+        // A change here cannot be saved into ed's bin: closing asks; Cancel keeps it open, Save Script As makes a new
+        // script in a bin asst can change (p.590).
+        w.selectLines(0, 0);
+        w.setAskHooks([](const QString&, const QString&) { return std::optional<QString>(QStringLiteral("1")); }, {});
+        w.askScene();
+        QVERIFY(w.isModified());
+        const QString mine = bins.newBin();
+        QVERIFY(bins.openBin(mine));
+        int asked = 0;
+        window.setCloseScriptHook([&] { return asked++ == 0 ? 2 : 0; });
+        QVERIFY(!window.closeScript());
+        QVERIFY(w.isOpen());
+        QVERIFY(window.closeScript());
+        QVERIFY(!w.isOpen());
+        QCOMPARE(asked, 2);
+        const BinDocument* copyBin = bins.document(mine);
+        QCOMPARE(copyBin->bin().items.size(), qsizetype(1));
+        QCOMPARE(model::scriptOf(copyBin->bin().items.first())->scenes.value(0), QStringLiteral("1"));
+
+        // ed lets go: blue; a click takes it (green); Alt+click releases it (p.589).
+        QVERIFY(window.openScript(binId, item.id));
+        QVERIFY(ed.closeBin(edDoc));
+        bins.pollLocks();
+        QCOMPARE(w.lock(), ScriptLock::Released);
+        window.scriptLockClicked(false);
+        QCOMPARE(w.lock(), ScriptLock::Mine);
+        QCOMPARE(w.findChild<QToolButton*>(QStringLiteral("scriptLock"))->property("lockColor").toString(), QStringLiteral("#3cb446"));
+        window.scriptLockClicked(true);
+        QCOMPARE(w.lock(), ScriptLock::Released);
+
+        // The Find window's Script Text: the current script, or every script in the project; a result opens the line.
+        commands.action(QStringLiteral("edit.find"))->trigger();
+        FindWindow* find = window.findWindow();
+        QVERIFY(find);
+        find->tabs()->setCurrentIndex(FindWindow::ScriptTab);
+        find->setText(QStringLiteral("three"));
+        find->setScriptScope(false);
+        QCOMPARE(find->find(), 1);
+        find->setScriptScope(true);
+        QCOMPARE(find->find(), 2); // the copy too
+        find->setScriptWholeWords(true);
+        find->setText(QStringLiteral("thre"));
+        QCOMPARE(find->find(), 0);
+        find->setText(QStringLiteral("changed"));
+        QCOMPARE(find->find(), 2);
+        find->setScriptScope(false);
+        QCOMPARE(find->find(), 1);
+        QCOMPARE(find->results()->item(0, 1)->text(), QStringLiteral("2"));
+        w.selectLines(0, 0);
+        find->openResult(0);
+        QCOMPARE(w.selectedLines()->first, 1);
+        // Scripts in Project on Clips and Sequences: clips linked as takes only (none here).
+        find->tabs()->setCurrentIndex(FindWindow::ClipsTab);
+        find->setScope(FindWindow::Scope::ScriptsInProject);
+        find->setText(QString());
+        QCOMPARE(find->find(), 0);
+        window.setProject({});
+        qunsetenv("LUMENIS_SHARED_BINS");
     }
 };
 

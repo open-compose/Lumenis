@@ -45,6 +45,8 @@ struct Result {
     model::BinItem item;
     std::int64_t frame = -1; // markers, Timeline and PhraseFind results: where the position goes
     bool phrase = false;     // a PhraseFind hit: the IN mark goes at `frame` too
+    QString scriptItem;      // a Script Text hit: the script and its line
+    int scriptLine = -1;
 };
 
 } // namespace
@@ -72,8 +74,6 @@ FindWindow::FindWindow(BinContainer& bins, Composer& composer, Timeline& timelin
         const QStringList names{tr("Clips and Sequences"), tr("Script Text"), tr("Timeline and Monitors"), tr("Markers")};
         tabs_->addTab(buildPage(tab), names.at(tab));
     }
-    // Script Text waits for scripts (ScriptSync, Phase 9).
-    tabs_->setTabEnabled(ScriptTab, false);
     // The Bin Index status (p.429): ours, always indexed. The PhraseFind AI Index (p.437, p.441) beside it, and the
     // Settings button (p.441).
     auto* status = new QHBoxLayout;
@@ -174,8 +174,8 @@ QWidget* FindWindow::buildPage(int tab) {
         options->addWidget(new QLabel(tr("Search:"), w));
         scope_ = new QComboBox(w);
         scope_->addItems({tr("Bins in Project"), tr("Scripts in Project"), tr("Bins and Scripts in Project"), tr("Current Bin")});
-        // No scripts yet: Scripts in Project is dimmed; with them, Bins and Scripts searches the bins.
-        if (auto* model = qobject_cast<QStandardItemModel*>(scope_->model())) model->item(1)->setEnabled(false);
+        // Scripts in Project finds the clips the project's scripts link as takes (ours); Bins and Scripts searches the bins,
+        // which hold those clips too.
         options->addWidget(scope_);
         ignoreCase_ = new QCheckBox(tr("Ignore Case"), w);
         ignoreCase_->setChecked(true);
@@ -199,6 +199,19 @@ QWidget* FindWindow::buildPage(int tab) {
         options->addWidget(markers_);
         options->addWidget(clipNames_);
         options->addWidget(timelineText_);
+        options->addStretch(1);
+    } else if (tab == ScriptTab) {
+        // "Select this option if you want the system to search through your scripts. Then choose to search in the current
+        // script opened in your project or all scripts in the project" (p.440); "Whole words only: Available when you
+        // select Script Text" (p.441).
+        options->addWidget(new QLabel(tr("Search:"), w));
+        scriptScope_ = new QComboBox(w);
+        scriptScope_->setObjectName(QStringLiteral("scriptScope"));
+        scriptScope_->addItems({tr("Current Script"), tr("Scripts in Project")});
+        options->addWidget(scriptScope_);
+        scriptWholeWords_ = new QCheckBox(tr("Whole Words only"), w);
+        scriptWholeWords_->setObjectName(QStringLiteral("scriptWholeWords"));
+        options->addWidget(scriptWholeWords_);
         options->addStretch(1);
     } else if (tab == MarkersTab) {
         // The Markers tab shares Ignore Case with the others (p.417).
@@ -360,8 +373,30 @@ int FindWindow::find() {
         found = static_cast<int>(currentMatches_.size());
         if (found > 0) findNext();
     } else if (tab == ClipsTab) {
-        const auto matches = model::findItems(projectBins(), text, filters(tab), options());
+        const bool scripts = scope_->currentIndex() == static_cast<int>(Scope::ScriptsInProject);
+        const auto matches = model::findItems(scripts ? model::scriptTakeBins(projectBins()) : projectBins(), text, filters(tab), options());
         fillItems(matches);
+        found = static_cast<int>(matches.size());
+    } else if (tab == ScriptTab) {
+        QList<model::FindBin> bins = projectBins();
+        if (scriptScope_->currentIndex() == 0) {
+            // Current Script: the Script window's.
+            const auto current = scriptSource_.current ? scriptSource_.current() : std::nullopt;
+            QList<model::FindBin> only;
+            for (model::FindBin b : bins) {
+                if (!current || b.id != current->first) continue;
+                b.bin.items.removeIf([&](const model::BinItem& i) { return i.id != current->second; });
+                only << b;
+            }
+            bins = only;
+        }
+        model::TextFindOptions o = options();
+        o.wholeWords = scriptWholeWords_->isChecked();
+        auto matches = model::findScriptText(bins, text, o);
+        // The filter rows narrow the hits by their text (ours).
+        for (const model::FindFilter& f : filters(tab))
+            matches.removeIf([&](const model::ScriptTextHit& h) { return !model::textMatches(h.text, f.text, o); });
+        fillScriptText(matches);
         found = static_cast<int>(matches.size());
     } else if (tab == MarkersTab) {
         const auto matches = model::findMarkers(projectBins(), text, filters(tab), options());
@@ -438,7 +473,7 @@ void FindWindow::fillPhrases(const QList<model::PhraseHit>& found) {
     p.table->setRowCount(static_cast<int>(found.size()));
     for (int r = 0; r < found.size(); ++r) {
         const model::PhraseHit& h = found.at(r);
-        p.rows << Result{h.binId, h.item, h.frame, true};
+        p.rows << Result{h.binId, h.item, h.frame, true, {}, -1};
         p.table->setItem(r, 0, new QTableWidgetItem(h.item.name));
         p.table->setItem(r, 1, new QTableWidgetItem(h.binName));
         auto* score = new QTableWidgetItem;
@@ -500,10 +535,33 @@ void FindWindow::fillItems(const QList<model::ItemFound>& found) {
     p.table->setRowCount(static_cast<int>(found.size()));
     for (int r = 0; r < found.size(); ++r) {
         const model::ItemFound& f = found.at(r);
-        p.rows << Result{f.binId, f.item, -1};
+        p.rows << Result{f.binId, f.item, -1, false, {}, -1};
         p.table->setItem(r, 0, new QTableWidgetItem(f.item.name));
         p.table->setItem(r, 1, new QTableWidgetItem(f.binName));
         for (int c = 0; c < columns_.size(); ++c) p.table->setItem(r, c + 2, new QTableWidgetItem(model::cellText(f.item, columns_.at(c))));
+    }
+}
+
+void FindWindow::setScriptScope(bool wholeProject) { scriptScope_->setCurrentIndex(wholeProject ? 1 : 0); }
+
+void FindWindow::setScriptWholeWords(bool on) { scriptWholeWords_->setChecked(on); }
+
+// Script, Line and Text (ours: the guide does not list the columns).
+void FindWindow::fillScriptText(const QList<model::ScriptTextHit>& found) {
+    Page& p = page(ScriptTab);
+    p.table->setColumnCount(3);
+    p.table->setHorizontalHeaderLabels({tr("Script"), tr("Line"), tr("Text")});
+    p.table->setRowCount(static_cast<int>(found.size()));
+    for (int r = 0; r < found.size(); ++r) {
+        const model::ScriptTextHit& h = found.at(r);
+        p.table->setItem(r, 0, new QTableWidgetItem(h.scriptName));
+        p.table->setItem(r, 1, new QTableWidgetItem(QString::number(h.line + 1)));
+        p.table->setItem(r, 2, new QTableWidgetItem(h.text.trimmed()));
+        Result res;
+        res.binId = h.binId;
+        res.scriptItem = h.itemId;
+        res.scriptLine = h.line;
+        p.rows << res;
     }
 }
 
@@ -515,7 +573,7 @@ void FindWindow::fillMarkers(const QList<model::MarkerFound>& found) {
     p.table->setRowCount(static_cast<int>(found.size()));
     for (int r = 0; r < found.size(); ++r) {
         const model::MarkerFound& f = found.at(r);
-        p.rows << Result{f.binId, f.item, f.marker.frame};
+        p.rows << Result{f.binId, f.item, f.marker.frame, false, {}, -1};
         const QStringList cells{f.item.name, f.binName, f.marker.name, f.marker.color, f.marker.track,
                                 timecode(f.marker.frame, f.item), f.marker.comment, f.marker.user};
         for (int c = 0; c < cells.size(); ++c) p.table->setItem(r, c, new QTableWidgetItem(cells.at(c)));
@@ -570,7 +628,7 @@ int FindWindow::fillTimeline(const QString& text) {
     p.table->setRowCount(static_cast<int>(rows.size()));
     for (int r = 0; r < rows.size(); ++r) {
         const Row& row = rows.at(r);
-        p.rows << Result{rec->binId, rec->item, row.position};
+        p.rows << Result{rec->binId, rec->item, row.position, false, {}, -1};
         const QStringList cells{row.clip, row.track, timecode(row.start, rec->item), timecode(row.end, rec->item),
                                 record.durationText(row.end - row.start), row.comment, QString::number(row.position)};
         for (int c = 0; c < cells.size(); ++c) p.table->setItem(r, c, new QTableWidgetItem(cells.at(c)));
@@ -587,6 +645,11 @@ void FindWindow::openResult(int row) {
     if (row < 0 || row >= p.rows.size()) return;
     p.table->selectRow(row);
     const Result& r = p.rows.at(row);
+    if (tab == ScriptTab) {
+        // The script opens at the line (ours: it is selected).
+        if (scriptSource_.open) scriptSource_.open(r.binId, r.scriptItem, r.scriptLine);
+        return;
+    }
     if (tab == TimelineTab) {
         composer_.setActiveMonitor(MonitorId::Record);
         composer_.moveTo(MonitorId::Record, r.frame);

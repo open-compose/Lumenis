@@ -256,6 +256,31 @@ private slots:
         QCOMPARE(made.slates[0].takes[0].clipId, QStringLiteral("c1"));
         QCOMPARE(made.slates[0].takes[0].marks, (QMap<int, std::int64_t>{{0, 5}, {1, 30}}));
     }
+
+    // The Find window's Script Text and Scripts in Project (p.429-430, p.440, 8.3e).
+    void findInScripts() {
+        Script a = scriptFromText(QStringLiteral("We eat at noon.\nEating is fun.\nNEAT"));
+        addSlate(a, 0, 1, {{QStringLiteral("b1"), QStringLiteral("c1"), QStringLiteral("33/1"), {}}});
+        Bin bin;
+        BinItem clip;
+        clip.id = QStringLiteral("c1");
+        clip.name = QStringLiteral("33/1");
+        BinItem other;
+        other.id = QStringLiteral("c2");
+        other.name = QStringLiteral("unused");
+        bin.items = {scriptItem(QStringLiteral("Scene 33"), a), clip, other};
+        const QList<FindBin> bins{{QStringLiteral("b1"), QStringLiteral("Bin 1"), bin}};
+        QCOMPARE(findScriptText(bins, QStringLiteral("eat"), {}).size(), qsizetype(3));
+        const auto whole = findScriptText(bins, QStringLiteral("eat"), {true, true});
+        QCOMPARE(whole.size(), qsizetype(1));
+        QCOMPARE(whole[0].line, 0);
+        QCOMPARE(whole[0].scriptName, QStringLiteral("Scene 33"));
+        QCOMPARE(findScriptText(bins, QStringLiteral("eat"), {false, false}).size(), qsizetype(1)); // case kept: not "Eating", "NEAT"
+        const QList<FindBin> takes = scriptTakeBins(bins);
+        QCOMPARE(takes.size(), qsizetype(1));
+        QCOMPARE(takes[0].bin.items.size(), qsizetype(1));
+        QCOMPARE(takes[0].bin.items[0].id, QStringLiteral("c1"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestScript)

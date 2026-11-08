@@ -1441,7 +1441,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (Avid's .avt is undocumented); peer-to-peer sharing over NEXIS waits for 8.7.
     * 8.2e (done), AutoCut from transcript speakers (2026.8 guide p.451-452): speakers assigned to a group's angles, AutoCut
       on a group segment.
-  * 8.3, ScriptSync (ch.18, p.566-590; the Script setting p.1217), in five parts (planned 2026-11-07):
+  * 8.3 (done), ScriptSync (ch.18, p.566-590; the Script setting p.1217), in five parts (planned 2026-11-07):
     * 8.3a (done), scripts and the Script window (p.570-576): File > New > New Script importing a text file into a script item
       in the active bin, the script kept in the project folder (ours: `.cthscript`; Avid's .avc is undocumented) with
       the attic and auto-save as bins (p.570); the Script window (a panel) with Save Script, Save a Script Copy As,
@@ -1462,7 +1462,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     * 8.3d (done), ScriptSync AI (p.584-585) and Create Script from Clip (p.569-570): the dialog (tracks, the skip options,
       Overwrite existing marks, Sync between first and last mark) aligning script lines with the words of 8.2's
       transcripts; a script made from clips' transcripts, its lines already marked.
-    * 8.3e, shared scripts (p.589-590): the script lock icons and refresh on shared storage through 3.7's locks, the
+    * 8.3e (done), shared scripts (p.589-590): the script lock icons and refresh on shared storage through 3.7's locks, the
       Cancel choice when closing a locked script; the Find window's Script Text tab and Scripts in Project (p.428-430).
   * 8.4, Dynamic Media Folders and the background services (p.371-377), on the Background Queue.
   * 8.5, FrameFlex and colour adapters (p.527-545): Source Settings, reframing and panning, Reformat, LUTs and CLF

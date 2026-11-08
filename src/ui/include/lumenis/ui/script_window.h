@@ -20,6 +20,9 @@
 //   selected lines) and a click on a line marks it at the playing frame; a click selects a mark, Ctrl+drag moves it,
 //   Delete offers Delete mark(s); double-click on a mark cues its take there; Ctrl+Alt+double-click splices the marked
 //   range (spliceRequested); Find Bin shows the selected takes' clips in their bins.
+// * Shared scripts (8.3e; p.589-590): the script lock icon shows its bin's lock (lumenis/model/bin_lock.h, 3.7):
+//   red, another user holds it; yellow, the holder saved changes (the title says "(modified)"); blue, released; green,
+//   this user holds it. Clicks go to MainWindow (lockClicked), which refreshes, takes or (Alt) releases the lock.
 // * Changes mark the window modified (an asterisk in its title, p.570); MainWindow saves the script into its bin item
 //   (File > Save Script).
 
@@ -61,6 +64,9 @@ struct ScriptSlateOptions {
     double frameScale = 1.0; // Edit > Enlarge Frame / Reduce Frame (p.578)
 };
 
+// The script lock icon's states (p.589), as the script's bin's lock (BinDocument::LockState).
+enum class ScriptLock { None, Mine, Others, Modified, Released, Protected };
+
 class ScriptWindow : public QWidget {
     Q_OBJECT
 
@@ -80,8 +86,15 @@ public:
     bool isModified() const { return modified_; }
     // After the script was saved: no asterisk.
     void markSaved();
-    // The window's title: the script's name, with "*" while modified.
+    // The window's title: the script's name, with "*" while modified and "(modified)" while the lock's holder has saved
+    // changes not read yet (p.589).
     QString title() const;
+    // The script lock icon (8.3e). `holder` names who holds the lock, for its tooltip.
+    void setLock(ScriptLock lock, const QString& holder = {});
+    ScriptLock lock() const { return lock_; }
+    // Someone else holds the lock (or the bin is protected): changes can be made but not saved, only saved as a new
+    // script (p.590).
+    bool isLockedByOther() const { return lock_ == ScriptLock::Others || lock_ == ScriptLock::Modified || lock_ == ScriptLock::Protected; }
 
     // How the Script setting shows scripts (p.1217): line numbers in the left margin, rows shaded alternately.
     void setDisplay(bool lineNumbers, bool shadedRows);
@@ -214,6 +227,8 @@ signals:
     // A script mark was added (play stops after Add Script Mark, p.583).
     void scriptMarkAdded(const model::ScriptTake& take, int line);
     void findBinRequested(const QList<model::ScriptTake>& takes);
+    // The script lock icon was clicked (p.589); `alt` with Alt held.
+    void lockClicked(bool alt);
     // Splicing a Script Range (p.588): the take over script lines [first, last].
     void spliceRequested(const model::ScriptTake& take, int first, int last);
 
@@ -239,6 +254,8 @@ private:
     QComboBox* pages_ = nullptr;
     QLabel* status_ = nullptr;
     QToolButton* offscreenButton_ = nullptr;
+    QToolButton* lockButton_ = nullptr;
+    ScriptLock lock_ = ScriptLock::None;
     QToolButton* colorButton_ = nullptr;
     model::Script script_;
     QString binId_;

@@ -25,6 +25,8 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QInputDialog>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QSpinBox>
 
 namespace lumenis::ui {
@@ -85,6 +87,7 @@ void MainWindow::setUpScriptWindow() {
     });
     connect(scriptWindow_, &ScriptWindow::findBinRequested, this, &MainWindow::findScriptBins);
     connect(scriptWindow_, &ScriptWindow::spliceRequested, this, &MainWindow::spliceScriptRange);
+    connect(scriptWindow_, &ScriptWindow::lockClicked, this, &MainWindow::scriptLockClicked);
     connect(scriptWindow_, &ScriptWindow::takeInfoRequested, this, [this](const model::ScriptTake& take) {
         // Ours: the Info window (p.572) is not built; its clip's details go to the Console.
         const model::BinItem* item = scriptTakeItem(take);
@@ -328,9 +331,23 @@ bool MainWindow::openScript(const QString& binId, const QString& itemId) {
     const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
     const auto script = item ? model::scriptOf(*item) : std::nullopt;
     if (!script) return false;
-    // Ours: a changed script is saved before another takes the window (bins save on their own the same way, p.570).
-    if (scriptWindow_->isOpen() && scriptWindow_->isModified() && scriptWindow_->itemId() != itemId) saveScript();
+    // Ours: a changed script is saved before another takes the window (bins save on their own the same way, p.570); a
+    // locked one asks (closeScript).
+    if (scriptWindow_->isOpen() && scriptWindow_->isModified() && scriptWindow_->itemId() != itemId) {
+        if (scriptWindow_->isLockedByOther()) {
+            if (!closeScript()) return false;
+            doc = binContainer_->document(binId);
+            item = doc ? doc->bin().item(itemId) : nullptr;
+            if (!item) return false;
+        } else {
+            saveScript();
+        }
+    }
     scriptWindow_->open(binId, itemId, item->name, *script);
+    // The script lock icon follows its bin's lock (8.3e).
+    QObject::disconnect(scriptLockConnection_);
+    scriptLockConnection_ = connect(doc, &BinDocument::lockChanged, this, &MainWindow::updateScriptLock);
+    updateScriptLock();
     applyScriptSettings();
     scriptWindow_->setDisplay(settings_->flag(QStringLiteral("Script"), QStringLiteral("showLineNumbers")),
                               settings_->value(QStringLiteral("Script"), QStringLiteral("background")).toString() != QLatin1String("white"));
@@ -488,6 +505,98 @@ bool MainWindow::createScriptFromClips() {
     const model::BinItem item = model::scriptItem(clips.first().name + tr(" Script"), script);
     doc.addItem(item);
     return openScript(doc.nodeId(), item.id);
+}
+
+// Shared scripts (8.3e, p.589-590): the script's bin's lock as the script lock icon.
+void MainWindow::updateScriptLock() {
+    const BinDocument* doc = scriptWindow_->isOpen() ? binContainer_->document(scriptWindow_->binId()) : nullptr;
+    if (!doc) {
+        scriptWindow_->setLock(ScriptLock::None);
+        return;
+    }
+    using State = BinDocument::LockState;
+    const std::pair<State, ScriptLock> states[] = {{State::NotShared, ScriptLock::None}, {State::Mine, ScriptLock::Mine},
+                                                   {State::Others, ScriptLock::Others}, {State::Modified, ScriptLock::Modified},
+                                                   {State::Released, ScriptLock::Released}, {State::Protected, ScriptLock::Protected}};
+    ScriptLock lock = ScriptLock::None;
+    for (const auto& [state, shown] : states)
+        if (state == doc->lockState()) lock = shown;
+    scriptWindow_->setLock(lock, doc->lockHolder() ? doc->lockHolder()->describe() : QString());
+}
+
+// "If you click the yellow icon, the script refreshes ... If you click the blue icon, you now control the script and the
+// icon turns green ... You can release the lock by Alt + clicking the green icon" (p.589). The bin's lock does it
+// (BinContainer::lockButtonClicked); the script is read again from its item afterwards unless it has changes here.
+void MainWindow::scriptLockClicked(bool alt) {
+    BinDocument* doc = scriptWindow_->isOpen() ? binContainer_->document(scriptWindow_->binId()) : nullptr;
+    if (!doc) return;
+    using State = BinDocument::LockState;
+    const State before = doc->lockState();
+    if (before == State::Mine && alt && scriptWindow_->isModified()) saveScript();
+    binContainer_->lockButtonClicked(doc, alt);
+    const bool reread = before == State::Modified || (before == State::Released && !scriptWindow_->isModified());
+    if (reread) {
+        const model::BinItem* item = doc->bin().item(scriptWindow_->itemId());
+        const auto script = item ? model::scriptOf(*item) : std::nullopt;
+        if (script) {
+            const auto sel = scriptWindow_->selectedLines();
+            scriptWindow_->open(doc->nodeId(), item->id, item->name, *script);
+            applyScriptSettings();
+            if (sel) scriptWindow_->selectLines(sel->first, sel->second);
+        }
+    }
+    updateScriptLock();
+}
+
+// Closing the Script window (File > Close with it active, or another script opening). A changed script is saved; a
+// changed script someone else holds asks: "Save Script As - choose if you want to save the script including any changes
+// as a new script. Don't Save ... Cancel - choose if you want to keep the locked script open" (p.590). Ours: Save Script As
+// puts the copy into the active bin when that can be changed, else into the first open bin that can. False: cancelled.
+bool MainWindow::closeScript() {
+    if (!scriptWindow_->isOpen()) return true;
+    if (scriptWindow_->isModified()) {
+        if (!scriptWindow_->isLockedByOther()) {
+            if (!saveScript()) return false;
+        } else {
+            int choice = 2;
+            if (closeScriptHook_) {
+                choice = closeScriptHook_();
+            } else {
+                QMessageBox box(QMessageBox::Question, tr("Close Script"),
+                                tr("The script \"%1\" is locked by another user. Save your changes as a new script?").arg(scriptWindow_->name()),
+                                QMessageBox::NoButton, this);
+                QPushButton* saveAs = box.addButton(tr("Save Script As"), QMessageBox::AcceptRole);
+                QPushButton* discard = box.addButton(tr("Don't Save"), QMessageBox::DestructiveRole);
+                box.addButton(QMessageBox::Cancel);
+                box.exec();
+                choice = box.clickedButton() == saveAs ? 0 : box.clickedButton() == discard ? 1 : 2;
+            }
+            if (choice == 2) return false;
+            if (choice == 0) {
+                BinDocument* target = binContainer_->activeDocument();
+                if (!target || target->isReadOnly()) {
+                    target = nullptr;
+                    for (BinDocument* d : binContainer_->openDocuments())
+                        if (!d->isReadOnly()) target = d;
+                }
+                if (!target) {
+                    ConsoleLog::instance().append(tr("Close Script: no open bin can take the new script."));
+                    return false;
+                }
+                bool ok = true;
+                QString name = scriptWindow_->name() + tr(" Copy");
+                if (!closeScriptHook_) {
+                    name = QInputDialog::getText(this, tr("Save Script As"), tr("Name:"), QLineEdit::Normal, name, &ok);
+                    if (!ok || name.trimmed().isEmpty()) return false;
+                }
+                target->addItem(model::scriptItem(name.trimmed(), scriptWindow_->script()));
+            }
+        }
+    }
+    QObject::disconnect(scriptLockConnection_);
+    scriptWindow_->close();
+    scriptWindow_->setLock(ScriptLock::None);
+    return true;
 }
 
 } // namespace lumenis::ui

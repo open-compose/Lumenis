@@ -148,20 +148,42 @@ in the middle of its line (p.583).
   (slate) over its lines with every line marked; it opens in the Script window. "Just click a line of text to jump to its
   corresponding location": in such a script (`Script::fromClips`) a click on a marked line loads the take cued there.
 
-## Later
+## Shared scripts (p.589-590, 8.3e)
 
-* 8.3e: shared scripts' locks; the Find window's Script Text tab.
+A script is kept in its bin item, so it is shared through its bin's lock (3.7, docs/spec/bin-locking.md); Avid's "This
+feature is enabled only when the Project is stored on an Avid NEXIS workspace" is ours for any shared storage, as for
+bins.
+
+* The script lock icon (the toolbar's `scriptLock`, shown only for a shared bin) takes the bin's lock colours: red,
+  another user holds it; yellow, "the owner of the shared script has made changes" and the title says "(modified)" (ours:
+  the bin tabs' wording); blue, released; green, this user holds it (ours: dark red for a protected bin).
+* "If you click the yellow icon, the script refreshes and the new refreshed script displays the updated content and returns
+  the icon red. ... If you click the blue icon, you now control the script and the icon turns green ... You can release
+  the lock by Alt + clicking the green icon" (p.589): the bin's own lock button does it
+  (`BinContainer::lockButtonClicked`); the script is read again afterwards (a released script only when unchanged here);
+  releasing saves a changed script first.
+* A script someone else holds can be changed but not saved. Closing it with changes (File > Close with the Script
+  window active, or opening another script) asks Save Script As (a new script item, in the active bin when it can be
+  changed, else in the first open bin that can), Don't Save or Cancel (p.590).
+
+## The Find window (p.429-430, p.440-441, 8.3e)
+
+The Script Text tab searches the current script or every script in the project, with its own Whole Words only, and a
+result opens the script at its line; Scripts in Project on the Clips and Sequences tab finds the clips the scripts link
+as takes (docs/spec/find.md).
 
 ## Tests
 
 * `tst_script`: importing text, scene and page numbers, the script item, editing with the numbers following the lines,
   find and replace; slates and takes (adding, moving, lines, frames, indicators, Interpolate Position, JSON); script marks
   (adding, extending, Find Script's lines, marked frames, moving, deleting, through line edits); `scriptSync`: the skip
-  options, alignment with a changed word, Overwrite, Sync between first and last mark, scripts from transcripts.
+  options, alignment with a changed word, Overwrite, Sync between first and last mark, scripts from transcripts;
+  `findInScripts`: Script Text with Whole Words and case, the clips scripts link.
 * `tst_script_ui`: New Script into the active bin, AS/AP, the status bar and menus, Edit Mode, Find and Replace, the
   Delete dialog, Text Layout, Save Script, reopening, Save a Script Copy As; dropping clips, tabs, Ctrl+click and the
   lasso, the arrow keys, Set Offscreen and Set Color, Show All Takes and Show Frames, Enlarge Frame, moving slates,
   loading and playing takes, Delete Takes; `scriptMarks`: Add Script Mark, cueing with the Pre-roll, Find Script, the Record
   button marking the playing take, moving a mark, splicing a script range, Find Bin, Delete mark(s);
   `scriptSyncAndCreateScript`: the dialog's tracks and Select Dialog, marks from a transcript, Create Script from Clip and
-  its click to jump.
+  its click to jump; `sharedScripts`: two users on a shared bin, the lock icon's colours and clicks, "(modified)", closing a
+  locked changed script (Cancel, Save Script As), the Find window's Script Text and Scripts in Project.

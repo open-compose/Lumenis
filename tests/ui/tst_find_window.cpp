@@ -122,7 +122,7 @@ private slots:
         FindWindow* find = window.findWindow();
         QVERIFY(find && find->isVisible());
         QCOMPARE(find->tabs()->count(), 4);
-        QVERIFY(!find->tabs()->isTabEnabled(FindWindow::ScriptTab));
+        QVERIFY(find->tabs()->isTabEnabled(FindWindow::ScriptTab)); // scripts are searched (8.3e)
 
         // Clips and Sequences, Bins in Project: every column of every bin.
         find->setText(QStringLiteral("interview"));

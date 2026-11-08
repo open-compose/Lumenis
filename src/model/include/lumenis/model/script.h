@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/text_find.h"
 
 #include <QJsonObject>
 #include <QList>
@@ -173,6 +174,20 @@ std::optional<std::pair<int, int>> scriptLinesAt(const ScriptTake& take, std::in
 // when no mark is at or before the range's end.
 std::optional<std::pair<std::int64_t, std::int64_t>> markedFrames(const ScriptTake& take, int first, int last,
                                                                   std::int64_t clipFrames);
+
+// The Find window's Script Text tab (p.429-430, p.440, 8.3e): every line of the bins' scripts holding `text`, in bin and
+// line order; "Whole words only ... if you enter 'eat,' the system will only find eat. Not eating, eats, neat."
+struct ScriptTextHit {
+    QString binId;
+    QString itemId;
+    QString scriptName;
+    int line = 0;
+    QString text; // the line
+};
+QList<ScriptTextHit> findScriptText(const QList<FindBin>& bins, const QString& text, const TextFindOptions& options);
+// The clips the bins' scripts link as takes ("Scripts in Project" on the Clips and Sequences tab, p.429, ours): the bins
+// with only those items.
+QList<FindBin> scriptTakeBins(const QList<FindBin>& bins);
 
 // Find and Replace in the Script window (p.575-576).
 struct ScriptMatch {

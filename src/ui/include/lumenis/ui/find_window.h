@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/phrase_find.h"
+#include "lumenis/model/script.h"
 #include "lumenis/model/text_find.h"
 
 #include <QWidget>
@@ -27,7 +28,8 @@ class Timeline;
 // The Find window (Edit > Find, Ctrl+F; Editing Guide p.417, p.428-431; docs/spec/find.md). Four tabs:
 // * Clips and Sequences: items of the project's bins, open or not, or of the current bin, matching
 //   the text in any column, with filters;
-// * Script Text: dimmed until scripts exist;
+// * Script Text: the lines of the current script or of every script in the project (8.3e, p.429-430, p.440); a result
+//   opens the script at its line;
 // * Timeline and Monitors: the Record monitor's sequence's markers, clip names and Timeline text;
 // * Markers: marker comments in every sequence and clip of the project.
 // Double-clicking a result loads it or moves to it; findNext() (Ctrl+G) goes to the next one.
@@ -84,6 +86,16 @@ public:
         std::function<void()> manageTranscripts; // the Settings button's Manage Transcripts (8.2d)
     };
     void setPhraseFind(PhraseFindSource source);
+    // Script Text (8.3e). What the window needs: the script the Script window shows (its bin and item; nothing without one),
+    // and opening a script at a line.
+    struct ScriptSource {
+        std::function<std::optional<std::pair<QString, QString>>()> current;
+        std::function<void(const QString& binId, const QString& itemId, int line)> open;
+    };
+    void setScriptSource(ScriptSource source) { scriptSource_ = std::move(source); }
+    // The Script Text tab's "Current Script" or "Scripts in Project" (p.440) and its Whole Words only (p.441).
+    void setScriptScope(bool wholeProject);
+    void setScriptWholeWords(bool on);
     // The PhraseFind AI button: searches the dialogue and fills the Results (Clips and Sequences tab). Returns the
     // number found.
     int phraseFind();
@@ -133,6 +145,10 @@ private:
     QCheckBox* ignoreCase_ = nullptr;
     QCheckBox* wholeWords_ = nullptr;
     QCheckBox* loadIntoMonitor_ = nullptr;
+    QComboBox* scriptScope_ = nullptr;
+    QCheckBox* scriptWholeWords_ = nullptr;
+    ScriptSource scriptSource_;
+    void fillScriptText(const QList<model::ScriptTextHit>& found);
     QCheckBox* markers_ = nullptr;
     QCheckBox* clipNames_ = nullptr;
     QCheckBox* timelineText_ = nullptr;
