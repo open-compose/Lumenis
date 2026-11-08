@@ -245,7 +245,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Calculator | Ctrl+2 | p.100 | works | ☐ | | |
 | Command Palette | Ctrl+3 | p.98 | works | ☐ | | |
 | Console | Ctrl+6 | p.101 | works | ☐ | | |
-| Dynamic Media Folders |  | p.372 | *later* | ☐ | | |
+| Dynamic Media Folders |  | p.372 | works | ☐ | | |
 | Effect Palette | Ctrl+8 | p.791 | works | ☐ | | |
 | IMF Window |  | p.335 | *later* | ☐ | | |
 | List Tool |  | p.944 | works | ☐ | | |
@@ -328,6 +328,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 224 menu commands, 191 of them working with a project open; the
+* 224 menu commands, 192 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

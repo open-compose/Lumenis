@@ -8208,6 +8208,7 @@ void MainWindow::installPanelHandlers() {
     handle("script.text_layout", [this] { scriptTextLayout(); });
     handle("other.add_script_mark", [this] { addScriptMark(); });
     handle("tools.background_services", [this] { backgroundServices(); });
+    handle("tools.dynamic_media_folders", [this] { showDynamicMediaFolders(); });
     handle("script.scriptsync_ai", [this] { scriptSyncAI(); });
     handle("bin.create_script_from_clip", [this] { createScriptFromClips(); });
     handle("other.find_script", [this] { findScript(); });

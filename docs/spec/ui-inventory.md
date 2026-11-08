@@ -645,6 +645,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   looked in every 2 seconds, an entry taken once it looks the same twice, an entry done whether it worked or not,
   Link Using kept with FFmpeg linking, Start from four pairs of digits or eight digits in the file name, Checkin,
   Convert Audio Format, Relink before skipping, Apply Reformatting and Apply color transformations kept without effect.
+  The window's "-" button, the Profile Editor's sections open to start with and its summary in words, Track Formats
+  typed in place of the Multiple Mixes dialog, the Default FPS menu's rates, an entry acquired while processing as an
+  offline clip named after it, a new bin when Use active bin finds none.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

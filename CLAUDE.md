@@ -892,7 +892,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `main_window_services.cpp`; test `tst_background_services`), is done. 8.4b, Dynamic Media Folders and profiles
   (`src/media/dynamic_media_folders.*` with `processDmfEntry` linking, filling the AIS columns and running Copy to
   Folder, Consolidate and Transcode; `main_window_dmf.cpp` watching enabled folders and queuing entries, the assets
-  for the green dot; tests `tst_dmf`, `tst_background_services dynamicMediaFolders`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  for the green dot; tests `tst_dmf`, `tst_background_services dynamicMediaFolders`), is done. 8.4c, the Dynamic Media
+  Folders window and the Profile Editor (`src/ui/dynamic_media_folders_window.*` as the "DynamicMediaFolders" panel,
+  `MainWindow::editDmfProfile`/`acquireDmfAssets` with offline clips while processing; test `tst_background_services
+  dmfWindowAndAcquire`), is done, so 8.4 is. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

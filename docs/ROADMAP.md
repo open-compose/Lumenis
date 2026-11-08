@@ -1464,7 +1464,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       transcripts; a script made from clips' transcripts, its lines already marked.
     * 8.3e (done), shared scripts (p.589-590): the script lock icons and refresh on shared storage through 3.7's locks, the
       Cancel choice when closing a locked script; the Find window's Script Text tab and Scripts in Project (p.428-430).
-  * 8.4, Dynamic Media Folders and the background services (p.371-377), on the Background Queue, in three parts (planned
+  * 8.4 (done), Dynamic Media Folders and the background services (p.371-377), on the Background Queue, in three parts (planned
     2026-11-08; docs/spec/background-services.md):
     * 8.4a (done), the background services: Tools > Background Services (Start, Stop, Pause for a time, Always Start at
       Launch, Always Stop upon Exit, Enable Pausing; p.376-377), the Background Queue starting jobs only while they are
@@ -1474,7 +1474,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (Link Using, the bin choices and naming, Multichannel Audio, the AIS options) and ordered Actions (Copy to Folder
       with Auto Relink, Consolidate, Transcode with their options), files added to an enabled folder linked and processed
       on the Background Queue.
-    * 8.4c, the Dynamic Media Folders window and the Profile Editor (p.372-376): + to add a folder, the Profile Editor's
+    * 8.4c (done), the Dynamic Media Folders window and the Profile Editor (p.372-376): + to add a folder, the Profile Editor's
       menu bars and actions reordered by dragging, Save and naming, the profile menu, Enable, the indicator's green dot
       and the Acquire column putting the assets into bins (offline while processing, .new for consolidated or transcoded
       clips); DPX folders as clips.

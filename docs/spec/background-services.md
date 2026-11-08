@@ -60,6 +60,26 @@ Title_Templates are; the guide's service keeps them outside any project) through
   folder's `done` list, whether it worked or not (a failure is in the error report). What it made waits as an asset,
   and the indicator shows the green dot.
 
+## The Dynamic Media Folders window and the Profile Editor (p.372-376, 8.4c)
+
+* Tools > Dynamic Media Folders (`DynamicMediaFoldersWindow`, the "DynamicMediaFolders" panel; also the indicator's
+  right-click Dynamic Media Folders): a row per folder with Enable, the folder, its profile menu ("choosing the profile
+  from the drop down list", p.375) and the Acquire column. "+" opens the Select Folder window (p.372); ours: "-"
+  removes the selected folder. Profile Editor edits the selected folder's profile, or a new one.
+* The Profile Editor (`DmfProfileEditor`): the menu bars Profile Summary, Link Settings and Actions open and close
+  their sections (p.372; ours: all open to start with, the summary in words); Actions + adds a Copy to Folder action;
+  a row's Menu button chooses Copy to Folder, Consolidate or Transcode; rows are reordered by dragging (p.375); Set
+  chooses Copy to's folder; Save asks for the profile's name and gives the profile to the folder (p.375). Ours: the
+  Multichannel Audio's Track Formats are typed ("Stereo A1A2") where the guide's Edit opens the Multiple Mixes dialog;
+  Checkin to Production Management is dimmed.
+* Acquire (p.376; `MainWindow::acquireDmfAssets`): green with the count when assets are ready, dimmed while they are
+  still being processed. "The new assets will populate the Media Composer Bin according to the Bin setting": the
+  active bin, or a new bin named by the profile (also when no bin is active, ours). Consolidated and transcoded clips go
+  in as ".new" clips, numbered again when the bin has the name. An entry still being processed goes in as an offline
+  master clip named after it (ours); "When they are ready, the Acquire icon will redisplay", and acquiring again
+  replaces the offline clip with the entry's clips. Acquired assets leave the green dot. An entry that made nothing (an
+  error) has nothing to acquire; its error is in the error report.
+
 ## The progress indicator (p.375-376, 8.4a)
 
 `BackgroundIndicator` in the Timeline's toolbar (ours: before the Quick Find field), drawn by us after the guide's table:
@@ -76,4 +96,6 @@ until you generate an error report").
 * `tst_background_services`: jobs waiting while stopped and paused, a timed pause ending, the pause extended during play,
   Enable Pausing off, the error report; the indicator's states; Tools > Background Services in the application with its
   options kept and applied for the next user's settings; an enabled folder's file linked and copied in the
-  application, kept beside the user's settings, the green dot and a failing entry's error.
+  application, kept beside the user's settings, the green dot and a failing entry's error; the window's +, Enable,
+  profile and -, the Profile Editor's sections, actions and Save, Acquire into a new named bin and the active bin,
+  offline while processing and replaced when ready.

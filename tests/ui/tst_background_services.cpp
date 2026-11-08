@@ -5,6 +5,9 @@
 #include "lumenis/media/media.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/background_services.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/dynamic_media_folders_window.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
@@ -14,6 +17,10 @@
 
 #include <QAction>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QToolButton>
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
@@ -234,9 +241,137 @@ private slots:
         window.scanDynamicMediaFolders();
         window.backgroundQueue().waitForIdle();
         QCoreApplication::processEvents();
-        QCOMPARE(window.dmfAssets().size(), 2);
-        QVERIFY(!window.dmfAssets()[1].error.isEmpty());
+        // The failure is in the error report; it leaves nothing to acquire.
+        QCOMPARE(window.dmfAssets().size(), 1);
+        QCOMPARE(window.dynamicMediaFolders().folders[0].done.size(), 2);
         QCOMPARE(indicator->description(), QStringLiteral("assets error"));
+    }
+
+    // Tools > Dynamic Media Folders (8.4c, p.372-376): + adds a folder, the Profile Editor saves a named profile for it,
+    // Enable starts the watching, Acquire puts the clips in a new bin named by the profile; an entry still being
+    // processed goes in offline and is replaced when it is acquired again.
+    void dmfWindowAndAcquire() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+
+        commands.action(QStringLiteral("tools.dynamic_media_folders"))->trigger();
+        DynamicMediaFoldersWindow* w = window.dynamicMediaFoldersWindow();
+        QVERIFY(w && !w->isHidden());
+        const QString watched = dir.filePath(QStringLiteral("card"));
+        QVERIFY(QDir().mkpath(watched));
+        w->setFolderChooser([&] { return watched; });
+        w->findChild<QToolButton*>(QStringLiteral("addFolder"))->click();
+        QCOMPARE(window.dynamicMediaFolders().folders.size(), 1);
+        QVERIFY(!window.dynamicMediaFolders().folders[0].enabled);
+
+        // The Profile Editor: the menu bars open and close; Actions + with the Menu button's choices, a row dragged
+        // above another; Save names the profile, which the folder then has.
+        window.setDmfProfileEditorHook([](DmfProfileEditor& e) {
+            e.openSection(QStringLiteral("link"), false);
+            if (e.isSectionOpen(QStringLiteral("link"))) return false;
+            e.openSection(QStringLiteral("link"), true);
+            e.findChild<QComboBox*>(QStringLiteral("naming"))->setCurrentIndex(2);
+            e.findChild<QLineEdit*>(QStringLiteral("binName"))->setText(QStringLiteral("Card A"));
+            e.addAction();
+            e.setActionKind(0, media::DmfAction::Kind::Transcode);
+            e.addAction(); // Copy to Folder, selected
+            e.findChild<QLineEdit*>(QStringLiteral("copyTo"))->setText(QStringLiteral("/tmp/nowhere"));
+            e.moveAction(1, 0);
+            const media::DmfProfile p = e.profile();
+            if (p.actions.size() != 2 || p.actions[0].kind != media::DmfAction::Kind::CopyToFolder ||
+                p.actions[0].copyTo != QLatin1String("/tmp/nowhere") || p.actions[1].kind != media::DmfAction::Kind::Transcode)
+                return false;
+            // Only the Transcode is kept, so that nothing is copied in this test.
+            e.removeAction(0);
+            e.setNameChooser([](const QString&) { return QStringLiteral("Card"); });
+            return e.save();
+        });
+        w->selectFolder(0);
+        w->findChild<QPushButton*>(QStringLiteral("profileEditor"))->click();
+        const media::DmfProfile* saved = window.dynamicMediaFolders().profile(QStringLiteral("Card"));
+        QVERIFY(saved);
+        QCOMPARE(saved->link.naming, media::DmfLinkSettings::Naming::Specify);
+        QCOMPARE(saved->link.binName, QStringLiteral("Card A"));
+        QCOMPARE(saved->actions.size(), 1);
+        QCOMPARE(window.dynamicMediaFolders().folders[0].profile, QStringLiteral("Card"));
+        // Without actions, so the job only links.
+        media::DynamicMediaFolders folders = window.dynamicMediaFolders();
+        folders.profiles[0].actions.clear();
+        window.setDynamicMediaFolders(folders);
+
+        // A file; Enable; two looks queue it. Stopped services keep it waiting, so it is acquired while processing.
+        auto writeWav = [](const QString& path) {
+            media::WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = QStringLiteral("pcm_s16le");
+            s.channels = 1;
+            s.sampleRate = 48000;
+            media::MediaWriter m;
+            std::vector<float> v(4800, 0.1f);
+            return m.open(path, s) && m.writeAudio(v.data(), 4800) && m.finish();
+        };
+        QVERIFY(writeWav(watched + QStringLiteral("/Take1.wav")));
+        window.backgroundQueue().stopServices();
+        w->setEnabled(0, true);
+        QVERIFY(window.dynamicMediaFolders().folders[0].enabled);
+        window.scanDynamicMediaFolders();
+        QCOMPARE(window.dmfAssets().size(), 1);
+        QVERIFY(!window.dmfAssets()[0].ready);
+        QVERIFY(w->acquireButton(0)->isEnabled());
+        QCOMPARE(w->acquireButton(0)->text(), QStringLiteral("○"));
+
+        const QString binId = window.acquireDmfAssets(watched);
+        QVERIFY(!binId.isEmpty());
+        BinDocument* doc = window.binContainer().document(binId);
+        QVERIFY(doc);
+        QCOMPARE(doc->name(), QStringLiteral("Card A"));
+        QCOMPARE(doc->bin().items.size(), 1);
+        QCOMPARE(doc->bin().items[0].name, QStringLiteral("Take1"));
+        QVERIFY(!media::isLinked(doc->bin().items[0])); // offline
+        QVERIFY(!w->acquireButton(0)->isEnabled());
+
+        // Processed: the green icon; acquired again, the clip replaces the offline one.
+        window.backgroundQueue().startServices();
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        QVERIFY(window.dmfAssets()[0].ready);
+        QCOMPARE(w->acquireButton(0)->text(), QStringLiteral("● 1"));
+        QCOMPARE(window.timeline().backgroundIndicator()->description(), QStringLiteral("assets"));
+        QCOMPARE(window.acquireDmfAssets(watched), binId);
+        QCOMPARE(doc->bin().items.size(), 1);
+        QVERIFY(media::isLinked(doc->bin().items[0]));
+        QVERIFY(window.dmfAssets().isEmpty());
+        QCOMPARE(window.timeline().backgroundIndicator()->description(), QStringLiteral("idle"));
+
+        // Use active bin: the next file goes into the active bin.
+        folders = window.dynamicMediaFolders();
+        folders.profiles[0].link.bin = media::DmfLinkSettings::Bin::Active;
+        window.setDynamicMediaFolders(folders);
+        QVERIFY(writeWav(watched + QStringLiteral("/Take2.wav")));
+        window.scanDynamicMediaFolders();
+        window.scanDynamicMediaFolders();
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        window.binContainer().openBin(binId);
+        QVERIFY(window.binContainer().activeDocument());
+        const QString active = window.binContainer().activeDocument()->nodeId();
+        QCOMPARE(window.acquireDmfAssets(watched), active);
+        QVERIFY(window.binContainer().document(active)->bin().items.size() >= 1);
+
+        // - removes the folder.
+        w->selectFolder(0);
+        w->findChild<QPushButton*>(QStringLiteral("removeFolder"))->click();
+        QVERIFY(window.dynamicMediaFolders().folders.isEmpty());
     }
 };
 

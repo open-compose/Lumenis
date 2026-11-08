@@ -64,6 +64,8 @@ namespace lumenis::ui {
 class BinContainer;
 enum class MonitorId;
 class BackgroundQueue;
+class DmfProfileEditor;
+class DynamicMediaFoldersWindow;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ColorInfoTool;
@@ -796,8 +798,19 @@ public:
         bool ready = false;
         QList<model::BinItem> clips;
         QString error;
+        // Acquired while still being processed: the offline clips standing in for it, and their bin (8.4c).
+        QString placeholderBin;
+        QStringList placeholders;
     };
     const QList<DmfAsset>& dmfAssets() const { return dmfAssets_; }
+    // Tools > Dynamic Media Folders (8.4c, p.372-376): the window; editDmfProfile, its Profile Editor for a folder's
+    // profile (the hook answers for tests), true when saved; acquireDmfAssets, its Acquire column: the folder's
+    // assets into the profile's bin, returning the bin's id (empty when nothing went in, or there is no project).
+    void showDynamicMediaFolders();
+    DynamicMediaFoldersWindow* dynamicMediaFoldersWindow() const { return dmfWindow_; }
+    bool editDmfProfile(const QString& folder, const QString& profile);
+    void setDmfProfileEditorHook(std::function<bool(DmfProfileEditor&)> hook) { dmfProfileEditorHook_ = std::move(hook); }
+    QString acquireDmfAssets(const QString& folder);
     // The media database (p.358): read when a project opens, again with
     // File > Media > Load Media Database and Refresh Media Directories.
     // Managed clips in bins opened after are pointed at their files.
@@ -1223,6 +1236,9 @@ private:
     QList<DmfAsset> dmfAssets_;
     QHash<QString, QString> dmfSeen_; // entry path -> how it looked on the last scan
     QTimer* dmfTimer_ = nullptr;
+    DynamicMediaFoldersWindow* dmfWindow_ = nullptr;
+    std::function<bool(DmfProfileEditor&)> dmfProfileEditorHook_;
+    void refreshDmfWindow();
     void setUpDynamicMediaFolders();
     void saveDynamicMediaFolders();
     void queueDmfEntry(const QString& folder, const QString& entry, const media::DmfProfile& profile);
