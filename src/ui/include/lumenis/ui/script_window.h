@@ -170,6 +170,12 @@ public:
     // While screening, a click on line `line` marks the playing take there ("A script mark appears at that location in
     // the take, and the clip continues to play", p.584).
     bool markPlayingLine(int line);
+    // The takes ScriptSync AI and the Play and Record buttons work on: the selected takes, else those over the selected
+    // lines.
+    QList<model::ScriptTake> chosenTakes() const { return takesOverSelection(); }
+    // A change to the script from outside (ScriptSync AI): `edit` returns whether it changed anything; the window is then
+    // marked modified.
+    bool editScript(const std::function<bool(model::Script&)>& edit);
     // Find Script (p.586): selects the take and its lines.
     void showTakeLines(const QString& takeId, int first, int last);
     // Find Bin (p.586-587): findBinRequested with the selected takes.
@@ -253,6 +259,7 @@ private:
     QStringList recordTakes_;
     QString recordingTake_;
     QList<model::ScriptTake> takesOverSelection() const;
+    void jumpToLine(int line);
     QString indicatorColor_ = QStringLiteral("#d2c832");
     void scriptChanged();
     friend class ScriptTextView;

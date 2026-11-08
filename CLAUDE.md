@@ -879,7 +879,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   slatesAndTakes`, `tst_script_ui slatesAndTakes`), is done. 8.3c, script marks (`ScriptTake::marks`, `model::addScriptMark`/
   `scriptLinesAt`/`markedFrames`; the window's marks, Record button screening through `playClipLoop`, Find Bin; `MainWindow::
   addScriptMark`/`findScript`/`findScriptBins`/`spliceScriptRange`, `other.add_script_mark`/`other.find_script`, the
-  Pre-roll; tests `tst_script scriptMarks`, `tst_script_ui scriptMarks`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  Pre-roll; tests `tst_script scriptMarks`, `tst_script_ui scriptMarks`), is done. 8.3d, ScriptSync AI and Create Script from Clip
+  (`src/model/script_sync.*` aligning script words with the transcript's, `src/ui/script_sync_dialog.*`, `MainWindow::
+  scriptSyncAI`/`createScriptFromClips`, `Script::fromClips`; tests `tst_script scriptSync`, `tst_script_ui
+  scriptSyncAndCreateScript`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

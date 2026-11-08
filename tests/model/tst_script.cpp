@@ -1,6 +1,7 @@
 // Scripts (8.3a; Editing Guide ch.18, lumenis/model/script.h): importing a text file, scene and page numbers, the
 // script kept in its bin item, editing lines with the numbers following them, find and replace.
 #include "lumenis/model/script.h"
+#include "lumenis/model/script_sync.h"
 
 #include <QTest>
 
@@ -192,6 +193,68 @@ private slots:
         // Shortening the take drops marks outside it.
         setTakeLines(s, t, 3, 7);
         QCOMPARE(takeOf(s, t)->marks.size(), qsizetype(1));
+    }
+
+    // ScriptSync AI (p.584-585) and Create Script from Clip (p.569-570).
+    void scriptSync() {
+        // The skip options.
+        ScriptSyncOptions o;
+        QCOMPARE(spokenText(QStringLiteral("MARY SUE"), o), QStringLiteral("MARY SUE"));
+        o.skipCapitals = true;
+        QCOMPARE(spokenText(QStringLiteral("MARY SUE"), o), QString());
+        o.skipBracketed = true;
+        QCOMPARE(spokenText(QStringLiteral("Coffee (beat) please [aside]"), o), QStringLiteral("Coffee please"));
+        o.skipBeforeColon = true;
+        QCOMPARE(spokenText(QStringLiteral("MARY: Coffee?"), o), QStringLiteral("Coffee?"));
+        o.skipIndented = true;
+        o.dialogIndent = 4;
+        QCOMPARE(spokenText(QStringLiteral("  Action line."), o), QString());
+        QCOMPARE(spokenText(QStringLiteral("\tCoffee?"), o), QStringLiteral("Coffee?"));
+        QCOMPARE(indentOf(QStringLiteral("  \tx")), 8);
+
+        Script s = scriptFromText(QStringLiteral("INT. DINER - NIGHT\nMARY SUE\nCoffee, please.\nWAITRESS\nComing right up, hon.\nMARY SUE\nThanks a lot."));
+        addSlate(s, 1, 6, {{QStringLiteral("b"), QStringLiteral("c1"), QStringLiteral("33/1"), QStringLiteral("1")}});
+        const QString t = s.slates[0].takes[0].id;
+        // What was said, with a cough and a changed word: "Thanks a bunch" still has two of its three words.
+        const QList<SyncWord> words{{QStringLiteral("cough"), 2},   {QStringLiteral("Coffee"), 10}, {QStringLiteral("please"), 14},
+                                    {QStringLiteral("Coming"), 40}, {QStringLiteral("right"), 44},  {QStringLiteral("up"), 47},
+                                    {QStringLiteral("hon"), 50},    {QStringLiteral("Thanks"), 80}, {QStringLiteral("a"), 84},
+                                    {QStringLiteral("bunch"), 86}};
+        ScriptSyncOptions sync;
+        sync.skipCapitals = true;
+        QCOMPARE(scriptSyncTake(s, t, words, sync), 3);
+        QCOMPARE(takeOf(s, t)->marks, (QMap<int, std::int64_t>{{2, 10}, {4, 40}, {6, 80}}));
+        // Existing marks stay without Overwrite; with it they are updated.
+        addScriptMark(s, t, 4, 39);
+        QCOMPARE(scriptSyncTake(s, t, words, sync), 0);
+        QCOMPARE(takeOf(s, t)->marks.value(4), 39);
+        sync.overwrite = true;
+        QCOMPARE(scriptSyncTake(s, t, words, sync), 1);
+        QCOMPARE(takeOf(s, t)->marks.value(4), 40);
+        // Between the first and last marks only: line 6's mark is the last, so nothing after it changes.
+        deleteScriptMarks(s, {t}, 4, 4);
+        sync.betweenMarks = true;
+        QCOMPARE(scriptSyncTake(s, t, words, sync), 1);
+        QCOMPARE(takeOf(s, t)->marks.value(4), 40);
+
+        // Create Script from Clip: lines from the transcript, the clip's take over them, every line marked.
+        ShownTranscript shown;
+        ShownLine l1;
+        l1.speaker = QStringLiteral("Mary");
+        l1.frame = 5;
+        l1.words = {{QStringLiteral("Coffee?"), 5, 9, {}, 0, 0}};
+        ShownLine l2;
+        l2.speaker = QStringLiteral("Speaker 2");
+        l2.frame = 30;
+        l2.words = {{QStringLiteral("Coming"), 30, 34, {}, 1, 0}, {QStringLiteral("up."), 34, 38, {}, 1, 1}};
+        shown.lines = {l1, l2};
+        const Script made = scriptFromTranscripts({{QStringLiteral("b"), QStringLiteral("c1"), QStringLiteral("33/1"), {}},
+                                                   {QStringLiteral("b"), QStringLiteral("c2"), QStringLiteral("33/2"), {}}},
+                                                  {shown, ShownTranscript{}}, {});
+        QCOMPARE(made.lines, (QStringList{QStringLiteral("Mary: Coffee?"), QStringLiteral("Speaker 2: Coming up.")}));
+        QCOMPARE(made.slates.size(), qsizetype(1));
+        QCOMPARE(made.slates[0].takes[0].clipId, QStringLiteral("c1"));
+        QCOMPARE(made.slates[0].takes[0].marks, (QMap<int, std::int64_t>{{0, 5}, {1, 30}}));
     }
 };
 

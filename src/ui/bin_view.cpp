@@ -2299,6 +2299,8 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             add(tr("Share Transcripts"), "bin.share_transcripts", true);
             add(tr("Delete Transcript"), "bin.delete_transcript", clipSelected);
             add(tr("Export SubCap"), "bin.export_subcap", sequence);
+            // "right-click on one or more selected clips in a bin and choose Transcript > Create Script from Clip" (p.570).
+            add(tr("Create Script from Clip"), "bin.create_script_from_clip", clipSelected);
         }
     }
     colorMenu(menu, tr("Set Background Color"), true);

@@ -307,7 +307,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Hold Slates Onscreen |  | p.578 | works | ☐ | | |
 | Interpolate Position |  | p.577 | works | ☐ | | |
 | Manage Transcripts |  | p.454 | works | ☐ | | |
-| ScriptSync AI |  | p.584 | *later* | ☐ | | |
+| ScriptSync AI |  | p.584 | works | ☐ | | |
 | Show All Takes |  | p.578 | works | ☐ | | |
 | Show Frames |  | p.578 | works | ☐ | | |
 | Text Layout |  | p.571 | works | ☐ | | |
@@ -328,6 +328,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 224 menu commands, 189 of them working with a project open; the
+* 224 menu commands, 190 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

@@ -1,7 +1,8 @@
 // MainWindow's scripts (8.3; Editing Guide ch.18, docs/spec/scriptsync.md): File > New > New Script, the Script window
 // panel showing a script item, Save Script, Save a Script Copy As and Script > Text Layout; the slates' clips and frames,
 // loading and playing takes and the Script menu's slate options (8.3b, p.576-582); script marks, screening, Find Script,
-// Find Bin and splicing a script range (8.3c, p.582-588).
+// Find Bin and splicing a script range (8.3c, p.582-588); ScriptSync AI and Create Script from Clip (8.3d, p.569-570,
+// p.584-585).
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/model/script.h"
@@ -11,6 +12,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/script_sync_dialog.h"
 #include "lumenis/ui/script_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/tool_windows.h"
@@ -402,6 +404,90 @@ bool MainWindow::scriptTextLayout(std::optional<model::ScriptLayout> layout) {
     }
     scriptWindow_->setTextLayout(*layout);
     return true;
+}
+
+// Script > ScriptSync AI (p.584-585): "Select one or more takes that include audio. Select all clips and takes in the
+// Script that you want marked up. Select Script > ScriptSync AI." Ours: the transcripts of 8.2 are the analysis; clips not
+// transcribed yet are queued, and ScriptSync AI is run again once they are.
+int MainWindow::scriptSyncAI() {
+    if (!scriptWindow_->isOpen()) return -1;
+    const QList<model::ScriptTake> takes = scriptWindow_->chosenTakes();
+    if (takes.isEmpty()) {
+        ConsoleLog::instance().append(tr("ScriptSync AI: select the takes (or the lines) to mark up first."));
+        return -1;
+    }
+    QStringList tracks;
+    for (const model::ScriptTake& t : takes) {
+        if (const model::BinItem* item = scriptTakeItem(t)) {
+            for (const QString& track : model::sourceTracksOf(*item))
+                if (track.startsWith(QLatin1Char('A')) && !tracks.contains(track)) tracks << track;
+        }
+    }
+    ScriptSyncDialog dialog(tracks, scriptSyncOptions_, [this]() -> std::optional<int> {
+        const auto sel = scriptWindow_->selectedLines();
+        if (!sel) return std::nullopt;
+        return model::indentOf(scriptWindow_->script().lines.value(sel->first));
+    }, this);
+    const bool accepted = scriptSyncHook_ ? scriptSyncHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!accepted) return -1;
+    scriptSyncOptions_ = dialog.options();
+    const QStringList chosen = dialog.tracks();
+    int placed = 0;
+    QStringList untranscribed;
+    scriptWindow_->editScript([&](model::Script& script) {
+        for (const model::ScriptTake& t : takes) {
+            const model::BinItem* item = scriptTakeItem(t);
+            if (!item) continue;
+            const model::ShownTranscript shown = shownTranscriptOf(*item, chosen);
+            for (const QString& mob : shown.notTranscribedMobs)
+                if (!untranscribed.contains(mob)) untranscribed << mob;
+            placed += model::scriptSyncTake(script, t.id, model::syncWords(shown), scriptSyncOptions_);
+        }
+        return placed > 0;
+    });
+    if (!untranscribed.isEmpty()) {
+        transcribeNow(untranscribed);
+        ConsoleLog::instance().append(tr("ScriptSync AI: %n clip(s) are being transcribed; run ScriptSync AI again when they are "
+                                         "done.", nullptr, static_cast<int>(untranscribed.size())));
+    }
+    ConsoleLog::instance().append(tr("ScriptSync AI: %n script mark(s) placed.", nullptr, placed));
+    return placed;
+}
+
+// "Right-click on one or more selected clips in a bin and choose Transcript > Create Script from Clip ... After
+// transcribing your clip, the Script window appears with the text automatically aligned to your media" (p.570). Ours: the
+// script item is named after the first clip with " Script" and goes into the clips' bin.
+bool MainWindow::createScriptFromClips() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return false;
+    BinDocument& doc = view->document();
+    QList<model::ScriptClip> clips;
+    QList<model::ShownTranscript> transcripts;
+    QStringList untranscribed;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* item = doc.bin().item(id);
+        if (!item || item->kind == model::BinItemKind::Sequence || item->kind == model::BinItemKind::Script) continue;
+        const model::ShownTranscript shown = shownTranscriptOf(*item, {});
+        for (const QString& mob : shown.notTranscribedMobs)
+            if (!untranscribed.contains(mob)) untranscribed << mob;
+        clips << model::ScriptClip{doc.nodeId(), item->id, item->name, item->fields.value(QStringLiteral("Take"))};
+        transcripts << shown;
+    }
+    if (!untranscribed.isEmpty()) transcribeNow(untranscribed);
+    const model::Script script = model::scriptFromTranscripts(clips, transcripts, importLayout(*settings_));
+    if (script.lines.isEmpty()) {
+        ConsoleLog::instance().append(untranscribed.isEmpty()
+                                          ? tr("Create Script from Clip: select clips with dialog first.")
+                                          : tr("Create Script from Clip: the clips are being transcribed; try again when they are done."));
+        return false;
+    }
+    if (doc.isReadOnly()) {
+        ConsoleLog::instance().append(tr("Create Script from Clip: the bin cannot be changed."));
+        return false;
+    }
+    const model::BinItem item = model::scriptItem(clips.first().name + tr(" Script"), script);
+    doc.addItem(item);
+    return openScript(doc.nodeId(), item.id);
 }
 
 } // namespace lumenis::ui

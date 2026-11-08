@@ -125,18 +125,43 @@ in the middle of its line (p.583).
   selected lines' first line to the frame before the next mark after them (the clip's end without one) at the Record
   monitor's IN or position; the first edit makes a sequence. A range before every mark splices nothing (ours).
 
+## ScriptSync AI and Create Script from Clip (p.569-570, p.584-585, 8.3d)
+
+`src/model/script_sync.*`, `src/ui/script_sync_dialog.*`, `MainWindow::scriptSyncAI`/`createScriptFromClips`.
+
+* Script > ScriptSync AI works on the selected takes, else the takes over the selected lines ("Select one or more takes
+  that include audio. Select all clips and takes in the Script that you want marked up", p.584). The dialog (p.585):
+  Tracks (the takes' clips' audio tracks, all checked), Skip lines that only contain CAPITAL letters, Skip text in
+  parentheses or brackets, Skip text before colon, Skip lines indented less than dialog with Dialog Indent (characters)
+  and Select Dialog (the indent of the Script window's selected line), Overwrite existing marks, Sync between first and
+  last mark. Ours: the options are kept for the session; the Dialog Indent starts at 10.
+* "ScriptSync AI uses the PhraseFind AI engine to analyze the audio portion of a clip" (p.584). Ours: the clip's
+  transcript (8.2) at the clip's frames is the analysis. The words of the take's lines and the transcript's are aligned
+  by their longest common sequence, compared as PhraseFind compares words; a line is marked at the frame of its first
+  matched word when at least half its words are matched. Without Overwrite, marked lines keep their marks. With Sync
+  between first and last mark, only the lines and frames between the take's first and last marks are used. Clips
+  without a transcript are queued for transcription and the Console says to run ScriptSync AI again; there is no
+  progress tracker or Ctrl+. (the alignment takes moments), and alignments of more than 16 million word pairs are not
+  tried.
+* Transcript > Create Script from Clip on the bin's right-click menu (p.570): a script item named "<clip> Script" in the
+  clips' bin, its lines the clips' transcript lines as "Speaker: words" with an empty line between clips, each clip a take
+  (slate) over its lines with every line marked; it opens in the Script window. "Just click a line of text to jump to its
+  corresponding location": in such a script (`Script::fromClips`) a click on a marked line loads the take cued there.
+
 ## Later
 
-* 8.3d: ScriptSync AI and Create Script from Clip.
 * 8.3e: shared scripts' locks; the Find window's Script Text tab.
 
 ## Tests
 
 * `tst_script`: importing text, scene and page numbers, the script item, editing with the numbers following the lines,
   find and replace; slates and takes (adding, moving, lines, frames, indicators, Interpolate Position, JSON); script marks
-  (adding, extending, Find Script's lines, marked frames, moving, deleting, through line edits).
+  (adding, extending, Find Script's lines, marked frames, moving, deleting, through line edits); `scriptSync`: the skip
+  options, alignment with a changed word, Overwrite, Sync between first and last mark, scripts from transcripts.
 * `tst_script_ui`: New Script into the active bin, AS/AP, the status bar and menus, Edit Mode, Find and Replace, the
   Delete dialog, Text Layout, Save Script, reopening, Save a Script Copy As; dropping clips, tabs, Ctrl+click and the
   lasso, the arrow keys, Set Offscreen and Set Color, Show All Takes and Show Frames, Enlarge Frame, moving slates,
   loading and playing takes, Delete Takes; `scriptMarks`: Add Script Mark, cueing with the Pre-roll, Find Script, the Record
-  button marking the playing take, moving a mark, splicing a script range, Find Bin, Delete mark(s).
+  button marking the playing take, moving a mark, splicing a script range, Find Bin, Delete mark(s);
+  `scriptSyncAndCreateScript`: the dialog's tracks and Select Dialog, marks from a transcript, Create Script from Clip and
+  its click to jump.

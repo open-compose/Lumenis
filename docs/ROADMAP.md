@@ -1459,7 +1459,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       button's real-time screening and marking (Tab/Shift+Tab, marks extending takes), loading a marked segment with
       its IN and the pre-roll, moving and deleting marks, Find Script and Find Bin, splicing a script range
       (Ctrl+Alt+double-click), the rough cut workflow.
-    * 8.3d, ScriptSync AI (p.584-585) and Create Script from Clip (p.569-570): the dialog (tracks, the skip options,
+    * 8.3d (done), ScriptSync AI (p.584-585) and Create Script from Clip (p.569-570): the dialog (tracks, the skip options,
       Overwrite existing marks, Sync between first and last mark) aligning script lines with the words of 8.2's
       transcripts; a script made from clips' transcripts, its lines already marked.
     * 8.3e, shared scripts (p.589-590): the script lock icons and refresh on shared storage through 3.7's locks, the

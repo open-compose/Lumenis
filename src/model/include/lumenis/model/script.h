@@ -79,6 +79,8 @@ struct Script {
     QMap<int, QString> pages;
     QList<ScriptSlate> slates;
     ScriptLayout layout;
+    // Made by Create Script from Clip (p.569-570): "Just click a line of text to jump to its corresponding location".
+    bool fromClips = false;
 
     // The scene or page a line is in; empty before the first.
     QString sceneAt(int line) const;

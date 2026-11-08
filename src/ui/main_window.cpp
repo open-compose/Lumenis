@@ -8203,6 +8203,8 @@ void MainWindow::installPanelHandlers() {
     handle("script.add_page", [this] { scriptWindow_->askPage(); });
     handle("script.text_layout", [this] { scriptTextLayout(); });
     handle("other.add_script_mark", [this] { addScriptMark(); });
+    handle("script.scriptsync_ai", [this] { scriptSyncAI(); });
+    handle("bin.create_script_from_clip", [this] { createScriptFromClips(); });
     handle("other.find_script", [this] { findScript(); });
     for (const char* id : {"script.show_frames", "script.show_all_takes", "script.hold_slates_onscreen", "script.interpolate_position"})
         handle(id, [this, id] { setScriptSlateOption(QString::fromLatin1(id)); });

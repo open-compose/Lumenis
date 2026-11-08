@@ -645,7 +645,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   colours, lettered OS/SC buttons, Shift+arrows stepping ten frames, Alt+click writing to the Console in place of the Info
   window, a slate's Shift+click adding its active take. Marks (8.3c): Add Script Mark on the take last loaded and the first
   selected line, the Record and Find Bin buttons lettered and placed after Play, Add Script Mark and Find Script in a
-  column of their own on the Other tab, a range before every mark splicing nothing.
+  column of their own on the Other tab, a range before every mark splicing nothing. ScriptSync AI (8.3d): transcripts as the
+  analysis, the half-the-words rule, Dialog Indent 10 to start, options kept for the session, no progress tracker; Create
+  Script from Clip's "<clip> Script" name, "Speaker: words" lines and the empty line between clips.
 * AutoCut (docs/spec/transcripts.md): Assign to Camera Angle on the speaker's right-click menu, kept in the group by
   speaker name; the group's shown transcript; only video tracks switched.
 * Transcripts out (docs/spec/transcripts.md): the exported .txt as an Avid DS caption file with the speaker as its first
@@ -3116,7 +3118,8 @@ Details: docs/spec/bin-locking.md.
   (p.577); Edit > Enlarge Frame and Reduce Frame on slates (p.578).
 * Script marks (p.582-589), 8.3c: the Command Palette's Other tab Add Script Mark and Find Script; the Script window's
   Record and Find Bin buttons; Delete mark(s); Ctrl+Alt+double-click splicing; the Script setting's Pre-roll.
-* Later: ScriptSync AI (8.3d), shared scripts (8.3e).
+* Script > ScriptSync AI and its dialog (p.584-585), the bin's Transcript > Create Script from Clip (p.570), 8.3d.
+* Later: shared scripts (8.3e).
 
 ## 20e. Transcripts (ch.14, p.436-453; docs/spec/transcripts.md)
 

@@ -50,6 +50,7 @@ add_library(lumenis_model STATIC
     phrase_find.cpp
     transcript_export.cpp
     script.cpp
+    script_sync.cpp
     bin_attic.cpp
     effect_keyframes.cpp
     bin_relations.cpp
@@ -85,6 +86,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/phrase_find.h
     include/lumenis/model/transcript_export.h
     include/lumenis/model/script.h
+    include/lumenis/model/script_sync.h
     include/lumenis/model/bin_attic.h
     include/lumenis/model/effect_keyframes.h
     include/lumenis/model/bin_relations.h

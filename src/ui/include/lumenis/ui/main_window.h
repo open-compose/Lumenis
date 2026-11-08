@@ -15,6 +15,7 @@
 #include "lumenis/model/transcript.h"
 #include "lumenis/model/transcript_view.h"
 #include "lumenis/model/script.h"
+#include "lumenis/model/script_sync.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -68,6 +69,7 @@ class TranscriptTool;
 class SpeakerNamesDialog;
 class TranscribeTracksDialog;
 class ScriptWindow;
+class ScriptSyncDialog;
 class ManageTranscriptsDialog;
 struct SpeakerNameChange;
 class ConsolidateDialog;
@@ -645,6 +647,15 @@ public:
     bool findScript();
     int findScriptBins(const QList<model::ScriptTake>& takes);
     bool spliceScriptRange(const model::ScriptTake& take, int first, int last);
+    // ScriptSync AI and Create Script from Clip (8.3d, p.569-570, p.584-585). scriptSyncAI: Script > ScriptSync AI's
+    // dialog, then marks on the Script window's chosen takes from their clips' transcripts; clips without one are queued
+    // for transcription. Returns the marks placed, -1 when nothing could run. createScriptFromClips: the bin's Transcript >
+    // Create Script from Clip on the active bin's selected clips, a script item in that bin, opened; false without
+    // transcripts (those clips are queued). setScriptSyncHook: tests answer the dialog (true: OK).
+    int scriptSyncAI();
+    bool createScriptFromClips();
+    using ScriptSyncAsk = std::function<bool(ScriptSyncDialog&)>;
+    void setScriptSyncHook(ScriptSyncAsk ask) { scriptSyncHook_ = std::move(ask); }
     static QList<std::pair<QString, QString>> scriptIndicatorColors();
     // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
     // to match when exporting and importing", p.451).
@@ -1065,6 +1076,8 @@ private:
     std::int64_t scriptPreRollFrames() const;
     void followScriptRecording();
     QList<model::ScriptTake> scriptRecordTakes_; // the Record button's takes while screening
+    model::ScriptSyncOptions scriptSyncOptions_; // the ScriptSync AI dialog's last choices (ours: kept for the session)
+    ScriptSyncAsk scriptSyncHook_;
     void refreshScriptMenu();
     void setUpScriptWindow();
     TranscribeTracksAsk transcribeTracksHook_;

@@ -73,6 +73,7 @@ QJsonObject Script::toJson() const {
                   {QStringLiteral("wordWrap"), layout.wordWrap},
                   {QStringLiteral("fontSize"), layout.fontSize}};
     if (!layout.font.isEmpty()) o.insert(QStringLiteral("font"), layout.font);
+    if (fromClips) o.insert(QStringLiteral("fromClips"), true);
     if (!scenes.isEmpty()) o.insert(QStringLiteral("scenes"), marksToJson(scenes));
     if (!pages.isEmpty()) o.insert(QStringLiteral("pages"), marksToJson(pages));
     if (!slates.isEmpty()) {
@@ -128,6 +129,7 @@ Script Script::fromJson(const QJsonObject& o) {
     s.layout.textWidth = std::max(50, o.value(QStringLiteral("textWidth")).toInt(600));
     s.layout.wordWrap = o.value(QStringLiteral("wordWrap")).toBool(true);
     s.layout.font = o.value(QStringLiteral("font")).toString();
+    s.fromClips = o.value(QStringLiteral("fromClips")).toBool();
     s.layout.fontSize = std::clamp(o.value(QStringLiteral("fontSize")).toInt(12), 4, 144);
     const int last = std::max(0, count - 1);
     auto ranges = [last](const QJsonValue& v) {

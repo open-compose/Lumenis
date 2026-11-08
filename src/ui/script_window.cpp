@@ -263,6 +263,9 @@ protected:
             // location in the take, and the clip continues to play" (p.584).
             if (e->button() == Qt::LeftButton && window_.isRecording()) window_.markPlayingLine(lineAt(p.y()).first);
             QTextEdit::mousePressEvent(e);
+            // A script made from clips: "Just click a line of text to jump to its corresponding location" (p.570).
+            if (e->button() == Qt::LeftButton && !window_.isRecording() && !window_.editMode_ && window_.script_.fromClips)
+                window_.jumpToLine(lineAt(p.y()).first);
             return;
         }
         drag_ = {};
@@ -1288,6 +1291,22 @@ void ScriptWindow::showTakeLines(const QString& takeId, int first, int last) {
     // "The Script window scrolls to and highlights the portion of script that most closely matches the clip location".
     selectLines(first, last);
     selectTakes({takeId});
+}
+
+bool ScriptWindow::editScript(const std::function<bool(model::Script&)>& edit) {
+    if (!isOpen() || !edit || !edit(script_)) return false;
+    scriptChanged();
+    return true;
+}
+
+// The take marked on the line (the first such slate's) loads cued to its mark.
+void ScriptWindow::jumpToLine(int line) {
+    for (const model::ScriptSlate& s : script_.slates)
+        for (const model::ScriptTake& t : s.takes)
+            if (t.marks.contains(line)) {
+                loadTake(t.id, line);
+                return;
+            }
 }
 
 void ScriptWindow::findBins() {

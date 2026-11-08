@@ -5,14 +5,16 @@
 // bin, the tabs' Take numbers, selecting, Delete Takes, the arrow keys, Set Offscreen and Set Color, moving slates,
 // loading and playing takes with Interpolate Position, the Script menu's options and Enlarge/Reduce Frame. Script marks
 // (8.3c, p.582-588): Add Script Mark, the Record button's screening, cueing with the Pre-roll, moving and deleting marks,
-// Find Script, Find Bin, splicing a script range.
+// Find Script, Find Bin, splicing a script range. ScriptSync AI and Create Script from Clip (8.3d, p.569-570, p.584-585).
 #include "lumenis/model/script.h"
+#include "lumenis/model/transcript.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/script_sync_dialog.h"
 #include "lumenis/ui/script_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -449,6 +451,95 @@ private slots:
         QCOMPARE(asked, 1);
         QVERIFY(!model::takeOf(w.script(), take1)->marks.contains(3));
         QCOMPARE(model::takeOf(w.script(), take1)->marks.size(), qsizetype(1));
+    }
+
+    void scriptSyncAndCreateScript() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString text = dir.filePath(QStringLiteral("Scene 33.txt"));
+        {
+            QFile f(text);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("INT. DINER - NIGHT\n          MARY SUE\n     Coffee, please.\n          WAITRESS\n     Coming right up.\n");
+        }
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1400, 800);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString binId = bins.newBin();
+        BinDocument* bin = bins.openBin(binId);
+        QVERIFY(bin);
+        model::BinItem clip;
+        clip.id = model::newItemId();
+        clip.kind = model::BinItemKind::MasterClip;
+        clip.name = QStringLiteral("33/1");
+        clip.durationFrames = 200;
+        clip.editRate = Rational(25);
+        clip.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1 A2"));
+        bin->addItem(clip);
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(clip).toString());
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("Coffee,"), 0.4, 0.8}, {QStringLiteral("please."), 0.8, 1.2}}},
+                   model::TranscriptLine{2, {{QStringLiteral("Coming"), 2.0, 2.3}, {QStringLiteral("right"), 2.3, 2.5},
+                                             {QStringLiteral("up."), 2.5, 2.8}}}};
+        QVERIFY(model::TranscriptStore().save(t));
+
+        // ScriptSync AI on the take over the scene: the dialog's tracks and options, the Select Dialog button reading the
+        // selected line's indent (p.585).
+        QVERIFY(window.newScript(text));
+        ScriptWindow& w = window.scriptWindow();
+        w.selectLines(1, 4);
+        QVERIFY(w.linkClips({{binId, clip.id, clip.name, {}}}));
+        const QString take = w.script().slates.first().takes.first().id;
+        QStringList offered;
+        window.setScriptSyncHook([&](ScriptSyncDialog& d) {
+            offered = d.tracks();
+            model::ScriptSyncOptions o = d.options();
+            o.skipIndented = true;
+            d.setOptions(o);
+            d.selectDialog();
+            return true;
+        });
+        // With no take selected, the takes over the selected lines are synced; line 3 is indented 5 characters.
+        w.selectTakes({});
+        w.selectLines(2, 2);
+        QCOMPARE(window.scriptSyncAI(), 2);
+        QCOMPARE(offered, (QStringList{QStringLiteral("A1"), QStringLiteral("A2")}));
+        QCOMPARE(model::takeOf(w.script(), take)->marks, (QMap<int, std::int64_t>{{2, 10}, {4, 50}}));
+        QVERIFY(w.title().endsWith(QLatin1Char('*')));
+        // Run again without Overwrite: nothing new.
+        QCOMPARE(window.scriptSyncAI(), 0);
+
+        // Create Script from Clip from the bin's Transcript menu: the transcript's lines, the clip's take over them, each
+        // line marked; a click on a line cues the clip there (p.569-570).
+        BinView* view = bins.viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({clip.id});
+        window.panels().activate(window.panels().panel(QStringLiteral("BinContainer")));
+        commands.action(QStringLiteral("bin.create_script_from_clip"))->trigger();
+        QCOMPARE(w.name(), QStringLiteral("33/1 Script"));
+        QCOMPARE(w.script().lines, (QStringList{QStringLiteral("Speaker 1: Coffee, please."), QStringLiteral("Speaker 2: Coming right up.")}));
+        QVERIFY(w.script().fromClips);
+        QCOMPARE(w.script().slates.first().takes.first().marks, (QMap<int, std::int64_t>{{0, 10}, {1, 50}}));
+        window.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        auto* textView = qobject_cast<QAbstractScrollArea*>(w.findChild<QWidget*>(QStringLiteral("scriptText")));
+        const QPoint second(20, w.takeLinePoint(w.script().slates.first().takes.first().id, 1).y());
+        QTest::mouseClick(textView->viewport(), Qt::LeftButton, Qt::NoModifier, second);
+        const model::LoadedClip* loaded = window.composer().state(MonitorId::Source).current();
+        QVERIFY(loaded);
+        QCOMPARE(loaded->item.id, clip.id);
+        QCOMPARE(window.composer().state(MonitorId::Source).in(), std::optional<std::int64_t>(50));
+        qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };
 
