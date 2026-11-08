@@ -3,6 +3,7 @@ add_library(lumenis_media STATIC
     compositor.cpp
     optical_flow.cpp
     fields.cpp
+    frame_flex.cpp
     fluid_fx.cpp
     render.cpp
     wipes.cpp
@@ -74,6 +75,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/audio_suite.h
     include/lumenis/media/audio_input.h
     include/lumenis/media/dynamic_media_folders.h
+    include/lumenis/media/frame_flex.h
     include/lumenis/media/clap_host.h
     include/lumenis/media/ofx_host.h
     include/lumenis/media/movie_export.h

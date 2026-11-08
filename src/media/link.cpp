@@ -400,6 +400,8 @@ std::optional<model::BinItem> linkClipUnchecked(const MediaInfo& info, const Lin
                           .arg(fpsText(video->interlaced ? fps * 2 : fps)));
         Rational aspect = video->aspect;
         if (options.sdWidescreen && video->height <= 576) aspect = Rational(16, 9);
+        // "Set the default for all new clips that are created" (p.1204).
+        set("Reformatting Options", options.reformat);
         if (aspect.num() > 0) set("Image Aspect Ratio", QStringLiteral("%1:%2").arg(aspect.num()).arg(aspect.den()));
         if (video->width > 0 && video->height > 0 && aspect.num() > 0) {
             // The pixel shape that stretches the stored size to the picture's.

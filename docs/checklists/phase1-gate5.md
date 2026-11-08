@@ -181,7 +181,9 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Read Audio Timecode |  | p.668 | works | ☐ | | |
 | Recreate Title Media |  | p.475 | works | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | works | ☐ | | |
+| Refresh Sequence > Aspect Ratio and Reformatting Options |  | p.478 | works | ☐ | | |
 | Refresh Sequence > Group Clips |  | p.478 | works | ☐ | | |
+| Refresh Sequence > All FrameFlex including creative framing |  | p.478 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | works | ☐ | | |
@@ -328,6 +330,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 224 menu commands, 192 of them working with a project open; the
+* 226 menu commands, 194 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

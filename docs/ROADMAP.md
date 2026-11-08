@@ -1479,7 +1479,31 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       and the Acquire column putting the assets into bins (offline while processing, .new for consolidated or transcoded
       clips); DPX folders as clips.
   * 8.5, FrameFlex and colour adapters (p.527-545): Source Settings, reframing and panning, Reformat, LUTs and CLF
-    through OpenColorIO, CDLs, Remove Color Adapters, ACES projects (p.557).
+    through OpenColorIO, CDLs, Remove Color Adapters, ACES projects (p.557). In five parts (planned 2026-11-08;
+    docs/spec/frameflex.md):
+    * 8.5a (done), Reformat and spatial adapters (p.475-478, p.528-535): the clips' Reformatting Options column and the
+      Link Options' default (Center Keep Size, p.475, p.1204), FrameFlex boxes kept with clips, the spatial adapter on
+      segments drawn from whole frames (Stretch, Pillarbox/Letterbox, Center Crop, Center Keep Size; the box's position,
+      size, rotation, Image Size and aspect ratios), the green dot, Refresh Sequence > Aspect Ratio and Reformatting
+      Options and All FrameFlex including creative framing.
+    * 8.5b, the Source Settings dialog (p.527-533, p.545): from the bin's, the Source monitor's and the Timeline's
+      right-click Source Settings; Show Viewers with the top viewer's box, its handles and rotation, and the bottom
+      viewer's result; the FrameFlex tab's fields, Size matches project raster, Image Size = raster, Rotate left/right,
+      Reset, Revert and Apply on every selected clip; the Playback Rate tab (the motion adapter's rate). Panning: the
+      FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the Layout button's bypass and
+      Alt+Layout reset (p.533), creative framing.
+    * 8.5c, colour adapters (p.536-541, p.544): the Color Encoding tab (Source color space, Auto, the transformation
+      list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
+      (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public
+      curves exist), the Color Adapter on segments, the Color Transformations column, Refresh Sequence > Color
+      Adapters and Remove Color Adapters, Transcode's Apply source transformations > Color encoding.
+    * 8.5d, LUTs, CLF and CDLs (p.539-544): the Color Management setting (Insert color transformations automatically,
+      Use CDL values from ASC_SOP and ASC_SAT, Installed LUTs Project/Shared/Both, Select LUT file), our readers for
+      the listed 1D and 3D LUT formats, CLF through OpenColorIO where it is installed, the ASC_SOP and ASC_SAT columns
+      and the CDL transformation.
+    * 8.5e, Display Color Space on the monitors (p.544), the proxy mode (Format setting's Proxy 1/4 and 1/16, p.526-527)
+      and ACES projects (p.557-560: the ACES colour space, ACES colour adapter types, the Output Color Space, ACEScct
+      working space and 32-bit float timeline) through OpenColorIO's ACES configurations where available.
   * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1110) and stereoscopic projects.
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:
@@ -1509,6 +1533,12 @@ decision, 2026-10-27):
   only the button worked). Go through commands.json, menus.json, keyboard.json and command_palette.json against the
   handlers, list the guides' names that differ for one item in docs/spec/ui-inventory.md, and add a test that fails
   when a command reaches nothing unless it is listed as dimmed on purpose;
+* Export to File of a sequence as MOV or MP4 makes no file on Windows 11 (owner's report, 2026-11-08): File > Output >
+  Export to File, the options set, Save, and nothing is written and nothing said, with or without In and Out marks;
+  the Options button opens the Settings window, which may not be what the guide means (p.865-869). The reasons went
+  only to the Console; since 2026-11-08 a failed export also says why in a message (`MainWindow::exportToFile`), which
+  is what to look at first. Then: reproduce on Windows (the FFmpeg build's encoders, the path), fix the cause, add a
+  BUILDING.md entry and a test, and check the Options button against the guide;
 * anything else later found not to fit another area.
 
 ### Phase 10 — Hardening

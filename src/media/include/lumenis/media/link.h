@@ -96,6 +96,9 @@ struct LinkOptions {
     // Link settings, Link Options tab: "Always use 16:9 aspect ratio for SD
     // clips" (p.1204).
     bool sdWidescreen = false;
+    // Link Options' Reformatting option (p.1204): the new clips' Reformat attribute as its column text
+    // (model::reformatText); empty sets none.
+    QString reformat;
 };
 
 // Whether a probed file has picture or sound to link to.

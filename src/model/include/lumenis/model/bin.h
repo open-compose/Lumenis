@@ -103,6 +103,9 @@ struct BinItem {
     // Its source chain: a file source per track, then the tape or import
     // before them; a subclip's master clip. Empty for clips made before it.
     QList<ClipSource> sources;
+    // Its Source Settings (Editing Guide p.527-545; lumenis/model/frame_flex.h): the FrameFlex box ("frameFlex") and,
+    // from 8.5c, its colour transformations. Empty for none.
+    QJsonObject sourceSettings;
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.

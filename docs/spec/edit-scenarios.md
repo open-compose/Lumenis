@@ -122,6 +122,9 @@ Each file is a JSON list of scenarios:
     (false) Default Clip Pan on Track and `{"adjust_clip_audio": [[tracks],
     dB, pan]}` Adjust Pan/Vols on Track (p.711); `expect_clip_audio` gives
     each material segment's `[gain, pan or null]`;
+  * a clip's `"reformat"` (the Reformatting Options column's text) and `"frameflex_size"` (a FrameFlex box of that
+    Size) make its spatial adapter (8.5a); `expect_spatial` gives each material segment's `[Reformat, Size or null]`, or
+    null for none;
   * `{"subdivide": [track, record frame]}` is the Effect Editor's Subdivide
     Effect on the Pan and Scan effect there (FX Guide p.235-236), guided by
     the selected record tracks;

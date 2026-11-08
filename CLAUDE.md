@@ -895,7 +895,14 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   for the green dot; tests `tst_dmf`, `tst_background_services dynamicMediaFolders`), is done. 8.4c, the Dynamic Media
   Folders window and the Profile Editor (`src/ui/dynamic_media_folders_window.*` as the "DynamicMediaFolders" panel,
   `MainWindow::editDmfProfile`/`acquireDmfAssets` with offline clips while processing; test `tst_background_services
-  dmfWindowAndAcquire`), is done, so 8.4 is. After Phase 7, before Phase 8: 7.6, the owner's report
+  dmfWindowAndAcquire`), is done, so 8.4 is.
+  8.5, FrameFlex and colour adapters, is in five parts (ROADMAP). 8.5a, Reformat and spatial adapters
+  (docs/spec/frameflex.md: `src/model/frame_flex.*` with the Reformatting Options column, FrameFlex boxes in
+  `BinItem::sourceSettings` and `Segment::spatial`; `src/media/frame_flex.*` drawing them through
+  `MainWindow::adaptedFrame`; the Link Options' Reformatting option; Refresh Sequence > Aspect Ratio and Reformatting
+  Options and All FrameFlex; tests `tst_frame_flex`, `tst_frameflex_ui`, scenario `49-spatial-adapter.json`), is done.
+  The owner's report that Export to File makes no movie on Windows 11 is in Phase 9; a failed export now says why in a
+  message. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

@@ -232,6 +232,7 @@ QJsonObject segmentToJson(const Segment& s) {
         for (const SurroundPan& p : s.surround) pans.append(surroundPanToJson(p));
         o.insert(QStringLiteral("surround"), pans);
     }
+    if (s.spatial) o.insert(QStringLiteral("spatial"), s.spatial->toJson());
     if (s.adapter) {
         o.insert(QStringLiteral("adapter"), QJsonObject{{QStringLiteral("rate"), QString::fromStdString(s.adapter->clipRate.toString())},
                                                        {QStringLiteral("sequenceRate"), QString::fromStdString(s.adapter->sequenceRate.toString())},
@@ -279,6 +280,9 @@ Segment segmentFromJson(const QJsonObject& o) {
     }
     for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
         if (!s.isFiller() && s.surround.size() < 2) s.surround << surroundPanFromJson(v.toObject());
+    }
+    if (const QJsonObject a = o.value(QStringLiteral("spatial")).toObject(); !s.isFiller() && !a.isEmpty()) {
+        s.spatial = SpatialAdapter::fromJson(a);
     }
     if (const QJsonObject a = o.value(QStringLiteral("adapter")).toObject(); !s.isFiller() && !a.isEmpty()) {
         const auto clipRate = rateFromText(a.value(QStringLiteral("rate")).toString());
@@ -1066,6 +1070,9 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.length = plan.length;
             // A mixed rate clip as the monitor shows it, at the sequence's rate (motion_adapter.h).
             s.adapter = adapterOf(source);
+            // "The new framing of the image will be applied when you drop the clip in the Source viewer or on the
+            // Timeline" (p.531): its Reformat attribute and FrameFlex box.
+            if (s.sourceTrack.startsWith(QLatin1Char('V'))) s.spatial = spatialAdapterOf(source);
             // "Levels set in master clips carry across to the sequence after you edit the clips"
             // (p.711): Apply Gain and Center Pan (clip_audio.h).
             if (s.sourceTrack.startsWith(QLatin1Char('A'))) {

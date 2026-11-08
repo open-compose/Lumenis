@@ -1,0 +1,18 @@
+[
+  {
+    "name": "a clip's Reformat attribute and FrameFlex box go into the video segments edited from it as a spatial adapter; audio and other clips take none",
+    "guide": "p.475-476, p.528, p.531",
+    "clips": [{"name": "A"}, {"name": "C", "reformat": "Center Crop", "frameflex_size": 0.5}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20]], "A1": [["A", 0, 20]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 20},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["C", 0, 10]],
+      "A1": [["A", 0, 20], ["C", 0, 10]]},
+    "expect_spatial": {"V1": [null, ["Center Crop", 0.5]], "A1": [null, null]}
+  }
+]

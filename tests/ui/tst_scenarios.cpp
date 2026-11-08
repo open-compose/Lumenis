@@ -5,6 +5,7 @@
 // After the last step every scenario is undone step by step back to its starting sequence and
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
 #include "lumenis/core/project_format.h"
+#include "lumenis/model/frame_flex.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -180,6 +181,13 @@ struct Run {
             if (o.contains(QStringLiteral("tape"))) i.fields.insert(QStringLiteral("Tape"), o.value(QStringLiteral("tape")).toString());
             // Multichannel groups, as the Track Formats column has them (p.671).
             if (o.contains(QStringLiteral("formats"))) i.fields.insert(QStringLiteral("Track Formats"), o.value(QStringLiteral("formats")).toString());
+            // The Reformat attribute (the Reformatting Options column, p.476) and a FrameFlex box's Size (p.530).
+            if (o.contains(QStringLiteral("reformat"))) i.fields.insert(QStringLiteral("Reformatting Options"), o.value(QStringLiteral("reformat")).toString());
+            if (o.contains(QStringLiteral("frameflex_size"))) {
+                model::FrameFlex flex;
+                flex.size = o.value(QStringLiteral("frameflex_size")).toDouble();
+                model::setFrameFlex(i, flex);
+            }
             // Apply Gain and Center Pan (p.216, p.714).
             i.audioGain = o.value(QStringLiteral("gain")).toDouble();
             if (o.contains(QStringLiteral("pan"))) i.audioPan = o.value(QStringLiteral("pan")).toInt();
@@ -1148,6 +1156,26 @@ private slots:
                 QJsonArray got;
                 for (const model::Segment& g : t->segments) {
                     if (!g.isFiller()) got.append(QJsonArray{g.gain, g.ownPan() ? QJsonValue(g.pan) : QJsonValue()});
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // Spatial adapters (8.5a): each track's segments' Reformat attribute and FrameFlex Size, null for none.
+        const QJsonObject spatial = scenario.value(QStringLiteral("expect_spatial")).toObject();
+        if (!spatial.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = spatial.begin(); it != spatial.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (g.isFiller()) continue;
+                    if (!g.spatial) {
+                        got.append(QJsonValue());
+                    } else {
+                        got.append(QJsonArray{model::reformatText(g.spatial->reformat),
+                                              g.spatial->frameFlex ? QJsonValue(g.spatial->frameFlex->size) : QJsonValue()});
+                    }
                 }
                 QCOMPARE(got, it.value().toArray());
             }

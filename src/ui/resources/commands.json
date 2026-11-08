@@ -116,6 +116,8 @@
     {"id": "clip.read_audio_timecode", "text": "Read Audio Timecode"},
     {"id": "clip.recreate_title_media", "text": "Recreate Title Media"},
     {"id": "clip.refresh_sequence.motion_adapters_timewarps", "text": "Motion Adapters/Timewarps"},
+    {"id": "clip.refresh_sequence.aspect_ratio_reformatting", "text": "Aspect Ratio and Reformatting Options"},
+    {"id": "clip.refresh_sequence.all_frameflex", "text": "All FrameFlex including creative framing"},
     {"id": "clip.refresh_sequence.group_clips", "text": "Group Clips"},
     {"id": "clip.relink.linked_media", "text": "Linked Media"},
     {"id": "clip.relink.managed_media", "text": "Managed Media"},

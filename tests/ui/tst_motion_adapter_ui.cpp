@@ -114,6 +114,8 @@ private slots:
         window.resize(1200, 760);
         window.show();
         window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        // The small test media fills the frame as before 8.5a (Link Options' Reformatting option, p.1204).
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("reformat"), QStringLiteral("letterbox"));
         model::ProjectEntry project;
         project.folder = dir.filePath(QStringLiteral("Film"));
         project.settings.name = QStringLiteral("Film");
@@ -233,6 +235,8 @@ private slots:
         window.resize(1200, 760);
         window.show();
         window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        // The small test media fills the frame as before 8.5a (Link Options' Reformatting option, p.1204).
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("reformat"), QStringLiteral("letterbox"));
         // A 25i project.
         model::ProjectEntry project;
         project.folder = dir.filePath(QStringLiteral("Film"));
@@ -324,6 +328,8 @@ private slots:
         window.resize(1200, 760);
         window.show();
         window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        // The small test media fills the frame as before 8.5a (Link Options' Reformatting option, p.1204).
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("reformat"), QStringLiteral("letterbox"));
         model::ProjectEntry project;
         project.folder = dir.filePath(QStringLiteral("Film"));
         project.settings.name = QStringLiteral("Film");

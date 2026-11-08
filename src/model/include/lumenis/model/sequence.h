@@ -2,6 +2,7 @@
 
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
+#include "lumenis/model/frame_flex.h"
 
 #include <QHash>
 #include <QJsonObject>
@@ -277,6 +278,10 @@ struct Segment {
     // sequence's rate, and for segments edited before adapters (6.5d2), which count the clip's own
     // frames. Not an effect: Remove Effect leaves it (p.469).
     std::optional<MotionAdapter> adapter;
+    // Its Spatial Adapter (Editing Guide p.528; lumenis/model/frame_flex.h), on video segments from a clip with a Reformat
+    // attribute or a FrameFlex box: how the clip's picture fits the frame. None: pillarboxed or letterboxed (ours, as
+    // before 8.5a). Not an effect: Remove Effect leaves it.
+    std::optional<SpatialAdapter> spatial;
     // Nested tracks (FX Guide p.219-224; lumenis/model/nest.h): the segment effect's own tracks, as a
     // sequence's composition (Sequence::toJson) whose frame nestIn + n is the segment's frame n. Filler with
     // an effect (a Submaster) can have them too. Empty: none.

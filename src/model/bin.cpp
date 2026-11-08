@@ -136,6 +136,7 @@ QJsonObject itemToJson(const BinItem& item) {
     if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
     if (!item.markers.isEmpty()) o.insert(QStringLiteral("markers"), item.markers);
     if (!item.link.isEmpty()) o.insert(QStringLiteral("link"), item.link);
+    if (!item.sourceSettings.isEmpty()) o.insert(QStringLiteral("sourceSettings"), item.sourceSettings);
     if (!item.sources.isEmpty()) {
         QJsonArray sources;
         for (const ClipSource& s : item.sources) sources.append(sourceToJson(s));
@@ -171,6 +172,7 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.composition = o.value(QStringLiteral("composition")).toObject();
     item.markers = o.value(QStringLiteral("markers")).toArray();
     item.link = o.value(QStringLiteral("link")).toObject();
+    item.sourceSettings = o.value(QStringLiteral("sourceSettings")).toObject();
     for (const QJsonValue& v : o.value(QStringLiteral("sources")).toArray()) {
         if (const auto s = sourceFromJson(v.toObject())) item.sources << *s;
     }

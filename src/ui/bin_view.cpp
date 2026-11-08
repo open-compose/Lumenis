@@ -12,6 +12,7 @@
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/export_volume.h"
+#include "lumenis/model/frame_flex.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
@@ -376,6 +377,12 @@ bool BinDocument::setField(const QString& id, const QString& heading, const QStr
         if (!f || !model::hasFieldMotion(*item) || !model::fieldMotionChoices(*item).contains(*f)) return false;
         if (item->fields.value(heading) == model::fieldMotionText(*f)) return false;
         item->fields.insert(heading, model::fieldMotionText(*f));
+    } else if (heading == QLatin1String(model::kReformatHeading)) {
+        // "Click the Reformat field for the clip or sub-clip, and select an option" (p.476): master clips and subclips.
+        const auto r = model::reformatFromText(value);
+        if (!r || (item->kind != model::BinItemKind::MasterClip && item->kind != model::BinItemKind::Subclip)) return false;
+        if (item->fields.value(heading) == model::reformatText(*r)) return false;
+        item->fields.insert(heading, model::reformatText(*r));
     } else if (bin_.display.customColumns.contains(heading) || model::isEditableHeading(heading)) {
         if (item->fields.value(heading) == value) return false;
         item->fields.insert(heading, value);
@@ -2210,6 +2217,28 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
                     });
                 }
                 return fields;
+            }
+        }
+        // The Reformatting Options column (p.476): the four options, set on every selected clip.
+        if (at.isValid() && model_->heading(at.column()) == QLatin1String(model::kReformatHeading)) {
+            const QString id = at.data(BinItemModel::kIdRole).toString();
+            const model::BinItem* item = document_.bin().item(id);
+            if (item && (item->kind == model::BinItemKind::MasterClip || item->kind == model::BinItemKind::Subclip)) {
+                if (!table_->selectionModel()->isSelected(at)) selectIds({id});
+                menu->deleteLater();
+                auto* options = new QMenu(this);
+                options->setObjectName(QStringLiteral("reformatMenu"));
+                const QString current = item->fields.value(QLatin1String(model::kReformatHeading));
+                for (model::Reformat r : {model::Reformat::Stretch, model::Reformat::Letterbox, model::Reformat::CenterCrop,
+                                          model::Reformat::CenterKeepSize}) {
+                    QAction* a = options->addAction(model::reformatText(r));
+                    a->setCheckable(true);
+                    a->setChecked(a->text() == current);
+                    connect(a, &QAction::triggered, this, [this, text = a->text()] {
+                        for (const QString& selected : selectedIds()) document_.setField(selected, QLatin1String(model::kReformatHeading), text);
+                    });
+                }
+                return options;
             }
         }
         if (at.isValid() && !table_->selectionModel()->isSelected(at)) {

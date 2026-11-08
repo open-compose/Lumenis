@@ -55,6 +55,7 @@ target_compile_definitions(tst_ofx_host PRIVATE LUMENIS_TEST_OFX="$<TARGET_FILE:
 # Audio timecode (LTC) and Change Sample Rate (docs/spec/clip-audio.md).
 lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)
 lumenis_add_test(tst_dmf SOURCES tst_dmf.cpp LIBS lumenis::media)
+lumenis_add_test(tst_frame_flex SOURCES tst_frame_flex.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)
 lumenis_add_test(tst_waveform SOURCES tst_waveform.cpp LIBS lumenis::media)
 # Syncing clips by their sound (Editing Guide p.1124, p.1126).

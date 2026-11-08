@@ -15,6 +15,7 @@
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/frame_flex.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/scopes.h"
 
@@ -793,7 +794,8 @@ void MainWindow::createPanels() {
                 }
             }
         }
-        return frames_->frame(item, frame, size);
+        // "The new framing of the image will be applied when you drop the clip in the Source viewer" (p.531).
+        return adaptedFrame(item, frame, size, model::spatialAdapterOf(item));
     });
     // The Safe Color Limiter's analysis display (FX Guide p.729-730; 6.10e4c2): "By default, when the Effect Editor is
     // open, the effect changes the display in the Source monitor to an analysis mode that highlights pixels in the image
@@ -3146,12 +3148,28 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     }
 }
 
+// A clip's frame through a spatial adapter (8.5a; media::spatialAdaptedImage): the whole frame cut and fit into the
+// project frame at `want`. Without an adapter, or a project, the frame as the cache scales it.
+QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
+                                const std::optional<model::SpatialAdapter>& spatial) const {
+    if (!spatial || !project_) return frames_->frame(clip, frame, want);
+    const QImage full = frames_->frame(clip, frame, QSize());
+    const QSize raster(project_->settings.format.width, project_->settings.format.height);
+    return media::spatialAdaptedImage(full, *spatial, raster, want.isValid() ? want : raster);
+}
+
 // Without a project, the edit rate stays the LinkOptions default.
 media::LinkOptions MainWindow::linkOptions() const {
     media::LinkOptions o;
     if (project_) o.editRate = project_->settings.format.editRate;
     o.when = QDateTime::currentDateTimeUtc();
     o.sdWidescreen = settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("sdWidescreen"));
+    // "If you are linking to clips, then the default is set to Center Keep Size" (p.475), as the Link setting says.
+    if (settings_) {
+        if (const auto r = model::reformatFromText(settings_->text(QStringLiteral("Link"), QStringLiteral("reformat")))) {
+            o.reformat = model::reformatText(*r);
+        }
+    }
     return o;
 }
 
@@ -3484,6 +3502,38 @@ int MainWindow::refreshMotionAdapters() {
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
     timeline_->changeRecordSequence(tr("Refresh Sequence"), [&](model::Sequence& seq) {
         changed = model::refreshMotionAdapters(seq, resolve, interlaced, blending);
+        return changed > 0;
+    });
+    return changed;
+}
+
+// Clip > Refresh Sequence > Aspect Ratio and Reformatting Options, and All FrameFlex including creative framing (p.478;
+// 8.5a): as refreshMotionAdapters, the sequences selected in the active bin, else the Record monitor's.
+int MainWindow::refreshSpatialAdapters(bool creative) {
+    if (!project_) return 0;
+    const auto resolve = [this](const QString& bin, const QString& clip) { return composer_->resolve(bin, clip); };
+    int changed = 0;
+    BinView* view = binContainer_->activeView();
+    const QWidget* focus = QApplication::focusWidget();
+    if (view && focus && (view == focus || view->isAncestorOf(focus))) {
+        for (const QString& id : view->selectedIds()) {
+            const model::BinItem* found = view->document().bin().item(id);
+            if (!found || found->kind != model::BinItemKind::Sequence) continue;
+            model::BinItem item = *found;
+            model::Sequence seq = model::Sequence::fromItem(item);
+            const int n = model::refreshSpatialAdapters(seq, resolve, creative);
+            if (n == 0) continue;
+            seq.storeIn(item);
+            item.modified = QDateTime::currentDateTimeUtc();
+            storeClip(view->document().nodeId(), item);
+            changed += n;
+        }
+        return changed;
+    }
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
+    timeline_->changeRecordSequence(tr("Refresh Sequence"), [&](model::Sequence& seq) {
+        changed = model::refreshSpatialAdapters(seq, resolve, creative);
         return changed > 0;
     });
     return changed;
@@ -4689,7 +4739,19 @@ void MainWindow::exportToFile() {
         file.setActive(versions.at(chosen));
         settings_->commit(model::SettingsScope::User);
     }
-    writeExport(*picked, dialog.path());
+    const qsizetype before = ConsoleLog::instance().lines().size();
+    if (!writeExport(*picked, dialog.path())) {
+        // A failed export says why where it was asked for, not only in the Console (owner's report, 2026-11-08: an
+        // export on Windows 11 made no file and said nothing). Not modal, so that tests and scripts go on.
+        QStringList why = ConsoleLog::instance().lines().mid(before);
+        if (why.isEmpty()) why << tr("Nothing was exported.");
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Export to File"), tr("The export did not complete."),
+                                    QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("exportFailed"));
+        box->setInformativeText(why.join(QLatin1Char('\n')));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    }
 }
 
 bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
@@ -5982,7 +6044,7 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         }
         if (!clip || !media::isLinked(*clip)) return QImage();
         if (frames_->isOffline(*clip)) return std::nullopt;
-        return frames_->frame(*clip, clipFrame, want);
+        return adaptedFrame(*clip, clipFrame, want, segment.spatial);
     };
     // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
     c.burnIn.sequence = loaded.item;
@@ -8224,6 +8286,8 @@ void MainWindow::installPanelHandlers() {
     handle("bin.include_in_transcription", [this] { setBinsTranscribed(true); });
     handle("bin.exclude_from_transcription", [this] { setBinsTranscribed(false); });
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
+    handle("clip.refresh_sequence.aspect_ratio_reformatting", [this] { refreshSpatialAdapters(false); });
+    handle("clip.refresh_sequence.all_frameflex", [this] { refreshSpatialAdapters(true); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
     handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
