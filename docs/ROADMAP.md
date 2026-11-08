@@ -1495,8 +1495,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         clip's original rate or the project's, with Refresh Sequence > Motion Adapters/Timewarps dropping the adapters).
       * 8.5b3 (done), panning: the FrameFlex effect in the Effect Editor with keyframed boxes in the Record monitor, the
         Layout button's bypass and Alt+Layout reset (p.533-534), creative framing for All FrameFlex.
-    * 8.5c, colour adapters (p.536-541, p.544): the Color Encoding tab (Source color space, Auto, the transformation
-      list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
+    * 8.5c, colour adapters, in two parts (8.5c1 done: the encoding on clips, the built-in transformations, the Color
+      Adapter on segments, the column and the two Refresh Sequence commands; 8.5c2: the Color Encoding tab and
+      Transcode's option; docs/spec/color-adapters.md; p.536-541, p.544): the Color Encoding tab (Source color space,
+      Auto, the transformation list with Add, Delete and dragging, Bypass all color transformations, Revert), the built-in transformations
       (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public
       curves exist), the Color Adapter on segments, the Color Transformations column, Refresh Sequence > Color
       Adapters and Remove Color Adapters, Transcode's Apply source transformations > Color encoding.

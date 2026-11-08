@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/color_adapter.h"
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/effect.h"
 #include "lumenis/model/frame_flex.h"
@@ -270,6 +271,10 @@ struct Segment {
     // attribute or a FrameFlex box: how the clip's picture fits the frame. None: pillarboxed or letterboxed (ours, as
     // before 8.5a). Not an effect: Remove Effect leaves it.
     std::optional<SpatialAdapter> spatial;
+    // Its Color Adapter (Editing Guide p.528, p.540; lumenis/model/color_adapter.h), on video segments from a clip with
+    // colour transformations: the clip's Color Encoding as the segment took it. Not an effect: Remove Effect leaves it;
+    // Refresh Sequence > Remove Color Adapters takes it off (p.544).
+    std::optional<ColorEncoding> color;
     // Nested tracks (FX Guide p.219-224; lumenis/model/nest.h): the segment effect's own tracks, as a
     // sequence's composition (Sequence::toJson) whose frame nestIn + n is the segment's frame n. Filler with
     // an effect (a Submaster) can have them too. Empty: none.

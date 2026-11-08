@@ -23,6 +23,7 @@ add_library(lumenis_model STATIC
     motion_effect.cpp
     timewarp.cpp
     motion_adapter.cpp
+    color_adapter.cpp
     frame_flex.cpp
     nest.cpp
     effect_template.cpp
@@ -60,6 +61,7 @@ add_library(lumenis_model STATIC
     structure.cpp
     include/lumenis/model/bin.h
     include/lumenis/model/bin_lock.h
+    include/lumenis/model/color_adapter.h
     include/lumenis/model/effect.h
     include/lumenis/model/frame_flex.h
     include/lumenis/model/project_bins.h

@@ -658,6 +658,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   it, its sliders' ranges, the whole image pillarboxed or letterboxed in the Effect Preview, the rotation handle 4% of the
   picture's width above the box, the box drawn while bypassed, the Layout button lettered above the groups, Alt+Layout
   without keyframes resetting the values, frames counted from the source IN under a motion effect.
+* Colour adapters (docs/spec/color-adapters.md): the Source color space menu's entries, Auto taking every project as
+  Rec. 709, the Color Transformations column's text ("Bypassed: ..."), Log-C and C-Log scene-referred without a tone
+  curve and full range, Sony's looks only from a provider, Remove Color Adapters undone by a later Refresh.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

@@ -7,6 +7,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/color_adapter.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/frame_flex.h"
 #include "lumenis/model/sequence.h"
@@ -284,6 +285,74 @@ private slots:
         // Remove Effect leaves the adapter.
         QVERIFY(!timeline.removeEffectAtPosition());
         QVERIFY(segment().spatial && segment().spatial->frameFlex);
+    }
+
+    // Colour adapters (p.536-541, p.544; 8.5c1): a clip's colour transformations in the Source monitor and in the segments
+    // edited from it, Refresh Sequence > Color Adapters and Remove Color Adapters.
+    void colorAdapters() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("halves.mov"));
+        QVERIFY(writeHalves(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 128;
+        project.settings.format.height = 128;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        QVERIFY(bin->setField(ids.first(), QLatin1String(model::kReformatHeading), QStringLiteral("Stretch")));
+        model::BinItem clip = *bin->bin().item(ids.first());
+        model::ColorEncoding e;
+        e.transformations = {QStringLiteral("Levels scaling (full range to video levels)")};
+        model::setColorEncoding(clip, e);
+        bin->replaceItem(clip);
+        // "When clips are viewed in the Source monitor or dropped on the Timeline ... the color transformation is applied"
+        // (p.540): full red becomes video-level red.
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, clip);
+        QColor c = composer.pictureAt(MonitorId::Source, 0, QSize(128, 128)).pixelColor(5, 64);
+        QVERIFY2(std::abs(c.red() - 235) <= 3 && std::abs(c.blue() - 16) <= 3, qPrintable(c.name()));
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        QVERIFY(composer.state(MonitorId::Record).current());
+        auto segment = [&] {
+            return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0);
+        };
+        QVERIFY(segment().color == e);
+        auto recordRed = [&] { return composer.pictureAt(MonitorId::Record, 0, QSize(128, 128)).pixelColor(5, 64).red(); };
+        QVERIFY(std::abs(recordRed() - 235) <= 3);
+        // The clip changed afterwards: the sequence keeps its adapter until Refresh Sequence > Color Adapters.
+        e.transformations = {QStringLiteral("Gamma 2.6 to Linear")};
+        model::setColorEncoding(clip, e);
+        bin->replaceItem(clip);
+        QVERIFY(std::abs(recordRed() - 235) <= 3);
+        composer.setActiveMonitor(MonitorId::Record);
+        commands.action(QStringLiteral("clip.refresh_sequence.color_adapters"))->trigger();
+        settle();
+        QVERIFY(segment().color == e);
+        QVERIFY(recordRed() > 245); // 1.0 ^ 2.6 stays 1
+        // Remove Color Adapters: the sequence only; the clip keeps its encoding (p.544).
+        commands.action(QStringLiteral("clip.refresh_sequence.remove_color_adapters"))->trigger();
+        settle();
+        QVERIFY(!segment().color);
+        QVERIFY(model::colorEncodingOf(*bin->bin().item(clip.id)));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        settle();
+        QVERIFY(segment().color == e);
     }
 
     // The Source Settings dialog's FrameFlex tab (p.529-535): fields, buttons and the top viewer's drags change the box,

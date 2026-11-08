@@ -233,6 +233,7 @@ QJsonObject segmentToJson(const Segment& s) {
         o.insert(QStringLiteral("surround"), pans);
     }
     if (s.spatial) o.insert(QStringLiteral("spatial"), s.spatial->toJson());
+    if (s.color) o.insert(QStringLiteral("color"), s.color->toJson());
     if (s.adapter) {
         o.insert(QStringLiteral("adapter"), QJsonObject{{QStringLiteral("rate"), QString::fromStdString(s.adapter->clipRate.toString())},
                                                        {QStringLiteral("sequenceRate"), QString::fromStdString(s.adapter->sequenceRate.toString())},
@@ -283,6 +284,9 @@ Segment segmentFromJson(const QJsonObject& o) {
     }
     if (const QJsonObject a = o.value(QStringLiteral("spatial")).toObject(); !s.isFiller() && !a.isEmpty()) {
         s.spatial = SpatialAdapter::fromJson(a);
+    }
+    if (const QJsonObject a = o.value(QStringLiteral("color")).toObject(); !s.isFiller() && !a.isEmpty()) {
+        s.color = ColorEncoding::fromJson(a);
     }
     if (const QJsonObject a = o.value(QStringLiteral("adapter")).toObject(); !s.isFiller() && !a.isEmpty()) {
         const auto clipRate = rateFromText(a.value(QStringLiteral("rate")).toString());
@@ -1072,7 +1076,12 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.adapter = adapterOf(source);
             // "The new framing of the image will be applied when you drop the clip in the Source viewer or on the
             // Timeline" (p.531): its Reformat attribute and FrameFlex box.
-            if (s.sourceTrack.startsWith(QLatin1Char('V'))) s.spatial = spatialAdapterOf(source);
+            if (s.sourceTrack.startsWith(QLatin1Char('V'))) {
+                s.spatial = spatialAdapterOf(source);
+                // "When clips are viewed in the Source monitor or dropped on the Timeline, any associated look files
+                // (LUTs, CDLs, etc.) are also considered when the color transformation is applied" (p.540).
+                s.color = colorAdapterOf(source);
+            }
             // "Levels set in master clips carry across to the sequence after you edit the clips"
             // (p.711): Apply Gain and Center Pan (clip_audio.h).
             if (s.sourceTrack.startsWith(QLatin1Char('A'))) {

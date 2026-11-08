@@ -1579,10 +1579,11 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
                 p.setBrush(QColor(0xff3cc85a));
                 p.drawEllipse(QRectF(centre - 2, y - 2, 4, 4));
             }
-        } else if (s.spatial && s.spatial->frameFlex && t.kind == model::TrackKind::Video && !s.effect) {
+        } else if (((s.spatial && s.spatial->frameFlex) || s.color) && t.kind == model::TrackKind::Video && !s.effect) {
             // A reframed clip's Spatial Adapter: "A green dot on the clip in the Timeline indicates that spatial changes
             // (in the form of a spatial adapter effect) have been applied to this clip" (p.531). Ours: only for a
-            // FrameFlex box, not for the Reformat attribute alone.
+            // FrameFlex box, not for the Reformat attribute alone. A Color Adapter has one too ("any of these changes
+            // will be indicated as adapter effects and will display as green dots on the clip", p.528).
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
             if (x1 - x0 > 10) {
@@ -2625,7 +2626,10 @@ void Timeline::sync() {
                     // "If you use the Toggle Source/Record button to view the Timeline for a mixed rate
                     // clip loaded in the Source monitor, you also see the green dot" (p.470).
                     seg.adapter = model::adapterOf(item);
-                    if (t.startsWith(QLatin1Char('V'))) seg.spatial = model::spatialAdapterOf(item);
+                    if (t.startsWith(QLatin1Char('V'))) {
+                        seg.spatial = model::spatialAdapterOf(item);
+                        seg.color = model::colorAdapterOf(item);
+                    }
                     if (seg.length > 0) track->segments << seg;
                 }
             }

@@ -910,7 +910,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `EffectTarget::Spatial` in `effectAt`/`effectFor`, `model::Effect` now in `effect.h`; the box over the whole image in the
   Effect Preview through `media::framingPreviewAdapter`/`framingHandles`/`dragFraming` and `EffectEditor::framingSegment`;
   the Layout button `EffectEditor::setFramingBypassed`/`resetFraming`; tests `tst_frame_flex framingEffect`,
-  `tst_frameflex_ui panningShot`), is done, so 8.5b is.
+  `tst_frameflex_ui panningShot`), is done, so 8.5b is. 8.5c1, colour adapters (docs/spec/color-adapters.md:
+  `model::ColorEncoding` in `src/model/color_adapter.*` kept in the clip's Source Settings with the Color Transformations
+  column, `Segment::color`, `refreshColorAdapters`/`removeColorAdapters` behind Refresh Sequence > Color Adapters and Remove
+  Color Adapters; the transformations in `src/media/color_transform.*` with `media::registerColorTransformation` for
+  providers; `MainWindow::adaptedFrame`/`refreshSequences`; tests `tst_color_adapter`, `tst_frameflex_ui colorAdapters`), is
+  done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

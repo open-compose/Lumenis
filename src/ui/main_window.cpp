@@ -15,6 +15,7 @@
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/color_transform.h"
 #include "lumenis/media/frame_flex.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/scopes.h"
@@ -800,7 +801,7 @@ void MainWindow::createPanels() {
             }
         }
         // "The new framing of the image will be applied when you drop the clip in the Source viewer" (p.531).
-        return adaptedFrame(item, frame, size, model::spatialAdapterOf(item));
+        return adaptedFrame(item, frame, size, model::spatialAdapterOf(item), model::colorAdapterOf(item));
     });
     // The Safe Color Limiter's analysis display (FX Guide p.729-730; 6.10e4c2): "By default, when the Effect Editor is
     // open, the effect changes the display in the Source monitor to an analysis mode that highlights pixels in the image
@@ -3160,12 +3161,15 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     }
 }
 
-// A clip's frame through a spatial adapter (8.5a; media::spatialAdaptedImage): the whole frame cut and fit into the
-// project frame at `want`. Without an adapter, or a project, the frame as the cache scales it.
+// A clip's frame through its colour adapter (8.5c; media::applyColorTransformations) and spatial adapter (8.5a;
+// media::spatialAdaptedImage): the colours transformed, then the whole frame cut and fit into the project frame at `want`.
+// Without a spatial adapter, or a project, the frame as the cache scales it.
 QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
-                                const std::optional<model::SpatialAdapter>& spatial) const {
-    if (!spatial || !project_) return frames_->frame(clip, frame, want);
-    const QImage full = frames_->frame(clip, frame, QSize());
+                                const std::optional<model::SpatialAdapter>& spatial,
+                                const std::optional<model::ColorEncoding>& color) const {
+    const QStringList transformations = color ? color->applied() : QStringList();
+    if (!spatial || !project_) return media::applyColorTransformations(frames_->frame(clip, frame, want), transformations);
+    const QImage full = media::applyColorTransformations(frames_->frame(clip, frame, QSize()), transformations);
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
     return media::spatialAdaptedImage(full, *spatial, raster, want.isValid() ? want : raster);
 }
@@ -3594,11 +3598,24 @@ int MainWindow::refreshMotionAdapters() {
     return changed;
 }
 
+// Clip > Refresh Sequence > Color Adapters (p.478) and Remove Color Adapters (p.544; 8.5c): as refreshSpatialAdapters.
+int MainWindow::refreshColorAdapters(bool remove) {
+    const auto resolve = [this](const QString& bin, const QString& clip) { return composer_->resolve(bin, clip); };
+    return refreshSequences([&](model::Sequence& seq) {
+        return remove ? model::removeColorAdapters(seq) : model::refreshColorAdapters(seq, resolve);
+    });
+}
+
 // Clip > Refresh Sequence > Aspect Ratio and Reformatting Options, and All FrameFlex including creative framing (p.478;
 // 8.5a): as refreshMotionAdapters, the sequences selected in the active bin, else the Record monitor's.
 int MainWindow::refreshSpatialAdapters(bool creative) {
     if (!project_) return 0;
     const auto resolve = [this](const QString& bin, const QString& clip) { return composer_->resolve(bin, clip); };
+    return refreshSequences([&](model::Sequence& seq) { return model::refreshSpatialAdapters(seq, resolve, creative); });
+}
+
+int MainWindow::refreshSequences(const std::function<int(model::Sequence&)>& refresh) {
+    if (!project_) return 0;
     int changed = 0;
     BinView* view = binContainer_->activeView();
     const QWidget* focus = QApplication::focusWidget();
@@ -3608,7 +3625,7 @@ int MainWindow::refreshSpatialAdapters(bool creative) {
             if (!found || found->kind != model::BinItemKind::Sequence) continue;
             model::BinItem item = *found;
             model::Sequence seq = model::Sequence::fromItem(item);
-            const int n = model::refreshSpatialAdapters(seq, resolve, creative);
+            const int n = refresh(seq);
             if (n == 0) continue;
             seq.storeIn(item);
             item.modified = QDateTime::currentDateTimeUtc();
@@ -3620,7 +3637,7 @@ int MainWindow::refreshSpatialAdapters(bool creative) {
     const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
     timeline_->changeRecordSequence(tr("Refresh Sequence"), [&](model::Sequence& seq) {
-        changed = model::refreshSpatialAdapters(seq, resolve, creative);
+        changed = refresh(seq);
         return changed > 0;
     });
     return changed;
@@ -6131,15 +6148,15 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         }
         if (!clip || !media::isLinked(*clip)) return QImage();
         if (frames_->isOffline(*clip)) return std::nullopt;
-        if (!segment.spatial) return adaptedFrame(*clip, clipFrame, want, std::nullopt);
+        if (!segment.spatial) return adaptedFrame(*clip, clipFrame, want, std::nullopt, segment.color);
         if (framingPreview_ && segment == *framingPreview_ && segment.spatial->frameFlex) {
-            return adaptedFrame(*clip, clipFrame, want, media::framingPreviewAdapter(*segment.spatial->frameFlex));
+            return adaptedFrame(*clip, clipFrame, want, media::framingPreviewAdapter(*segment.spatial->frameFlex), segment.color);
         }
         // The FrameFlex effect's box at the frame (p.533): frames into the segment, counted from its source IN (ours:
         // a motion effect's speed is not taken into account).
         const double offset = std::clamp(static_cast<double>(clipFrame - segment.sourceIn), 0.0,
                                          static_cast<double>(std::max<std::int64_t>(segment.length - 1, 0)));
-        return adaptedFrame(*clip, clipFrame, want, model::adapterAt(*segment.spatial, offset, segment.length));
+        return adaptedFrame(*clip, clipFrame, want, model::adapterAt(*segment.spatial, offset, segment.length), segment.color);
     };
     // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
     c.burnIn.sequence = loaded.item;
@@ -8384,6 +8401,8 @@ void MainWindow::installPanelHandlers() {
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("clip.refresh_sequence.aspect_ratio_reformatting", [this] { refreshSpatialAdapters(false); });
     handle("clip.refresh_sequence.all_frameflex", [this] { refreshSpatialAdapters(true); });
+    handle("clip.refresh_sequence.color_adapters", [this] { refreshColorAdapters(false); });
+    handle("clip.refresh_sequence.remove_color_adapters", [this] { refreshColorAdapters(true); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
     handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });

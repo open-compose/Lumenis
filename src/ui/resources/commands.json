@@ -117,6 +117,8 @@
     {"id": "clip.recreate_title_media", "text": "Recreate Title Media"},
     {"id": "clip.refresh_sequence.motion_adapters_timewarps", "text": "Motion Adapters/Timewarps"},
     {"id": "clip.refresh_sequence.aspect_ratio_reformatting", "text": "Aspect Ratio and Reformatting Options"},
+    {"id": "clip.refresh_sequence.color_adapters", "text": "Color Adapters"},
+    {"id": "clip.refresh_sequence.remove_color_adapters", "text": "Remove Color Adapters"},
     {"id": "clip.refresh_sequence.all_frameflex", "text": "All FrameFlex including creative framing"},
     {"id": "clip.refresh_sequence.group_clips", "text": "Group Clips"},
     {"id": "clip.relink.linked_media", "text": "Linked Media"},

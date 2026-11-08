@@ -435,7 +435,9 @@ const QStringList& binHeadings() {
             QStringLiteral("AuxInk Dur"), QStringLiteral("AuxInk Edge"), QStringLiteral("AuxInk End"),
             QStringLiteral("AuxInk Film"), QStringLiteral("Cadence"), QStringLiteral("Camera"),
             QStringLiteral("Camroll"), QStringLiteral("CFPS"), QStringLiteral("Color"),
-            QStringLiteral("Color Framing"), QStringLiteral("Color Space"), QStringLiteral("Comments"),
+            QStringLiteral("Color Framing"), QStringLiteral("Color Space"),
+            // Not in the table: "the Color Transformations bin column" (p.536).
+            QStringLiteral("Color Transformations"), QStringLiteral("Comments"),
             QStringLiteral("Creation Date"), QStringLiteral("Disk Label"), QStringLiteral("DPX"),
             QStringLiteral("Drive"), QStringLiteral("Duration"), QStringLiteral("End"),
             QStringLiteral("Field Motion"), QStringLiteral("Film TC"), QStringLiteral("Film Type"),

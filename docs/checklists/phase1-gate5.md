@@ -182,6 +182,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Recreate Title Media |  | p.475 | works | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | works | ☐ | | |
 | Refresh Sequence > Aspect Ratio and Reformatting Options |  | p.478 | works | ☐ | | |
+| Refresh Sequence > Color Adapters |  | p.478 | works | ☐ | | |
+| Refresh Sequence > Remove Color Adapters |  | p.544 | works | ☐ | | |
 | Refresh Sequence > Group Clips |  | p.478 | works | ☐ | | |
 | Refresh Sequence > All FrameFlex including creative framing |  | p.478 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
@@ -330,6 +332,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 226 menu commands, 194 of them working with a project open; the
+* 228 menu commands, 196 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

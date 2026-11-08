@@ -705,6 +705,9 @@ public:
     // Refresh Sequence > Aspect Ratio and Reformatting Options (`creative` false) and All FrameFlex including creative
     // framing (8.5a, p.478). Returns how many segments changed.
     int refreshSpatialAdapters(bool creative);
+    // Clip > Refresh Sequence > Color Adapters, or with `remove` Remove Color Adapters (p.478, p.544; 8.5c): video segments
+    // take their clip's Color Adapter, or lose theirs. Returns how many segments changed.
+    int refreshColorAdapters(bool remove);
     // Source Settings (8.5b1, p.527-535) for the clips selected in the active bin, or the Source monitor's clip; the hook
     // answers for tests (true for OK). False when there is no clip or it was cancelled.
     bool sourceSettings();
@@ -1162,7 +1165,11 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
-    QImage adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial) const;
+    QImage adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial,
+                        const std::optional<model::ColorEncoding>& color = std::nullopt) const;
+    // The sequences selected in the active bin (when it has the focus), else the Record monitor's, through `refresh`, each
+    // changed one stored (the Record monitor's as an undo step). Returns the changes `refresh` counted.
+    int refreshSequences(const std::function<int(model::Sequence&)>& refresh);
     // While the Record monitor's Effect Preview is composed: the segment whose FrameFlex effect the Effect Editor shows,
     // drawn whole under its box (EffectEditor::framingSegment; 8.5b3).
     std::optional<model::Segment> framingPreview_;
