@@ -1570,7 +1570,16 @@ decision, 2026-10-27):
   or returns quietly (commands that do nothing, missing media, files that cannot be read or written, missing encoders,
   tools and plug-ins), show a message there (non-modal where a test or script may run it), and add a test that a
   failed command with no message is caught;
-* anything else later found not to fit another area.
+* anything else later found not to fit another area;
+* last, a trademark check (owner's request, 2026-11-09): Avid marks some feature names as trademarks (AutoSync,
+  for one, carries a ™ in places in the Editing Guide), so we must not use them as our menu, command, window or
+  function names. Go through every user-visible name (commands.json, menus.json, command_palette.json, settings.json,
+  window and panel titles, the specs and BUILDING.md) against Avid's list at
+  https://www.avid.com/legal/trademarks-and-other-notices and against the names the guides mark ™ or ®. Rename what
+  is marked to a generic name (AutoSync becomes "Sync Clips"; others such as ScriptSync, PhraseFind, MultiRez,
+  FrameFlex, Titler+ and Media Composer itself to be checked). Keep the guide's name in the spec as the source the
+  item follows, with our name beside it; update tests/data/menu_inventory.json and the checklist; and add a test that
+  fails when a listed trademark appears in a user-visible string.
 
 ### Phase 10 — Hardening
 * Performance profiling, accessibility audit, localisation (the languages
