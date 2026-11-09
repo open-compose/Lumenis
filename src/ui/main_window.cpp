@@ -15,6 +15,7 @@
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/target_mask.h"
 #include "lumenis/media/color_transform.h"
 #include "lumenis/media/frame_flex.h"
 #include "lumenis/media/lut_file.h"
@@ -1429,6 +1430,7 @@ SettingsWindow* MainWindow::showSettings() {
     if (!settingsWindow_) {
         settingsWindow_ = new SettingsWindow(*settings_, this);
         connect(settingsWindow_, &SettingsWindow::proxyChanged, this, [this](int mode) { setProxyMode(mode); });
+        connect(settingsWindow_, &SettingsWindow::maskMarginsChanged, this, [this](const model::MaskMargins& m) { setMaskMargins(m); });
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
@@ -3324,22 +3326,43 @@ bool MainWindow::setProxyMode(int mode) {
     if (project_->settings.proxy == mode) return true;
     model::ProjectSettings changed = project_->settings;
     changed.proxy = mode;
+    if (!saveProjectSettings(changed, tr("Proxy"))) return false;
+    model::setRenderProxy(mode);
+    if (settingsWindow_) settingsWindow_->setProject(project_);
+    composer_->refreshDisplay();
+    timeline_->setDisplay(timeline_->display()); // the render dots follow the mode
+    return true;
+}
+
+// The Format tab's settings are kept in the project file; one that cannot be written says why, and the Format tab shows
+// the project as it was.
+bool MainWindow::saveProjectSettings(const model::ProjectSettings& changed, const QString& what) {
+    if (!project_) return false;
     QString error;
     if (!model::ProjectStore::write(project_->file, changed, &error)) {
-        ConsoleLog::instance().append(tr("Proxy not changed: %1").arg(error));
-        auto* box = new QMessageBox(QMessageBox::Warning, tr("Proxy"), tr("The proxy mode could not be saved: %1").arg(error),
+        ConsoleLog::instance().append(tr("%1 not changed: %2").arg(what, error));
+        auto* box = new QMessageBox(QMessageBox::Warning, what, tr("The project's %1 could not be saved: %2").arg(what, error),
                                     QMessageBox::Ok, this);
-        box->setObjectName(QStringLiteral("proxyNotSaved"));
+        box->setObjectName(QStringLiteral("projectNotSaved"));
         box->setAttribute(Qt::WA_DeleteOnClose);
         box->open();
         if (settingsWindow_) settingsWindow_->setProject(project_);
         return false;
     }
     project_->settings = changed;
-    model::setRenderProxy(mode);
+    return true;
+}
+
+// The Target Settings dialog's OK or Apply (p.551; 8.5e3): the project's mask margins, which the monitors show at once.
+bool MainWindow::setMaskMargins(const model::MaskMargins& margins) {
+    if (!project_) return false;
+    if (project_->settings.mask == margins) return true;
+    model::ProjectSettings changed = project_->settings;
+    changed.mask = margins;
+    if (!saveProjectSettings(changed, tr("Mask Margins"))) return false;
     if (settingsWindow_) settingsWindow_->setProject(project_);
-    composer_->refreshDisplay();
-    timeline_->setDisplay(timeline_->display()); // the render dots follow the mode
+    composer_->setMaskMargins(margins);
+    if (FullScreenView* view = fullScreen_.data()) view->update();
     return true;
 }
 
@@ -5979,7 +6002,9 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     source.frames = end - start;
     source.frameRate = sequenceItem.editRate;
     source.raster = c.size;
-    source.picture = [&](std::int64_t f) { return media::composeImage(c, start + f); };
+    // Enable Mask Regions: "you can export your sequence with mask margins burned in" (p.1175, p.900).
+    const model::MaskMargins burned = flag("enableMaskRegions") ? project_->settings.mask : model::MaskMargins{};
+    source.picture = [&](std::int64_t f) { return media::burnMaskMargins(media::composeImage(c, start + f), burned); };
     source.sound = [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) { renderer->render(at, count, out); };
     QProgressDialog progress(tr("Exporting %1...").arg(item.name), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("exportProgress"));
@@ -7950,9 +7975,15 @@ void MainWindow::applySettings() {
     }
     // The monitors' Display Color Space converts from the project's colour space (p.544).
     composer_->setProjectColorSpace(project_ ? project_->settings.colorSpace : QString());
+    // Mask margins (p.550-552; 8.5e3): the project's, shown as each monitor's Target Mask (the Composer setting's Viewer
+    // tab, p.1161) and the Full Screen Playback setting's (p.1191).
+    composer_->setMaskMargins(project_ ? project_->settings.mask : model::MaskMargins{});
+    composer_->setTargetMask(MonitorId::Source, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("sourceTargetMask"))));
+    composer_->setTargetMask(MonitorId::Record, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"))));
     if (FullScreenView* view = fullScreen_.data()) {
         view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));
+        view->setTargetMask(model::targetMaskFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("targetMask"))));
     }
     // Bin settings (p.1152-1154).
     binContainer_->setAutoSaveTiming(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")) * 60 * 1000,

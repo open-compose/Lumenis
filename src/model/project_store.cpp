@@ -89,6 +89,7 @@ QJsonObject toJson(const ProjectSettings& s) {
         o.insert(QStringLiteral("filmType"), s.filmType);
     }
     if (s.proxy != 0) o.insert(QStringLiteral("proxy"), s.proxy);
+    if (!s.mask.isEmpty() || !s.mask.preset.isEmpty()) o.insert(QStringLiteral("maskMargins"), s.mask.toJson());
     return o;
 }
 
@@ -237,6 +238,7 @@ std::optional<ProjectSettings> ProjectStore::read(const QString& file, QString* 
     // A proxy mode the format does not offer is none.
     s.proxy = o.value(QStringLiteral("proxy")).toInt();
     if (!proxyModes(s.format).contains(s.proxy)) s.proxy = 0;
+    s.mask = MaskMargins::fromJson(o.value(QStringLiteral("maskMargins")).toObject());
     s.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     s.modified = QDateTime::fromString(o.value(QStringLiteral("modified")).toString(), Qt::ISODate);
     return s;

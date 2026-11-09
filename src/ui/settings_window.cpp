@@ -1,4 +1,5 @@
 #include "lumenis/ui/settings_window.h"
+#include "lumenis/ui/target_settings_dialog.h"
 
 #include "lumenis/model/safe_colors.h"
 #include "lumenis/ui/safe_color_graph.h"
@@ -828,6 +829,11 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
         proxy->setEnabled(proxy->count() > 1);
         connect(proxy, &QComboBox::activated, this, [this, proxy](int index) { emit proxyChanged(proxy->itemData(index).toInt()); });
         format_->addRow(tr("Proxy:"), proxy);
+        // "Click the Mask Margins button. The Target Settings dialog displays" (p.551).
+        auto* mask = new QPushButton(tr("Mask Margins"));
+        mask->setObjectName(QStringLiteral("maskMarginsButton"));
+        connect(mask, &QPushButton::clicked, this, &SettingsWindow::openMaskMargins);
+        format_->addRow(QString(), mask);
         add(tr("Color Space:"), s.colorSpace, "formatColorSpace");
         add(tr("Color Depth:"), s.colorDepth, "formatColorDepth");
         add(tr("Stereoscopic:"), s.stereoscopic, "formatStereoscopic");
@@ -838,6 +844,16 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
         l->projectFormat = formatText;
         l->projectEditRate = project ? std::optional<Rational>(project->settings.format.editRate) : std::nullopt;
     }
+}
+
+void SettingsWindow::openMaskMargins() {
+    if (!entry_) return;
+    const Rational aspect = entry_->settings.aspect;
+    const double ratio = aspect.den() > 0 ? static_cast<double>(aspect.num()) / static_cast<double>(aspect.den()) : 16.0 / 9.0;
+    TargetSettingsDialog dialog(entry_->settings.mask, ratio, this);
+    connect(&dialog, &TargetSettingsDialog::applied, this, &SettingsWindow::maskMarginsChanged);
+    const bool ok = maskHook_ ? maskHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (ok) emit maskMarginsChanged(dialog.margins());
 }
 
 void SettingsWindow::showTab(Tab tab) {

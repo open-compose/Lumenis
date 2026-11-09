@@ -717,6 +717,9 @@ public:
     // when no project is open, its format does not offer the mode or the project file cannot be written (a message
     // says why).
     bool setProxyMode(int mode);
+    // The Format tab's Mask Margins (p.550-551; 8.5e3): the project's, saved with it and shown by the monitors' Target
+    // Mask. False without a project or when the project file cannot be written (a message says why).
+    bool setMaskMargins(const model::MaskMargins& margins);
     void setLutFileHook(std::function<QString()> hook) { lutFileHook_ = std::move(hook); }
     // The Color Encoding tab's Color Management Settings button (p.542): the setting opened from the User tab; for tests
     // the hook gets the setting's entry instead of the dialog opening.
@@ -1188,6 +1191,8 @@ private:
     // drawn whole under its box (EffectEditor::framingSegment; 8.5b3).
     std::optional<model::Segment> framingPreview_;
     std::function<QString()> lutFileHook_;
+    // Writes the project file with `changed` and keeps it; false, with a message naming `what`, when it cannot be written.
+    bool saveProjectSettings(const model::ProjectSettings& changed, const QString& what);
     std::function<void(int)> colorManagementHook_;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.

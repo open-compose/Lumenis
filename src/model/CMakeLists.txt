@@ -5,6 +5,7 @@ add_library(lumenis_model STATIC
     transcript_view.cpp
     project_bins.cpp
     project_store.cpp
+    mask_margins.cpp
     locations.cpp
     monitor.cpp
     sequence.cpp
@@ -66,6 +67,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/frame_flex.h
     include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h
+    include/lumenis/model/mask_margins.h
     include/lumenis/model/locations.h
     include/lumenis/model/monitor.h
     include/lumenis/model/sequence.h

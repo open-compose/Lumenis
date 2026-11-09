@@ -2,7 +2,8 @@
 // docs/spec/composer-display.md): two rows of data with a second tracking display, the Fast Menu
 // and the gang icon; Flow Data Dynamically; Tick Marks in Position Bars; the middle Composer button
 // panel. Also Dynamic Play (p.401-402), Display During Segment Drag (p.617-618, p.1219) and the monitors' Display Color
-// Space (p.544).
+// Space (p.544) and Target Mask (p.552, 8.5e3).
+#include "lumenis/media/target_mask.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/model/sequence.h"
@@ -137,6 +138,61 @@ private slots:
         // A 2020 project's pictures start on a Rec.2020 display.
         c.setProjectColorSpace(QStringLiteral("RGB 2020"));
         QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.2020"));
+    }
+
+    // "Right-click in the source or record viewer and select Target Mask" (p.552): the project's mask margins drawn as
+    // the monitor says. Also the burn-in of Export's Enable Mask Regions (p.900).
+    void targetMask() {
+        Composer c;
+        c.resize(900, 360);
+        c.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(200, 40, 40));
+            return image;
+        });
+        c.show();
+        c.load(MonitorId::Record, QStringLiteral("bin"), clip(QStringLiteral("b"), 100));
+        settle();
+        c.setMaskMargins(model::maskForPreset(QStringLiteral("2.39:1"), 16.0 / 9.0));
+        MonitorPicture* w = c.picture(MonitorId::Record);
+        auto centre = [&] {
+            const QImage shot = w->grab().toImage();
+            return shot.pixel(shot.width() / 2, shot.height() / 2);
+        };
+        QCOMPARE(centre(), qRgb(200, 40, 40));
+        QMenu* menu = c.contextMenu(MonitorId::Record);
+        auto* target = menu->findChild<QMenu*>(QStringLiteral("targetMask"));
+        QVERIFY(target);
+        QStringList choices;
+        for (QAction* a : target->actions()) choices << a->text();
+        QCOMPARE(choices, model::targetMaskLabels());
+        QVERIFY(target->findChild<QAction*>(QStringLiteral("none"))->isChecked());
+        target->findChild<QAction*>(QStringLiteral("blackMask"))->trigger();
+        delete menu;
+        settle();
+        QCOMPARE(c.targetMask(MonitorId::Record), model::TargetMask::BlackMask);
+        QCOMPARE(c.targetMask(MonitorId::Source), model::TargetMask::None);
+        // The centre stays; a row just inside the picture's top is in the masked band: black.
+        const QImage shot = w->grab().toImage();
+        QCOMPARE(shot.pixel(shot.width() / 2, shot.height() / 2), qRgb(200, 40, 40));
+        int firstRed = -1;
+        for (int y = 0; y < shot.height() && firstRed < 0; ++y) {
+            if (shot.pixel(shot.width() / 2, y) == qRgb(200, 40, 40)) firstRed = y;
+        }
+        QVERIFY(firstRed > 0);
+        c.setTargetMask(MonitorId::Record, model::TargetMask::MixToWhite);
+        settle();
+        const QImage mixed = w->grab().toImage();
+        const QRgb band = mixed.pixel(mixed.width() / 2, firstRed - 2);
+        QVERIFY2(qGreen(band) > 100 && qRed(band) > 200, qPrintable(QString::number(band, 16)));
+        // Burned in for export: outside black, inside kept, the format kept.
+        QImage frame(160, 90, QImage::Format_RGB32);
+        frame.fill(QColor(200, 40, 40));
+        const QImage burned = media::burnMaskMargins(frame, model::maskForPreset(QStringLiteral("2.39:1"), 16.0 / 9.0));
+        QCOMPARE(burned.format(), frame.format());
+        QCOMPARE(burned.pixel(80, 2), qRgb(0, 0, 0));
+        QCOMPARE(burned.pixel(80, 45), qRgb(200, 40, 40));
+        QCOMPARE(media::burnMaskMargins(frame, {}), frame);
     }
 
     // Tick Marks in Position Bars (p.1159): invisible when off.

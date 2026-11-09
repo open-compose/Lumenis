@@ -18,6 +18,7 @@
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
+#include "lumenis/ui/target_settings_dialog.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
@@ -27,6 +28,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QLabel>
+#include <QDoubleSpinBox>
+#include <QPushButton>
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QTemporaryDir>
@@ -481,6 +484,26 @@ private slots:
         QCOMPARE(window.mediaCreation(QStringLiteral("transcode")).raster, QSize(512, 288));
         QCOMPARE(window.mediaCreation(QStringLiteral("import")).raster, QSize(1024, 576));
         QVERIFY(window.setProxyMode(0));
+
+        // The Format tab's Mask Margins button and the Target Settings dialog (p.551; 8.5e3): a preset fills the
+        // percentages, OK keeps them in the project file and the monitors show them.
+        settings = window.showSettings();
+        auto* maskButton = settings->findChild<QPushButton*>(QStringLiteral("maskMarginsButton"));
+        QVERIFY(maskButton);
+        settings->setMaskDialogHook([](TargetSettingsDialog& d) {
+            auto* preset = d.findChild<QComboBox*>(QStringLiteral("maskPreset"));
+            if (!preset || preset->currentText() != QStringLiteral("16:9")) return false;
+            d.choosePreset(QStringLiteral("2.39:1"));
+            return d.findChild<QDoubleSpinBox*>(QStringLiteral("maskTop"))->value() > 12.0;
+        });
+        maskButton->click();
+        settle();
+        QCOMPARE(window.composer().maskMargins().preset, QStringLiteral("2.39:1"));
+        QCOMPARE(model::ProjectStore::read(project.file)->mask, window.composer().maskMargins());
+        // The Composer setting's Viewer tab names each monitor's Target Mask (p.1161).
+        window.settings().setValue(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"), QStringLiteral("blackMask"));
+        settle();
+        QCOMPARE(window.composer().targetMask(MonitorId::Record), model::TargetMask::BlackMask);
     }
 };
 

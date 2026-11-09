@@ -1509,10 +1509,11 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       and the CDL transformation.
     * 8.5e, in four parts: 8.5e1 (done), Display Color Space on the monitors (p.544); 8.5e2 (done), the proxy mode (the Format
       tab's Proxy 1/4 and 1/16, p.526-527, p.549-550: pictures and renders at the proxy raster, renders kept per proxy
-      mode); 8.5e3, the Format tab's Mask Margins and the monitors' Target Mask (p.550-552, the Composer setting's Target
+      mode); 8.5e3 (done), the Format tab's Mask Margins and the monitors' Target Mask (p.550-552, the Composer setting's Target
       Mask p.1191, Export's Enable Mask Regions); 8.5e4, ACES projects (p.557-560: the ACES colour space, ACES colour
       adapter types, the Output Color Space, ACEScct working space and 32-bit float timeline) through OpenColorIO's ACES
-      configurations where available.
+      configurations where available, with the Composer setting's Viewer tab Color Space options (p.1161: Project,
+      Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, ACESproxy) matched with Display Color Space.
   * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1110) and stereoscopic projects.
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:

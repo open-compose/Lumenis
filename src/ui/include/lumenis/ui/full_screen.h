@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/model/mask_margins.h"
 #include <QString>
 #include <QWidget>
 
@@ -33,6 +34,8 @@ public:
     // "Full Screen" (p.1191): off, the picture is shown with as little
     // scaling as possible.
     void setFullScreenScaling(bool on);
+    // The Full Screen Playback setting's Target Mask (p.1191; 8.5e3) over the Composer's mask margins.
+    void setTargetMask(model::TargetMask mask);
     // Where the picture goes in a widget of `area`, for an image of
     // `image` size, in widget pixels. Empty for an empty image.
     QRect pictureRect(QSize area, QSize image) const;
@@ -52,6 +55,7 @@ protected:
 private:
     Composer& composer_;
     Reformat reformat_ = Reformat::Letterbox;
+    model::TargetMask targetMask_ = model::TargetMask::None;
     bool fullScreen_ = true;
 };
 

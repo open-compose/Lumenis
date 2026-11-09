@@ -931,7 +931,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_composer_display displayColorSpace`), is done. 8.5e2, the proxy mode (the Format tab's Proxy `formatProxy`,
   `ProjectSettings::proxy` with `model::proxyModes`/`proxyRaster`, `MainWindow::setProxyMode`; renders per mode through
   `model::setRenderProxy` in the render key and `EffectRender::kept`; tests `tst_effect_render proxyModes`,
-  `tst_project_store proxyModes`, `tst_render_ui proxyMode`), is done.
+  `tst_project_store proxyModes`, `tst_render_ui proxyMode`), is done. 8.5e3, mask margins and Target Mask (the Format
+  tab's Mask Margins with `src/ui/target_settings_dialog.*`, `ProjectSettings::mask` and `src/model/mask_margins.*`,
+  `MainWindow::setMaskMargins`; `Composer::setTargetMask`, the Composer setting's Viewer tab, Full Screen Playback's
+  Target Mask, `media::paintTargetMask`/`burnMaskMargins` in `src/media/target_mask.*` for Export's Enable Mask Regions;
+  tests `tst_project_store maskMargins`, `tst_composer_display targetMask`, `tst_render_ui proxyMode`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

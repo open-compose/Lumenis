@@ -382,7 +382,7 @@ private slots:
         SettingsList list(settings, SettingsScope::User);
         const int composer = settings.file(SettingsScope::User).activeIndex("Composer");
         list.dialogHook = [](SettingsDialog& d) {
-            QCOMPARE(d.tabs()->count(), 4); // Window, Edit, Move, MultiCam (p.1158-1161)
+            QCOMPARE(d.tabs()->count(), 5); // Window, Edit, Move, MultiCam, Viewer (p.1158-1161)
             qobject_cast<QCheckBox*>(d.editor("activateRecordAfterEdit"))->setChecked(true);
             QTimer::singleShot(0, &d, &QDialog::accept);
         };

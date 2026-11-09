@@ -4,6 +4,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/display_color.h"
+#include "lumenis/media/target_mask.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/titler.h"
@@ -755,6 +756,8 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
                            fit.width(), fit.height());
             p.setRenderHint(QPainter::SmoothPixmapTransform, composer_.smoothScaling());
             p.drawImage(at, image);
+            // The monitor's Target Mask over the project's mask margins (p.552).
+            media::paintTargetMask(p, QRectF(at), composer_.maskMargins(), composer_.targetMask(monitor_));
         } else if (offline) {
             // "A black screen appears with the words Media Offline" (p.347).
             QFont f = font();
@@ -2828,6 +2831,20 @@ QMenu* Composer::contextMenu(MonitorId monitor) {
     captions->setCheckable(true);
     captions->setChecked(showsCaptions(monitor));
     connect(captions, &QAction::toggled, this, [this, monitor](bool on) { setShowCaptions(monitor, on); });
+    // "Right-click in the source or record viewer and select Target Mask" (p.552), with the four choices.
+    QMenu* target = menu->addMenu(tr("Target Mask"));
+    target->setObjectName(QStringLiteral("targetMask"));
+    auto* masks = new QActionGroup(target);
+    const QStringList labels = model::targetMaskLabels();
+    for (int i = 0; i < labels.size(); ++i) {
+        const auto mask = static_cast<model::TargetMask>(i);
+        QAction* a = target->addAction(labels.at(i));
+        a->setObjectName(model::targetMaskValue(mask));
+        a->setCheckable(true);
+        a->setChecked(mask == targetMask(monitor));
+        masks->addAction(a);
+        connect(a, &QAction::triggered, this, [this, monitor, mask] { setTargetMask(monitor, mask); });
+    }
     // "Right-click in the desired viewer (source /record), select Display Color Space, and choose from the list" (p.544).
     QMenu* display = menu->addMenu(tr("Display Color Space"));
     display->setObjectName(QStringLiteral("displayColorSpace"));
@@ -2947,6 +2964,18 @@ void Composer::setProjectColorSpace(const QString& space) {
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
         if (MonitorPicture* w = picture(m)) w->update();
     }
+}
+
+void Composer::setMaskMargins(const model::MaskMargins& margins) {
+    maskMargins_ = margins;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (MonitorPicture* w = picture(m)) w->update();
+    }
+}
+
+void Composer::setTargetMask(MonitorId monitor, model::TargetMask mask) {
+    targetMask_[monitor == MonitorId::Record ? 1 : 0] = mask;
+    if (MonitorPicture* w = picture(monitor)) w->update();
 }
 
 QImage Composer::displayed(MonitorId monitor, const QImage& image) const {

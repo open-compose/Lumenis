@@ -17,6 +17,7 @@ add_library(lumenis_ui STATIC
     clip_audio_dialogs.cpp
     group_clips_dialog.cpp
     clip_color_dialog.cpp
+    target_settings_dialog.cpp
     surround_panner.cpp
     button_mapping.cpp
     composer.cpp
@@ -124,6 +125,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/clip_audio_dialogs.h
     include/lumenis/ui/group_clips_dialog.h
     include/lumenis/ui/clip_color_dialog.h
+    include/lumenis/ui/target_settings_dialog.h
     include/lumenis/ui/surround_panner.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h

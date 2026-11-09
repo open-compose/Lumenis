@@ -18,6 +18,8 @@ class QTabWidget;
 
 namespace lumenis::ui {
 
+class TargetSettingsDialog;
+
 // A setting's dialog box, made from its options (guide ch.33): check
 // boxes, number boxes, menus and radio buttons, on tabs when the setting
 // has several. Options not available yet are shown dimmed.
@@ -173,6 +175,10 @@ public:
     // The User Profile menu: the profiles, then Create, Update and Reveal.
     QComboBox* userProfiles() const { return profiles_; }
     QFormLayout* formatForm() const { return format_; }
+    // The Format tab's Mask Margins button (p.551): opens the Target Settings dialog; for tests the hook gets the dialog
+    // and returns whether it was accepted.
+    void openMaskMargins();
+    void setMaskDialogHook(std::function<bool(TargetSettingsDialog&)> hook) { maskHook_ = std::move(hook); }
 
     // The User Profile menu's commands. selectUser loads another profile's
     // settings; false if `name` is empty or already the user.
@@ -188,6 +194,8 @@ signals:
     void toolRequested(const QString& tool);
     // The Format tab's Proxy was changed (p.527: "click Proxy and choose the appropriate setting"; 8.5e2): 0, 4 or 16.
     void proxyChanged(int mode);
+    // The Target Settings dialog's OK or Apply (p.551; 8.5e3).
+    void maskMarginsChanged(const lumenis::model::MaskMargins& margins);
 
 private:
     // Rebuilds the User Profile menu and selects the current user.
@@ -202,6 +210,7 @@ private:
     SettingsList* site_ = nullptr;
     std::optional<model::ProjectEntry> entry_;
     bool filling_ = false; // fillProfiles() is running: ignore the menu's signals
+    std::function<bool(TargetSettingsDialog&)> maskHook_;
 };
 
 // Windows > Site Settings (p.1141): the site settings, which settings are

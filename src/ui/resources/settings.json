@@ -181,6 +181,20 @@
             {"key": "splitTrack", "type": "choice", "label": "Show Track in Split View When Playing", "default": "monitored", "page": 1161,
              "choices": [{"value": "v1", "label": "V1"}, {"value": "monitored", "label": "Monitored track"}]}
           ]
+        },
+        {
+          "name": "Viewer",
+          "options": [
+            {"key": "resizeToImage", "type": "bool", "label": "Resize Monitor to Image", "default": false, "page": 1161, "later": true},
+            {"key": "sourceTargetMask", "type": "choice", "style": "menu", "label": "Source Monitor Target Mask", "default": "none", "page": 1161,
+             "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
+            {"key": "recordTargetMask", "type": "choice", "style": "menu", "label": "Record Monitor Target Mask", "default": "none", "page": 1161,
+             "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
+            {"key": "sourceColorSpace", "type": "choice", "style": "menu", "label": "Source Monitor Color Space", "default": "project", "page": 1161, "later": true,
+             "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]},
+            {"key": "recordColorSpace", "type": "choice", "style": "menu", "label": "Record Monitor Color Space", "default": "project", "page": 1161, "later": true,
+             "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]}
+          ]
         }
       ]
     },
@@ -308,6 +322,7 @@
             {"key": "useMarks", "type": "bool", "label": "Use Marks", "default": false, "page": 1175},
             {"key": "useSelectedTracks", "type": "bool", "label": "Use Selected Tracks", "default": true, "page": 1175},
             {"key": "includeInactiveAudio", "type": "bool", "label": "Include Inactive Audio Tracks", "default": false, "page": 1175},
+            {"key": "enableMaskRegions", "type": "bool", "label": "Enable Mask Regions", "default": false, "page": 1175},
             {"key": "aafEditProtocol", "type": "bool", "label": "AAF Edit Protocol", "default": false, "page": 1175, "later": true},
             {"key": "includeVideo", "type": "bool", "label": "Include All Video/Data Tracks in Sequence", "default": true, "page": 1175},
             {"key": "includeAudio", "type": "bool", "label": "Include All Audio Tracks in Sequence", "default": true, "page": 1175}
@@ -518,7 +533,7 @@
              "choices": [{"value": "stretch", "label": "Stretch"}, {"value": "letterbox", "label": "Pillar/Letterbox"}, {"value": "crop", "label": "Center Crop"}, {"value": "keepSize", "label": "Center Keep Size"}, {"value": "rawPixel", "label": "Raw Pixel"}]},
             {"key": "s3dView", "type": "choice", "style": "menu", "label": "S3D View", "default": "mono", "page": 1190, "later": true,
              "choices": [{"value": "mono", "label": "Mono"}, {"value": "mix", "label": "Mix"}, {"value": "difference", "label": "Difference"}, {"value": "frameCompatible", "label": "Frame Compatible"}, {"value": "anaglyph", "label": "Anaglyph"}, {"value": "checkerboard", "label": "Checkerboard"}]},
-            {"key": "targetMask", "type": "choice", "style": "menu", "label": "Target Mask", "default": "none", "page": 1191, "later": true,
+            {"key": "targetMask", "type": "choice", "style": "menu", "label": "Target Mask", "default": "none", "page": 1191,
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
             {"key": "fullScreen", "type": "bool", "label": "Full Screen", "default": true, "page": 1191},
             {"key": "both", "type": "bool", "label": "Display Both Fields", "default": false, "page": 1191, "later": true}

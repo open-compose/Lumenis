@@ -7,6 +7,7 @@ add_library(lumenis_media STATIC
     display_color.cpp
     lut_file.cpp
     frame_flex.cpp
+    target_mask.cpp
     fluid_fx.cpp
     render.cpp
     wipes.cpp
@@ -82,6 +83,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/display_color.h
     include/lumenis/media/lut_file.h
     include/lumenis/media/frame_flex.h
+    include/lumenis/media/target_mask.h
     include/lumenis/media/clap_host.h
     include/lumenis/media/ofx_host.h
     include/lumenis/media/movie_export.h

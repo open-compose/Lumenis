@@ -168,6 +168,29 @@ Format tab, click Proxy and choose the appropriate setting" (p.527).
   resized clips ("Any clips that are resized will have a spatial adapter applied", p.527) is not shown: the whole picture
   is made smaller, not each clip.
 
+## Mask margins and Target Mask (p.550-552, p.900, p.1161, p.1175, p.1191; 8.5e3)
+
+"You can specify mask margins on the output frame to view a master with a different aspect ratio than the project
+setting ... This is for viewing purposes only" (p.550).
+
+* The Format tab's Mask Margins button opens the Target Settings dialog (`src/ui/target_settings_dialog.*`, p.551): a
+  Mask Margins group with the "Mask margins preset" menu (4:3, 9:16, 16:9, 1:1, 1.32:1, 1.37:1, 1.66:1, 1.75:1, 1.85:1,
+  1.90:1, 2:1, 2.33:1, 2.35:1, 2.37:1, 2.39:1 and Custom..., as the guide's picture lists them) and top, bottom, left and
+  right percentages, with OK, Cancel and Apply. A preset fills the percentages: a wider shape than the picture's is
+  letterboxed, a narrower one pillarboxed, centred (`model::maskForPreset`, ours). A percentage typed by hand makes it
+  Custom... (ours). The margins are the project's (`ProjectSettings::mask`, "maskMargins" in the project file;
+  `MainWindow::setMaskMargins`); a file that cannot be written says why.
+* "Right-click in the source or record viewer and select Target Mask" (p.552): No Mask, Mix to White, Mix to Black and
+  Black Mask (`Composer::setTargetMask`, `media::paintTargetMask`). The Composer setting's new Viewer tab has Source and
+  Record Monitor Target Mask (p.1161), which set them as the setting is applied; the right-click choice lasts until then
+  (ours). Mix to White and Mix to Black are half white and half black (ours: "translucent", p.1161).
+* The Full Screen Playback setting's Target Mask (p.1191) draws the same over the full screen picture.
+* Export's Enable Mask Regions (p.1175: "you can export your sequence with mask margins burned in", p.900) blacks the
+  masked region of exported movie frames (`media::burnMaskMargins`).
+* Left: the Output Tool's Target Mask (p.552, with the hardware modules), Export's "Mask Margins active area" source
+  raster (p.894), the Viewer tab's Resize Monitor to Image and its Color Space options (p.1161: Project, Rec709, Rec709
+  (full range), SRGB, DCI P3, Rec2020, ACESproxy; with 8.5e4).
+
 ## Tests
 
 * `tst_color_adapter`: the encoding with its column and JSON, Auto, bypass; segments' adapters, Refresh Sequence and
@@ -187,5 +210,8 @@ Format tab, click Proxy and choose the appropriate setting" (p.527).
 * `tst_effect_render proxyModes`: the key per mode, renders kept and found again, through JSON, removed. `tst_project_store
   proxyModes`: the modes per format, the rasters, the project file. `tst_render_ui proxyMode`: the Format tab's menu,
   renders at 1024 and 512 wide, offline and back, Transcode's raster.
+* `tst_project_store maskMargins`: the presets, letterbox and pillarbox margins, the masked area, the project file.
+  `tst_composer_display targetMask`: the Target Mask menu, Black Mask and Mix to White over the picture, the burn-in.
+  `tst_render_ui proxyMode`: the Format tab's Mask Margins button and dialog, the Viewer tab's Record Monitor Target Mask.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

@@ -141,9 +141,10 @@ Export As **MXF OP1a**, **XDCAM MXF OP1a** and **MXF OP1a (legacy)**
 * QuickTime Movie's Same as Source and QuickTime Reference (p.879-880),
   Display Aspect Ratio, File Field Order and Create Preview (p.1179-1180).
 * MP4's Frame Rate (p.896), Direct Out, the custom Color Space (p.897),
-  Tier (p.899), Enable Mask Regions and Render Unrendered Effects (p.1175).
+  Tier (p.899) and Render Unrendered Effects (p.1175).
 * Export by dragging to a folder (p.869): with the Send To templates in 7.1c.
-* Export with Mask Margins (p.900) and Enable Mask Regions: with the mask regions (p.550), which are not there yet.
+* Export's "Mask Margins active area" source raster (p.894). Enable Mask Regions burns the mask margins into movie frames
+  (8.5e3, docs/spec/color-adapters.md); stills and DPX/OpenEXR sequences do not yet.
 * File Field Order (p.1186), Cineon, Photoshop, PNG Interlaced, JPEG Progressive.
 
 ## Tests

@@ -1,5 +1,7 @@
 #include "lumenis/ui/full_screen.h"
 
+#include "lumenis/media/target_mask.h"
+
 #include "lumenis/ui/composer.h"
 
 #include <QGuiApplication>
@@ -89,7 +91,14 @@ void FullScreenView::paintEvent(QPaintEvent*) {
         return;
     }
     p.setRenderHint(QPainter::SmoothPixmapTransform, composer_.smoothScaling());
-    p.drawImage(pictureRect(size(), image.size()), image);
+    const QRect placed = pictureRect(size(), image.size());
+    p.drawImage(placed, image);
+    media::paintTargetMask(p, QRectF(placed), composer_.maskMargins(), targetMask_);
+}
+
+void FullScreenView::setTargetMask(model::TargetMask mask) {
+    targetMask_ = mask;
+    update();
 }
 
 void FullScreenView::open(QWidget* near) {

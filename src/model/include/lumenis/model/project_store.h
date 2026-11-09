@@ -2,6 +2,7 @@
 
 #include "lumenis/core/project_format.h"
 #include "lumenis/core/rational.h"
+#include "lumenis/model/mask_margins.h"
 
 #include <QDateTime>
 #include <QList>
@@ -31,6 +32,8 @@ struct ProjectSettings {
     // sequence at 1/4 or 1/16 of the project's resolution ("you can play your sequence at 1/4 or 1/16 of the current
     // project resolution", p.526). Only high-resolution projects have it (proxyModes).
     int proxy = 0;
+    // The Format tab's Mask Margins (p.550-551; 8.5e3).
+    MaskMargins mask;
     // Stored in UTC; create() fills them in when they are invalid.
     QDateTime created;
     QDateTime modified;

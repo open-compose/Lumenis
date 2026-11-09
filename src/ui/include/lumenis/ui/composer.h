@@ -4,6 +4,7 @@
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/model/closed_captions.h"
 #include "lumenis/model/marker.h"
+#include "lumenis/model/mask_margins.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/model/sequence.h"
 
@@ -184,6 +185,13 @@ public:
     // The project's colour space (the Format tab's Color Space), which the pictures are in; MainWindow sets it.
     void setProjectColorSpace(const QString& space);
     QImage displayed(MonitorId monitor, const QImage& image) const;
+    // The project's mask margins (the Format tab, p.550-551; 8.5e3) and each monitor's Target Mask ("Right-click in the
+    // source or record viewer and select Target Mask", p.552; the Composer setting's Viewer tab, p.1161): how the masked
+    // region is drawn over the picture.
+    void setMaskMargins(const model::MaskMargins& margins);
+    const model::MaskMargins& maskMargins() const { return maskMargins_; }
+    model::TargetMask targetMask(MonitorId monitor) const { return targetMask_[monitor == MonitorId::Record ? 1 : 0]; }
+    void setTargetMask(MonitorId monitor, model::TargetMask mask);
     std::optional<model::CaptionScreen> shownCaption(MonitorId monitor) const;
     std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const {
         return phantoms_ ? phantoms_(monitor) : std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>{};
@@ -827,6 +835,8 @@ private:
     bool showCaptions_[2] = {false, false}; // Source, Record
     QString displaySpace_[2];               // Source, Record; empty for the project's
     QString projectColorSpace_;
+    model::MaskMargins maskMargins_;
+    model::TargetMask targetMask_[2] = {model::TargetMask::None, model::TargetMask::None}; // Source, Record
     int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
     int groupBank_ = 0;
     bool multiCamera_ = false;

@@ -1,4 +1,5 @@
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/mask_margins.h"
 
 #include <QDir>
 #include <QFile>
@@ -131,6 +132,29 @@ private slots:
         s.format = hd;
         QVERIFY(ProjectStore::write(file, s));
         QCOMPARE(ProjectStore::read(file)->proxy, 0);
+    }
+
+    // Mask margins (p.550-551): the presets of the Target Settings dialog, letterboxed or pillarboxed, kept in the file.
+    void maskMargins() {
+        QCOMPARE(maskPresets().first(), QStringLiteral("4:3"));
+        QCOMPARE(maskPresets().last(), customMaskPreset());
+        QCOMPARE(maskPresets().size(), 16);
+        const double hd = 16.0 / 9.0;
+        const MaskMargins scope = maskForPreset(QStringLiteral("2.39:1"), hd);
+        QVERIFY(qAbs(scope.top - (1.0 - hd / 2.39) * 50.0) < 1e-9 && scope.top == scope.bottom && scope.left == 0.0);
+        const MaskMargins academy = maskForPreset(QStringLiteral("4:3"), hd);
+        QVERIFY(qAbs(academy.left - 12.5) < 1e-9 && academy.right == academy.left && academy.top == 0.0);
+        QVERIFY(maskForPreset(QStringLiteral("16:9"), hd).isEmpty());
+        QVERIFY(maskForPreset(customMaskPreset(), hd).isEmpty());
+        QCOMPARE(maskedArea(QRectF(0, 0, 200, 100), academy), QRectF(25, 0, 150, 100));
+        QCOMPARE(targetMaskFrom(targetMaskValue(TargetMask::BlackMask)), TargetMask::BlackMask);
+        QCOMPARE(targetMaskFrom(QStringLiteral("nonsense")), TargetMask::None);
+        ProjectSettings s = settings(QStringLiteral("Masked"));
+        s.mask = scope;
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("p.cthproj"));
+        QVERIFY(ProjectStore::write(file, s));
+        QCOMPARE(ProjectStore::read(file)->mask, scope);
     }
 
     void userProfiles() {
