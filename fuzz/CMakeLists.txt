@@ -24,6 +24,7 @@ add_library(lumenis_fuzz_targets STATIC
     ${PROJECT_SOURCE_DIR}/src/media/pict.cpp
     ${PROJECT_SOURCE_DIR}/src/media/lut_file.cpp
     ${PROJECT_SOURCE_DIR}/src/media/color_transform.cpp
+    ${PROJECT_SOURCE_DIR}/src/media/aces.cpp
     # Without OpenColorIO here: CLF files are refused.
     ${PROJECT_SOURCE_DIR}/src/media/ocio_colour.cpp
 )

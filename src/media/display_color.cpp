@@ -3,6 +3,8 @@
 // converts pictures through lookup tables: 256 entries to decode 8-bit code values, 4096 to encode.
 #include "lumenis/media/display_color.h"
 
+#include "lumenis/media/aces.h"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -134,6 +136,38 @@ std::optional<Conversion> conversion(const QString& project, const QString& disp
     return Conversion{m, src->transfer, dst->transfer};
 }
 
+bool isAces(const QString& project) { return project.contains(QLatin1String("ACES")); }
+
+// An ACES project's display (p.557-559; 8.5e4b1): the ACEScct working space decoded to linear AP1, then for ACESproxy
+// its encoding; for the other displays the output tone curve (aces::outputToneMap, ours), the display's primaries and
+// transfer. "Project" in an ACES project is shown as Rec709 (ours, until the Format tab's Output Color Space).
+struct AcesDisplay {
+    bool proxy = false;
+    Mat matrix{1, 0, 0, 0, 1, 0, 0, 0, 1};
+    Transfer to = Transfer::Gamma24;
+};
+
+std::optional<AcesDisplay> acesDisplay(const QString& display) {
+    AcesDisplay d;
+    if (display == QLatin1String("ACESproxy")) {
+        d.proxy = true;
+        return d;
+    }
+    const auto dst = displaySpace(display == QLatin1String("Project") ? QStringLiteral("Rec709") : display);
+    if (!dst) return std::nullopt;
+    d.matrix = aces::conversion(aces::ap1(), dst->xy);
+    d.to = dst->transfer;
+    return d;
+}
+
+Vec acesColor(const AcesDisplay& d, const Vec& linearAp1) {
+    if (d.proxy) {
+        return {aces::linearToAcesproxy(linearAp1[0]), aces::linearToAcesproxy(linearAp1[1]), aces::linearToAcesproxy(linearAp1[2])};
+    }
+    const Vec light = mul(d.matrix, aces::outputToneMap(linearAp1));
+    return {encode(d.to, light[0]), encode(d.to, light[1]), encode(d.to, light[2])};
+}
+
 } // namespace
 
 QStringList displayColorSpaces() {
@@ -160,7 +194,9 @@ QString displaySpaceOfProject(const QString& project) {
 }
 
 bool convertsForDisplay(const QString& project, const QString& display) {
-    // "Project" (and ACESproxy, until 8.5e4b) is no display space: nothing to convert. Otherwise the picture is converted
+    // An ACES project's ACEScct pictures are always shown through an output transform.
+    if (isAces(project)) return acesDisplay(display).has_value();
+    // "Project" (and ACESproxy outside ACES projects) is no display space: nothing to convert. Otherwise the picture is converted
     // when the display's primaries or transfer differ from the project's (a PQ or HLG picture even on a Rec2020 display).
     const auto src = projectSpace(project);
     const auto dst = displaySpace(display);
@@ -169,6 +205,11 @@ bool convertsForDisplay(const QString& project, const QString& display) {
 }
 
 std::array<double, 3> toDisplayColor(const std::array<double, 3>& rgb, const QString& project, const QString& display) {
+    if (isAces(project)) {
+        const auto d = acesDisplay(display);
+        if (!d) return rgb;
+        return acesColor(*d, {aces::acescctToLinear(rgb[0]), aces::acescctToLinear(rgb[1]), aces::acescctToLinear(rgb[2])});
+    }
     const auto c = conversion(project, display);
     if (!c) return rgb;
     const Vec lin = mul(c->matrix, Vec{decode(c->from, rgb[0]), decode(c->from, rgb[1]), decode(c->from, rgb[2])});
@@ -176,6 +217,24 @@ std::array<double, 3> toDisplayColor(const std::array<double, 3>& rgb, const QSt
 }
 
 QImage toDisplayColorSpace(const QImage& image, const QString& project, const QString& display) {
+    if (isAces(project)) {
+        const auto d = acesDisplay(display);
+        if (!d || image.isNull()) return image;
+        std::array<double, 256> lin{};
+        for (int i = 0; i < 256; ++i) lin[static_cast<std::size_t>(i)] = aces::acescctToLinear(i / 255.0);
+        QImage result = image.convertToFormat(QImage::Format_ARGB32);
+        auto byte = [](double v) { return static_cast<int>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0)); };
+        for (int y = 0; y < result.height(); ++y) {
+            auto* line = reinterpret_cast<QRgb*>(result.scanLine(y));
+            for (int x = 0; x < result.width(); ++x) {
+                const QRgb p = line[x];
+                const Vec c = acesColor(*d, {lin[static_cast<std::size_t>(qRed(p))], lin[static_cast<std::size_t>(qGreen(p))],
+                                             lin[static_cast<std::size_t>(qBlue(p))]});
+                line[x] = qRgba(byte(c[0]), byte(c[1]), byte(c[2]), qAlpha(p));
+            }
+        }
+        return result;
+    }
     const auto c = conversion(project, display);
     if (!c || image.isNull()) return image;
     std::array<double, 256> in{};

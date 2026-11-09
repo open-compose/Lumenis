@@ -31,6 +31,24 @@ QStringList colorTransformationNames();
 // A provider hook for transformations we do not make (Sony's looks; 8.5d's LUT files): `name` as the list shows it.
 // Registering a name again replaces it.
 void registerColorTransformation(const QString& name, const ColorTransformation& steps);
+// The same with its Color Adapter Type ("Generic", "ACES Canon" ...), so that a provider's ACES input transforms show
+// under their type.
+void registerColorTransformation(const QString& name, const ColorTransformation& steps, const QString& type);
+
+// ---- Color Adapter Types (p.558; 8.5e4b1)
+// The Color Encoding tab's Color Adapter Type menu, as the guide's picture shows it: Generic and User Installed LUTs, and
+// in ACES projects ACES ADX, ACES Generic, ACES Panasonic, ACES Sony, ACES Arri, ACES Canon and ACES Working Color Space.
+QStringList colorAdapterTypes(bool acesProject);
+// A transformation's type: "User Installed LUTs" for External ones, the type it was registered with, else Generic.
+QString colorTransformationType(const QString& name);
+// The transformations of one type, in list order. ACES ADX and ACES Canon have none built in (ours: their transforms
+// are not published as formulas; a provider registers them).
+QStringList colorTransformationsOfType(const QString& type);
+// "ACES to ACEScct": ACES 2065 to the working colour space, "a further automatic lossless transformation" (p.558).
+QString acesWorkingSpaceTransformation();
+// `names` with the working space conversion added after them when one of them takes a source to ACES 2065 (an ACES
+// type's "... to ACES"); unchanged otherwise. Applied to clips' transformations in ACES projects.
+QStringList withAcesWorkingSpace(const QStringList& names);
 bool hasColorTransformation(const QString& name);
 
 // The image with `names` applied, top to bottom ("Transformations are applied cumulatively starting from top to bottom",

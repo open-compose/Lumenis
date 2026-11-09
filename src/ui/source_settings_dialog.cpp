@@ -18,6 +18,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -304,11 +305,21 @@ SourceSettingsDialog::SourceSettingsDialog(const QString& clipName, const QImage
     transformations_->setDragDropMode(QAbstractItemView::InternalMove);
     connect(transformations_->model(), &QAbstractItemModel::rowsMoved, this, &SourceSettingsDialog::colorChanged);
     colorLayout->addWidget(transformations_, 1);
+    // "Select the desired Color Adapter Type and Color Adapter" (p.558): the type narrows the adapters offered.
+    auto* typeRow = new QHBoxLayout;
+    typeRow->addWidget(new QLabel(tr("Color Adapter Type")));
+    adapterType_ = new QComboBox;
+    adapterType_->setObjectName(QStringLiteral("colorAdapterType"));
+    adapterType_->addItems(media::colorAdapterTypes(false));
+    typeRow->addWidget(adapterType_, 1);
+    colorLayout->addLayout(typeRow);
     auto* addRow = new QHBoxLayout;
+    addRow->addWidget(new QLabel(tr("Color Adapter")));
     transformationChoice_ = new QComboBox;
     transformationChoice_->setObjectName(QStringLiteral("transformationChoice"));
-    transformationChoice_->addItems(media::colorTransformationNames());
     addRow->addWidget(transformationChoice_, 1);
+    connect(adapterType_, &QComboBox::currentIndexChanged, this, &SourceSettingsDialog::fillAdapters);
+    fillAdapters();
     auto* addButton = new QPushButton(tr("Add"));
     addButton->setObjectName(QStringLiteral("addTransformation"));
     connect(addButton, &QPushButton::clicked, this, [this] { addTransformation(transformationChoice_->currentText()); });
@@ -529,17 +540,36 @@ void SourceSettingsDialog::moveTransformation(int from, int to) {
 void SourceSettingsDialog::setClipCdl(const QString& name, bool onAuto) {
     clipCdl_ = name;
     cdlOnAuto_ = onAuto;
-    if (!name.isEmpty() && transformationChoice_->findText(name) < 0) transformationChoice_->addItem(name);
+    fillAdapters();
+}
+
+void SourceSettingsDialog::setAcesProject(bool aces) {
+    acesProject_ = aces;
+    const QString type = adapterType_->currentText();
+    {
+        const QSignalBlocker block(adapterType_);
+        adapterType_->clear();
+        adapterType_->addItems(media::colorAdapterTypes(aces));
+        // An ACES project starts on ACES Generic, as the guide's picture shows (p.558).
+        adapterType_->setCurrentText(aces && type == QLatin1String("Generic") ? QStringLiteral("ACES Generic") : type);
+    }
+    fillAdapters();
+    colorChanged();
+}
+
+void SourceSettingsDialog::fillAdapters() {
+    const QString current = transformationChoice_->currentText();
+    const QString type = adapterType_->currentText();
+    transformationChoice_->clear();
+    transformationChoice_->addItems(media::colorTransformationsOfType(type));
+    if (type == QLatin1String("Generic") && !clipCdl_.isEmpty()) transformationChoice_->addItem(clipCdl_);
+    transformationChoice_->setCurrentText(current);
 }
 
 void SourceSettingsDialog::openColorManagement() {
     if (colorManagement_) colorManagement_();
     // LUTs installed meanwhile join the list (p.542: "The LUT is now available in the list of color transformation").
-    const QString current = transformationChoice_->currentText();
-    transformationChoice_->clear();
-    transformationChoice_->addItems(media::colorTransformationNames());
-    if (!clipCdl_.isEmpty()) transformationChoice_->addItem(clipCdl_);
-    transformationChoice_->setCurrentText(current);
+    fillAdapters();
 }
 
 void SourceSettingsDialog::autoTransformations() {
@@ -550,7 +580,8 @@ void SourceSettingsDialog::autoTransformations() {
 }
 
 QImage SourceSettingsDialog::shownFrame() const {
-    return media::applyColorTransformations(frame_, colorEncoding().applied());
+    const QStringList applied = colorEncoding().applied();
+    return media::applyColorTransformations(frame_, acesProject_ ? media::withAcesWorkingSpace(applied) : applied);
 }
 
 // "The selection is added to the Color transformations list and applied to the image in the viewer" (p.539).

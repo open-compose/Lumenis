@@ -4,6 +4,8 @@
 // chain of curves is looked up from tables built from the 8-bit input; after a matrix the steps are computed per pixel.
 #include "lumenis/media/color_transform.h"
 
+#include "lumenis/media/aces.h"
+
 #include <QHash>
 #include <QMutex>
 #include <QRegularExpression>
@@ -23,6 +25,12 @@ double clamp01(double v) { return std::clamp(v, 0.0, 1.0); }
 double oetf709(double l) {
     l = clamp01(l);
     return l < 0.018 ? 4.5 * l : 1.099 * std::pow(l, 0.45) - 0.099;
+}
+
+// BT.709's (and BT.2020's) camera curve undone: the signal back to scene linear.
+double inverseOetf709(double v) {
+    v = clamp01(v);
+    return v < 0.081 ? v / 4.5 : std::pow((v + 0.099) / 1.099, 1.0 / 0.45);
 }
 
 double srgbToLinear(double v) {
@@ -66,6 +74,7 @@ ColorStep matrix(std::array<double, 9> m) {
 struct Registry {
     QStringList names;
     QHash<QString, ColorTransformation> steps;
+    QHash<QString, QString> types; // name -> Color Adapter Type; Generic when absent
 };
 
 Registry& registry() {
@@ -91,6 +100,34 @@ Registry& registry() {
              matrix({1.617523, -0.537287, -0.080237, -0.070573, 1.334613, -0.264040, -0.021102, -0.226954, 1.248056}),
              curve(oetf709)});
         add(QStringLiteral("Canon C-Log to REC709"), {curve([](double v) { return oetf709(cLogToLinear(v)); })});
+        // ACES projects' colour adapters (p.558; 8.5e4b1): each takes its source to ACES 2065 ("All transforms take you
+        // to an ACES 2065 color space (full floating point)"), by the published curves and gamuts. The names are ours,
+        // after the guide's "Rec 709 to ACES" and "C300 D55_Ver.1.0 to ACES".
+        auto aces = [&](const QString& type, const QString& name, ColorTransformation t) {
+            add(name, std::move(t));
+            g.types.insert(name, type);
+        };
+        using namespace lumenis::media::aces;
+        const QString generic = QStringLiteral("ACES Generic");
+        aces(generic, QStringLiteral("Rec 709 to ACES"), {curve(inverseOetf709), matrix(conversion(rec709(), ap0()))});
+        aces(generic, QStringLiteral("sRGB to ACES"), {curve(srgbToLinear), matrix(conversion(rec709(), ap0()))});
+        aces(generic, QStringLiteral("Linear Rec 709 to ACES"), {matrix(conversion(rec709(), ap0()))});
+        aces(generic, QStringLiteral("Rec 2020 to ACES"), {curve(inverseOetf709), matrix(conversion(rec2020(), ap0()))});
+        aces(generic, QStringLiteral("Linear P3-D65 to ACES"), {matrix(conversion(p3d65(), ap0()))});
+        aces(QStringLiteral("ACES Panasonic"), QStringLiteral("V-Log V-Gamut to ACES"),
+             {curve(vLogToLinear), matrix(conversion(vGamut(), ap0()))});
+        aces(QStringLiteral("ACES Sony"), QStringLiteral("S-Log3 S-Gamut3 to ACES"),
+             {curve(sLog3ToLinear), matrix(conversion(sGamut3(), ap0()))});
+        aces(QStringLiteral("ACES Sony"), QStringLiteral("S-Log3 S-Gamut3.Cine to ACES"),
+             {curve(sLog3ToLinear), matrix(conversion(sGamut3Cine(), ap0()))});
+        aces(QStringLiteral("ACES Arri"), QStringLiteral("LogC3 EI800 ALEXA Wide Gamut to ACES"),
+             {curve(logC3ToLinear), matrix(conversion(alexaWideGamut(), ap0()))});
+        const QString working = QStringLiteral("ACES Working Color Space");
+        aces(working, QStringLiteral("ACEScct to ACES"), {curve(acescctToLinear), matrix(conversion(ap1(), ap0()))});
+        aces(working, QStringLiteral("ACEScc to ACES"), {curve(acesccToLinear), matrix(conversion(ap1(), ap0()))});
+        aces(working, QStringLiteral("ACEScg to ACES"), {matrix(conversion(ap1(), ap0()))});
+        // "There is a further automatic lossless transformation to the 'working Color Space' (ACEScct)" (p.558).
+        aces(working, acesWorkingSpaceTransformation(), {matrix(conversion(ap0(), ap1())), curve(linearToAcescct)});
         return g;
     }();
     return r;
@@ -188,9 +225,50 @@ QStringList colorTransformationNames() {
 }
 
 void registerColorTransformation(const QString& name, const ColorTransformation& steps) {
+    registerColorTransformation(name, steps, QStringLiteral("Generic"));
+}
+
+void registerColorTransformation(const QString& name, const ColorTransformation& steps, const QString& type) {
     QMutexLocker lock(&registryMutex());
     if (!registry().steps.contains(name)) registry().names << name;
     registry().steps.insert(name, steps);
+    registry().types.insert(name, type);
+}
+
+QStringList colorAdapterTypes(bool acesProject) {
+    QStringList types{QStringLiteral("Generic"), QStringLiteral("User Installed LUTs")};
+    if (acesProject) {
+        types << QStringLiteral("ACES ADX") << QStringLiteral("ACES Generic") << QStringLiteral("ACES Panasonic")
+              << QStringLiteral("ACES Sony") << QStringLiteral("ACES Arri") << QStringLiteral("ACES Canon")
+              << QStringLiteral("ACES Working Color Space");
+    }
+    return types;
+}
+
+QString colorTransformationType(const QString& name) {
+    if (name.startsWith(QLatin1String("External "))) return QStringLiteral("User Installed LUTs");
+    QMutexLocker lock(&registryMutex());
+    return registry().types.value(name, QStringLiteral("Generic"));
+}
+
+QStringList colorTransformationsOfType(const QString& type) {
+    QStringList names;
+    for (const QString& name : colorTransformationNames()) {
+        if (colorTransformationType(name) == type) names << name;
+    }
+    return names;
+}
+
+QString acesWorkingSpaceTransformation() { return QStringLiteral("ACES to ACEScct"); }
+
+QStringList withAcesWorkingSpace(const QStringList& names) {
+    if (names.isEmpty() || names.constLast() == acesWorkingSpaceTransformation()) return names;
+    for (const QString& n : names) {
+        if (colorTransformationType(n).startsWith(QLatin1String("ACES ")) && n.endsWith(QLatin1String(" to ACES"))) {
+            return names + QStringList{acesWorkingSpaceTransformation()};
+        }
+    }
+    return names;
 }
 
 bool hasColorTransformation(const QString& name) {

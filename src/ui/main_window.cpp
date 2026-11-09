@@ -3189,7 +3189,11 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
 QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
                                 const std::optional<model::SpatialAdapter>& spatial,
                                 const std::optional<model::ColorEncoding>& color) const {
-    const QStringList transformations = color ? color->applied() : QStringList();
+    QStringList transformations = color ? color->applied() : QStringList();
+    // In ACES projects the media is ACES 2065 after its adapter, then the working space ACEScct (p.558).
+    if (project_ && project_->settings.colorSpace.contains(QLatin1String("ACES"))) {
+        transformations = media::withAcesWorkingSpace(transformations);
+    }
     if (!spatial || !project_) return media::applyColorTransformations(frames_->frame(clip, frame, want), transformations);
     const QImage full = media::applyColorTransformations(frames_->frame(clip, frame, QSize()), transformations);
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
@@ -3259,6 +3263,7 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
                                                    first.fields.value(QStringLiteral("ASC_SAT"))),
                       settings_ && settings_->flag(QStringLiteral("Color Management"), QStringLiteral("useCdl")));
     dialog.setColorManagementOpener([this] { openColorManagementSetting(); });
+    dialog.setAcesProject(project_ && project_->settings.colorSpace.contains(QLatin1String("ACES")));
     dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate, const model::ColorEncoding& color) {
         for (const auto& [bin, id] : chosen) {
             BinDocument* doc = binContainer_->document(bin);

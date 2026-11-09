@@ -563,6 +563,33 @@ private slots:
     // The Playback Rate tab (p.545): a 25 fps clip in a 30 fps project plays its frames one by one at 30 fps once set to
     // the project's rate, from the Timeline's right-click Source Settings too; Refresh Sequence > Motion Adapters/Timewarps
     // then drops the segment's adapter.
+    // The Color Encoding tab in ACES projects (p.558; 8.5e4b1): the Color Adapter Type menu with the ACES types, the
+    // adapters by type, and the frame shown in the working space.
+    void acesColorAdapterTypes() {
+        QImage frame(32, 18, QImage::Format_RGB32);
+        frame.fill(QColor(255, 255, 255));
+        SourceSettingsDialog d(QStringLiteral("clip"), frame, QSize(32, 18), model::SpatialAdapter{}, 1);
+        auto* type = d.findChild<QComboBox*>(QStringLiteral("colorAdapterType"));
+        auto* adapters = d.findChild<QComboBox*>(QStringLiteral("transformationChoice"));
+        QVERIFY(type && adapters);
+        QCOMPARE(type->count(), 2);
+        QCOMPARE(adapters->findText(QStringLiteral("Rec 709 to ACES")), -1);
+        d.setAcesProject(true);
+        QCOMPARE(type->count(), 9);
+        QCOMPARE(type->currentText(), QStringLiteral("ACES Generic"));
+        QVERIFY(adapters->findText(QStringLiteral("Rec 709 to ACES")) >= 0);
+        QCOMPARE(adapters->findText(QStringLiteral("Gamma 2.6 to Linear")), -1);
+        type->setCurrentText(QStringLiteral("ACES Sony"));
+        QCOMPARE(adapters->itemText(0), QStringLiteral("S-Log3 S-Gamut3 to ACES"));
+        type->setCurrentText(QStringLiteral("ACES Generic"));
+        adapters->setCurrentText(QStringLiteral("Rec 709 to ACES"));
+        d.findChild<QPushButton*>(QStringLiteral("addTransformation"))->click();
+        QCOMPARE(d.colorEncoding().transformations, QStringList{QStringLiteral("Rec 709 to ACES")});
+        // White in ACEScct: 0.554, about 141 in 8 bits.
+        const QRgb shown = d.shownFrame().pixel(4, 4);
+        QVERIFY2(qAbs(qGreen(shown) - 141) <= 2, qPrintable(QString::number(qGreen(shown))));
+    }
+
     void playbackRate() {
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("halves.mov"));

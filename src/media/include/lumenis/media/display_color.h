@@ -21,8 +21,11 @@
 //
 // The choices are the Composer setting's Viewer tab's (p.1161, 8.5e4a): "You can choose the selected Project color
 // space, or Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, or ACESproxy color space". Project shows the picture as
-// it is. Rec709 (full range) is shown as Rec709, our pictures being full-range RGB (ours). ACESproxy is for ACES projects
-// (8.5e4b) and converts nothing yet.
+// it is. Rec709 (full range) is shown as Rec709, our pictures being full-range RGB (ours).
+//
+// In ACES projects (8.5e4b1) the pictures are in the ACEScct working space and every choice converts: ACESproxy gives the
+// ACESproxy encoding; the others go through an output tone curve (ours, aces::outputToneMap) to the display's primaries
+// and transfer, Project as Rec709 (ours, until the Format tab's Output Color Space).
 namespace lumenis::media {
 
 // The Display Color Space menu's choices, in the guide's order (p.1161).
@@ -33,7 +36,7 @@ QStringList displayColorSpaceValues();
 QString displayColorSpaceOfValue(const QString& value);
 // The display colour space a project colour space (project_format.h's colorSpacesFor texts) is shown in without a
 // conversion: "Rec709" for 601 and 709 projects, "Rec2020" for the 2020 ones (PQ and HLG included), "DCI P3". Empty
-// for a colour space we do not convert (ACES RGB, until its output transforms, 8.5e4).
+// for ACES RGB, whose pictures go through the output transform instead.
 QString displaySpaceOfProject(const QString& projectColorSpace);
 // Whether a picture in the project's colour space needs converting for `display`; false when they match or either is
 // unknown.

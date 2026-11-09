@@ -108,6 +108,9 @@ public:
     // With `onAuto` (the Color Management setting's "Use CDL values from ASC_SOP and ASC_SAT bin columns when
     // available"), Auto adds it too: "click the Auto button on the Color Encoding tab" (p.543).
     void setClipCdl(const QString& name, bool onAuto = false);
+    // ACES projects (p.558; 8.5e4b1): the Color Adapter Type menu offers the ACES types, and the frame shown goes on to
+    // the ACEScct working space after an ACES adapter (media::withAcesWorkingSpace).
+    void setAcesProject(bool aces);
     // "Right-click your clip, select Source Settings, click the Color Encoding tab and click Color Management Settings"
     // (p.542): what the tab's button does (MainWindow opens the setting); the drop-down is filled again afterwards, for
     // LUTs installed meanwhile.
@@ -131,6 +134,10 @@ private:
     bool appliedRate_ = false;
     QString clipCdl_;
     bool cdlOnAuto_ = false;
+    bool acesProject_ = false;
+    QComboBox* adapterType_ = nullptr;
+    // Fills the Color Adapter menu with the chosen type's transformations (and the clip's CDL under Generic).
+    void fillAdapters();
     std::function<void()> colorManagement_;
     model::ColorEncoding appliedColor_;
     QComboBox* sourceSpace_ = nullptr;

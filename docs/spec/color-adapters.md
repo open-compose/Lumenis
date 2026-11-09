@@ -145,6 +145,39 @@ Display Color Space, and choose from the list" (p.544).
   display's white and brighter values clipped; 601 projects are shown as Rec709. Rec709 (full range) is shown as Rec709:
   our pictures are full-range RGB already. A display whose primaries and transfer are the project's converts nothing.
 
+## ACES projects (p.557-559; 8.5e4b1)
+
+"Those input transforms convert the camera source to ACES 2065 color space ... Then, internally we convert to the ACEScct
+color space. This is done so the current controls still feel the same (such as color correction)" (p.557).
+
+* The encodings are built in from their published specifications (`src/media/aces.*`): ACES2065-1 (linear AP0), ACEScg
+  (linear AP1), ACEScct and ACEScc (AP1) and ACESproxy 10-bit, with ARRI LogC3 (EI 800) and ALEXA Wide Gamut, Sony S-Log3
+  with S-Gamut3 and S-Gamut3.Cine, and Panasonic V-Log and V-Gamut. Primaries are converted through XYZ with a Bradford
+  adaptation between the D65 and ACES whites (ours; the Academy's transforms use CAT02). OpenColorIO 2.1, which the
+  reference Linux has, carries no built-in ACES config, so nothing here needs it.
+* The Color Encoding tab has the Color Adapter Type menu of the guide's picture (p.558): Generic and User Installed LUTs,
+  and in ACES projects ACES ADX, ACES Generic, ACES Panasonic, ACES Sony, ACES Arri, ACES Canon and ACES Working Color
+  Space (`media::colorAdapterTypes`). The Color Adapter menu lists the type's transformations
+  (`media::colorTransformationsOfType`); an ACES project starts on ACES Generic. Ours, the names after the guide's "Rec
+  709 to ACES" and "C300 D55_Ver.1.0 to ACES": ACES Generic: Rec 709, sRGB, Linear Rec 709, Rec 2020 and Linear P3-D65 to
+  ACES; ACES Panasonic: V-Log V-Gamut to ACES; ACES Sony: S-Log3 S-Gamut3 and S-Log3 S-Gamut3.Cine to ACES; ACES Arri:
+  LogC3 EI800 ALEXA Wide Gamut to ACES; ACES Working Color Space: ACEScct, ACEScc and ACEScg to ACES, and ACES to ACEScct.
+  ACES ADX and ACES Canon have none built in (their transforms are not published as formulas): a provider registers them
+  with `media::registerColorTransformation(name, steps, type)`.
+* "All transforms take you to an ACES 2065 color space ... There is a further automatic lossless transformation to the
+  'working Color Space' (ACEScct)" (p.558): in ACES projects a clip whose transformations take it to ACES goes on to
+  ACEScct (`media::withAcesWorkingSpace`, in `MainWindow::adaptedFrame` and the tab's viewer). "Currently in ACES
+  projects, the color adapters do not apply automatically when linking" (p.559): nothing is added on linking. Ours: the
+  working space is held in our 8-bit pictures, so ACEScct values above 1 (scene linear above about 222) clip.
+* "Select Display Color Space and choose the ACES color space" (p.559): in ACES projects ACESproxy shows the ACESproxy
+  encoding of the working space; the other choices show it through an output transform. Ours, as the Reference Rendering
+  and Output Transforms are not built in: a filmic tone curve fitted to the ACES SDR output (K. Narkowicz's published fit,
+  after 0.6 exposure, per channel on linear AP1), then the display's primaries and transfer; Project shows as Rec709 until
+  the Format tab's Output Color Space (8.5e4b2).
+* Left for 8.5e4b2: the Format tab's ACES version and Output Color Space applied on export (p.559-560), the Project tab's
+  video output ACES colour space (p.560), the blue Video Quality Menu and the 32-bit floating point Timeline (p.558),
+  Transcode in the working space.
+
 ## The proxy mode (p.526-527, p.549-550; 8.5e2)
 
 "Set the proxy mode for the Timeline to 1/4 or 1/16: Effectively, this reduces the number of pixels to be processed as you
@@ -216,5 +249,9 @@ setting ... This is for viewing purposes only" (p.550).
 * `tst_project_store maskMargins`: the presets, letterbox and pillarbox margins, the masked area, the project file.
   `tst_composer_display targetMask`: the Target Mask menu, Black Mask and Mix to White over the picture, the burn-in.
   `tst_render_ui proxyMode`: the Format tab's Mask Margins button and dialog, the Viewer tab's Record Monitor Target Mask.
+* `tst_color_adapter acesProjects`: ACEScct, ACEScc and ACESproxy values, the camera curves' 18% greys, the AP0 to
+  AP1 matrix, the adapters' types and the working space, a provider's ACES type, the monitors' ACESproxy and output
+  transform. `tst_frameflex_ui acesColorAdapterTypes`: the Color Adapter Type menu, adding an ACES adapter, the viewer
+  in ACEScct.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

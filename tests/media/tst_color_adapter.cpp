@@ -1,6 +1,7 @@
 // Colour encoding and colour adapters (Editing Guide p.536-541, p.544; 8.5c, docs/spec/color-adapters.md): the encoding
 // kept with a clip and its column, Auto's transformations, segments' adapters through JSON, Refresh Sequence > Color
 // Adapters and Remove Color Adapters, and the built-in transformations' values.
+#include "lumenis/media/aces.h"
 #include "lumenis/media/color_transform.h"
 #include "lumenis/media/display_color.h"
 #include "lumenis/media/link.h"
@@ -230,7 +231,8 @@ private slots:
         const QString hd = QStringLiteral("YCbCr 709");
         QVERIFY(!media::convertsForDisplay(hd, QStringLiteral("Rec709")));
         QVERIFY(media::convertsForDisplay(hd, QStringLiteral("DCI P3")));
-        QVERIFY(!media::convertsForDisplay(QStringLiteral("ACES RGB"), QStringLiteral("Rec709")));
+        // ACES projects' pictures always go through an output transform (8.5e4b1).
+        QVERIFY(media::convertsForDisplay(QStringLiteral("ACES RGB"), QStringLiteral("Rec709")));
         QVERIFY(media::convertsForDisplay(QStringLiteral("YCbCr 2020 / SMPTE 2084"), QStringLiteral("Rec2020")));
         // Project and ACESproxy convert nothing; an SRGB display shows darks brighter than gamma 2.4, so a dark grey's code
         // value drops (0.2 to about 0.156).
@@ -267,6 +269,54 @@ private slots:
         const QImage p3 = media::toDisplayColorSpace(image, hd, QStringLiteral("DCI P3"));
         QCOMPARE(qAlpha(p3.pixel(1, 1)), 128);
         QVERIFY(qGreen(p3.pixel(1, 1)) > 0);
+    }
+
+    // ACES (p.557-559; 8.5e4b1): the published encodings, the adapters by type and the working space, and the monitors'
+    // output transform.
+    void acesProjects() {
+        namespace aces = media::aces;
+        // ACEScct (S-2016-001): 18% grey is 0.4136, and back.
+        QVERIFY(near(aces::linearToAcescct(0.18), 0.41358, 1e-4));
+        QVERIFY(near(aces::acescctToLinear(aces::linearToAcescct(0.18)), 0.18, 1e-9));
+        QVERIFY(near(aces::acescctToLinear(aces::linearToAcescct(0.001)), 0.001, 1e-9));
+        QVERIFY(near(aces::acesccToLinear(aces::linearToAcescc(0.5)), 0.5, 1e-9));
+        // ACESproxy 10-bit: 18% grey at code 426.
+        QCOMPARE(aces::linearToAcesproxy(0.18), 426.0 / 1023.0);
+        QCOMPARE(aces::linearToAcesproxy(0.0), 64.0 / 1023.0);
+        // The published camera curves put 18% grey at their published code values.
+        QVERIFY(near(aces::sLog3ToLinear(420.0 / 1023.0), 0.18, 1e-6));
+        QVERIFY(near(aces::vLogToLinear(0.423311), 0.18, 1e-4));
+        QVERIFY(near(aces::logC3ToLinear(0.391007), 0.18, 1e-4));
+        // AP0 to AP1 (the same white): the Academy's ACES2065-1 to ACEScg matrix's first row.
+        const auto m = aces::conversion(aces::ap0(), aces::ap1());
+        QVERIFY(near(m[0], 1.4514393, 2e-4) && near(m[1], -0.2365107, 2e-4) && near(m[2], -0.2149286, 2e-4));
+        // Rec 709 white becomes ACES white; the working space follows an ACES adapter.
+        const auto white = media::transformColor({1.0, 1.0, 1.0}, {QStringLiteral("Rec 709 to ACES")});
+        QVERIFY2(near(white[0], 1.0, 2e-3) && near(white[1], 1.0, 2e-3) && near(white[2], 1.0, 2e-3), "white");
+        const QStringList applied = media::withAcesWorkingSpace({QStringLiteral("Rec 709 to ACES")});
+        QCOMPARE(applied.constLast(), media::acesWorkingSpaceTransformation());
+        QCOMPARE(media::withAcesWorkingSpace({QStringLiteral("Gamma 2.6 to Linear")}), QStringList{QStringLiteral("Gamma 2.6 to Linear")});
+        QCOMPARE(media::withAcesWorkingSpace(applied), applied);
+        QVERIFY(near(media::transformColor({1.0, 1.0, 1.0}, applied)[1], aces::linearToAcescct(1.0), 2e-3));
+        // The Color Adapter Types (p.558).
+        QCOMPARE(media::colorAdapterTypes(false), (QStringList{QStringLiteral("Generic"), QStringLiteral("User Installed LUTs")}));
+        QCOMPARE(media::colorAdapterTypes(true).size(), 9);
+        QCOMPARE(media::colorTransformationsOfType(QStringLiteral("ACES Sony")).size(), 2);
+        QVERIFY(media::colorTransformationsOfType(QStringLiteral("ACES ADX")).isEmpty());
+        QVERIFY(media::colorTransformationsOfType(QStringLiteral("Generic")).contains(QStringLiteral("Gamma 2.6 to Linear")));
+        QVERIFY(!media::colorTransformationsOfType(QStringLiteral("Generic")).contains(QStringLiteral("Rec 709 to ACES")));
+        // A provider's ACES transform shows under its type.
+        media::registerColorTransformation(QStringLiteral("Test Camera to ACES"), {}, QStringLiteral("ACES Canon"));
+        QCOMPARE(media::colorTransformationsOfType(QStringLiteral("ACES Canon")), QStringList{QStringLiteral("Test Camera to ACES")});
+        // The monitors: ACESproxy shows the proxy encoding of the working space's linear; Rec709 (and Project) the output
+        // transform, mid grey a little darker than mid, white not above white.
+        const QString project = QStringLiteral("ACES RGB");
+        const double grey = aces::linearToAcescct(0.18);
+        QVERIFY(near(media::toDisplayColor({grey, grey, grey}, project, QStringLiteral("ACESproxy"))[0], 426.0 / 1023.0, 1e-6));
+        const auto shown = media::toDisplayColor({grey, grey, grey}, project, QStringLiteral("Rec709"));
+        QVERIFY2(shown[0] > 0.3 && shown[0] < 0.6, qPrintable(QString::number(shown[0])));
+        QCOMPARE(media::toDisplayColor({grey, grey, grey}, project, QStringLiteral("Project")), shown);
+        QVERIFY(media::toDisplayColor({1.0, 1.0, 1.0}, project, QStringLiteral("Rec709"))[0] <= 1.0);
     }
 
     // The built-in transformations (p.539-540).

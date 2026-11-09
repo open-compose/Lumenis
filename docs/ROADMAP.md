@@ -1512,9 +1512,11 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       mode); 8.5e3 (done), the Format tab's Mask Margins and the monitors' Target Mask (p.550-552, the Composer setting's Target
       Mask p.1191, Export's Enable Mask Regions); 8.5e4, in two parts: 8.5e4a (done), the Composer setting's Viewer
       tab Color Space options (p.1161: Project, Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, ACESproxy) as Display
-      Color Space's choices; 8.5e4b, ACES projects (p.557-560: the ACES colour space, ACES colour adapter types, the Output
-      Color Space, ACEScct working space and 32-bit float timeline, ACESproxy on the monitors) through OpenColorIO's ACES
-      configurations where available.
+      Color Space's choices; 8.5e4b, ACES projects, in two parts: 8.5e4b1 (done), the ACES encodings and
+      colour adapter types, the ACEScct working space and the monitors' ACESproxy and output transform (p.557-559, built
+      in from the published formulas; OpenColorIO 2.1 has no built-in ACES config); 8.5e4b2, the Format tab's ACES
+      version and Output Color Space on export, the Project tab's video output colour space, the blue Video Quality Menu
+      and the 32-bit float Timeline, Transcode in the working space (p.558-560).
   * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1110) and stereoscopic projects.
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:
