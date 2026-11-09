@@ -127,10 +127,42 @@ Working Settings and Target Settings. Each of the two holds:
 * Clip Text > Clip Resolution (p.1104; the Fast menu's item): the resolution of the media the clip plays now, so "the
   resolution of the clip (as shown in the text on the clip) is different" in working and target settings (p.1103).
 
+## Partial and shared media (8.6c; p.1100-1102, p.1109-1110, p.1116-1120)
+
+* Associated media (`media::associatedMedia`): the sets naming the clip's MobID, and those of other clips that share
+  its source and some of its timecode span: "You can also associate two or more master clips with the same media if the
+  clips share a source ID and timecode" (p.1100). Ours: the source is the clip's tape, else its source file, as our media
+  files record them; spans are compared by timecode (`media::mediaCoverage`: Full, Partial or None).
+* Only media holding the whole clip are played (`mediaCandidates`). Ours: Media Composer plays the shared section of
+  partly online media and shows "offline frames" beyond it (p.1118); we leave partly online media out of Dynamic
+  Relink, and the bin shows them as partly online.
+* The MultiRez bin headings (p.1116; `media::multiRezHeadings`, `BinAppearance::multiRezHeadings`/`multiRezCell`):
+  "Video resolutions" and "Audio sample rate". Ours: our resolutions' names (Avid DNx LB ... 444) and 32, 44.1, 48 and
+  96 kHz. "These headings appear at the bottom of the Bin Column Selection list" (Choose Columns). Cells: "Filled circle
+  Online, Half-filled circle Partially online, Empty circle Offline or Not Available" (●, ◐, ○), for master clips and
+  audio clips; MainWindow keeps them until the media change (`MainWindow::multiRezCell`).
+* "Video format: This column displays the resolution of the media files to which the clips ... are currently linked"
+  (p.1116): Dynamic Relink sets the Video column to the resolution it links to and puts the clip's own back with its
+  affinity media. The Drive column's blank for several drives is left as it is (ours).
+* Transcode without Create new clips on a sequence (p.354-355, p.1118 "Consolidating and Transcoding a Portion of a
+  Clip"): each clip keeps the media of the range the sequence uses, with handles, naming its MobID; no ".new" clips and
+  the sequence is left as it is. The clip is then partly online at that resolution.
+* Delete (p.1117, `media::affinityMediaFiles`): "For clips in a bin, you can delete only the media that was originally
+  associated with the clip": the media naming the clip's MobID (dual ingest, batch capture, "Transcoded clip, one
+  clip"), not the media of clips that only share its source ("Transcoded clip, multiple clips", "Clips that share
+  timecode and source": original resolution only). With media at several resolutions the Delete dialog has a box for
+  each (`deleteResolution:<name>`, ours: all ticked); "Multiple audio sample rates are not listed" is ours too only in
+  that sound-only media are listed by sample rate.
+* Cross Rate Dynamic Relink (p.1109-1110): with Specific Resolution's Frame Rate, media at a whole multiple of the
+  project's rate count as the project's (25 and 50, not 23.976 and 25); with Allow Mixed Frame Rate Media, "In the case
+  of no media with exact frame rate match, Dynamic Relink will try to find the closest multiple frame rate value".
+  "The clips placed in the Source Monitor will not be linked to a different rate media": clips loading into the Source
+  monitor relink without it (`chooseMedia`'s `crossRate`).
+
 ## Left for later
 
-* 8.6c: the MultiRez bin headings (p.1116), partially online media and clips sharing a source and timecode span
-  (p.1100-1102, p.1118-1120), the Delete dialog's affinity (p.1117), Cross Rate Dynamic Relink (p.1109-1110).
+* Playing partly online media with offline frames beyond them (p.1118-1120), Viewing a Source Clip in the Timeline's
+  offline portions (p.1119); Frame Chase editing and archive restores (MediaCentral, p.1111, p.1120).
 
 ## Tests
 
@@ -139,6 +171,9 @@ Working Settings and Target Settings. Each of the two holds:
   each If no match is found, Offline and back, the affinity link kept through the media database.
 * `tst_render_ui dynamicRelink`: the setting applied to the loaded clip, Offline, Override with the Target tab, relinking
   as a clip loads, off again, and Create new clips following the setting.
-* `tst_render_ui multiRezButton`: the displays and colours, Resolution Tracking colours, Find Next Mismatched or
+* `tst_dynamic_relink crossRate`, `partialAndShared`, `sequenceWithoutNewClips`: cross-rate choosing, partly online
+  and shared media and their bin cells, Delete's affinity files, the Video column, a sequence transcoded without new
+  clips.
+* `tst_render_ui multiRezButton`: the bin's MultiRez cells and Delete's files, and the displays and colours, Resolution Tracking colours, Find Next Mismatched or
   Unavailable Clip, Update Media Status, Clip Text > Clip Resolution, the menu's Dynamic Relink items and the Clip Color
   dialog's Resolution Tracking. `tst_clip_colors resolutionTracking`.

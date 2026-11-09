@@ -685,7 +685,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Create new clips dimmed without Dynamic Relink; sequences' clips still getting new clips. The MultiRez button (8.6b):
   its place after the Video Quality Menu, the click order, its picture, Resolution Tracking offered with Dynamic Relink
   on and coloured blue/yellow by default with the Offline red, Override dimmed with Dynamic Relink off, mismatched
-  renders against the Render tab's resolution, Find Next's message when the display is inactive.
+  renders against the Render tab's resolution, Find Next's message when the display is inactive. Partial and shared
+  media (8.6c): a clip's source as its tape or source file, spans compared by timecode, partly online media not played,
+  the headings as our resolutions and 32-96 kHz, ●/◐/○ as the circles, the Drive column left as it is, Delete's
+  resolution boxes all ticked, whole multiples as cross rates.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

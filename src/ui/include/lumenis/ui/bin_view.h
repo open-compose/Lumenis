@@ -335,6 +335,11 @@ struct BinAppearance {
     static BinAppearance& current();
     // The icon colour for a clip with Show local media icons; an invalid colour leaves it as it is.
     static std::function<QColor(const model::BinItem&)>& mediaTint();
+    // The MultiRez bin headings (p.1116; 8.6c): MainWindow names them (media::multiRezHeadings), Choose Columns lists
+    // them at the bottom, and a clip's cell under one is what `multiRezCell` gives (a filled, half-filled or empty
+    // circle). Without a cell function the columns are empty.
+    static QStringList& multiRezHeadings();
+    static std::function<QString(const model::BinItem&, const QString& heading)>& multiRezCell();
     // A frame's border colour in the Frame view by object type (p.1154); invalid for no border.
     static QColor typeColor(model::BinItemKind kind);
 };

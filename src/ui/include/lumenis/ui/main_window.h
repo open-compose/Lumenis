@@ -992,6 +992,8 @@ public:
     // Whether a rendered effect's media are at another resolution than the Media Creation setting's Render tab gives
     // (Show Mismatched Render Ranges, p.1115).
     bool renderAtOtherResolution(const model::EffectRender& render) const;
+    // A clip's MultiRez bin cell under a resolution heading (p.1116; 8.6c), kept until the media change.
+    QString multiRezCell(const model::BinItem& clip, const QString& heading);
 
 private:
     // The Titler+ template open in the Record monitor (editTitleTemplate): where it is, its sequence as edited, and
@@ -1066,7 +1068,9 @@ private:
     // The Timeline's MultiRez button wired to Dynamic Relink (main_window_relink.cpp).
     void connectMultiRez();
     QHash<QString, model::ClipFacts::Resolution> resolutionCache_;
-    bool dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& settings);
+    bool dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& settings,
+                           bool crossRate = true);
+    QHash<QString, QHash<QString, media::MediaCoverage>> coverageCache_; // multiRezCell()
     PanelManager* panels_ = nullptr;
     BinContainer* binContainer_ = nullptr;
     Composer* composer_ = nullptr;

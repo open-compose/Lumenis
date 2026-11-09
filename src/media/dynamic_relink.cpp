@@ -3,6 +3,7 @@
 // it when clips load into the monitors and the Timeline, and when the Dynamic Relink setting changes.
 #include "lumenis/media/dynamic_relink.h"
 
+#include "lumenis/core/timecode.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 
@@ -18,6 +19,8 @@ namespace {
 
 const QString kAffinityKey = QStringLiteral("multiRez");
 const QString kOfflineKey = QStringLiteral("multiRezOffline");
+// The clip's Video column while it plays other media: the column shows the resolution linked to (p.1116).
+const QString kVideoKey = QStringLiteral("multiRezVideo");
 
 RelinkRules::NoMatch noMatchOf(const QString& v, RelinkRules::NoMatch fallback) {
     if (v == QLatin1String("highestQuality")) return RelinkRules::NoMatch::HighestQuality;
@@ -81,6 +84,7 @@ bool sameRules(const RelinkRules& a, const RelinkRules& b) {
 QJsonObject plainLink(QJsonObject link) {
     link.remove(kAffinityKey);
     link.remove(kOfflineKey);
+    link.remove(kVideoKey);
     return link;
 }
 
@@ -97,6 +101,15 @@ bool sameRate(const Rational& rate, const QString& text) {
 
 bool sameRate(const Rational& a, const Rational& b) {
     return a.num() > 0 && b.num() > 0 && std::abs(a.toDouble() - b.toDouble()) < 0.001;
+}
+
+// Whether one rate is a whole multiple of the other (25 and 50, 23.976 and 47.952).
+bool multipleRates(double a, double b) {
+    if (a <= 0 || b <= 0) return false;
+    const double hi = std::max(a, b);
+    const double lo = std::min(a, b);
+    const double ratio = hi / lo;
+    return std::abs(ratio - std::round(ratio)) < 0.002;
 }
 
 bool newer(const MediaCandidate& a, const MediaCandidate& b) {
@@ -221,23 +234,31 @@ MediaCandidate setCandidate(const MediaSet& set, std::int64_t frames) {
     return c;
 }
 
-// Whether a set holds the clip's tracks for its whole length: partly online media wait for 8.6c.
-bool covers(const MediaSet& set, const model::BinItem& clip, const std::optional<Link>& own) {
-    if (own) {
-        if (own->videoStream >= 0 && !set.hasVideo()) return false;
-        // Managed media keep a file a track; linked media a channel a track.
-        const int tracks = own->isManaged() ? static_cast<int>(own->audioPaths.size()) : own->channels;
-        if (set.audioTracks() < tracks) return false;
-    }
-    const MediaFileInfo& any = set.any();
-    if (clip.durationFrames > 0 && any.rate.num() > 0 && clip.editRate.num() > 0) {
-        const double have = static_cast<double>(any.frames) / any.rate.toDouble();
-        const double need = static_cast<double>(clip.durationFrames) / clip.editRate.toDouble();
-        if (have + 0.5 / clip.editRate.toDouble() < need) return false;
-    }
-    const QString start = clip.fields.value(QStringLiteral("Start"));
-    if (!start.isEmpty() && !any.start.isEmpty() && any.start != start) return false;
-    return true;
+// Whether a set holds the clip's tracks.
+bool hasTracks(const MediaSet& set, const std::optional<Link>& own) {
+    if (!own) return true;
+    if (own->videoStream >= 0 && !set.hasVideo()) return false;
+    // Managed media keep a file a track; linked media a channel a track.
+    const int tracks = own->isManaged() ? static_cast<int>(own->audioPaths.size()) : own->channels;
+    return set.audioTracks() >= tracks;
+}
+
+// A timecode label as seconds of timecode (frames over the nominal rate, so labels at different rates compare);
+// nothing when it does not read.
+std::optional<double> timecodeSeconds(const QString& text, const Rational& rate) {
+    if (text.isEmpty() || rate.num() <= 0) return std::nullopt;
+    const TimecodeFormat format = TimecodeFormat::forRate(rate, text.contains(QLatin1Char(';')));
+    const auto tc = Timecode::parse(text.toStdString(), format);
+    if (!tc || format.nominalFps <= 0) return std::nullopt;
+    return static_cast<double>(tc->frameCount()) / format.nominalFps;
+}
+
+// The clip's source as its media files name it (managed.cpp's Maker): its tape, else its source file.
+bool sharesSource(const MediaFileInfo& file, const model::BinItem& clip) {
+    const QString tape = clip.fields.value(QStringLiteral("Tape"));
+    if (!tape.isEmpty()) return file.tape == tape;
+    const QString source = clip.fields.value(QStringLiteral("Source File"));
+    return !source.isEmpty() && file.tape.isEmpty() && file.source == source;
 }
 
 } // namespace
@@ -279,6 +300,98 @@ QString containerOf(const QString& format, const QString& path) {
     return QStringLiteral("Other");
 }
 
+MediaCoverage mediaCoverage(const MediaSet& set, const model::BinItem& clip) {
+    const MediaFileInfo& any = set.any();
+    if (clip.editRate.num() <= 0 || any.rate.num() <= 0) return MediaCoverage::Full;
+    const double need = static_cast<double>(std::max<std::int64_t>(clip.durationFrames, 0)) / clip.editRate.toDouble();
+    const double have = static_cast<double>(any.frames) / any.rate.toDouble();
+    const double tolerance = 0.5 / clip.editRate.toDouble();
+    const auto clipStart = timecodeSeconds(clip.fields.value(QStringLiteral("Start")), clip.editRate);
+    const auto setStart = timecodeSeconds(any.start, any.rate);
+    if (!clipStart || !setStart) {
+        // Without timecode both start together (ours).
+        if (have + tolerance >= need) return MediaCoverage::Full;
+        return have > 0 ? MediaCoverage::Partial : MediaCoverage::None;
+    }
+    const double clipEnd = *clipStart + need;
+    const double setEnd = *setStart + have;
+    if (*setStart <= *clipStart + tolerance && setEnd + tolerance >= clipEnd) return MediaCoverage::Full;
+    if (std::min(clipEnd, setEnd) - std::max(*clipStart, *setStart) > tolerance) return MediaCoverage::Partial;
+    return MediaCoverage::None;
+}
+
+QList<MediaSet> associatedMedia(const model::BinItem& clip, const MediaDatabase& db, bool affinityOnly) {
+    QList<MediaSet> out;
+    if (clip.kind != model::BinItemKind::MasterClip && clip.kind != model::BinItemKind::AudioClip) return out;
+    const MobId master = model::mobIdOf(clip);
+    for (const MediaSet& set : db.sets()) {
+        const MediaFileInfo& any = set.any();
+        const bool own = any.material == master;
+        if (!own && (affinityOnly || !sharesSource(any, clip))) continue;
+        if (!own && mediaCoverage(set, clip) == MediaCoverage::None) continue;
+        out << set;
+    }
+    return out;
+}
+
+QStringList multiRezHeadings() {
+    QStringList out;
+    for (const Resolution& r : resolutions()) out << r.name;
+    out << QStringLiteral("32 kHz") << QStringLiteral("44.1 kHz") << QStringLiteral("48 kHz") << QStringLiteral("96 kHz");
+    return out;
+}
+
+namespace {
+
+QString sampleRateHeading(int rate) {
+    if (rate <= 0) return {};
+    const double khz = rate / 1000.0;
+    return QStringLiteral("%1 kHz").arg(QString::number(khz, 'g', 4));
+}
+
+} // namespace
+
+QHash<QString, MediaCoverage> multiRezCoverage(const model::BinItem& clip, const MediaDatabase& db) {
+    QHash<QString, MediaCoverage> out;
+    auto keep = [&out](const QString& heading, MediaCoverage c) {
+        if (heading.isEmpty()) return;
+        if (static_cast<int>(c) > static_cast<int>(out.value(heading, MediaCoverage::None))) out.insert(heading, c);
+    };
+    for (const MediaSet& set : associatedMedia(clip, db)) {
+        const MediaCoverage c = mediaCoverage(set, clip);
+        if (set.hasVideo()) keep(set.track(QStringLiteral("V1")).resolution, c);
+        if (set.audioTracks() > 0) keep(sampleRateHeading(set.track(QStringLiteral("A1")).sampleRate), c);
+    }
+    return out;
+}
+
+QString multiRezCellText(MediaCoverage coverage) {
+    switch (coverage) {
+    case MediaCoverage::Full: return QStringLiteral("\u25CF");    // filled circle: online
+    case MediaCoverage::Partial: return QStringLiteral("\u25D0"); // half-filled circle: partially online
+    case MediaCoverage::None: break;
+    }
+    return QStringLiteral("\u25CB"); // empty circle: offline or not available
+}
+
+QMap<QString, QStringList> affinityMediaFiles(const model::BinItem& clip, const MediaDatabase& db) {
+    QMap<QString, QStringList> out;
+    for (const MediaSet& set : associatedMedia(clip, db, true)) {
+        const QString heading = set.hasVideo() ? set.track(QStringLiteral("V1")).resolution
+                                               : sampleRateHeading(set.any().sampleRate);
+        QStringList& files = out[heading.isEmpty() ? QStringLiteral("Media") : heading];
+        for (const auto& [track, file] : set.tracks) files << file.path;
+    }
+    // The clip's own managed files even when the database has not read them.
+    if (const auto own = Link::fromJson(affinityLink(clip)); own && own->isManaged()) {
+        bool listed = false;
+        for (const QStringList& files : out) listed = listed || files.contains(own->file());
+        if (!listed) out[QStringLiteral("Media")] << own->files();
+    }
+    for (QStringList& files : out) files.removeDuplicates();
+    return out;
+}
+
 QJsonObject affinityLink(const model::BinItem& clip) {
     const QJsonValue kept = clip.link.value(kAffinityKey);
     if (kept.isObject()) return kept.toObject();
@@ -291,10 +404,11 @@ QList<MediaCandidate> mediaCandidates(const model::BinItem& clip, const MediaDat
     const QJsonObject own = affinityLink(clip);
     const auto ownLink = Link::fromJson(own);
     if (auto c = affinityCandidate(clip, own)) out << *c;
-    const MobId master = model::mobIdOf(clip);
-    for (const MediaSet& set : db.setsOf(master)) {
+    // Its media at other resolutions, and those of clips sharing its source and timecode span (p.1100-1102); only media
+    // holding the whole clip are played (ours: partly online media show in the bin's MultiRez headings).
+    for (const MediaSet& set : associatedMedia(clip, db)) {
         if (ownLink && set.mediaId == ownLink->mediaId) continue;
-        if (!covers(set, clip, ownLink)) continue;
+        if (!hasTracks(set, ownLink) || mediaCoverage(set, clip) != MediaCoverage::Full) continue;
         out << setCandidate(set, clip.durationFrames);
     }
     std::stable_sort(out.begin(), out.end(), newer);
@@ -314,7 +428,7 @@ std::optional<MediaCandidate> currentMedia(const model::BinItem& clip, const QLi
 
 RelinkChoice chooseMedia(const QList<MediaCandidate>& candidates, const std::optional<MediaCandidate>& current,
                          const RelinkRules& rules, const Rational& projectRate, const QSize& projectRaster,
-                         bool mixedRates) {
+                         bool mixedRates, bool crossRate) {
     RelinkChoice choice;
     if (candidates.isEmpty()) return choice;
     const bool video = std::any_of(candidates.begin(), candidates.end(), [](const MediaCandidate& c) { return c.video; });
@@ -327,9 +441,16 @@ RelinkChoice chooseMedia(const QList<MediaCandidate>& candidates, const std::opt
 
     // The pool: media at the project's rate. "In case of no media with current project frame rate, Media Composer uses
     // the most recent online compression out of all available for that object" (p.1169).
+    // Cross Rate Dynamic Relink (p.1109-1110): with Specific Resolution's Frame Rate, media at a multiple of the project's
+    // rate count as the project's ("material available in 25fps and 50fps can be cross-rate relinked ... in projects with
+    // frame rates multiple to 25").
+    const bool rateChosen = video && rules.video == RelinkRules::Method::SpecificResolution && !rules.frameRate.isEmpty();
     QList<MediaCandidate> pool;
     for (const MediaCandidate& c : candidates) {
-        if (!video || !c.video || sameRate(c.rate, projectRate) || projectRate.num() <= 0) pool << c;
+        if (!video || !c.video || sameRate(c.rate, projectRate) || projectRate.num() <= 0 ||
+            (crossRate && rateChosen && multipleRates(c.rate.toDouble(), projectRate.toDouble()))) {
+            pool << c;
+        }
     }
     if (pool.isEmpty()) {
         if (!mixedRates) {
@@ -353,11 +474,26 @@ RelinkChoice chooseMedia(const QList<MediaCandidate>& candidates, const std::opt
             for (const MediaCandidate& c : pool) {
                 if (c.video && passesVideo(c, rules, !mixedRates)) matches << c;
             }
-            // A preferred frame rate (Allow Mixed Frame Rate Media, p.1110): media at it first.
+            // A preferred frame rate (Allow Mixed Frame Rate Media, p.1110): media at it first; "In the case of no media
+            // with exact frame rate match, Dynamic Relink will try to find the closest multiple frame rate value".
             if (mixedRates && !rules.frameRate.isEmpty()) {
                 QList<MediaCandidate> atRate;
                 for (const MediaCandidate& c : matches) {
                     if (sameRate(c.rate, rules.frameRate)) atRate << c;
+                }
+                const double want = rules.frameRate.toDouble();
+                if (atRate.isEmpty() && want > 0) {
+                    double closest = -1;
+                    for (const MediaCandidate& c : matches) {
+                        if (!multipleRates(c.rate.toDouble(), want)) continue;
+                        const double d = std::abs(c.rate.toDouble() - want);
+                        if (closest < 0 || d < closest - 0.001) {
+                            closest = d;
+                            atRate = {c};
+                        } else if (std::abs(d - closest) < 0.001) {
+                            atRate << c;
+                        }
+                    }
                 }
                 if (!atRate.isEmpty()) matches = atRate;
             }
@@ -404,7 +540,7 @@ RelinkChoice chooseMedia(const QList<MediaCandidate>& candidates, const std::opt
 }
 
 bool dynamicRelink(model::BinItem& clip, const MediaDatabase& db, const DynamicRelinkSettings& settings,
-                   const Rational& projectRate, const QSize& projectRaster, RelinkChoice* out) {
+                   const Rational& projectRate, const QSize& projectRaster, RelinkChoice* out, bool crossRate) {
     if (!settings.enabled) return false;
     if (clip.kind != model::BinItemKind::MasterClip && clip.kind != model::BinItemKind::AudioClip) return false;
     if (clip.link.isEmpty()) return false;
@@ -415,29 +551,40 @@ bool dynamicRelink(model::BinItem& clip, const MediaDatabase& db, const DynamicR
     const QList<MediaCandidate> candidates = mediaCandidates(clip, db);
     const auto current = currentMedia(clip, candidates);
     const RelinkChoice choice = chooseMedia(candidates, current, settings.active(), projectRate, projectRaster,
-                                            settings.mixedRates);
+                                            settings.mixedRates, crossRate);
     if (out) *out = choice;
     const QJsonObject own = affinityLink(clip);
+    // "Video format: This column displays the resolution of the media files to which the clips ... are currently linked"
+    // (p.1116): the column follows the media, its own text kept for the way back.
+    const QString ownVideo = clip.link.contains(kVideoKey) ? clip.link.value(kVideoKey).toString()
+                                                           : clip.fields.value(QStringLiteral("Video"));
     QJsonObject next;
+    QString video = ownVideo;
     if (!choice.media) {
         if (candidates.isEmpty()) return false; // nothing online at all: leave it as it is
         next = own;
         next.insert(QStringLiteral("unlinked"), true);
         next.insert(kOfflineKey, true);
         next.insert(kAffinityKey, own);
+        next.insert(kVideoKey, ownVideo);
+        video = clip.fields.value(QStringLiteral("Video"));
     } else if (choice.media->affinity) {
         next = own;
     } else {
         next = choice.media->link;
         next.insert(kAffinityKey, own);
+        next.insert(kVideoKey, ownVideo);
+        if (!choice.media->resolution.isEmpty()) video = choice.media->resolution;
     }
     if (next == clip.link) return false;
     clip.link = next;
+    if (!video.isEmpty() || clip.fields.contains(QStringLiteral("Video"))) clip.fields.insert(QStringLiteral("Video"), video);
     return true;
 }
 
 bool restoreAffinityMedia(model::BinItem& clip) {
     if (!clip.link.contains(kAffinityKey) && !clip.link.contains(kOfflineKey)) return false;
+    if (clip.link.contains(kVideoKey)) clip.fields.insert(QStringLiteral("Video"), clip.link.value(kVideoKey).toString());
     clip.link = affinityLink(clip);
     return true;
 }

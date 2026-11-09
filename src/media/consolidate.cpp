@@ -213,10 +213,21 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             const std::int64_t from = std::max<std::int64_t>(use.first - options.handles, 0);
             const std::int64_t to = std::min(use.end + options.handles, clip->durationFrames);
             QString error;
+            // Without Create new clips the clip keeps the media of the range it is used for: partly online at that
+            // resolution (p.1118: "Consolidating and Transcoding a Portion of a Clip"), its segments left as they are.
+            associating = !copy && !options.newClips;
             auto made = make(*clip, from, to, &error);
+            const bool kept = associating;
+            associating = false;
             if (!made) {
                 result.error = error;
                 break;
+            }
+            if (kept) {
+                const bool listed = std::any_of(result.associated.begin(), result.associated.end(),
+                                                [&](const model::BinItem& a) { return a.id == clip->id; });
+                if (!listed) result.associated << *clip;
+                continue;
             }
             made->name = numberedName(clip->name, QStringLiteral(".new"), names);
             names << made->name;

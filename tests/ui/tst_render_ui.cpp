@@ -14,6 +14,7 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/composer.h"
@@ -788,6 +789,23 @@ private slots:
         QVERIFY(!window.dynamicRelinkSettings().enabled);
         menu.reset(timeline.multiRezMenu(nullptr));
         QVERIFY(!menu->findChild<QAction*>(QStringLiteral("multiRezOverride"))->isEnabled());
+        // The MultiRez bin headings (p.1116; 8.6c): the clip's LB media are online, nothing at 444; Choose Columns lists
+        // the headings.
+        QVERIFY(BinAppearance::multiRezHeadings().contains(QStringLiteral("Avid DNx LB")));
+        QVERIFY(BinAppearance::multiRezCell());
+        QCOMPARE(BinAppearance::multiRezCell()(*bin->bin().item(clip.id), QStringLiteral("Avid DNx LB")), QStringLiteral("\u25CF"));
+        QCOMPARE(BinAppearance::multiRezCell()(*bin->bin().item(clip.id), QStringLiteral("Avid DNx 444")), QStringLiteral("\u25CB"));
+        // Delete offers the clip's own media: the LB files, though the clip plays its linked file.
+        int deletable = 0;
+        window.setBinDeleteHook([&deletable](int, int files) -> std::optional<MainWindow::BinDeleteChoice> {
+            deletable = files;
+            return std::nullopt; // Cancel
+        });
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({clip.id});
+        QCOMPARE(window.binContainer().deleteSelection(), 0);
+        QVERIFY(deletable >= 1);
         // The Clip Color dialog's Resolution Tracking is offered with Dynamic Relink only.
         ClipColorDialog colors(timeline.clipColorOptions());
         QVERIFY(!colors.option(QStringLiteral("resolution"))->isEnabled());

@@ -291,6 +291,11 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     // pink to indicate mixed resolution." Ours: local is every one of the clip's files there and none
     // on shared storage (model::isSharedLocation); mixed resolution is video media of the clip's MobID
     // at more than one resolution in the media database.
+    // The MultiRez bin headings (p.1116; 8.6c, main_window_relink.cpp).
+    BinAppearance::multiRezHeadings() = media::multiRezHeadings();
+    BinAppearance::multiRezCell() = [self = QPointer<MainWindow>(this)](const model::BinItem& item, const QString& heading) {
+        return self ? self->multiRezCell(item, heading) : QString();
+    };
     BinAppearance::mediaTint() = [self = QPointer<MainWindow>(this)](const model::BinItem& item) -> QColor {
         if (!self) return {};
         if (item.kind != model::BinItemKind::MasterClip && item.kind != model::BinItemKind::Subclip &&
@@ -346,6 +351,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
 
 MainWindow::~MainWindow() {
     BinAppearance::mediaTint() = nullptr;
+    BinAppearance::multiRezCell() = nullptr;
     // An edit in progress (a bin being named) is committed now, while every
     // view is alive, not by the focus change as the window comes down.
     if (QWidget* focused = QApplication::focusWidget(); focused && isAncestorOf(focused)) focused->clearFocus();
@@ -877,14 +883,21 @@ void MainWindow::createPanels() {
     // The filter returns the ids the bin goes on to delete: all of them when no managed media is among
     // them, none when only the media files go, and nothing (std::nullopt) on Cancel.
     binContainer_->setDeleteFilter([this](const BinDocument& doc, const QStringList& ids) -> std::optional<QStringList> {
+        // "For clips in a bin, you can delete only the media that was originally associated with the clip" (p.1117):
+        // the clip's affinity media, every resolution named by its MobID, listed by resolution.
         QStringList files;
+        QMap<QString, QStringList> byResolution;
         int clips = 0;
         for (const QString& id : ids) {
             const model::BinItem* item = doc.bin().item(id);
-            const auto link = item ? media::linkOf(*item) : std::nullopt;
-            if (!link || !link->isManaged()) continue;
+            if (!item) continue;
+            const QMap<QString, QStringList> affinity = media::affinityMediaFiles(*item, mediaDb_);
+            if (affinity.isEmpty()) continue;
             ++clips;
-            files += link->files();
+            for (auto it = affinity.begin(); it != affinity.end(); ++it) {
+                byResolution[it.key()] += it.value();
+                files += it.value();
+            }
         }
         files.removeDuplicates();
         if (files.isEmpty()) return ids;
@@ -904,12 +917,32 @@ void MainWindow::createPanels() {
             layout->addWidget(new QLabel(tr("%n of the clips have media files:", "", clips), &dialog));
             layout->addWidget(clipBox);
             layout->addWidget(mediaBox);
+            // With media at several resolutions, a box for each ("Select the items you want to delete", p.1117).
+            QHash<QString, QCheckBox*> resolutionBoxes;
+            if (byResolution.size() > 1) {
+                for (auto it = byResolution.begin(); it != byResolution.end(); ++it) {
+                    auto* box = new QCheckBox(tr("    %1 media (%n file(s))", "", static_cast<int>(it.value().size())).arg(it.key()), &dialog);
+                    box->setObjectName(QStringLiteral("deleteResolution:") + it.key());
+                    box->setChecked(true);
+                    box->setEnabled(false);
+                    connect(mediaBox, &QCheckBox::toggled, box, &QWidget::setEnabled);
+                    resolutionBoxes.insert(it.key(), box);
+                    layout->addWidget(box);
+                }
+            }
             auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
             connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
             connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
             layout->addWidget(buttons);
             if (dialog.exec() != QDialog::Accepted) return std::nullopt;
             choice = {clipBox->isChecked(), mediaBox->isChecked()};
+            if (choice.media && !resolutionBoxes.isEmpty()) {
+                files.clear();
+                for (auto it = resolutionBoxes.begin(); it != resolutionBoxes.end(); ++it) {
+                    if (it.value()->isChecked()) files += byResolution.value(it.key());
+                }
+                files.removeDuplicates();
+            }
         }
         if (choice.media) {
             frames_->clear();
@@ -4010,7 +4043,8 @@ void MainWindow::loadMediaDatabase() {
         }
     }
     if (found > 0) frames_->clear();
-    resolutionCache_.clear(); // the MultiRez display looks at the media again (8.6b)
+    resolutionCache_.clear(); // the MultiRez display and bin headings look at the media again (8.6b-c)
+    coverageCache_.clear();
     ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
 }
 

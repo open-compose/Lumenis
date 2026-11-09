@@ -5,8 +5,10 @@
 #include "lumenis/model/bin.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QSize>
 #include <QString>
 
@@ -90,6 +92,28 @@ struct MediaCandidate {
     QDateTime created;
 };
 
+// How much of a clip's length a media set holds, by their timecode spans (p.1102, p.1118-1120).
+enum class MediaCoverage { None, Partial, Full };
+MediaCoverage mediaCoverage(const MediaSet& set, const model::BinItem& clip);
+
+// The media sets associated with a master clip or audio clip (p.1099-1102): those naming its MobID ("Single Clip,
+// Multiple Resolutions", the affinity media) and, unless `affinityOnly`, those of other clips sharing its source (its
+// tape, else its source file) and some of its timecode span ("Multiple Clips, Multiple Resolutions", "Partial Clips").
+QList<MediaSet> associatedMedia(const model::BinItem& clip, const MediaDatabase& db, bool affinityOnly = false);
+
+// The MultiRez bin headings (p.1116): "Video resolutions" and "Audio sample rate" as our media have them: our
+// resolutions' names and 32, 44.1, 48 and 96 kHz. Choose Columns lists them at the bottom.
+QStringList multiRezHeadings();
+// What a clip's associated media hold under each heading.
+QHash<QString, MediaCoverage> multiRezCoverage(const model::BinItem& clip, const MediaDatabase& db);
+// A MultiRez cell: "Filled circle Online, Half-filled circle Partially online, Empty circle Offline or Not Available".
+QString multiRezCellText(MediaCoverage coverage);
+
+// The media files Delete may remove with a clip, by heading (p.1117): "For clips in a bin, you can delete only the media
+// that was originally associated with the clip", every resolution that names its MobID, and not those of clips that
+// only share its source and timecode.
+QMap<QString, QStringList> affinityMediaFiles(const model::BinItem& clip, const MediaDatabase& db);
+
 // What chooseMedia() decided.
 struct RelinkChoice {
     std::optional<MediaCandidate> media; // nothing: offline
@@ -98,7 +122,7 @@ struct RelinkChoice {
 };
 
 // The media a master clip or audio clip can play now: its affinity media while its files are there, then the media
-// database's sets that name its MobID and hold the clip's tracks for its whole length, newest first. Empty for other
+// database's associated sets (associatedMedia()) that hold the clip's tracks for its whole length, newest first. Empty for other
 // items. `affinity` is the clip's own media, as affinityLink() gives it.
 QList<MediaCandidate> mediaCandidates(const model::BinItem& clip, const MediaDatabase& db);
 
@@ -110,17 +134,21 @@ std::optional<MediaCandidate> currentMedia(const model::BinItem& clip, const QLi
 // Quality matching (p.1120-1121, p.1169-1171): the candidate the rules choose for a clip whose media is `current`, in a
 // project at `projectRate` and `projectRaster`. Media at the project's rate is preferred; with none, or with
 // `mixedRates`, the others are taken, and with none at the project's rate "Media Composer uses the most recent online
-// compression out of all available" (p.1169). Pictures go by the video rules, sound-only clips by the audio rules.
+// compression out of all available" (p.1169). Pictures go by the video rules, sound-only clips by the audio rules. With
+// `crossRate`, Specific Resolution's Frame Rate also takes media at a whole multiple of the project's rate (Cross Rate
+// Dynamic Relink, p.1109-1110); "the clips placed in the Source Monitor will not be linked to a different rate media".
 RelinkChoice chooseMedia(const QList<MediaCandidate>& candidates, const std::optional<MediaCandidate>& current,
                          const RelinkRules& rules, const Rational& projectRate, const QSize& projectRaster,
-                         bool mixedRates);
+                         bool mixedRates, bool crossRate = true);
 
 // Relinks a master clip or audio clip to the media the setting's active rules choose (p.1107): its link is the
 // chosen candidate's, keeping the affinity link under "multiRez"; offline is the affinity link marked unlinked with
 // "multiRezOffline" ("Relinking to offline does not delete existing media", p.1170). Returns whether the item
-// changed; `choice` gets the decision. Nothing happens while the setting is off, or for other items.
+// changed; `choice` gets the decision. Nothing happens while the setting is off, or for other items. The Video column
+// shows the resolution linked to (p.1116), its own text back with the affinity media. `crossRate` as chooseMedia().
 bool dynamicRelink(model::BinItem& clip, const MediaDatabase& db, const DynamicRelinkSettings& settings,
-                   const Rational& projectRate, const QSize& projectRaster, RelinkChoice* choice = nullptr);
+                   const Rational& projectRate, const QSize& projectRaster, RelinkChoice* choice = nullptr,
+                   bool crossRate = true);
 
 // Puts a clip back on its affinity media (Dynamic Relink turned off); whether it changed.
 bool restoreAffinityMedia(model::BinItem& clip);

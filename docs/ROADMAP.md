@@ -1527,7 +1527,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     8.6b (done), the MultiRez button and its menu (p.1111-1116): Show Mismatches and Show Target Availability, Enable Clip
       Coloring with Resolution Tracking, Find Next Mismatched or Unavailable Clip (Ctrl+/), Update Media Status, Show
       Mismatched Render Ranges, Clip Text > Clip Resolutions (p.1104).
-    8.6c, partial and shared media (p.1100-1102, p.1116-1120): the MultiRez bin headings with full, half and empty
+    8.6c (done), partial and shared media (p.1100-1102, p.1116-1120): the MultiRez bin headings with full, half and empty
       circles, clips sharing a source and timecode span, partially online media, the Delete dialog's affinity
       resolutions, Cross Rate Dynamic Relink (p.1109-1110).
     8.6d, stereoscopic projects (the guide's scattered stereoscopic pages, to be gathered first).

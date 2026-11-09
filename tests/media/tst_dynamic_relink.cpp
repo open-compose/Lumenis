@@ -2,10 +2,12 @@
 // lumenis/media/dynamic_relink.h): a linked clip transcoded twice without Create new clips has three media, and the
 // setting's rules choose among them; Offline and back; the setting read from its values; the frame rate pool.
 #include "lumenis/media/consolidate.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/media/dynamic_relink.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
+#include "lumenis/core/mob_id.h"
 
 #include <QImage>
 #include <QTemporaryDir>
@@ -110,6 +112,151 @@ private slots:
         QCOMPARE(c.media->mediaId, QStringLiteral("p25"));
         // Nothing to choose from: offline.
         QVERIFY(!chooseMedia({}, std::nullopt, r, Rational(25), QSize(1920, 1080), false).media);
+    }
+
+    // Cross Rate Dynamic Relink (p.1109-1110): Specific Resolution's Frame Rate takes media at a multiple of the project's
+    // rate, not in the Source monitor; with Allow Mixed Frame Rate Media the closest multiple when none is exact.
+    void crossRate() {
+        const QList<MediaCandidate> both{candidate(QStringLiteral("p25"), Rational(25), 9),
+                                         candidate(QStringLiteral("p50"), Rational(50), 1)};
+        RelinkRules r;
+        r.video = RelinkRules::Method::SpecificResolution;
+        r.frameRate = QStringLiteral("50");
+        RelinkChoice c = chooseMedia(both, both.at(0), r, Rational(25), QSize(1920, 1080), false, true);
+        QVERIFY(c.matched);
+        QCOMPARE(c.media->mediaId, QStringLiteral("p50"));
+        // The Source monitor: no cross-rate media, so no match and the existing media kept.
+        c = chooseMedia(both, both.at(0), r, Rational(25), QSize(1920, 1080), false, false);
+        QVERIFY(!c.matched);
+        QCOMPARE(c.media->mediaId, QStringLiteral("p25"));
+        // 23.976 is not a multiple of 25.
+        const QList<MediaCandidate> film{candidate(QStringLiteral("p25"), Rational(25), 9),
+                                         candidate(QStringLiteral("p23"), Rational(24000, 1001), 1)};
+        r.frameRate = QStringLiteral("23.976");
+        QVERIFY(!chooseMedia(film, film.at(0), r, Rational(25), QSize(1920, 1080), false, true).matched);
+        // Preferred rate 100, none exact: the closest multiple, 50.
+        r.frameRate = QStringLiteral("100");
+        c = chooseMedia(both, both.at(0), r, Rational(25), QSize(1920, 1080), true, true);
+        QVERIFY(c.matched);
+        QCOMPARE(c.media->mediaId, QStringLiteral("p50"));
+    }
+
+    // Partial and shared media (p.1100-1102, p.1116-1118): media for part of the clip are half online and not played; a
+    // clip sharing the source and timecode is associated; Delete offers only the clip's own (affinity) media; the Video
+    // column follows the media linked to.
+    void partialAndShared() {
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("Shot.mov"));
+        QVERIFY(writeVideo(source, 10));
+        LinkOptions lo;
+        lo.editRate = Rational(25);
+        auto clip = linkClip(*probe(source), lo);
+        QVERIFY(clip);
+        QVERIFY(!clip->fields.value(QStringLiteral("Source File")).isEmpty());
+        const QString video = clip->fields.value(QStringLiteral("Video"));
+        MediaCreation creation;
+        creation.videoDrive = dir.path();
+        creation.raster = QSize(256, 144);
+        // The whole clip in LB and frames 2 to 6 in HQ, both naming the clip; the whole clip in SQ as a new clip.
+        creation.master = model::mobIdOf(*clip);
+        creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        QVERIFY(transcodeClip(*clip, 0, -1, creation));
+        creation.resolution = *findResolution(QStringLiteral("dnx_hq"));
+        QVERIFY(transcodeClip(*clip, 2, 6, creation));
+        creation.master = MobId();
+        creation.resolution = *findResolution(QStringLiteral("dnx_sq"));
+        const auto other = transcodeClip(*clip, 0, -1, creation);
+        QVERIFY(other);
+        QVERIFY(!(model::mobIdOf(*other) == model::mobIdOf(*clip)));
+        MediaDatabase db;
+        db.scan({dir.path()});
+        const QHash<QString, MediaCoverage> coverage = multiRezCoverage(*clip, db);
+        QCOMPARE(coverage.value(QStringLiteral("Avid DNx LB")), MediaCoverage::Full);
+        QCOMPARE(coverage.value(QStringLiteral("Avid DNx HQ")), MediaCoverage::Partial);
+        QCOMPARE(coverage.value(QStringLiteral("Avid DNx SQ")), MediaCoverage::Full);
+        QCOMPARE(coverage.value(QStringLiteral("Avid DNx 444"), MediaCoverage::None), MediaCoverage::None);
+        QCOMPARE(multiRezCellText(MediaCoverage::Full), QStringLiteral("\u25CF"));
+        QCOMPARE(multiRezCellText(MediaCoverage::Partial), QStringLiteral("\u25D0"));
+        QCOMPARE(multiRezCellText(MediaCoverage::None), QStringLiteral("\u25CB"));
+        QVERIFY(multiRezHeadings().contains(QStringLiteral("Avid DNx HQ")));
+        QVERIFY(multiRezHeadings().contains(QStringLiteral("48 kHz")));
+        // The new clip sees the original's LB media too (they share the source and its whole span).
+        QCOMPARE(multiRezCoverage(*other, db).value(QStringLiteral("Avid DNx LB")), MediaCoverage::Full);
+        // Played: the linked file, LB and SQ, not the partial HQ.
+        const QList<MediaCandidate> all = mediaCandidates(*clip, db);
+        QCOMPARE(all.size(), 3);
+        for (const MediaCandidate& c : all) QVERIFY(c.resolution != QLatin1String("Avid DNx HQ"));
+        // Delete: the LB and HQ media named by the clip, not the other clip's SQ.
+        const QMap<QString, QStringList> affinity = affinityMediaFiles(*clip, db);
+        QCOMPARE(affinity.keys(), (QStringList{QStringLiteral("Avid DNx HQ"), QStringLiteral("Avid DNx LB")}));
+        QVERIFY(!affinityMediaFiles(*other, db).contains(QStringLiteral("Avid DNx LB")));
+        // The Video column follows the media.
+        DynamicRelinkSettings s;
+        s.enabled = true;
+        s.working.video = RelinkRules::Method::SpecificResolution;
+        s.working.compression = QStringLiteral("Avid DNx LB");
+        model::BinItem item = *clip;
+        QVERIFY(dynamicRelink(item, db, s, Rational(25), QSize(256, 144)));
+        QCOMPARE(item.fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
+        s.working.compression = QStringLiteral("Avid DNx SQ");
+        QVERIFY(dynamicRelink(item, db, s, Rational(25), QSize(256, 144)));
+        QCOMPARE(item.fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
+        QVERIFY(restoreAffinityMedia(item));
+        QCOMPARE(item.fields.value(QStringLiteral("Video")), video);
+        QCOMPARE(item.link, clip->link);
+    }
+
+    // Transcode of a sequence without Create new clips (p.354-355, p.1118): the clip keeps the media of the range the
+    // sequence uses, partly online; the sequence and its segments are left as they are.
+    void sequenceWithoutNewClips() {
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString source = dir.filePath(QStringLiteral("Shot.mov"));
+        QVERIFY(writeVideo(source, 20));
+        LinkOptions lo;
+        lo.editRate = Rational(25);
+        auto clip = linkClip(*probe(source), lo);
+        QVERIFY(clip);
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = clip->id;
+        a.binId = QStringLiteral("bin1");
+        a.sourceTrack = QStringLiteral("V1");
+        a.sourceIn = 4;
+        a.length = 6;
+        sequence.track(QStringLiteral("V1"))->segments = {a};
+        model::BinItem seq;
+        seq.id = model::newItemId();
+        seq.kind = model::BinItemKind::Sequence;
+        seq.name = QStringLiteral("Cut 1");
+        seq.editRate = Rational(25);
+        sequence.storeIn(seq);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == clip->id) return *clip;
+            return std::nullopt;
+        };
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        options.newClips = false;
+        options.handles = 1;
+        options.creation.raster = QSize(256, 144);
+        options.creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        options.creation.videoDrive = dir.path();
+        const ConsolidateResult r = consolidate({seq}, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(r.added.isEmpty());
+        QVERIFY(r.changed.isEmpty());
+        QCOMPARE(r.associated.size(), 1);
+        QCOMPARE(r.associated.constFirst().id, clip->id);
+        MediaDatabase db;
+        db.scan({dir.path()});
+        QCOMPARE(db.setsOf(model::mobIdOf(*clip)).size(), 1);
+        QCOMPARE(db.setsOf(model::mobIdOf(*clip)).constFirst().any().frames, 8); // frames 3 to 11 with a frame of handles
+        QCOMPARE(multiRezCoverage(*clip, db).value(QStringLiteral("Avid DNx LB")), MediaCoverage::Partial);
+        QCOMPARE(mediaCandidates(*clip, db).size(), 1); // the linked file only
     }
 
     // A linked clip transcoded twice without Create new clips (p.354-355): three media, chosen by the rules.

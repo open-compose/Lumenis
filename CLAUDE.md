@@ -955,7 +955,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::MultiRezDisplay`, `multiRezMenu`, `findNextMismatched` with Ctrl+/ `timeline.find_next_mismatched`,
   `updateMediaStatus`; `MainWindow::clipResolution`/`renderAtOtherResolution`; Resolution Tracking in
   `model::ClipColorOptions` and the Clip Color dialog; Clip Text > Clip Resolution following the media; tests
-  `tst_render_ui multiRezButton`, `tst_clip_colors resolutionTracking`), is done.
+  `tst_render_ui multiRezButton`, `tst_clip_colors resolutionTracking`), is done. 8.6c, partial and shared media
+  (`media::associatedMedia`/`mediaCoverage` by timecode span and source, the MultiRez bin headings through
+  `BinAppearance::multiRezHeadings`/`multiRezCell` and `MainWindow::multiRezCell`, the Video column following the media,
+  Delete's affinity files `media::affinityMediaFiles` by resolution, Cross Rate Dynamic Relink in `chooseMedia`, Transcode
+  of sequences without new clips; tests `tst_dynamic_relink crossRate`/`partialAndShared`/`sequenceWithoutNewClips`,
+  `tst_render_ui multiRezButton`), is done. Next: 8.6d, stereoscopic projects.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

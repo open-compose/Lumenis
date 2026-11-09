@@ -48,8 +48,8 @@ struct ConsolidateOptions {
     bool acesWorkingSpace = false;
     // Transcode's "Create new clips" (p.354-355), offered with Dynamic Relink on: off, "the existing master clip is
     // associated with both the original media file and the transcoded media file". The new media of a selected master
-    // clip then name its MobID (MultiRez, p.1099-1101; 8.6a) and no ".new" clip is made; sequences' clips still get new
-    // clips until partly online media come (8.6c).
+    // clip then name its MobID (MultiRez, p.1099-1101; 8.6a) and no ".new" clip is made; a sequence's clips keep the
+    // media of the ranges it uses (with handles), partly online at that resolution (p.1118; 8.6c).
     bool newClips = true;
     MediaCreation creation; // its raster is the project's
 };

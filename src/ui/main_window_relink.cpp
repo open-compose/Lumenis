@@ -35,14 +35,17 @@ media::DynamicRelinkSettings MainWindow::dynamicRelinkSettings() const {
 
 // One clip: relinked by the setting, or back on its affinity media while the setting is off. Stored in its bin when it
 // changed, so the sequences that use it and the monitors play the new media.
-bool MainWindow::dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& s) {
+bool MainWindow::dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& s,
+                                   bool crossRate) {
     if (!project_) return false;
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
-    const bool changed = s.enabled ? media::dynamicRelink(clip, mediaDb_, s, project_->settings.format.editRate, raster)
+    const bool changed = s.enabled ? media::dynamicRelink(clip, mediaDb_, s, project_->settings.format.editRate, raster,
+                                                          nullptr, crossRate)
                                    : media::restoreAffinityMedia(clip);
     if (changed) {
         storeClip(binId, clip);
         resolutionCache_.clear();
+        coverageCache_.clear();
     }
     return changed;
 }
@@ -52,7 +55,8 @@ model::BinItem MainWindow::dynamicRelinkItem(const QString& binId, const model::
     model::BinItem out = item;
     int changed = 0;
     if (item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip) {
-        if (s.enabled && dynamicRelinkClip(binId, out, s)) ++changed;
+        // "the clips placed in the Source Monitor will not be linked to a different rate media" (p.1110).
+        if (s.enabled && dynamicRelinkClip(binId, out, s, false)) ++changed;
     } else if (item.kind == model::BinItemKind::Sequence && s.enabled) {
         // The clips the sequence's segments use, each once.
         QSet<QString> seen;
@@ -76,11 +80,11 @@ int MainWindow::dynamicRelinkLoaded() {
     const media::DynamicRelinkSettings s = dynamicRelinkSettings();
     int changed = 0;
     QSet<QString> seen;
-    auto relink = [&](const QString& binId, const QString& clipId) {
+    auto relink = [&](const QString& binId, const QString& clipId, bool crossRate) {
         if (seen.contains(binId + QLatin1Char('/') + clipId)) return;
         seen.insert(binId + QLatin1Char('/') + clipId);
         auto clip = composer_->resolve(binId, clipId);
-        if (clip && dynamicRelinkClip(binId, *clip, s)) ++changed;
+        if (clip && dynamicRelinkClip(binId, *clip, s, crossRate)) ++changed;
     };
     for (MonitorId monitor : {MonitorId::Source, MonitorId::Record}) {
         const model::LoadedClip* loaded = composer_->state(monitor).current();
@@ -89,11 +93,11 @@ int MainWindow::dynamicRelinkLoaded() {
             const model::Sequence seq = model::Sequence::fromItem(loaded->item);
             for (const model::Track& t : seq.tracks()) {
                 for (const model::Segment& seg : t.segments) {
-                    if (!seg.isFiller()) relink(seg.binId.isEmpty() ? loaded->binId : seg.binId, seg.clipId);
+                    if (!seg.isFiller()) relink(seg.binId.isEmpty() ? loaded->binId : seg.binId, seg.clipId, true);
                 }
             }
         } else if (!loaded->binId.isEmpty()) {
-            relink(loaded->binId, loaded->item.id);
+            relink(loaded->binId, loaded->item.id, false);
         }
     }
     if (changed > 0) {
@@ -156,6 +160,13 @@ model::ClipFacts::Resolution MainWindow::clipResolution(const QString& binId, co
     return result;
 }
 
+QString MainWindow::multiRezCell(const model::BinItem& clip, const QString& heading) {
+    if (clip.kind != model::BinItemKind::MasterClip && clip.kind != model::BinItemKind::AudioClip) return {};
+    auto it = coverageCache_.find(clip.id);
+    if (it == coverageCache_.end()) it = coverageCache_.insert(clip.id, media::multiRezCoverage(clip, mediaDb_));
+    return media::multiRezCellText(it->value(heading, media::MediaCoverage::None));
+}
+
 bool MainWindow::renderAtOtherResolution(const model::EffectRender& render) const {
     if (render.clips.isEmpty()) return false;
     const auto clip = model::binItemFromJson(render.clips.constFirst());
@@ -185,6 +196,7 @@ void MainWindow::connectMultiRez() {
     connect(timeline_, &Timeline::updateMediaStatusRequested, this, [this] {
         loadMediaDatabase();
         resolutionCache_.clear();
+        coverageCache_.clear();
         if (timeline_->multiRezDisplay() == Timeline::MultiRezDisplay::Mismatches) dynamicRelinkLoaded();
     });
     connect(timeline_, &Timeline::dynamicRelinkEnableRequested, this, [this](bool on) {

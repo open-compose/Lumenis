@@ -641,6 +641,9 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
         return {};
     }
     if (role != Qt::DisplayRole && role != Qt::EditRole) return {};
+    if (BinAppearance::multiRezHeadings().contains(h)) {
+        return BinAppearance::multiRezCell() ? BinAppearance::multiRezCell()(item, h) : QString();
+    }
     return model::cellText(item, h);
 }
 
@@ -834,6 +837,16 @@ BinAppearance& BinAppearance::current() {
 std::function<QColor(const model::BinItem&)>& BinAppearance::mediaTint() {
     static std::function<QColor(const model::BinItem&)> tint;
     return tint;
+}
+
+QStringList& BinAppearance::multiRezHeadings() {
+    static QStringList headings;
+    return headings;
+}
+
+std::function<QString(const model::BinItem&, const QString&)>& BinAppearance::multiRezCell() {
+    static std::function<QString(const model::BinItem&, const QString&)> cell;
+    return cell;
 }
 
 // "Blue - Precomputes and source side motion effects; Green - Master clips; Dark Green - Subclips and
@@ -1892,6 +1905,10 @@ void BinView::chooseColumns() {
     QStringList available = model::binHeadings();
     available.removeAll(QStringLiteral("Name")); // always shown (p.249)
     available << d.customColumns;
+    // "These headings appear at the bottom of the Bin Column Selection list" (p.1116).
+    for (const QString& h : BinAppearance::multiRezHeadings()) {
+        if (!available.contains(h)) available << h;
+    }
     ChooseColumnsDialog dialog(available, d.columns, this);
     if (dialog.exec() == QDialog::Accepted) setColumns(dialog.chosen());
 }
