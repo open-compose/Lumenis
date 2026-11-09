@@ -209,11 +209,21 @@ enum class Picture {
 // The Video Quality Menu button's picture for each quality (p.404): green
 // for Full Quality, green and yellow for Draft Quality, yellow for Best
 // Performance. The guide names the colours; the drawing is ours.
-QIcon qualityIcon(Composer::VideoQuality quality) {
+QIcon qualityIcon(Composer::VideoQuality quality, bool floatingPoint = false) {
     QPixmap pm(32, 32);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
+    if (floatingPoint) {
+        // "the blue Video Quality Menu" of 32-bit floating point precision (p.558): a blue rounded square as the guide's
+        // picture shows it (the drawing is ours).
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0x1f, 0x6f, 0xd6));
+        p.drawRoundedRect(QRectF(5, 8, 22, 16), 4, 4);
+        p.end();
+        pm.setDevicePixelRatio(2.0);
+        return QIcon(pm);
+    }
     const QColor green(0x3c, 0xb0, 0x4a);
     const QColor yellow(0xe6, 0xc6, 0x19);
     const QRectF circle(6, 6, 20, 20);
@@ -2290,7 +2300,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         menu.exec(quality->mapToGlobal(pos));
     });
     connect(&composer_, &Composer::videoQualityChanged, quality,
-            [quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q)); });
+            [this, quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q, floatingPoint_)); });
     tool("clientMonitor", Picture::ClientMonitor, tr("Client Monitor"), false);
     // "The Step In and Step Out buttons appear by default in the Timeline top toolbar" (FX Guide p.220).
     connect(tool("stepIn", Picture::StepIn, tr("Step In"), true), &QToolButton::clicked, this, [this] { perform(QStringLiteral("fx.step_in")); });
@@ -8027,6 +8037,14 @@ bool Timeline::toggleExpertTarget(const QString& track, std::int64_t frame) {
     if (!expert_.removeOne(*target)) expert_ << *target;
     view_->update();
     return true;
+}
+
+void Timeline::setFloatingPointPrecision(bool on) {
+    floatingPoint_ = on;
+    if (auto* quality = findChild<QToolButton*>(QStringLiteral("videoQuality"))) {
+        quality->setIcon(qualityIcon(composer_.videoQuality(), on));
+        quality->setToolTip(on ? tr("Video Quality Menu (32 bit floating point)") : tr("Video Quality Menu"));
+    }
 }
 
 void Timeline::setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges) {

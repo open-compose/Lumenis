@@ -157,6 +157,23 @@ private slots:
         QCOMPARE(ProjectStore::read(file)->mask, scope);
     }
 
+    // ACES projects' Output Color Space (p.559): kept in the file, Rec709 for an unknown one.
+    void acesOutputColorSpace() {
+        ProjectSettings s = settings(QStringLiteral("Aces"));
+        s.colorSpace = QStringLiteral("ACES RGB");
+        QVERIFY(isAcesColorSpace(s.colorSpace));
+        QCOMPARE(s.outputColorSpace, QStringLiteral("Rec709"));
+        QCOMPARE(acesOutputColorSpaces().size(), 4);
+        s.outputColorSpace = QStringLiteral("DCI P3");
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("p.cthproj"));
+        QVERIFY(ProjectStore::write(file, s));
+        QCOMPARE(ProjectStore::read(file)->outputColorSpace, QStringLiteral("DCI P3"));
+        s.outputColorSpace = QStringLiteral("nonsense");
+        QVERIFY(ProjectStore::write(file, s));
+        QCOMPARE(ProjectStore::read(file)->outputColorSpace, QStringLiteral("Rec709"));
+    }
+
     void userProfiles() {
         QTemporaryDir dir;
         const UserProfiles users(dir.filePath("Users"));

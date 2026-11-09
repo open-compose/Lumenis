@@ -942,7 +942,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   encodings and colour adapters (`src/media/aces.*`; the Color Adapter Type menu through `media::colorAdapterTypes`/
   `colorTransformationsOfType`, `SourceSettingsDialog::setAcesProject`; the ACEScct working space through
   `media::withAcesWorkingSpace`; ACESproxy and the output transform on the monitors in `display_color.cpp`; tests
-  `tst_color_adapter acesProjects`, `tst_frameflex_ui acesColorAdapterTypes`), is done.
+  `tst_color_adapter acesProjects`, `tst_frameflex_ui acesColorAdapterTypes`), is done. 8.5e4b2, ACES projects' Format tab
+  (ACES version, Output Color Space `ProjectSettings::outputColorSpace` through `MainWindow::setOutputColorSpace`, exported
+  frames through `MainWindow::outputFrame`), the blue Video Quality Menu `Timeline::setFloatingPointPrecision` and Transcode
+  in the working space (`ConsolidateOptions::acesWorkingSpace`; tests `tst_render_ui acesProject`, `tst_project_store
+  acesOutputColorSpace`), is done, so 8.5e and 8.5 are. Next: 8.6, MultiRez and Dynamic Relink and stereoscopic projects.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

@@ -1432,6 +1432,7 @@ SettingsWindow* MainWindow::showSettings() {
         settingsWindow_ = new SettingsWindow(*settings_, this);
         connect(settingsWindow_, &SettingsWindow::proxyChanged, this, [this](int mode) { setProxyMode(mode); });
         connect(settingsWindow_, &SettingsWindow::maskMarginsChanged, this, [this](const model::MaskMargins& m) { setMaskMargins(m); });
+        connect(settingsWindow_, &SettingsWindow::outputColorSpaceChanged, this, [this](const QString& s) { setOutputColorSpace(s); });
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
@@ -3370,6 +3371,27 @@ bool MainWindow::setMaskMargins(const model::MaskMargins& margins) {
     composer_->setMaskMargins(margins);
     if (FullScreenView* view = fullScreen_.data()) view->update();
     return true;
+}
+
+// The Format tab's Output Color Space (p.559; 8.5e4b2), saved with the project; the monitors on Project follow it.
+bool MainWindow::setOutputColorSpace(const QString& space) {
+    if (!project_ || !model::isAcesColorSpace(project_->settings.colorSpace) || !model::acesOutputColorSpaces().contains(space)) {
+        return false;
+    }
+    if (project_->settings.outputColorSpace == space) return true;
+    model::ProjectSettings changed = project_->settings;
+    changed.outputColorSpace = space;
+    if (!saveProjectSettings(changed, tr("Output Color Space"))) return false;
+    if (settingsWindow_) settingsWindow_->setProject(project_);
+    composer_->setOutputColorSpace(space);
+    return true;
+}
+
+QImage MainWindow::outputFrame(const QImage& frame) const {
+    // "This is a conversion from the ACES Timeline that happens when you export to file so you can deliver a specific
+    // format from your ACES project" (p.559-560).
+    if (!project_ || !model::isAcesColorSpace(project_->settings.colorSpace)) return frame;
+    return media::toDisplayColorSpace(frame, project_->settings.colorSpace, project_->settings.outputColorSpace);
 }
 
 // The Color Encoding tab's Color Management Settings button (p.542): the User tab's Color Management setting.
@@ -6010,7 +6032,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     source.raster = c.size;
     // Enable Mask Regions: "you can export your sequence with mask margins burned in" (p.1175, p.900).
     const model::MaskMargins burned = flag("enableMaskRegions") ? project_->settings.mask : model::MaskMargins{};
-    source.picture = [&](std::int64_t f) { return media::burnMaskMargins(media::composeImage(c, start + f), burned); };
+    source.picture = [&](std::int64_t f) { return media::burnMaskMargins(outputFrame(media::composeImage(c, start + f)), burned); };
     source.sound = [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) { renderer->render(at, count, out); };
     QProgressDialog progress(tr("Exporting %1...").arg(item.name), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("exportProgress"));
@@ -7754,6 +7776,7 @@ void MainWindow::consolidateTranscode() {
     }
     options.creation.raster = transcode.raster;
     options.creation.project = transcode.project;
+    options.acesWorkingSpace = model::isAcesColorSpace(project_->settings.colorSpace);
     options.creation.when = QDateTime::currentDateTimeUtc();
     QStringList taken;
     for (const model::BinItem& item : doc.bin().items) taken << item.name;
@@ -7981,6 +8004,10 @@ void MainWindow::applySettings() {
     }
     // The monitors' Display Color Space converts from the project's colour space (p.544).
     composer_->setProjectColorSpace(project_ ? project_->settings.colorSpace : QString());
+    // ACES projects (8.5e4b2): the monitors' Project shows the Output Color Space; the Timeline's blue Video Quality Menu.
+    const bool aces = project_ && model::isAcesColorSpace(project_->settings.colorSpace);
+    composer_->setOutputColorSpace(aces ? project_->settings.outputColorSpace : QString());
+    timeline_->setFloatingPointPrecision(aces);
     // Mask margins (p.550-552; 8.5e3): the project's, shown as each monitor's Target Mask (the Composer setting's Viewer
     // tab, p.1161) and the Full Screen Playback setting's (p.1191).
     composer_->setMaskMargins(project_ ? project_->settings.mask : model::MaskMargins{});

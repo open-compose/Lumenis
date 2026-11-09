@@ -143,8 +143,8 @@ Export As **MXF OP1a**, **XDCAM MXF OP1a** and **MXF OP1a (legacy)**
 * MP4's Frame Rate (p.896), Direct Out, the custom Color Space (p.897),
   Tier (p.899) and Render Unrendered Effects (p.1175).
 * Export by dragging to a folder (p.869): with the Send To templates in 7.1c.
-* Export's "Mask Margins active area" source raster (p.894). Enable Mask Regions burns the mask margins into movie frames
-  (8.5e3, docs/spec/color-adapters.md); stills and DPX/OpenEXR sequences do not yet.
+* Export's "Mask Margins active area" source raster (p.894). Enable Mask Regions burns the mask margins into movie and
+  still frames (8.5e3), and ACES projects' frames go to the Output Color Space (8.5e4b2; docs/spec/color-adapters.md).
 * File Field Order (p.1186), Cineon, Photoshop, PNG Interlaced, JPEG Progressive.
 
 ## Tests

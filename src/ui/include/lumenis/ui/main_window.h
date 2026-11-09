@@ -720,6 +720,11 @@ public:
     // The Format tab's Mask Margins (p.550-551; 8.5e3): the project's, saved with it and shown by the monitors' Target
     // Mask. False without a project or when the project file cannot be written (a message says why).
     bool setMaskMargins(const model::MaskMargins& margins);
+    // ACES projects' Output Color Space (p.559-560; 8.5e4b2), saved with the project. False outside ACES projects, for an
+    // unknown space or when the project file cannot be written.
+    bool setOutputColorSpace(const QString& space);
+    // An exported frame: in ACES projects the working space converted to the Output Color Space; otherwise as it is.
+    QImage outputFrame(const QImage& frame) const;
     void setLutFileHook(std::function<QString()> hook) { lutFileHook_ = std::move(hook); }
     // The Color Encoding tab's Color Management Settings button (p.542): the setting opened from the User tab; for tests
     // the hook gets the setting's entry instead of the dialog opening.

@@ -423,6 +423,11 @@ public:
     // monitor, while the Timeline setting Highlight Suggested Render Areas After Playback is on; the next
     // play or change of sequence clears them.
     void setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges);
+    // ACES projects (p.558; 8.5e4b2): "the Timeline will automatically change to 32 bit floating point precision. (You
+    // will notice the blue Video Quality Menu at the bottom of the Timeline.)" The button turns blue and says so. Ours:
+    // the pictures stay 8 bits a channel (docs/spec/color-adapters.md).
+    void setFloatingPointPrecision(bool on);
+    bool floatingPointPrecision() const { return floatingPoint_; }
     // ExpertRender (FX Guide p.142-146): the effects it chose, highlighted; while `modifying` (Modify
     // Selection), Shift+click on an effect adds it or takes it out (toggleExpertTarget) and a click in
     // TC1 cancels (cancelExpertSelection, which emits expertSelectionCancelled()).
@@ -1428,6 +1433,7 @@ protected:
 
 private:
     friend class TimelineView; // its resizeEvent() calls syncScrollBars()
+    bool floatingPoint_ = false; // setFloatingPointPrecision
 
     void sync();
     void syncScrollBars();

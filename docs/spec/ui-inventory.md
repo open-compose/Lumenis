@@ -671,7 +671,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   for Rec709/Rec2020, the sRGB curve for SRGB and gamma 2.6 with the DCI white for DCI P3, Bradford adaptation; Rec709
   (full range) shown as Rec709; PQ/HLG reference white 203 cd/m² at the display's white, clipped above. ACES (8.5e4b1):
   the ACES adapters' names and which are built in, Bradford rather than CAT02, the working space in 8 bits, the output
-  transform as a fitted tone curve, Project shown as Rec709 in ACES projects, ACES Generic chosen first.
+  transform as a fitted tone curve, ACES Generic chosen first; the Output Color Space choices (Rec709, SRGB, DCI P3,
+  Rec2020, Rec709 first) and Project on the monitors following it; the blue Video Quality Menu a sign only.
   Proxy (8.5e2): the Format tab's Off, 1/4 and 1/16 texts; exports at the project's raster; no green dot for proxy
   resizing; the latest render of each other mode kept. Mask margins (8.5e3): presets centred, letterboxed or
   pillarboxed; a typed percentage makes Custom...; without margins the menu shows the picture's shape; Mix to White/Black

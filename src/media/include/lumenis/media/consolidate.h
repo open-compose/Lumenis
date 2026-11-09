@@ -43,6 +43,9 @@ struct ConsolidateOptions {
     // transcode only. The source transformations still remain on the clips in the bin": the new clips keep the
     // encoding.
     bool applyColorEncoding = false;
+    // ACES projects (8.5e4b2): the applied encoding goes on to the ACEScct working space (media::withAcesWorkingSpace), as
+    // the clips play there (p.558).
+    bool acesWorkingSpace = false;
     MediaCreation creation; // its raster is the project's
 };
 

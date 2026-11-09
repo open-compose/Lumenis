@@ -829,6 +829,17 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
         proxy->setEnabled(proxy->count() > 1);
         connect(proxy, &QComboBox::activated, this, [this, proxy](int index) { emit proxyChanged(proxy->itemData(index).toInt()); });
         format_->addRow(tr("Proxy:"), proxy);
+        // ACES projects (p.559): "You will notice the ACES version is v1.1. ... From the Output Color Space, select the
+        // color space you want for your exported sequence."
+        if (model::isAcesColorSpace(s.colorSpace)) {
+            add(tr("ACES Version:"), model::acesVersion(), "formatAcesVersion");
+            auto* output = new QComboBox;
+            output->setObjectName(QStringLiteral("formatOutputColorSpace"));
+            output->addItems(model::acesOutputColorSpaces());
+            output->setCurrentText(s.outputColorSpace);
+            connect(output, &QComboBox::activated, this, [this, output](int index) { emit outputColorSpaceChanged(output->itemText(index)); });
+            format_->addRow(tr("Output Color Space:"), output);
+        }
         // "Click the Mask Margins button. The Target Settings dialog displays" (p.551).
         auto* mask = new QPushButton(tr("Mask Margins"));
         mask->setObjectName(QStringLiteral("maskMarginsButton"));

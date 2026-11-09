@@ -34,6 +34,10 @@ struct ProjectSettings {
     int proxy = 0;
     // The Format tab's Mask Margins (p.550-551; 8.5e3).
     MaskMargins mask;
+    // ACES projects' Output Color Space (the Format tab, p.559-560; 8.5e4b2): "select the color space you want for your
+    // exported sequence. This is a conversion from the ACES Timeline that happens when you export to file". One of
+    // acesOutputColorSpaces(); Rec709 to start with (ours).
+    QString outputColorSpace = QStringLiteral("Rec709");
     // Stored in UTC; create() fills them in when they are invalid.
     QDateTime created;
     QDateTime modified;
@@ -47,6 +51,13 @@ QList<int> proxyModes(const ProjectFormat& format);
 // The raster pictures and renders are made at in a proxy mode: half the project's width and height for 1/4, a quarter
 // for 1/16 (even); the project's raster for none or a mode the format does not offer.
 QSize proxyRaster(const ProjectSettings& settings);
+
+// The Format tab's Output Color Space choices in ACES projects (ours: the displays the monitors offer, p.1161, without
+// Project and ACESproxy), and the ACES version the tab shows ("You will notice the ACES version is v1.1", p.559).
+QStringList acesOutputColorSpaces();
+inline QString acesVersion() { return QStringLiteral("v1.1"); }
+// Whether a project colour space is ACES's ("ACES RGB", p.558).
+inline bool isAcesColorSpace(const QString& colorSpace) { return colorSpace.contains(QLatin1String("ACES")); }
 
 // A project found in or created by a ProjectStore.
 struct ProjectEntry {

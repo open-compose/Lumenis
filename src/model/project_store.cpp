@@ -90,10 +90,15 @@ QJsonObject toJson(const ProjectSettings& s) {
     }
     if (s.proxy != 0) o.insert(QStringLiteral("proxy"), s.proxy);
     if (!s.mask.isEmpty() || !s.mask.preset.isEmpty()) o.insert(QStringLiteral("maskMargins"), s.mask.toJson());
+    if (isAcesColorSpace(s.colorSpace)) o.insert(QStringLiteral("outputColorSpace"), s.outputColorSpace);
     return o;
 }
 
 } // namespace
+
+QStringList acesOutputColorSpaces() {
+    return {QStringLiteral("Rec709"), QStringLiteral("SRGB"), QStringLiteral("DCI P3"), QStringLiteral("Rec2020")};
+}
 
 QList<int> proxyModes(const ProjectFormat& format) {
     QList<int> modes{0};
@@ -239,6 +244,8 @@ std::optional<ProjectSettings> ProjectStore::read(const QString& file, QString* 
     s.proxy = o.value(QStringLiteral("proxy")).toInt();
     if (!proxyModes(s.format).contains(s.proxy)) s.proxy = 0;
     s.mask = MaskMargins::fromJson(o.value(QStringLiteral("maskMargins")).toObject());
+    s.outputColorSpace = o.value(QStringLiteral("outputColorSpace")).toString(QStringLiteral("Rec709"));
+    if (!acesOutputColorSpaces().contains(s.outputColorSpace)) s.outputColorSpace = QStringLiteral("Rec709");
     s.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     s.modified = QDateTime::fromString(o.value(QStringLiteral("modified")).toString(), Qt::ISODate);
     return s;

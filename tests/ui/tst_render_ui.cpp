@@ -4,6 +4,7 @@
 // tab's Proxy (Editing Guide p.526-527, p.549-550; 8.5e2): renders at the proxy raster, offline at another mode and back
 // when the mode returns.
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/display_color.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/effect_render.h"
@@ -508,6 +509,54 @@ private slots:
         window.settings().setValue(QStringLiteral("Composer"), QStringLiteral("sourceColorSpace"), QStringLiteral("srgb"));
         settle();
         QCOMPARE(window.composer().displayColorSpace(MonitorId::Source), QStringLiteral("SRGB"));
+    }
+
+    // ACES projects (p.558-560; 8.5e4b2): the Format tab's ACES version and Output Color Space, the blue Video Quality
+    // Menu, the monitors' Project and exported frames following the Output Color Space.
+    void acesProject() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Aces"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("Aces.cthproj"));
+        project.settings.name = QStringLiteral("Aces");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(24);
+        project.settings.format.width = 1024;
+        project.settings.format.height = 576;
+        project.settings.colorSpace = QStringLiteral("ACES RGB");
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        QVERIFY(window.timeline().floatingPointPrecision());
+        SettingsWindow* settings = window.showSettings();
+        QCOMPARE(settings->findChild<QLabel*>(QStringLiteral("formatAcesVersion"))->text(), QStringLiteral("v1.1"));
+        auto* output = settings->findChild<QComboBox*>(QStringLiteral("formatOutputColorSpace"));
+        QVERIFY(output);
+        QCOMPARE(output->currentText(), QStringLiteral("Rec709"));
+        // An ACEScct grey exported to Rec709, then to DCI P3 (gamma 2.6: a higher code value for the same light).
+        QImage frame(4, 4, QImage::Format_RGB32);
+        frame.fill(qRgb(106, 106, 106));
+        const int rec709 = qGreen(window.outputFrame(frame).pixel(1, 1));
+        QVERIFY(rec709 != 106);
+        emit output->activated(output->findText(QStringLiteral("DCI P3")));
+        settle();
+        QCOMPARE(model::ProjectStore::read(project.file)->outputColorSpace, QStringLiteral("DCI P3"));
+        QVERIFY(qGreen(window.outputFrame(frame).pixel(1, 1)) > rec709);
+        QVERIFY(!window.setOutputColorSpace(QStringLiteral("ACESproxy")));
+        // The monitors on Project show the working space as the Output Color Space.
+        Composer& composer = window.composer();
+        QCOMPARE(composer.displayColorSpace(MonitorId::Record), QStringLiteral("Project"));
+        QCOMPARE(composer.displayed(MonitorId::Record, frame).pixel(1, 1),
+                 media::toDisplayColorSpace(frame, QStringLiteral("ACES RGB"), QStringLiteral("DCI P3")).pixel(1, 1));
     }
 };
 

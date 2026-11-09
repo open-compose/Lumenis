@@ -196,6 +196,8 @@ signals:
     void proxyChanged(int mode);
     // The Target Settings dialog's OK or Apply (p.551; 8.5e3).
     void maskMarginsChanged(const lumenis::model::MaskMargins& margins);
+    // The Format tab's Output Color Space in ACES projects (p.559; 8.5e4b2).
+    void outputColorSpaceChanged(const QString& space);
 
 private:
     // Rebuilds the User Profile menu and selects the current user.

@@ -1,5 +1,7 @@
 #include "lumenis/media/consolidate.h"
 
+#include "lumenis/media/color_transform.h"
+
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/color_adapter.h"
@@ -110,7 +112,10 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         MediaCreation creation = options.creation;
         creation.raster = rasterFor(clip, options.raster, options.creation.raster);
         const auto encoding = model::colorAdapterOf(clip);
-        if (options.applyColorEncoding && encoding) creation.colorTransformations = encoding->applied();
+        if (options.applyColorEncoding && encoding) {
+            creation.colorTransformations = encoding->applied();
+            if (options.acesWorkingSpace) creation.colorTransformations = withAcesWorkingSpace(creation.colorTransformations);
+        }
         auto made = transcodeClip(clip, in, out, creation, error);
         // The new clip has the colours in its media, or keeps the clip's encoding to apply them itself.
         if (made) model::setColorEncoding(*made, creation.colorTransformations.isEmpty() ? model::colorEncodingOf(clip) : std::nullopt);

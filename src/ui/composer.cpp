@@ -2978,8 +2978,20 @@ void Composer::setTargetMask(MonitorId monitor, model::TargetMask mask) {
     if (MonitorPicture* w = picture(monitor)) w->update();
 }
 
+void Composer::setOutputColorSpace(const QString& space) {
+    outputColorSpace_ = space;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (MonitorPicture* w = picture(m)) w->update();
+    }
+}
+
 QImage Composer::displayed(MonitorId monitor, const QImage& image) const {
-    return media::toDisplayColorSpace(image, projectColorSpace_, displayColorSpace(monitor));
+    QString display = displayColorSpace(monitor);
+    // In ACES projects Project shows the working space as the Output Color Space (ours).
+    if (display == QLatin1String("Project") && !outputColorSpace_.isEmpty() && projectColorSpace_.contains(QLatin1String("ACES"))) {
+        display = outputColorSpace_;
+    }
+    return media::toDisplayColorSpace(image, projectColorSpace_, display);
 }
 
 bool Composer::showsCaptions(MonitorId monitor) const {

@@ -174,9 +174,18 @@ color space. This is done so the current controls still feel the same (such as c
   and Output Transforms are not built in: a filmic tone curve fitted to the ACES SDR output (K. Narkowicz's published fit,
   after 0.6 exposure, per channel on linear AP1), then the display's primaries and transfer; Project shows as Rec709 until
   the Format tab's Output Color Space (8.5e4b2).
-* Left for 8.5e4b2: the Format tab's ACES version and Output Color Space applied on export (p.559-560), the Project tab's
-  video output ACES colour space (p.560), the blue Video Quality Menu and the 32-bit floating point Timeline (p.558),
-  Transcode in the working space.
+* The Format tab (p.559; 8.5e4b2): ACES projects show "ACES Version: v1.1" and an Output Color Space menu
+  (`formatOutputColorSpace`; ours: Rec709, SRGB, DCI P3 and Rec2020, Rec709 to start with), kept in the project file
+  (`ProjectSettings::outputColorSpace`, `MainWindow::setOutputColorSpace`). "This is a conversion from the ACES Timeline
+  that happens when you export to file" (p.559-560): exported movie and still frames go through the output transform to
+  it (`MainWindow::outputFrame`). The monitors on Project show it too (ours).
+* "the Timeline will automatically change to 32 bit floating point precision. (You will notice the blue Video Quality Menu
+  at the bottom of the Timeline.)" (p.558): the Video Quality Menu turns blue in ACES projects
+  (`Timeline::setFloatingPointPrecision`). Ours: the pictures stay 8 bits a channel, so it is a sign only.
+* Transcode's Apply source transformations > Color encoding in ACES projects ends in the working space
+  (`ConsolidateOptions::acesWorkingSpace`), as the clips play.
+* Left: the Project tab's ACES colour space for an external monitor (p.560), with the Video Output modules (7.3c); "To
+  preserve full precision when rendering effects, use DNxUncompressed floating point" (p.558), with float media.
 
 ## The proxy mode (p.526-527, p.549-550; 8.5e2)
 
@@ -252,6 +261,7 @@ setting ... This is for viewing purposes only" (p.550).
 * `tst_color_adapter acesProjects`: ACEScct, ACEScc and ACESproxy values, the camera curves' 18% greys, the AP0 to
   AP1 matrix, the adapters' types and the working space, a provider's ACES type, the monitors' ACESproxy and output
   transform. `tst_frameflex_ui acesColorAdapterTypes`: the Color Adapter Type menu, adding an ACES adapter, the viewer
-  in ACEScct.
+  in ACEScct. `tst_render_ui acesProject`: the Format tab's ACES version and Output Color Space, the blue Video Quality
+  Menu, exported frames and the monitors' Project following it. `tst_project_store acesOutputColorSpace`.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

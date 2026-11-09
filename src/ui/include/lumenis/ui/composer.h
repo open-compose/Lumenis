@@ -184,6 +184,8 @@ public:
     void setDisplayColorSpace(MonitorId monitor, const QString& space);
     // The project's colour space (the Format tab's Color Space), which the pictures are in; MainWindow sets it.
     void setProjectColorSpace(const QString& space);
+    // ACES projects' Output Color Space (8.5e4b2): what a monitor on Project shows the working space as.
+    void setOutputColorSpace(const QString& space);
     QImage displayed(MonitorId monitor, const QImage& image) const;
     // The project's mask margins (the Format tab, p.550-551; 8.5e3) and each monitor's Target Mask ("Right-click in the
     // source or record viewer and select Target Mask", p.552; the Composer setting's Viewer tab, p.1161): how the masked
@@ -835,6 +837,7 @@ private:
     bool showCaptions_[2] = {false, false}; // Source, Record
     QString displaySpace_[2];               // Source, Record; empty for the project's
     QString projectColorSpace_;
+    QString outputColorSpace_;
     model::MaskMargins maskMargins_;
     model::TargetMask targetMask_[2] = {model::TargetMask::None, model::TargetMask::None}; // Source, Record
     int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
