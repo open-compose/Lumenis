@@ -1579,7 +1579,15 @@ decision, 2026-10-27):
   is marked to a generic name (AutoSync becomes "Sync Clips"; others such as ScriptSync, PhraseFind, MultiRez,
   FrameFlex, Titler+ and Media Composer itself to be checked). Keep the guide's name in the spec as the source the
   item follows, with our name beside it; update tests/data/menu_inventory.json and the checklist; and add a test that
-  fails when a listed trademark appears in a user-visible string.
+  fails when a listed trademark appears in a user-visible string. Do the same for other companies' editing and
+  finishing products, so no name is one another company owns: Adobe (Premiere Pro, After Effects, Audition; e.g.
+  Warp Stabilizer, Morph Cut, Lumetri), Apple (Final Cut Pro, Motion, Compressor; e.g. Magnetic Timeline), Blackmagic
+  Design (DaVinci Resolve, Fusion, Fairlight; e.g. Speed Warp, Magic Mask), and others the check turns up (Grass
+  Valley EDIUS, Magix Vegas, Autodesk Flame, Boris FX). Use each company's published trademark list and the USPTO and
+  EUIPO trademark searches; keep the lists checked, with their dates, in docs/spec/trademarks.md, and put their names
+  in the test too. Names of open standards and formats we read or write (AAF, MXF, OpenTimelineIO, EDL, DNxHD/DNxHR
+  as codec names, ProRes, H.264) are used to name the format only, as the owners allow, and the doc records why each
+  is allowed.
 
 ### Phase 10 — Hardening
 * Performance profiling, accessibility audit, localisation (the languages
