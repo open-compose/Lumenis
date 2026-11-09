@@ -951,7 +951,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/media/dynamic_relink.*` with a clip's media as the sets naming its MobID, `MediaDatabase::setsOf`, quality matching
   `media::chooseMedia`, the affinity link kept under "multiRez"; `src/ui/main_window_relink.cpp` relinking through
   `Composer::setLoadFilter` and when the setting changes; Transcode's Create new clips `ConsolidateOptions::newClips`;
-  tests `tst_dynamic_relink`, `tst_render_ui dynamicRelink`), is done.
+  tests `tst_dynamic_relink`, `tst_render_ui dynamicRelink`), is done. 8.6b, the MultiRez button (`src/ui/timeline_multirez.cpp`:
+  `Timeline::MultiRezDisplay`, `multiRezMenu`, `findNextMismatched` with Ctrl+/ `timeline.find_next_mismatched`,
+  `updateMediaStatus`; `MainWindow::clipResolution`/`renderAtOtherResolution`; Resolution Tracking in
+  `model::ClipColorOptions` and the Clip Color dialog; Clip Text > Clip Resolution following the media; tests
+  `tst_render_ui multiRezButton`, `tst_clip_colors resolutionTracking`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

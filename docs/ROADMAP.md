@@ -1524,7 +1524,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       clip's media at several resolutions, Transcode without Create new clips (p.354-355), the setting's Working and
       Target tabs, quality matching, relinking clips loaded in the Source monitor and the Timeline, Override Working
       Settings with Target Settings, Allow Mixed Frame Rate Media.
-    8.6b, the MultiRez button and its menu (p.1111-1116): Show Mismatches and Show Target Availability, Enable Clip
+    8.6b (done), the MultiRez button and its menu (p.1111-1116): Show Mismatches and Show Target Availability, Enable Clip
       Coloring with Resolution Tracking, Find Next Mismatched or Unavailable Clip (Ctrl+/), Update Media Status, Show
       Mismatched Render Ranges, Clip Text > Clip Resolutions (p.1104).
     8.6c, partial and shared media (p.1100-1102, p.1116-1120): the MultiRez bin headings with full, half and empty

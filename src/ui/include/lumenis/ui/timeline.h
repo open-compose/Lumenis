@@ -428,6 +428,51 @@ public:
     // the pictures stay 8 bits a channel (docs/spec/color-adapters.md).
     void setFloatingPointPrecision(bool on);
     bool floatingPointPrecision() const { return floatingPoint_; }
+
+    // ---- The MultiRez button (8.6b; Editing Guide p.1111-1116, docs/spec/dynamic-relink.md; timeline_multirez.cpp).
+    // Its displays: "Gray - inactive", "Bottom half of diamond black - Show Mismatches display", "Top half of diamond
+    // black - Show Target Availability display" (p.1112). A click goes to the next; it "changes only the display".
+    enum class MultiRezDisplay { Inactive, Mismatches, TargetAvailability };
+    MultiRezDisplay multiRezDisplay() const { return multiRez_; }
+    void setMultiRezDisplay(MultiRezDisplay display);
+    // What the display says of a clip's media, from MainWindow's Dynamic Relink: in the Show Mismatches display whether
+    // the media it is linked to matches the settings in use; with `target`, whether media is available in the target
+    // settings. Without one every clip is Matched.
+    using ResolutionResolver =
+        std::function<model::ClipFacts::Resolution(const QString& binId, const QString& clipId, bool target)>;
+    void setResolutionResolver(ResolutionResolver resolver) { resolutionResolver_ = std::move(resolver); }
+    // Whether a rendered effect was rendered at another resolution than the one effects render at now (Show Mismatched
+    // Render Ranges, p.1115).
+    using RenderResolutionTest = std::function<bool(const model::EffectRender& render)>;
+    void setRenderResolutionTest(RenderResolutionTest test) { renderResolutionTest_ = std::move(test); }
+    // Clip Text > Clip Resolution's text for a clip (p.1104: the resolution the clip is linked to now); without one, its
+    // Video column.
+    using ClipResolutionText = std::function<QString(const model::BinItem& clip)>;
+    void setClipResolutionText(ClipResolutionText text) { clipResolutionText_ = std::move(text); }
+    // The Dynamic Relink setting as the button's menu shows it (Enable Dynamic Relink, Override Working Settings with
+    // Target Settings).
+    void setDynamicRelinkState(bool enabled, bool overrideWorking);
+    // Show Mismatched Render Ranges: "A blue line appears along the top of the effect to indicate the portion that is
+    // rendered using a different resolution" (p.1115).
+    bool showMismatchedRenderRanges() const { return mismatchedRenders_; }
+    void setShowMismatchedRenderRanges(bool on);
+    bool renderMismatched(const model::EffectRender& render) const;
+    // The button's colour now (p.1112): "blue" (some media does not match), "yellow" (some media is not available in
+    // the target settings) or "gray".
+    QString multiRezButtonColor() const { return multiRezColor_; }
+    // The display's state of a segment's clip (Resolution::None while inactive or for filler).
+    model::ClipFacts::Resolution segmentResolution(const model::Segment& segment) const;
+    // Find Next Mismatched or Unavailable Clip (Ctrl+/, p.1115): the position to the start of the next clip after it, on
+    // the selected tracks, that the display marks; in the Show Mismatches display rendered effects at another resolution
+    // too. False, with a message, when there is none.
+    bool findNextMismatched();
+    // Update Media Status (p.1115): MainWindow relinks or refreshes (updateMediaStatusRequested), then the display is
+    // worked out again.
+    void updateMediaStatus();
+    // The button's right-click menu (p.1114-1116).
+    QMenu* multiRezMenu(QWidget* parent);
+    // Recomputes the button's colour for the shown sequence; the view calls it as it paints.
+    void refreshMultiRezButton(const model::Sequence& seq) const;
     // ExpertRender (FX Guide p.142-146): the effects it chose, highlighted; while `modifying` (Modify
     // Selection), Shift+click on an effect adds it or takes it out (toggleExpertTarget) and a click in
     // TC1 cancels (cancelExpertSelection, which emits expertSelectionCancelled()).
@@ -1409,6 +1454,12 @@ signals:
     void message(const QString& text);
     // The Clip Color dialog's choices changed (setClipColorOptions()).
     void clipColorOptionsChanged(const model::ClipColorOptions& options);
+    // The MultiRez button's menu (p.1115-1116): Update Media Status; Enable Dynamic Relink and Override Working Settings
+    // with Target Settings change the Project setting; Dynamic Relink Settings opens it.
+    void updateMediaStatusRequested();
+    void dynamicRelinkEnableRequested(bool on);
+    void overrideWorkingRequested(bool on);
+    void dynamicRelinkSettingsRequested();
     // Video Quality Menu > Video Display Settings (p.405).
     void videoDisplaySettingsRequested();
     // A command that is not the Timeline's (New > Sequence).
@@ -1434,6 +1485,16 @@ protected:
 private:
     friend class TimelineView; // its resizeEvent() calls syncScrollBars()
     bool floatingPoint_ = false; // setFloatingPointPrecision
+    // The MultiRez button (timeline_multirez.cpp).
+    MultiRezDisplay multiRez_ = MultiRezDisplay::Inactive;
+    ResolutionResolver resolutionResolver_;
+    RenderResolutionTest renderResolutionTest_;
+    ClipResolutionText clipResolutionText_;
+    bool dynamicRelinkOn_ = false;
+    bool overrideWorking_ = false;
+    bool mismatchedRenders_ = false;
+    mutable QString multiRezColor_ = QStringLiteral("gray");
+    void showMultiRezColor() const;
 
     void sync();
     void syncScrollBars();

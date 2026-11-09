@@ -145,6 +145,34 @@ private slots:
         QCOMPARE(model::Sequence::fromJson(seq.toJson()).track(QStringLiteral("V1"))->segments.first().localColor, s.localColor);
     }
 
+    // Resolution Tracking (p.1112-1114; 8.6b): off at first; on, the MultiRez display's marks come first, blue, red and
+    // yellow; matched clips and an inactive display fall through to the other options.
+    void resolutionTracking() {
+        model::Segment s;
+        s.clipId = QStringLiteral("c");
+        s.length = 5;
+        ClipColorOptions o = ClipColorOptions::defaults();
+        QVERIFY(!o.resolution);
+        ClipFacts f;
+        f.sourceColor = QStringLiteral("#8cc83c");
+        f.resolution = ClipFacts::Resolution::Mismatched;
+        QCOMPARE(model::timelineClipColor(o, s, f), f.sourceColor);
+        o.resolution = true;
+        QCOMPARE(model::timelineClipColor(o, s, f), o.mismatchColor);
+        f.resolution = ClipFacts::Resolution::Unavailable;
+        QCOMPARE(model::timelineClipColor(o, s, f), o.unavailableColor);
+        f.resolution = ClipFacts::Resolution::Offline;
+        QCOMPARE(model::timelineClipColor(o, s, f), o.offlineColor);
+        f.resolution = ClipFacts::Resolution::Matched;
+        QCOMPARE(model::timelineClipColor(o, s, f), f.sourceColor);
+        // Over every other option, offline included.
+        f.resolution = ClipFacts::Resolution::Unavailable;
+        f.offline = true;
+        QCOMPARE(model::timelineClipColor(o, s, f), o.unavailableColor);
+        QCOMPARE(ClipColorOptions::fromJson(o.toJson()), o);
+        QCOMPARE(ClipColorOptions::defaults().mismatchColor, QStringLiteral("#2d6ee0"));
+    }
+
     // Bin colours show with Source on (the default); the dialog turns kinds on and off and changes
     // colours (p.595-597).
     void dialogAndPainting() {

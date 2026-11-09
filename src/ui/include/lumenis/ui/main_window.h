@@ -985,6 +985,13 @@ public:
     // Relinks the clips loaded in the monitors and those of the loaded sequences (p.1170); off, puts them back on their
     // affinity media. How many changed.
     int dynamicRelinkLoaded();
+    // What the Timeline's MultiRez display says of a clip (8.6b, p.1111-1115): in the Show Mismatches display whether
+    // its media match the settings in use (Offline when it has none), with `target` whether media match the Target
+    // settings. Worked out once and kept until the media or the setting change.
+    model::ClipFacts::Resolution clipResolution(const QString& binId, const QString& clipId, bool target);
+    // Whether a rendered effect's media are at another resolution than the Media Creation setting's Render tab gives
+    // (Show Mismatched Render Ranges, p.1115).
+    bool renderAtOtherResolution(const model::EffectRender& render) const;
 
 private:
     // The Titler+ template open in the Record monitor (editTitleTemplate): where it is, its sequence as edited, and
@@ -1056,6 +1063,9 @@ private:
     // The Dynamic Relink setting as last applied: a change relinks what is loaded (applyDynamicRelinkSetting()).
     std::optional<media::DynamicRelinkSettings> appliedRelink_;
     void applyDynamicRelinkSetting();
+    // The Timeline's MultiRez button wired to Dynamic Relink (main_window_relink.cpp).
+    void connectMultiRez();
+    QHash<QString, model::ClipFacts::Resolution> resolutionCache_;
     bool dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& settings);
     PanelManager* panels_ = nullptr;
     BinContainer* binContainer_ = nullptr;

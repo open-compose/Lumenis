@@ -682,7 +682,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   resolutions; the setting's three tabs (the top area as a tab of its own); Keep Existing Media first on both tabs; the
   Relink Parameters as menus starting with Any, and their values; Highest Quality as the project's raster, then pixels,
   then bytes a frame; field order and colour space not compared; clips back on their own media when the setting is off;
-  Create new clips dimmed without Dynamic Relink; sequences' clips still getting new clips.
+  Create new clips dimmed without Dynamic Relink; sequences' clips still getting new clips. The MultiRez button (8.6b):
+  its place after the Video Quality Menu, the click order, its picture, Resolution Tracking offered with Dynamic Relink
+  on and coloured blue/yellow by default with the Offline red, Override dimmed with Dynamic Relink off, mismatched
+  renders against the Render tab's resolution, Find Next's message when the display is inactive.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

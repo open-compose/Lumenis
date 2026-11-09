@@ -23,8 +23,8 @@ QMenu* addClipColorMenu(QMenu* parent, const QString& title, const std::function
 
 // The Timeline Fast menu's Clip Color dialog box (Editing Guide p.595-597; docs/spec/timeline-colors.md):
 // the kinds of clip colouring in priority order, each with its swatch where its colour can be
-// changed, and Default Colors. Resolution Tracking needs MultiRez and Proxy needs proxy media, so
-// both are dimmed. The layout is ours: the guide's picture is not described.
+// changed, and Default Colors. Resolution Tracking is offered only with Dynamic Relink on (setMultiRez) and Proxy
+// needs proxy media, so it is dimmed. The layout is ours: the guide's picture is not described.
 class ClipColorDialog : public QDialog {
     Q_OBJECT
 
@@ -34,12 +34,14 @@ public:
     // The choices and colours as they stand in the dialog.
     model::ClipColorOptions options() const;
     // The checkbox of an option by its key in model::ClipColorOptions::toJson() ("offline", "source"
-    // ...), and the swatch of a colour ("offlineColor", "linkedColor", "sdHdColor", or a rate
-    // "23.976"); null for others.
+    // ...), and the swatch of a colour ("offlineColor", "linkedColor", "sdHdColor", "mismatchColor",
+    // "unavailableColor", or a rate "23.976"); null for others.
     QCheckBox* option(const QString& key) const { return checks_.value(key); }
     QToolButton* swatch(const QString& key) const { return swatches_.value(key); }
     // A colour as the swatch's picker grid sets it.
     void setColor(const QString& key, const QString& hex);
+    // Resolution Tracking's checkbox enabled ("only available if you are working in a MultiRez environment", p.595).
+    void setMultiRez(bool on);
     // Default Colors (p.597): the colours back to their defaults.
     void defaultColors();
 

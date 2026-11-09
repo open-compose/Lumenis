@@ -15,6 +15,7 @@
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/main_window.h"
@@ -36,6 +37,8 @@
 #include <QPushButton>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QToolButton>
+#include <QMenu>
 #include <QRadioButton>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -659,6 +662,138 @@ private slots:
         d.setDynamicRelink(true);
         newClips->setChecked(false);
         QVERIFY(!d.options().newClips);
+        media::setExtraMediaDrives({});
+    }
+
+    // The MultiRez button (p.1111-1116; 8.6b): its displays and colours, Resolution Tracking clip colours, Find Next
+    // Mismatched or Unavailable Clip, Clip Text > Clip Resolution, and its menu's Dynamic Relink items.
+    void multiRezButton() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("red.mov"));
+        QVERIFY(writeMovie(movie, 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Rez"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("Rez.cthproj"));
+        project.settings.name = QStringLiteral("Rez");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem clip = *bin->bin().item(ids.first());
+        media::MediaCreation creation;
+        creation.videoDrive = drive;
+        creation.raster = QSize(256, 144);
+        creation.resolution = *media::findResolution(QStringLiteral("dnx_lb"));
+        creation.master = model::mobIdOf(clip);
+        QVERIFY(media::transcodeClip(clip, 0, -1, creation));
+        window.loadMediaDatabase();
+        // Working: Avid DNx 444, which nothing has, keeping the existing media: the clip is mismatched.
+        Settings& s = window.settings();
+        const QString kind = QStringLiteral("Dynamic Relink");
+        s.setValue(kind, QStringLiteral("working.videoMethod"), QStringLiteral("specificResolution"));
+        s.setValue(kind, QStringLiteral("working.compression"), QStringLiteral("Avid DNx 444"));
+        s.setValue(kind, QStringLiteral("enabled"), true);
+        settle();
+        // Two segments of the clip.
+        Composer& composer = window.composer();
+        Timeline& timeline = window.timeline();
+        composer.loadDefault(binId, *bin->bin().item(clip.id));
+        QVERIFY(timeline.perform(QStringLiteral("edit.splice_in")));
+        composer.loadDefault(binId, *bin->bin().item(clip.id));
+        QVERIFY(timeline.perform(QStringLiteral("edit.splice_in")));
+        settle();
+        const model::Sequence seq = recordSequence(composer);
+        const model::Track* v1 = seq.track(QStringLiteral("V1"));
+        QVERIFY(v1 && v1->segments.size() == 2);
+        const model::Segment seg = v1->segments.at(0);
+        // Inactive: gray, nothing marked; Find Next refuses.
+        QCOMPARE(timeline.multiRezButtonColor(), QStringLiteral("gray"));
+        QCOMPARE(timeline.segmentResolution(seg), model::ClipFacts::Resolution::None);
+        QVERIFY(!timeline.perform(QStringLiteral("timeline.find_next_mismatched")));
+        // A click: Show Mismatches, blue.
+        QToolButton* button = timeline.toolButton(QStringLiteral("multiRez"));
+        QVERIFY(button);
+        button->click();
+        settle();
+        QCOMPARE(timeline.multiRezDisplay(), Timeline::MultiRezDisplay::Mismatches);
+        QCOMPARE(timeline.segmentResolution(seg), model::ClipFacts::Resolution::Mismatched);
+        QCOMPARE(timeline.multiRezButtonColor(), QStringLiteral("blue"));
+        // Enable Clip Coloring: the segments blue.
+        std::unique_ptr<QMenu> menu(timeline.multiRezMenu(nullptr));
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("multiRezEnable"))->isChecked());
+        menu->findChild<QAction*>(QStringLiteral("multiRezClipColoring"))->setChecked(true);
+        QVERIFY(timeline.clipColorOptions().resolution);
+        QCOMPARE(timeline.segmentColor(seg), timeline.clipColorOptions().mismatchColor);
+        // Find Next Mismatched or Unavailable Clip (Ctrl+/): to the second segment.
+        composer.moveTo(MonitorId::Record, 0);
+        QVERIFY(timeline.perform(QStringLiteral("timeline.find_next_mismatched")));
+        QCOMPARE(composer.state(MonitorId::Record).position(), seg.length);
+        QVERIFY(!timeline.perform(QStringLiteral("timeline.find_next_mismatched")));
+        // Show Target Availability: the Target tab's Most Recent matches; then Avid DNx 444 there, yellow.
+        button->click();
+        settle();
+        QCOMPARE(timeline.multiRezDisplay(), Timeline::MultiRezDisplay::TargetAvailability);
+        QCOMPARE(timeline.multiRezButtonColor(), QStringLiteral("gray"));
+        s.setValue(kind, QStringLiteral("target.videoMethod"), QStringLiteral("specificResolution"));
+        s.setValue(kind, QStringLiteral("target.compression"), QStringLiteral("Avid DNx 444"));
+        settle();
+        timeline.updateMediaStatus();
+        QCOMPARE(timeline.segmentResolution(seg), model::ClipFacts::Resolution::Unavailable);
+        QCOMPARE(timeline.multiRezButtonColor(), QStringLiteral("yellow"));
+        QCOMPARE(timeline.segmentColor(seg), timeline.clipColorOptions().unavailableColor);
+        // Working matching the LB media: Update Media Status relinks in the Show Mismatches display, which clears.
+        s.setValue(kind, QStringLiteral("working.compression"), QStringLiteral("Avid DNx LB"));
+        settle();
+        timeline.setMultiRezDisplay(Timeline::MultiRezDisplay::Mismatches);
+        timeline.updateMediaStatus();
+        QCOMPARE(timeline.segmentResolution(seg), model::ClipFacts::Resolution::Matched);
+        QCOMPARE(timeline.multiRezButtonColor(), QStringLiteral("gray"));
+        // Clip Text > Clip Resolution names the media played now.
+        Timeline::Display display = timeline.display();
+        display.clipNames = false;
+        display.clipResolution = true;
+        timeline.setDisplay(display);
+        QCOMPARE(timeline.clipText(*v1, seg), QStringLiteral("Avid DNx LB"));
+        // The menu's Override Working Settings with Target Settings and Enable Dynamic Relink change the setting.
+        menu.reset(timeline.multiRezMenu(nullptr));
+        menu->findChild<QAction*>(QStringLiteral("multiRezOverride"))->setChecked(true);
+        settle();
+        QVERIFY(window.dynamicRelinkSettings().overrideWorking);
+        menu.reset(timeline.multiRezMenu(nullptr));
+        menu->findChild<QAction*>(QStringLiteral("multiRezEnable"))->setChecked(false);
+        settle();
+        QVERIFY(!window.dynamicRelinkSettings().enabled);
+        menu.reset(timeline.multiRezMenu(nullptr));
+        QVERIFY(!menu->findChild<QAction*>(QStringLiteral("multiRezOverride"))->isEnabled());
+        // The Clip Color dialog's Resolution Tracking is offered with Dynamic Relink only.
+        ClipColorDialog colors(timeline.clipColorOptions());
+        QVERIFY(!colors.option(QStringLiteral("resolution"))->isEnabled());
+        colors.setMultiRez(true);
+        QVERIFY(colors.option(QStringLiteral("resolution"))->isEnabled());
+        QVERIFY(colors.swatch(QStringLiteral("unavailableColor")));
         media::setExtraMediaDrives({});
     }
 };

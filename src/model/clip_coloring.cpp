@@ -28,6 +28,8 @@ void ClipColorOptions::resetColors() {
     offlineColor = QStringLiteral("#c83232");
     linkedColor = QStringLiteral("#3264c8");
     sdHdColor = QStringLiteral("#7846c8");
+    mismatchColor = QStringLiteral("#2d6ee0"); // blue (p.1113)
+    unavailableColor = QStringLiteral("#e6c619"); // yellow (p.1113)
     rateColors.clear();
     for (std::size_t i = 0; i < std::size(kRates); ++i) {
         rateColors.insert(QString::fromLatin1(kRates[i]), QString::fromLatin1(kRateColors[i]));
@@ -37,7 +39,10 @@ void ClipColorOptions::resetColors() {
 QJsonObject ClipColorOptions::toJson() const {
     QJsonObject rates;
     for (auto it = rateColors.begin(); it != rateColors.end(); ++it) rates.insert(it.key(), it.value());
-    return QJsonObject{{QStringLiteral("proxy"), proxy},
+    return QJsonObject{{QStringLiteral("resolution"), resolution},
+                       {QStringLiteral("mismatchColor"), mismatchColor},
+                       {QStringLiteral("unavailableColor"), unavailableColor},
+                       {QStringLiteral("proxy"), proxy},
                        {QStringLiteral("offline"), offline},
                        {QStringLiteral("linked"), linked},
                        {QStringLiteral("mixedRates"), mixedRates},
@@ -59,6 +64,9 @@ ClipColorOptions ClipColorOptions::fromJson(const QJsonObject& o) {
         const QString v = o.value(QLatin1String(key)).toString();
         if (!v.isEmpty()) into = v;
     };
+    flag("resolution", c.resolution);
+    color("mismatchColor", c.mismatchColor);
+    color("unavailableColor", c.unavailableColor);
     flag("proxy", c.proxy);
     flag("offline", c.offline);
     flag("linked", c.linked);
@@ -77,9 +85,18 @@ ClipColorOptions ClipColorOptions::fromJson(const QJsonObject& o) {
 }
 
 // The dialog's order (p.595-596): Resolution Tracking, Offline, Proxy, Linked Clips, Mixed Rates,
-// SD/HD, Timeline Local, Source. Resolution Tracking and Proxy never apply yet.
+// SD/HD, Timeline Local, Source. Proxy never applies yet.
 QString timelineClipColor(const ClipColorOptions& o, const Segment& s, const std::optional<ClipFacts>& clip) {
     if (s.isFiller()) return {};
+    if (o.resolution && clip) {
+        switch (clip->resolution) {
+        case ClipFacts::Resolution::Mismatched: return o.mismatchColor;
+        case ClipFacts::Resolution::Offline: return o.offlineColor;
+        case ClipFacts::Resolution::Unavailable: return o.unavailableColor;
+        case ClipFacts::Resolution::None:
+        case ClipFacts::Resolution::Matched: break;
+        }
+    }
     const bool offline = !clip || clip->offline;
     if (o.offline && offline) return o.offlineColor;
     if (clip) {

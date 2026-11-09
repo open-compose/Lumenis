@@ -1019,6 +1019,7 @@ void MainWindow::createPanels() {
     });
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
+    connectMultiRez(); // the MultiRez button through Dynamic Relink (8.6b)
     // Closed captions on D1 (7.4b): the Timeline's D-track and Show Captions read the clips' caption data.
     timeline_->setCaptionClipData([this](const model::Segment& s) { return captionClipData(s); });
     composer_->setCaptionResolver([this](MonitorId m, std::int64_t f) { return captionOn(m, f); });
@@ -4009,6 +4010,7 @@ void MainWindow::loadMediaDatabase() {
         }
     }
     if (found > 0) frames_->clear();
+    resolutionCache_.clear(); // the MultiRez display looks at the media again (8.6b)
     ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
 }
 

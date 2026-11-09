@@ -56,6 +56,7 @@
     {"id": "edit.enlarge_frame", "text": "Enlarge Frame", "shortcut": "Ctrl+L"},
     {"id": "edit.reduce_frame", "text": "Reduce Frame", "shortcut": "Ctrl+K"},
     {"id": "timeline.enlarge_waveform", "text": "Enlarge Waveform", "shortcut": "Ctrl+Alt+L"},
+    {"id": "timeline.find_next_mismatched", "text": "Find Next Mismatched or Unavailable Clip", "shortcut": "Ctrl+/"},
     {"id": "timeline.reduce_waveform", "text": "Reduce Waveform", "shortcut": "Ctrl+Alt+K"},
     {"id": "edit.enlarge_headframes", "text": "Enlarge HeadFrames"},
     {"id": "edit.reduce_headframes", "text": "Reduce HeadFrames"},

@@ -84,10 +84,51 @@ Working Settings and Target Settings. Each of the two holds:
 * Not ours: Send to Playback, MediaCentral check-in, OMF alpha media (p.1106), Frame Chase editing (p.1111) and the
   Production Management relink rules (p.1111).
 
+## The MultiRez button (8.6b; p.1111-1116)
+
+`src/ui/timeline_multirez.cpp`; MainWindow answers its questions in `src/ui/main_window_relink.cpp`.
+
+* The button is in the Timeline's bottom toolbar ("Right-click the MultiRez button at the bottom of the Timeline",
+  p.1107); ours: after the Video Quality Menu button. Its displays (p.1112): "Gray - inactive", "Bottom half of diamond
+  black - Show Mismatches display", "Top half of diamond black - Show Target Availability display". A click goes to the
+  next display (ours: inactive, mismatches, target availability, inactive); "Clicking the MultiRez button changes only
+  the display — it does not perform a dynamic relink". The drawing is ours: a diamond on a rounded square.
+* Its colour (`Timeline::multiRezButtonColor`): in the Show Mismatches display "If the background is blue, some media
+  does not match or is not available in the current settings"; in the Show Target Availability display "If the
+  background is yellow, some media is not available in the target settings"; gray otherwise.
+* A clip's state (`Timeline::segmentResolution`, `MainWindow::clipResolution`, kept until the media or the setting
+  change): Show Mismatches compares the media the clip plays with what the rules in use choose (Offline when it plays
+  none); "Clip coloring for the Show Mismatches display is not used when you select Use Highest Quality or Minimal
+  bandwith as the relink method" (p.1113), so those methods mark nothing. Show Target Availability asks whether the
+  Target tab's rules find a match, "the same information whether the clips are linked to the working settings or the
+  target settings" (p.1113).
+* Resolution Tracking in the Clip Color dialog (p.595-596, p.1112-1114): "This option is only available if you are
+  working in a MultiRez environment": ours, offered while Dynamic Relink is enabled (`ClipColorDialog::setMultiRez`). Its
+  colours: blue for a mismatch, red (the Offline colour) for offline clips, yellow for clips not available in the target
+  settings, with swatches for blue and yellow and Default Colors resetting them. "If you enable clip coloring for
+  MultiRez and then click the MultiRez button to display mismatches or target availability, this setting overrides any
+  other Timeline clip coloring" (p.1113): it comes before the other options (`model::timelineClipColor`).
+* The menu (p.1114-1116, in the table's order; `Timeline::multiRezMenu`): Enable Clip Coloring (the Clip Color
+  dialog's Resolution Tracking), Show Mismatched Render Ranges, Show Mismatches, Show Target Availability, Find Next
+  Mismatched or Unavailable Clip, Update Media Status, Enable Dynamic Relink, Override Working Settings with Target
+  Settings (dimmed with Dynamic Relink off, ours), Dynamic Relink Settings (opens the Project setting). The two Dynamic
+  Relink items change the setting, which relinks as 8.6a does.
+* Show Mismatched Render Ranges: "A blue line appears along the top of the effect to indicate the portion that is
+  rendered using a different resolution ... select the correct resolution in the Render tab in the Media Creation
+  dialog box and then re-render" (p.1115): ours, a render's media against the Media Creation setting's Render tab
+  resolution (`MainWindow::renderAtOtherResolution`), the whole effect marked.
+* Find Next Mismatched or Unavailable Clip, "You can also use Ctrl+/" (p.1115; command
+  `timeline.find_next_mismatched`): the position to the start of the next marked clip after it on the selected tracks
+  ("This option works only on enabled tracks"), in the Show Mismatches display mismatched renders too. Inactive, it
+  says to choose a display first (ours).
+* Update Media Status (p.1115): the media database read again; "In the Show Mismatches display, relinks the clips
+  displayed in the Timeline to the media that matches the working or target settings"; in the Show Target Availability
+  display it only refreshes.
+* Clip Text > Clip Resolution (p.1104; the Fast menu's item): the resolution of the media the clip plays now, so "the
+  resolution of the clip (as shown in the text on the clip) is different" in working and target settings (p.1103).
+
 ## Left for later
 
-* 8.6b: the MultiRez button and its menu, clip colouring for resolution tracking, Find Next Mismatched or Unavailable
-  Clip, Update Media Status, Show Mismatched Render Ranges, Clip Text > Clip Resolutions (p.1104, p.1111-1116).
 * 8.6c: the MultiRez bin headings (p.1116), partially online media and clips sharing a source and timecode span
   (p.1100-1102, p.1118-1120), the Delete dialog's affinity (p.1117), Cross Rate Dynamic Relink (p.1109-1110).
 
@@ -98,3 +139,6 @@ Working Settings and Target Settings. Each of the two holds:
   each If no match is found, Offline and back, the affinity link kept through the media database.
 * `tst_render_ui dynamicRelink`: the setting applied to the loaded clip, Offline, Override with the Target tab, relinking
   as a clip loads, off again, and Create new clips following the setting.
+* `tst_render_ui multiRezButton`: the displays and colours, Resolution Tracking colours, Find Next Mismatched or
+  Unavailable Clip, Update Media Status, Clip Text > Clip Resolution, the menu's Dynamic Relink items and the Clip Color
+  dialog's Resolution Tracking. `tst_clip_colors resolutionTracking`.

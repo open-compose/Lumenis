@@ -581,6 +581,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
     const QRect tracksArea(header, kRulerHeight, width() - header, height() - kRulerHeight);
     const QList<Row> rowList = rows();
     const model::Sequence& seq = timeline_.shown();
+    timeline_.refreshMultiRezButton(seq);
     const double scale = timeline_.scale();
     const std::int64_t fps = std::max(timeline_.format().nominalFps, 1);
     const std::int64_t start = timeline_.startFrame();
@@ -1513,6 +1514,17 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         p.setBrush(QColor(0xffe03030));
         p.drawRect(QRectF(x0, r.top + r.height - 4, x1 - x0, 2));
     };
+    // Show Mismatched Render Ranges: "A blue line appears along the top of the effect to indicate the portion that is
+    // rendered using a different resolution" (p.1115).
+    auto mismatchedRender = [&](const std::optional<model::EffectRender>& render, std::int64_t from, std::int64_t length) {
+        if (!timeline_.showMismatchedRenderRanges() || !render || !timeline_.renderMismatched(*render)) return;
+        const double x0 = std::max(xFor(from), static_cast<double>(headerWidth()));
+        const double x1 = std::min(xFor(from + length), static_cast<double>(width()));
+        if (x1 <= x0) return;
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xff2d6ee0));
+        p.drawRect(QRectF(x0, r.top + 2, x1 - x0, 2));
+    };
     // ExpertRender's choice (p.142): "highlights the effects that require rendering in the Timeline".
     for (const model::RenderTarget& target : timeline_.expertSelection()) {
         if (target.track != t.name()) continue;
@@ -1530,6 +1542,10 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
             renderRange(model::RenderTarget{t.name(), index, true, at - s.transition->before(), s.transition->duration});
         }
         if (s.effect) renderRange(model::RenderTarget{t.name(), index, false, at, s.length});
+        if (s.transition && s.transition->duration > 0) {
+            mismatchedRender(s.transitionRender, at - s.transition->before(), s.transition->duration);
+        }
+        if (s.effect) mismatchedRender(s.render, at, s.length);
         if (s.effect) {
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
@@ -2299,8 +2315,22 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
                 &Timeline::videoDisplaySettingsRequested);
         menu.exec(quality->mapToGlobal(pos));
     });
+    showMultiRezColor();
     connect(&composer_, &Composer::videoQualityChanged, quality,
             [this, quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q, floatingPoint_)); });
+    // The MultiRez button "at the bottom of the Timeline" (p.1107, p.1111-1116; timeline_multirez.cpp): a click goes to
+    // the next display, right-click opens its menu. Ours: placed after the Video Quality Menu button.
+    QToolButton* multiRez = tool("multiRez", Picture::VideoQuality, tr("MultiRez"), true);
+    multiRez->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(multiRez, &QToolButton::clicked, this, [this] {
+        setMultiRezDisplay(multiRez_ == MultiRezDisplay::Inactive     ? MultiRezDisplay::Mismatches
+                           : multiRez_ == MultiRezDisplay::Mismatches ? MultiRezDisplay::TargetAvailability
+                                                                      : MultiRezDisplay::Inactive);
+    });
+    connect(multiRez, &QWidget::customContextMenuRequested, this, [this, multiRez](const QPoint& pos) {
+        std::unique_ptr<QMenu> menu(multiRezMenu(multiRez));
+        menu->exec(multiRez->mapToGlobal(pos));
+    });
     tool("clientMonitor", Picture::ClientMonitor, tr("Client Monitor"), false);
     // "The Step In and Step Out buttons appear by default in the Timeline top toolbar" (FX Guide p.220).
     connect(tool("stepIn", Picture::StepIn, tr("Step In"), true), &QToolButton::clicked, this, [this] { perform(QStringLiteral("fx.step_in")); });
@@ -3188,6 +3218,7 @@ bool Timeline::handles(const QString& id) {
     static const QStringList ids{
         QStringLiteral("timeline.enlarge_waveform"),
         QStringLiteral("timeline.reduce_waveform"),
+        QStringLiteral("timeline.find_next_mismatched"),
         QStringLiteral("fx.remove_effect"),
         QStringLiteral("tools.titler"),
         QStringLiteral("edit.splice_in"),
@@ -3289,6 +3320,7 @@ bool Timeline::perform(const QString& id) {
         return zoomWaveform(id == QLatin1String("timeline.enlarge_waveform") ? 1 : -1);
     }
     if (id == QLatin1String("timeline.add_filler_at_start")) return addFillerAtStart();
+    if (id == QLatin1String("timeline.find_next_mismatched")) return findNextMismatched();
     if (id == QLatin1String("composer.load_filler")) {
         loadFiller();
         return true;
@@ -7317,6 +7349,7 @@ void Timeline::setClipColorOptions(const model::ClipColorOptions& options) {
 
 void Timeline::openClipColorDialog() {
     ClipColorDialog dialog(clipColors_, this);
+    dialog.setMultiRez(dynamicRelinkOn_);
     const bool ok = clipColorAsk_ ? clipColorAsk_(dialog) : dialog.exec() == QDialog::Accepted;
     if (ok) setClipColorOptions(dialog.options());
 }
@@ -7604,6 +7637,7 @@ std::optional<model::ClipFacts> Timeline::clipFacts(const model::Segment& segmen
         f.offline = !it->first;
         const auto link = media::linkOf(*clip);
         f.linked = link && !link->isManaged();
+        f.resolution = segmentResolution(segment);
     }
     // Mixed rates: the clip's FPS column against the sequence's edit rate.
     const QString fps = clip->fields.value(QStringLiteral("FPS"));
@@ -8118,7 +8152,10 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
             if (!file.isEmpty()) parts << QFileInfo(file).fileName();
         }
     }
-    if (d.clipResolution && clip) parts << model::cellText(*clip, QStringLiteral("Video"));
+    // "the resolution of the clip (as shown in the text on the clip)" follows Dynamic Relink (p.1103-1104).
+    if (d.clipResolution && clip) {
+        parts << (clipResolutionText_ ? clipResolutionText_(*clip) : model::cellText(*clip, QStringLiteral("Video")));
+    }
     parts.removeAll(QString());
     return parts.join(QStringLiteral("  "));
 }

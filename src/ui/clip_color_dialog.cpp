@@ -72,8 +72,12 @@ ClipColorDialog::ClipColorDialog(const model::ClipColorOptions& options, QWidget
         ++row;
         return box;
     };
-    add(QStringLiteral("resolution"), tr("Resolution Tracking"), false, false, {}, {})
-        ->setToolTip(tr("Only in a MultiRez environment"));
+    // "This option is only available if you are working in a MultiRez environment" (p.595): ours, with Dynamic Relink
+    // on (setMultiRez). Its swatches: mismatched and not available in the target settings (p.596, p.1113).
+    QCheckBox* resolution = add(QStringLiteral("resolution"), tr("Resolution Tracking"), options.resolution, false,
+                                QStringLiteral("mismatchColor"), options.mismatchColor);
+    resolution->setToolTip(tr("Only in a MultiRez environment"));
+    grid->addWidget(makeSwatch(QStringLiteral("unavailableColor"), options.unavailableColor), row - 1, 2);
     add(QStringLiteral("offline"), tr("Offline"), options.offline, true, QStringLiteral("offlineColor"), options.offlineColor);
     add(QStringLiteral("proxy"), tr("Proxy"), options.proxy, false, {}, {})->setToolTip(tr("Comes with proxy media"));
     add(QStringLiteral("linked"), tr("Linked Clips"), options.linked, true, QStringLiteral("linkedColor"), options.linkedColor);
@@ -141,6 +145,10 @@ void ClipColorDialog::setColor(const QString& key, const QString& hex) {
         options_.linkedColor = hex;
     } else if (key == QLatin1String("sdHdColor")) {
         options_.sdHdColor = hex;
+    } else if (key == QLatin1String("mismatchColor")) {
+        options_.mismatchColor = hex;
+    } else if (key == QLatin1String("unavailableColor")) {
+        options_.unavailableColor = hex;
     } else if (options_.rateColors.contains(key)) {
         options_.rateColors[key] = hex;
     } else {
@@ -150,17 +158,24 @@ void ClipColorDialog::setColor(const QString& key, const QString& hex) {
 }
 
 // "The Offline, Mixed Rates, and SD/HD color swatches reset to their default colors" (p.597); the
-// Linked Clips swatch too (ours).
+// Linked Clips and Resolution Tracking swatches too (ours; p.596 lists Resolution Tracking among the colours reset).
+void ClipColorDialog::setMultiRez(bool on) {
+    if (QCheckBox* r = checks_.value(QStringLiteral("resolution"))) r->setEnabled(on);
+}
+
 void ClipColorDialog::defaultColors() {
     const model::ClipColorOptions d = model::ClipColorOptions::defaults();
     setColor(QStringLiteral("offlineColor"), d.offlineColor);
     setColor(QStringLiteral("linkedColor"), d.linkedColor);
     setColor(QStringLiteral("sdHdColor"), d.sdHdColor);
+    setColor(QStringLiteral("mismatchColor"), d.mismatchColor);
+    setColor(QStringLiteral("unavailableColor"), d.unavailableColor);
     for (auto it = d.rateColors.begin(); it != d.rateColors.end(); ++it) setColor(it.key(), it.value());
 }
 
 model::ClipColorOptions ClipColorDialog::options() const {
     model::ClipColorOptions o = options_;
+    if (QCheckBox* r = checks_.value(QStringLiteral("resolution")); r && r->isEnabled()) o.resolution = r->isChecked();
     o.offline = checks_.value(QStringLiteral("offline"))->isChecked();
     o.linked = checks_.value(QStringLiteral("linked"))->isChecked();
     o.mixedRates = checks_.value(QStringLiteral("mixedRates"))->isChecked();
