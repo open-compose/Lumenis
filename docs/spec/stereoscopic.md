@@ -6,7 +6,7 @@ Editing Guide p.65-66 (the project's Stereoscopic option), p.213 (stereoscopic f
 ("search for “Working with Stereoscopic Clips” in the Media Composer Family Help", p.213), which we do not have, so
 the commands that make and change them are ours (see the watch list in ui-inventory.md).
 
-8.6d1 is the clips and the project's option; 8.6d2 the S3D views and settings; 8.6d3 groups, lists and presets
+8.6d1 is the clips and the project's option; 8.6d2 (below) the S3D views and settings; 8.6d3 groups, lists and presets
 (ROADMAP).
 
 ## Stereo Master Clips (p.243; 8.6d1)
@@ -38,7 +38,52 @@ the commands that make and change them are ours (see the watch list in ui-invent
   for each eye"; "If you have any standard (non-stereo) material in the sequence, it will use the same image in both"
   frames (p.66): `media::frameCompatible` in `src/media/stereo.*`, applied by `MainWindow::adaptedFrame` before the
   colour and spatial adapters of each eye (`MainWindow::monoFrame`). Ours: the left eye on the left or on top.
-* "Full: Uses both left and right images in a stereo master clip": ours, until the S3D views of the monitors (8.6d2)
-  show both, Full shows the leading eye.
+* "Full: Uses both left and right images in a stereo master clip": the monitors show both through their S3D View
+  (8.6d2); a picture made without one (the Timeline's frames, exports) is the leading eye's.
 
 Tests: `tst_stereo` (the model and the pictures), `tst_render_ui stereoscopic` (the bin, the monitor in each mode).
+
+## S3D Views and Overlays (p.1162-1163, p.1190-1191, p.1226-1227; 8.6d2)
+
+* The Composer setting's Viewer tab: Source and Record Monitor S3D View and S3D Overlay (`sourceS3DView`,
+  `recordS3DView`, `sourceS3DOverlay`, `recordS3DOverlay`); the Full Screen Playback setting's S3D View and S3D Overlay
+  (p.1190-1191); the Video Output tool's S3D View and S3D Overlay (p.1226-1227), kept with its values and shown by
+  `MainWindow::videoOutputPicture` for the output modules (7.3c), which send only test patterns until then.
+* The views (`model::S3DView` in `src/model/stereo_view.*`, `media::stereoView` in `src/media/stereo.*`):
+  * Mix, "a 50/50 blend of both the left and right eye images";
+  * Difference, "gray pixels represent no differences" (ours: middle gray plus half the difference of the eyes'
+    brightness, so differences show lighter or darker, embossed);
+  * Frame Compatible, "as dictated by the project settings (side/side or over/under)"; ours: Side by Side in a Full project;
+  * Mono with Left, Right and Leading eye (the eyes are listed for Full Screen Playback and the Video Output tool, p.1190,
+    p.1227; ours: the monitors take them too);
+  * Anaglyph Red-Cyan and Green-Magenta, and Amber-Blue for Full Screen Playback and the Video Output tool (p.1190,
+    p.1227): ours, each eye's colour channels (Red-Cyan: the left eye's red, the right eye's green and blue);
+  * B/W Anaglyph (the Video Output tool's Mono-Anaglyph): the same with each eye's brightness;
+  * Checkerboard 1 x 1 to 100 x 100 blocks, the left eye's block first;
+  * Compare 25, 50 or 75%, "a diagonal split screen": ours, the left eye above a diagonal from top right to bottom left
+    placed at that part of the way along the other diagonal;
+  * the Video Output tool's Follow Project (the project's own picture), Full Frame ("both the left and right eye at full
+    resolution": ours, side by side at twice the width) and Follow S/R ("the settings in the source/record monitors";
+    ours, its default).
+* Ours: the views apply in projects whose Stereoscopic option uses both eyes (Full, Side by Side, Over / Under); the
+  others have one picture to show. Each eye's picture is made by composing the monitor's picture with that eye of every
+  stereo clip (`MainWindow::stereoPicture` through `eyeOverride_`), so sequences mix stereo and 2D clips as in 8.6d1. The
+  Source monitor's group splits show no view ("the stereoscopic view is turned off", p.1124). The default view is Frame
+  Compatible (ours), which shows Side by Side and Over / Under projects as 8.6d1 did.
+* The S3D Overlay's guides (`media::drawParallaxGuides`): "Parallax Near: Displays green guides", "Parallax Far: Displays
+  blue guides", Near/Far both (p.1163). Ours: each a pair of vertical lines either side of the picture's centre as far
+  apart as the parallax, scaled from the S3D Settings' Raster Resolution to the picture.
+
+## S3D Settings (p.1216; 8.6d2)
+
+* The Project setting "S3D": Unit System (Imperial, Metric), Viewing Distance, Screen Width, Raster Resolution, Eye
+  Separation ("the default is 6.35 cm"), Depth Limit Near ("always a negative value") and Far ("always a positive
+  value"), Parallax Near and Far ("automatically calculated. If you set the drop-down button to manual, you may override
+  the calculated setting").
+* Ours: lengths in metres (Metric; the eye separation in centimetres) or feet (Imperial; inches); Raster Resolution as
+  pixels across; defaults of a 10 m screen 10 m away, 1920 pixels, -2 m and +10 m. The parallax is the eye separation
+  times depth / (viewing distance + depth), as a part of the screen width, in pixels of the raster
+  (`model::parallaxPixels`); the calculated values are written into the setting so it shows them
+  (`MainWindow::applySettings`), and the drop-downs are Calculated or Manual.
+
+Tests: `tst_stereo viewValues`/`viewPictures`/`parallaxAndGuides`, `tst_render_ui stereoViews`.

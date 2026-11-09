@@ -734,7 +734,7 @@ void MainWindow::createPanels() {
     });
     // The monitors show the frames of linked clips; a sequence shows its top
     // video track's (p.432-434 orders the tracks the same way).
-    composer_->setPictureResolver([this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
+    auto plainPicture = [this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
         // MultiCamera mode: the Source monitor shows the sequence's group (p.1129).
         if (monitor == MonitorId::Source && composer_->multiCameraMode()) return multiCamPicture(size, offline);
         const model::MonitorState& state = composer_->state(monitor);
@@ -819,6 +819,10 @@ void MainWindow::createPanels() {
         }
         // "The new framing of the image will be applied when you drop the clip in the Source viewer" (p.531).
         return adaptedFrame(item, frame, size, model::spatialAdapterOf(item), model::colorAdapterOf(item));
+    };
+    // Stereoscopic projects (8.6d2): each monitor's S3D View and Overlay over its picture of each eye.
+    composer_->setPictureResolver([this, plainPicture](MonitorId monitor, std::int64_t at, QSize size, bool* offline) {
+        return stereoPicture(monitor, [&] { return plainPicture(monitor, at, size, offline); });
     });
     // The Safe Color Limiter's analysis display (FX Guide p.729-730; 6.10e4c2): "By default, when the Effect Editor is
     // open, the effect changes the display in the Source monitor to an analysis mode that highlights pixels in the image
@@ -3129,6 +3133,14 @@ void MainWindow::toggleFullScreen() {
         view = new FullScreenView(*composer_, this);
         fullScreen_ = view;
         connect(view, &FullScreenView::closed, this, [this] { activateWindow(); });
+        // The Full Screen Playback setting's S3D View and S3D Overlay (p.1190-1191; 8.6d2).
+        view->setPictureSource([this](bool* offline) {
+            const QString kind = QStringLiteral("Full Screen Playback");
+            s3dOverride_ = std::pair{settings_->text(kind, QStringLiteral("s3dView")), settings_->text(kind, QStringLiteral("s3dOverlay"))};
+            const QImage image = composer_->picture(composer_->activeMonitor(), QSize(), offline);
+            s3dOverride_.reset();
+            return image;
+        });
     }
     applySettings();
     view->open(this);
@@ -3232,6 +3244,13 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
 QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
                                 const std::optional<model::SpatialAdapter>& spatial,
                                 const std::optional<model::ColorEncoding>& color) const {
+    // An S3D View composing one eye (stereoPicture()).
+    if (eyeOverride_) {
+        const model::Eye eye = *eyeOverride_ == model::S3DView::MonoEye::Left    ? model::Eye::Left
+                               : *eyeOverride_ == model::S3DView::MonoEye::Right ? model::Eye::Right
+                                                                                : model::shownEye(model::StereoMode::LeadingEye, clip);
+        return monoFrame(model::eyeClip(clip, eye), frame, want, spatial, color);
+    }
     const model::StereoMode mode = project_ ? model::stereoModeOf(project_->settings.stereoscopic) : model::StereoMode::Off;
     if (model::isFrameCompatible(mode)) {
         const QImage left = monoFrame(model::eyeClip(clip, model::Eye::Left), frame, want, spatial, color);
@@ -3411,6 +3430,77 @@ bool MainWindow::setProjectStereoscopic(const QString& mode) {
     frames_->clear();
     composer_->refreshDisplay();
     return true;
+}
+
+// The S3D Views and Overlays (8.6d2; p.1162-1163, p.1190-1191, p.1226-1227). In a project whose Stereoscopic option uses
+// both eyes (Full, Side by Side, Over / Under; ours: the others have one picture to show), the monitor's picture is made
+// once per eye through eyeOverride_ and the two shown as the view says; Mono makes it once with that eye; Frame
+// Compatible in a frame-compatible project and Follow Project are the project's own picture (8.6d1). The overlay's
+// guides go over the result. The values are the Composer setting's for the monitor unless s3dOverride_ gives others
+// (Full Screen Playback, the Video Output tool), where Follow S/R is the monitor's own.
+QImage MainWindow::stereoPicture(MonitorId monitor, const std::function<QImage()>& plain) const {
+    const model::StereoMode mode = project_ ? model::stereoModeOf(project_->settings.stereoscopic) : model::StereoMode::Off;
+    if (eyeOverride_ || !(mode == model::StereoMode::Full || model::isFrameCompatible(mode))) return plain();
+    // "While viewing stereoscopic clips in the source monitor, the stereoscopic view is turned off" for group splits (p.1124).
+    if (monitor == MonitorId::Source && (composer_->multiCameraMode() || composer_->groupSplit() > 1)) return plain();
+    const QString kind = QStringLiteral("Composer");
+    const bool source = monitor == MonitorId::Source;
+    const QString monitorView = settings_->text(kind, source ? QStringLiteral("sourceS3DView") : QStringLiteral("recordS3DView"));
+    const QString monitorOverlay = settings_->text(kind, source ? QStringLiteral("sourceS3DOverlay") : QStringLiteral("recordS3DOverlay"));
+    QString viewValue = s3dOverride_ ? s3dOverride_->first : monitorView;
+    const QString overlayValue = s3dOverride_ ? s3dOverride_->second : monitorOverlay;
+    if (viewValue == QLatin1String("followSR")) viewValue = monitorView;
+    const model::S3DView view = model::s3dViewOf(viewValue);
+    using K = model::S3DView::Kind;
+    QImage result;
+    struct Restore {
+        std::optional<model::S3DView::MonoEye>& eye;
+        ~Restore() { eye.reset(); }
+    } restore{eyeOverride_};
+    if (view.kind == K::FollowProject || (view.kind == K::FrameCompatible && model::isFrameCompatible(mode))) {
+        result = plain();
+    } else if (view.kind == K::Mono) {
+        eyeOverride_ = view.mono;
+        result = plain();
+    } else {
+        eyeOverride_ = model::S3DView::MonoEye::Left;
+        const QImage left = plain();
+        eyeOverride_ = model::S3DView::MonoEye::Right;
+        const QImage right = plain();
+        // Ours: Frame Compatible in a Full project is Side by Side.
+        result = media::stereoView(left, right, view, mode != model::StereoMode::OverUnder);
+    }
+    const model::S3DOverlay overlay = model::s3dOverlayOf(overlayValue);
+    if (overlay != model::S3DOverlay::Off && !result.isNull()) {
+        const model::S3DSettings s = s3dSettings();
+        result = result.convertToFormat(QImage::Format_RGB32);
+        media::drawParallaxGuides(result, overlay, model::parallaxNear(s), model::parallaxFar(s), s.rasterWidth);
+    }
+    return result;
+}
+
+model::S3DSettings MainWindow::s3dSettings() const {
+    const QString kind = QStringLiteral("S3D");
+    model::S3DSettings s;
+    s.imperial = settings_->text(kind, QStringLiteral("unitSystem")) == QLatin1String("imperial");
+    s.viewingDistance = settings_->value(kind, QStringLiteral("viewingDistance")).toDouble(s.viewingDistance);
+    s.screenWidth = settings_->value(kind, QStringLiteral("screenWidth")).toDouble(s.screenWidth);
+    s.rasterWidth = settings_->value(kind, QStringLiteral("rasterResolution")).toInt(s.rasterWidth);
+    s.eyeSeparation = settings_->value(kind, QStringLiteral("eyeSeparation")).toDouble(s.eyeSeparation);
+    s.depthNear = settings_->value(kind, QStringLiteral("depthLimitNear")).toDouble(s.depthNear);
+    s.depthFar = settings_->value(kind, QStringLiteral("depthLimitFar")).toDouble(s.depthFar);
+    s.manualNear = settings_->text(kind, QStringLiteral("parallaxNearMode")) == QLatin1String("manual");
+    s.manualFar = settings_->text(kind, QStringLiteral("parallaxFarMode")) == QLatin1String("manual");
+    s.parallaxNearValue = settings_->value(kind, QStringLiteral("parallaxNear")).toDouble();
+    s.parallaxFarValue = settings_->value(kind, QStringLiteral("parallaxFar")).toDouble();
+    return s;
+}
+
+QImage MainWindow::videoOutputPicture(QSize size) {
+    s3dOverride_ = std::pair{videoOutput_->s3dView(), videoOutput_->s3dOverlay()};
+    const QImage image = composer_->picture(MonitorId::Record, size);
+    s3dOverride_.reset();
+    return image;
 }
 
 // The Format tab's settings are kept in the project file; one that cannot be written says why, and the Format tab shows
@@ -8105,6 +8195,21 @@ void MainWindow::applySettings() {
     composer_->setDisplayColorSpace(MonitorId::Record, media::displayColorSpaceOfValue(s.text(QStringLiteral("Composer"), QStringLiteral("recordColorSpace"))));
     composer_->setTargetMask(MonitorId::Source, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("sourceTargetMask"))));
     composer_->setTargetMask(MonitorId::Record, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"))));
+    // S3D Settings (p.1216; 8.6d2): Parallax Near and Far are "automatically calculated" unless set to Manual; the
+    // calculated values are kept in the setting so that it shows them. The monitors show the S3D Views anew.
+    if (project_) {
+        const model::S3DSettings s3d = s3dSettings();
+        const std::pair<const char*, double> calculated[] = {
+            {"parallaxNear", s3d.manualNear ? s3d.parallaxNearValue : model::parallaxPixels(s3d, s3d.depthNear)},
+            {"parallaxFar", s3d.manualFar ? s3d.parallaxFarValue : model::parallaxPixels(s3d, s3d.depthFar)}};
+        for (const auto& [key, value] : calculated) {
+            const QString k = QString::fromLatin1(key);
+            if (std::abs(s.value(QStringLiteral("S3D"), k).toDouble() - value) > 0.005) {
+                settings_->setValue(QStringLiteral("S3D"), k, std::round(value * 100.0) / 100.0);
+            }
+        }
+        composer_->refreshDisplay();
+    }
     if (FullScreenView* view = fullScreen_.data()) {
         view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));

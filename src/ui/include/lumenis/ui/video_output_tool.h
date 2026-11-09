@@ -40,6 +40,10 @@ public:
     // downconvert, componentFormat, vbi, testPattern and calibration {slider: {manual, preset}}.
     void setValues(const QJsonObject& values);
     QJsonObject values() const;
+    // The S3D View and S3D Overlay (p.1226-1227; 8.6d2) as stored values (lumenis/model/stereo_view.h): "followSR" (ours,
+    // the default) shows what the Record monitor shows.
+    QString s3dView() const;
+    QString s3dOverlay() const;
 
     // A slider's value as shown: the factory level (0) while its preset button is lit, else its manual level.
     double sliderValue(const QString& name) const;
@@ -81,6 +85,8 @@ private:
     QComboBox* componentFormat_ = nullptr;
     QComboBox* vbi_ = nullptr;
     QComboBox* testPatterns_ = nullptr;
+    QComboBox* s3dView_ = nullptr;
+    QComboBox* s3dOverlay_ = nullptr;
     QComboBox* sdOutput_ = nullptr;
     QComboBox* hdOutput_ = nullptr;
     QMap<QString, Slider> sliders_;

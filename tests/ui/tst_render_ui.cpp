@@ -20,6 +20,8 @@
 #include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
+#include "lumenis/ui/full_screen.h"
+#include "lumenis/ui/video_output_tool.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/render_dialogs.h"
@@ -907,6 +909,110 @@ private slots:
         menu.reset(view->contextMenu(QPoint(-1, -1), table));
         QVERIFY(menu->findChild<QMenu*>(QStringLiteral("s3dLeadingEye")));
         QVERIFY(!menu->findChild<QAction*>(QStringLiteral("createStereoscopicClip")));
+    }
+
+    // The S3D Views and Overlays (8.6d2; p.1162-1163, p.1190-1191, p.1216, p.1226-1227) in a Full project: the Source
+    // monitor's view, the S3D Settings' parallax as the overlay's guides, Full Screen Playback's own view, and the Video
+    // Output tool's choices.
+    void stereoViews() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString leftMovie = dir.filePath(QStringLiteral("cam_left.mov"));
+        const QString rightMovie = dir.filePath(QStringLiteral("cam_right.mov"));
+        QVERIFY(writeMovie(leftMovie, 10, QColor(255, 0, 0)));
+        QVERIFY(writeMovie(rightMovie, 10, QColor(0, 0, 255)));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Full"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("Full.cthproj"));
+        project.settings.name = QStringLiteral("Full");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        project.settings.stereoscopic = QStringLiteral("Full");
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {leftMovie, rightMovie});
+        QCOMPARE(ids.size(), 2);
+        window.binContainer().activeView()->selectIds(ids);
+        const QString stereoId = window.createStereoscopicClip();
+        QVERIFY(!stereoId.isEmpty());
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(stereoId));
+        settle();
+        Settings& s = window.settings();
+        auto colorAt = [&](int x) {
+            const QImage picture = composer.pictureAt(MonitorId::Source, 0, QSize(128, 72));
+            return picture.isNull() ? QColor() : QColor(picture.pixel(x, 36));
+        };
+        auto setView = [&](const char* value) {
+            s.setValue(QStringLiteral("Composer"), QStringLiteral("sourceS3DView"), QString::fromLatin1(value));
+            settle();
+        };
+        // Frame Compatible by default: a Full project's eyes side by side (each Center Keep Size, so in the middle of its half).
+        QCOMPARE(colorAt(32), QColor(255, 0, 0));
+        QCOMPARE(colorAt(96), QColor(0, 0, 255));
+        // Anaglyph Red-Cyan: the left eye's red and the right eye's blue.
+        setView("anaglyphRedCyan");
+        QCOMPARE(colorAt(64), QColor(255, 0, 255));
+        setView("mix");
+        QCOMPARE(colorAt(64), QColor(127, 0, 127));
+        setView("monoRight");
+        QCOMPARE(colorAt(64), QColor(0, 0, 255));
+        setView("monoLeading");
+        QCOMPARE(colorAt(64), QColor(255, 0, 0));
+        // The S3D Settings work out Parallax Near and Far (p.1216) and keep them.
+        QCOMPARE(window.s3dSettings().rasterWidth, 1920);
+        s.setValue(QStringLiteral("S3D"), QStringLiteral("depthLimitNear"), -4.0);
+        settle();
+        QCOMPARE(s.value(QStringLiteral("S3D"), QStringLiteral("parallaxNear")).toDouble(), -8.13);
+        // Parallax Near set by hand: green guides 40 pixels of a 128-pixel raster apart about the centre.
+        s.setValue(QStringLiteral("S3D"), QStringLiteral("rasterResolution"), 128);
+        s.setValue(QStringLiteral("S3D"), QStringLiteral("parallaxNearMode"), QStringLiteral("manual"));
+        s.setValue(QStringLiteral("S3D"), QStringLiteral("parallaxNear"), -40.0);
+        s.setValue(QStringLiteral("Composer"), QStringLiteral("sourceS3DOverlay"), QStringLiteral("near"));
+        settle();
+        QCOMPARE(s.value(QStringLiteral("S3D"), QStringLiteral("parallaxNear")).toDouble(), -40.0);
+        QCOMPARE(colorAt(44), QColor(0, 255, 0));
+        QCOMPARE(colorAt(84), QColor(0, 255, 0));
+        QCOMPARE(colorAt(64), QColor(255, 0, 0));
+        s.setValue(QStringLiteral("Composer"), QStringLiteral("sourceS3DOverlay"), QStringLiteral("off"));
+        settle();
+        QCOMPARE(colorAt(44), QColor(0, 0, 0));
+        // Full Screen Playback's own S3D View.
+        s.setValue(QStringLiteral("Full Screen Playback"), QStringLiteral("s3dView"), QStringLiteral("monoRight"));
+        window.toggleFullScreen();
+        settle();
+        FullScreenView* full = window.fullScreenView();
+        QVERIFY(full);
+        const QImage shown = full->shownPicture();
+        QVERIFY(!shown.isNull());
+        QCOMPARE(QColor(shown.pixel(shown.width() / 2, shown.height() / 2)), QColor(0, 0, 255));
+        full->close();
+        settle();
+        // The monitor keeps its own view.
+        QCOMPARE(colorAt(64), QColor(255, 0, 0));
+        // The Video Output tool's S3D View and Overlay, kept with its values; Follow S/R to start with.
+        VideoOutputTool& vo = window.videoOutputTool();
+        QCOMPARE(vo.s3dView(), QStringLiteral("followSR"));
+        QComboBox* voView = vo.findChild<QComboBox*>(QStringLiteral("voS3DView"));
+        QVERIFY(voView);
+        voView->setCurrentIndex(voView->findData(QStringLiteral("anaglyphGreenMagenta")));
+        QCOMPARE(vo.values().value(QStringLiteral("s3dView")).toString(), QStringLiteral("anaglyphGreenMagenta"));
     }
 };
 

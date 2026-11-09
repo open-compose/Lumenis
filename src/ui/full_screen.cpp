@@ -79,7 +79,7 @@ void FullScreenView::paintEvent(QPaintEvent*) {
     if (composer_.state(monitor).isEmpty()) return;
     // The frame at its own size, placed as the setting says.
     bool offline = false;
-    const QImage image = composer_.picture(monitor, QSize(), &offline);
+    const QImage image = shownPicture(&offline);
     if (image.isNull()) {
         if (offline) {
             QFont f = font();
@@ -94,6 +94,11 @@ void FullScreenView::paintEvent(QPaintEvent*) {
     const QRect placed = pictureRect(size(), image.size());
     p.drawImage(placed, image);
     media::paintTargetMask(p, QRectF(placed), composer_.maskMargins(), targetMask_);
+}
+
+QImage FullScreenView::shownPicture(bool* offline) const {
+    if (source_) return source_(offline);
+    return composer_.picture(composer_.activeMonitor(), QSize(), offline);
 }
 
 void FullScreenView::setTargetMask(model::TargetMask mask) {

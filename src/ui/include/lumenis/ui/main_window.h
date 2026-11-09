@@ -5,6 +5,7 @@
 #include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/dynamic_relink.h"
 #include "lumenis/model/stereo_clip.h"
+#include "lumenis/model/stereo_view.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -742,6 +743,11 @@ public:
     int setStereoLeadingEye(model::Eye eye);
     // Sets the project's Stereoscopic option to one of stereoscopicModes() (p.65-66; not in SD projects but Off).
     bool setProjectStereoscopic(const QString& mode);
+    // The project's S3D Settings (p.1216; 8.6d2), whose parallax the S3D Overlay's guides show.
+    model::S3DSettings s3dSettings() const;
+    // The Record monitor's picture as the Video Output tool's S3D View and S3D Overlay show it (p.1226-1227), for the
+    // output modules (7.3c).
+    QImage videoOutputPicture(QSize size);
     // The same for a Record monitor segment's clip (the Timeline's right-click Source Settings, 8.5b2), and for given
     // clips (bin, item id).
     bool sourceSettingsForSegment(const model::SegmentRef& ref);
@@ -1223,6 +1229,14 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
+    // The monitor's picture from `plain` as the S3D View and Overlay show it (8.6d2; main_window.cpp says how).
+    QImage stereoPicture(MonitorId monitor, const std::function<QImage()>& plain) const;
+    // While set, adaptedFrame() plays this eye of stereo clips (Leading: each clip's leading eye): how stereoPicture()
+    // makes each eye's picture.
+    mutable std::optional<model::S3DView::MonoEye> eyeOverride_;
+    // The S3D View and Overlay values the next picture takes instead of the Composer setting's (Full Screen Playback, the
+    // Video Output tool).
+    mutable std::optional<std::pair<QString, QString>> s3dOverride_;
     // adaptedFrame() for one eye: the clip's frame with its colour and spatial adapters.
     QImage monoFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial,
                      const std::optional<model::ColorEncoding>& color) const;

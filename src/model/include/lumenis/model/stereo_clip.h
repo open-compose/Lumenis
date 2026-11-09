@@ -55,7 +55,7 @@ inline bool isFrameCompatible(StereoMode m) { return m == StereoMode::SideBySide
 BinItem eyeClip(const BinItem& item, Eye eye);
 // The eye a one-picture mode shows of a stereo clip: Left/Right Eye Only their eye, the others (Off, Leading Eye, Full)
 // the leading eye ("Any stereo material in the sequence is treated as a standard format, and only the leading eye image
-// is used", p.66). Ours: Full shows the leading eye until the S3D views (8.6d2) show both.
+// is used", p.66). Full: the leading eye too where no S3D View shows both (MainWindow::stereoPicture, 8.6d2).
 Eye shownEye(StereoMode mode, const BinItem& item);
 
 } // namespace lumenis::model

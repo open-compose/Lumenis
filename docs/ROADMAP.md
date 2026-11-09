@@ -1536,7 +1536,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       8.6d1 (done, docs/spec/stereoscopic.md), stereoscopic clips and the project's Stereoscopic option: Stereo Master Clips made from a left and a right
       eye master clip (p.213, p.243) with the S3D Leading Eye attribute, and pictures by the project's mode (Off,
       Leading Eye, Left Eye Only, Right Eye Only, Side by Side, Over / Under, Full; p.65-66).
-      8.6d2, the S3D views and overlays: the Composer setting's Source and Record Monitor S3D View and S3D Overlay
+      8.6d2 (done), the S3D views and overlays: the Composer setting's Source and Record Monitor S3D View and S3D Overlay
       (Mix, Difference, Frame Compatible, Mono, Anaglyph, B/W Anaglyph, Checkerboard, Compare; parallax guides,
       p.1162-1163), Full Screen Playback's (p.1190-1191), the Video Output tool's (p.1227), the S3D Settings Project
       setting with its parallax worked out (p.1216).

@@ -95,6 +95,31 @@ VideoOutputTool::VideoOutputTool(QWidget* parent) : QWidget(parent) {
     form->addRow(tr("Component Format:"), componentFormat_);
     form->addRow(tr("VBI:"), vbi_);
     form->addRow(tr("Test Patterns:"), testPatterns_);
+    // S3D View and S3D Overlay (p.1226-1227; 8.6d2): stored values with the guide's names.
+    auto valued = [&](const char* name, const std::vector<std::pair<const char*, QString>>& items, const char* initial) {
+        auto* c = new QComboBox(options);
+        c->setObjectName(QString::fromLatin1(name));
+        for (const auto& [value, label] : items) c->addItem(label, QString::fromLatin1(value));
+        c->setCurrentIndex(std::max(0, c->findData(QString::fromLatin1(initial))));
+        connect(c, &QComboBox::currentIndexChanged, this, [this] { changed(); });
+        return c;
+    };
+    s3dView_ = valued("voS3DView",
+                      {{"followSR", tr("Follow S/R")}, {"followProject", tr("Follow Project")}, {"mix", tr("Mix")},
+                       {"difference", tr("Difference")}, {"frameCompatible", tr("Frame Compatible")}, {"fullFrame", tr("Full Frame")},
+                       {"monoLeft", tr("Mono: Left")}, {"monoRight", tr("Mono: Right")}, {"monoLeading", tr("Mono: Leading eye")},
+                       {"bwRedCyan", tr("Mono-Anaglyph: Mono Red-Cyan")}, {"bwGreenMagenta", tr("Mono-Anaglyph: Mono Green-Magenta")},
+                       {"anaglyphRedCyan", tr("Anaglyph: Red-Cyan")}, {"anaglyphGreenMagenta", tr("Anaglyph: Green-Magenta")},
+                       {"anaglyphAmberBlue", tr("Anaglyph: Amber-Blue")}, {"checker1", tr("Checkerboard: 1 x 1")},
+                       {"checker10", tr("Checkerboard: 10 x 10")}, {"checker20", tr("Checkerboard: 20 x 20")},
+                       {"checker50", tr("Checkerboard: 50 x 50")}, {"checker100", tr("Checkerboard: 100 x 100")},
+                       {"compare25", tr("Compare: 25%")}, {"compare50", tr("Compare: 50%")}, {"compare75", tr("Compare: 75%")}},
+                      "followSR");
+    s3dOverlay_ = valued("voS3DOverlay",
+                         {{"off", tr("Off")}, {"near", tr("Parallax Near")}, {"far", tr("Parallax Far")}, {"nearFar", tr("Parallax Near/Far")}},
+                         "off");
+    form->addRow(tr("S3D View:"), s3dView_);
+    form->addRow(tr("S3D Overlay:"), s3dOverlay_);
     tabs_->addTab(options, tr("Options"));
     sdOutput_ = new QComboBox(tabs_);
     sdOutput_->setObjectName(QStringLiteral("voSdOutput"));
@@ -203,6 +228,10 @@ void VideoOutputTool::setValues(const QJsonObject& v) {
     pick(downconvert_, "downconvert");
     pick(componentFormat_, "componentFormat");
     pick(vbi_, "vbi");
+    for (auto [combo, key] : {std::pair{s3dView_, "s3dView"}, std::pair{s3dOverlay_, "s3dOverlay"}}) {
+        const int i = combo->findData(v.value(QLatin1String(key)).toString());
+        if (i >= 0) combo->setCurrentIndex(i);
+    }
     const QJsonObject cal = v.value(QStringLiteral("calibration")).toObject();
     for (auto it = sliders_.begin(); it != sliders_.end(); ++it) {
         const QJsonObject s = cal.value(it.key()).toObject();
@@ -227,7 +256,17 @@ QJsonObject VideoOutputTool::values() const {
             {QStringLiteral("downconvert"), downconvert_->currentText()},
             {QStringLiteral("componentFormat"), componentFormat_->currentText()},
             {QStringLiteral("vbi"), vbi_->currentText()},
+            {QStringLiteral("s3dView"), s3dView()},
+            {QStringLiteral("s3dOverlay"), s3dOverlay()},
             {QStringLiteral("calibration"), cal}};
+}
+
+QString VideoOutputTool::s3dView() const {
+    return s3dView_->currentData().toString();
+}
+
+QString VideoOutputTool::s3dOverlay() const {
+    return s3dOverlay_->currentData().toString();
 }
 
 double VideoOutputTool::sliderValue(const QString& name) const {

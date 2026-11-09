@@ -193,7 +193,15 @@
             {"key": "sourceColorSpace", "type": "choice", "style": "menu", "label": "Source Monitor Color Space", "default": "project", "page": 1161,
              "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]},
             {"key": "recordColorSpace", "type": "choice", "style": "menu", "label": "Record Monitor Color Space", "default": "project", "page": 1161,
-             "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]}
+             "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]},
+            {"key": "sourceS3DView", "type": "choice", "style": "menu", "label": "Source Monitor S3D View", "default": "frameCompatible", "page": 1162,
+             "choices": [{"value": "mix", "label": "Mix"}, {"value": "difference", "label": "Difference"}, {"value": "frameCompatible", "label": "Frame Compatible"}, {"value": "monoLeft", "label": "Mono: Left"}, {"value": "monoRight", "label": "Mono: Right"}, {"value": "monoLeading", "label": "Mono: Leading eye"}, {"value": "anaglyphRedCyan", "label": "Anaglyph: Red-Cyan"}, {"value": "anaglyphGreenMagenta", "label": "Anaglyph: Green-Magenta"}, {"value": "bwRedCyan", "label": "B/W Anaglyph: B/W Red-Cyan"}, {"value": "bwGreenMagenta", "label": "B/W Anaglyph: B/W Green-Magenta"}, {"value": "checker1", "label": "Checkerboard: 1 x 1"}, {"value": "checker10", "label": "Checkerboard: 10 x 10"}, {"value": "checker20", "label": "Checkerboard: 20 x 20"}, {"value": "checker50", "label": "Checkerboard: 50 x 50"}, {"value": "checker100", "label": "Checkerboard: 100 x 100"}, {"value": "compare25", "label": "Compare: 25%"}, {"value": "compare50", "label": "Compare: 50%"}, {"value": "compare75", "label": "Compare: 75%"}]},
+            {"key": "recordS3DView", "type": "choice", "style": "menu", "label": "Record Monitor S3D View", "default": "frameCompatible", "page": 1162,
+             "choices": [{"value": "mix", "label": "Mix"}, {"value": "difference", "label": "Difference"}, {"value": "frameCompatible", "label": "Frame Compatible"}, {"value": "monoLeft", "label": "Mono: Left"}, {"value": "monoRight", "label": "Mono: Right"}, {"value": "monoLeading", "label": "Mono: Leading eye"}, {"value": "anaglyphRedCyan", "label": "Anaglyph: Red-Cyan"}, {"value": "anaglyphGreenMagenta", "label": "Anaglyph: Green-Magenta"}, {"value": "bwRedCyan", "label": "B/W Anaglyph: B/W Red-Cyan"}, {"value": "bwGreenMagenta", "label": "B/W Anaglyph: B/W Green-Magenta"}, {"value": "checker1", "label": "Checkerboard: 1 x 1"}, {"value": "checker10", "label": "Checkerboard: 10 x 10"}, {"value": "checker20", "label": "Checkerboard: 20 x 20"}, {"value": "checker50", "label": "Checkerboard: 50 x 50"}, {"value": "checker100", "label": "Checkerboard: 100 x 100"}, {"value": "compare25", "label": "Compare: 25%"}, {"value": "compare50", "label": "Compare: 50%"}, {"value": "compare75", "label": "Compare: 75%"}]},
+            {"key": "sourceS3DOverlay", "type": "choice", "style": "menu", "label": "Source Monitor S3D Overlay", "default": "off", "page": 1163,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "near", "label": "Parallax Near"}, {"value": "far", "label": "Parallax Far"}, {"value": "nearFar", "label": "Parallax Near/Far"}]},
+            {"key": "recordS3DOverlay", "type": "choice", "style": "menu", "label": "Record Monitor S3D Overlay", "default": "off", "page": 1163,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "near", "label": "Parallax Near"}, {"value": "far", "label": "Parallax Far"}, {"value": "nearFar", "label": "Parallax Near/Far"}]}
           ]
         }
       ]
@@ -612,8 +620,10 @@
           "options": [
             {"key": "reformat", "type": "choice", "style": "menu", "label": "Reformat", "default": "letterbox", "page": 1190,
              "choices": [{"value": "stretch", "label": "Stretch"}, {"value": "letterbox", "label": "Pillar/Letterbox"}, {"value": "crop", "label": "Center Crop"}, {"value": "keepSize", "label": "Center Keep Size"}, {"value": "rawPixel", "label": "Raw Pixel"}]},
-            {"key": "s3dView", "type": "choice", "style": "menu", "label": "S3D View", "default": "mono", "page": 1190, "later": true,
-             "choices": [{"value": "mono", "label": "Mono"}, {"value": "mix", "label": "Mix"}, {"value": "difference", "label": "Difference"}, {"value": "frameCompatible", "label": "Frame Compatible"}, {"value": "anaglyph", "label": "Anaglyph"}, {"value": "checkerboard", "label": "Checkerboard"}]},
+            {"key": "s3dView", "type": "choice", "style": "menu", "label": "S3D View", "default": "frameCompatible", "page": 1190,
+             "choices": [{"value": "mix", "label": "Mix"}, {"value": "difference", "label": "Difference"}, {"value": "frameCompatible", "label": "Frame Compatible"}, {"value": "monoLeft", "label": "Mono: Left"}, {"value": "monoRight", "label": "Mono: Right"}, {"value": "monoLeading", "label": "Mono: Leading eye"}, {"value": "anaglyphRedCyan", "label": "Anaglyph: Red-Cyan"}, {"value": "anaglyphGreenMagenta", "label": "Anaglyph: Green-Magenta"}, {"value": "anaglyphAmberBlue", "label": "Anaglyph: Amber-Blue"}, {"value": "bwRedCyan", "label": "B/W Anaglyph: B/W Red-Cyan"}, {"value": "bwGreenMagenta", "label": "B/W Anaglyph: B/W Green-Magenta"}, {"value": "checker1", "label": "Checkerboard: 1 x 1"}, {"value": "checker10", "label": "Checkerboard: 10 x 10"}, {"value": "checker20", "label": "Checkerboard: 20 x 20"}, {"value": "checker50", "label": "Checkerboard: 50 x 50"}, {"value": "checker100", "label": "Checkerboard: 100 x 100"}, {"value": "compare25", "label": "Compare: 25%"}, {"value": "compare50", "label": "Compare: 50%"}, {"value": "compare75", "label": "Compare: 75%"}]},
+            {"key": "s3dOverlay", "type": "choice", "style": "menu", "label": "S3D Overlay", "default": "off", "page": 1191,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "near", "label": "Parallax Near"}, {"value": "far", "label": "Parallax Far"}, {"value": "nearFar", "label": "Parallax Near/Far"}]},
             {"key": "targetMask", "type": "choice", "style": "menu", "label": "Target Mask", "default": "none", "page": 1191,
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
             {"key": "fullScreen", "type": "bool", "label": "Full Screen", "default": true, "page": 1191},
@@ -881,6 +891,32 @@
              "choices": [{"value": "zero", "label": "Start frame count at 0"}, {"value": "one", "label": "Start frame count at 1"}, {"value": "timecode", "label": "Convert timecode to frames"}, {"value": "fileName", "label": "From the File name"}]},
             {"key": "startTimecode", "type": "choice", "style": "radio", "label": "Timecode for Start column", "default": "embedded", "page": 1205, "later": true,
              "choices": [{"value": "embedded", "label": "Embedded in source file"}, {"value": "fileName", "label": "From file name"}]}
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "S3D",
+      "scope": "project",
+      "page": 1216,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "unitSystem", "type": "choice", "style": "menu", "label": "Unit System", "default": "metric", "page": 1216,
+             "choices": [{"value": "imperial", "label": "Imperial"}, {"value": "metric", "label": "Metric"}]},
+            {"key": "viewingDistance", "type": "number", "label": "Viewing Distance", "min": 0.1, "max": 1000, "decimals": 2, "default": 10.0, "page": 1216},
+            {"key": "screenWidth", "type": "number", "label": "Screen Width", "min": 0.1, "max": 1000, "decimals": 2, "default": 10.0, "page": 1216},
+            {"key": "rasterResolution", "type": "int", "label": "Raster Resolution", "min": 16, "max": 16384, "default": 1920, "page": 1216},
+            {"key": "eyeSeparation", "type": "number", "label": "Eye Separation", "min": 0.1, "max": 100, "decimals": 2, "default": 6.35, "page": 1216},
+            {"key": "depthLimitNear", "type": "number", "label": "Depth Limit Near", "min": -1000, "max": 0, "decimals": 2, "default": -2.0, "page": 1216},
+            {"key": "depthLimitFar", "type": "number", "label": "Depth Limit Far", "min": 0, "max": 1000, "decimals": 2, "default": 10.0, "page": 1216},
+            {"key": "parallaxNearMode", "type": "choice", "style": "menu", "label": "Parallax Near", "default": "auto", "page": 1216,
+             "choices": [{"value": "auto", "label": "Calculated"}, {"value": "manual", "label": "Manual"}]},
+            {"key": "parallaxNear", "type": "number", "label": "Parallax Near (pixels)", "min": -10000, "max": 10000, "decimals": 2, "default": -3.05, "page": 1216},
+            {"key": "parallaxFarMode", "type": "choice", "style": "menu", "label": "Parallax Far", "default": "auto", "page": 1216,
+             "choices": [{"value": "auto", "label": "Calculated"}, {"value": "manual", "label": "Manual"}]},
+            {"key": "parallaxFar", "type": "number", "label": "Parallax Far (pixels)", "min": -10000, "max": 10000, "decimals": 2, "default": 6.10, "page": 1216}
           ]
         }
       ]

@@ -693,7 +693,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Stereoscopic Clip and the S3D Leading Eye submenu on the bin's right-click menu, the left eye found by its name's L or
   Left ending else bin order, the name "<left> S3D", the shorter eye's length, refused in SD projects; the left eye on the
   left or on top in Side by Side and Over / Under; Full showing the leading eye until the S3D views (8.6d2); the
-  Stereoscopic option changeable after the project is made (`MainWindow::setProjectStereoscopic`).
+  Stereoscopic option changeable after the project is made (`MainWindow::setProjectStereoscopic`). S3D Views (8.6d2): applied
+  only in Full, Side by Side and Over / Under projects, Frame Compatible as the default and Side by Side in Full projects,
+  Mono's eyes and Amber-Blue where the guide lists them, Difference as mid gray plus half the brightness difference, the
+  anaglyphs as channel swaps, Compare's diagonal, Full Frame side by side, Follow S/R as the Video Output tool's default;
+  the parallax guides as vertical line pairs about the centre; S3D Settings' units, defaults and parallax formula, the
+  calculated values written into the setting.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

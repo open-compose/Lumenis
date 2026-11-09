@@ -82,7 +82,7 @@ private slots:
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
         QCOMPARE(schema.kindNames(SettingsScope::Project),
-                 (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "Dynamic Relink", "General", "Media Creation", "Safe Colors", "Bin Layout", "Transcript", "Video Display"}));
+                 (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "Dynamic Relink", "General", "Media Creation", "S3D", "Safe Colors", "Bin Layout", "Transcript", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Color Management", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Render", "Script", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));

@@ -1,8 +1,11 @@
 #pragma once
 
 #include "lumenis/model/mask_margins.h"
+#include <QImage>
 #include <QString>
 #include <QWidget>
+
+#include <functional>
 
 namespace lumenis::ui {
 
@@ -36,6 +39,11 @@ public:
     void setFullScreenScaling(bool on);
     // The Full Screen Playback setting's Target Mask (p.1191; 8.5e3) over the Composer's mask margins.
     void setTargetMask(model::TargetMask mask);
+    // Where the picture comes from instead of the Composer's active monitor: MainWindow's, which shows a stereoscopic
+    // project's picture with the setting's S3D View and S3D Overlay (p.1190-1191; 8.6d2). `offline` as Composer::picture.
+    void setPictureSource(std::function<QImage(bool* offline)> source) { source_ = std::move(source); }
+    // The picture it shows now.
+    QImage shownPicture(bool* offline = nullptr) const;
     // Where the picture goes in a widget of `area`, for an image of
     // `image` size, in widget pixels. Empty for an empty image.
     QRect pictureRect(QSize area, QSize image) const;
@@ -57,6 +65,7 @@ private:
     Reformat reformat_ = Reformat::Letterbox;
     model::TargetMask targetMask_ = model::TargetMask::None;
     bool fullScreen_ = true;
+    std::function<QImage(bool*)> source_;
 };
 
 } // namespace lumenis::ui
