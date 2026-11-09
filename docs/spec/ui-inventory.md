@@ -662,7 +662,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Rec. 709, the Color Transformations column's text ("Bypassed: ..."), Log-C and C-Log scene-referred without a tone
   curve and full range, Sony's looks only from a provider, Remove Color Adapters undone by a later Refresh. The Color Encoding tab laid out
   top to bottom (space and Auto, the list, the drop-down with Add and Delete, Bypass), the dialog opening with the first
-  clip's encoding; Transcode's Frame Flex dimmed, colours baked through 8 bits.
+  clip's encoding; Transcode's Frame Flex dimmed, colours baked through 8 bits. LUTs (8.5d1): Avid DS, LUTher and Nucoda files refused,
+  the shared LUT folder in the application's data, the CDL transformation's name carrying its values, its place at the end
+  of the drop-down.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

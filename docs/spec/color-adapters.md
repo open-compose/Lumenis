@@ -74,6 +74,38 @@ from 0 to 1:
   before). "The transcode operation only applies source transformations that were made on the clip (from the bin)"
   (p.513): the clip's encoding, not the segments' adapters.
 
+## External LUTs and CDLs (p.539-544; 8.5d1)
+
+* "The application supports two different types of LUT formats: 1D LUT ... 3D LUT" (p.541). `src/media/lut_file.*`
+  reads the products the guide lists by their first line (`media::lutProduct`):
+  * IRIDAS 1D (.itx, "LUT_1D_SIZE"), IRIDAS 3D (.cube, "LUT_3D_SIZE") and Mistika 3D (.itx): the keyword format, with
+    TITLE, DOMAIN_MIN/MAX and the INPUT_RANGE keywords, red changing fastest;
+  * Kodak KDM (.3dl, "# IDENTIFICATION: 3DMODEL-3DLUT") and Lustre grids: the input grid's line, then integer RGB with
+    blue changing fastest, the output scaled by its bit depth;
+  * Autodesk ("LUT:" and the number of channels and entries): each channel's entries in turn.
+  1D tables are interpolated linearly, cubes trilinearly (`LutFile::apply`). Ours: Avid DS ("AVID DS LUT"), LUTher
+  ("#channels: c3") and Nucoda ("NUCODA_3D_CUBE 2") files are recognised and refused with a reason, as their layouts are
+  not published.
+* "The installed LUT(s) will be listed at the bottom, prefixed with the word External" (p.542): each readable file of the
+  project's `LUTs` folder ("Imported LUTs are stored in the project folder", p.542; `media::projectLutFolder`) and of the
+  folder for every project (`media::sharedLutFolder`: ours, the application data's `ColorManagement/LUTs`, or
+  `LUMENIS_SHARED_LUTS`; none with `LUMENIS_NO_SYSTEM_DRIVES=1`) is registered as "External <file name>" when a project
+  opens (`media::registerLutFolders`); the files that cannot be read are named in the Console. `media::installLut` copies
+  a file in and registers it, for 8.5d2's Select LUT file.
+* "CDL ASC_SOP=(111)...)(111)ASC_SAT=1 - Applies CDL values already associated with the master clips (found in the
+  ASC_SOP and ASC_SAT bin columns)" (p.540): `media::cdlTransformationName` names the clip's values in the transformation
+  ("CDL ASC_SOP=(s s s)(o o o)(p p p) ASC_SAT=x"), so it stands on its own in a list and a segment's adapter; it applies the
+  ASC CDL: (in x slope + offset) clamped, to the power, then saturation about Rec. 709 luma. "Alternatively, you can
+  select the CDL option from the Color Transformation list" (p.543): the Color Encoding tab offers the clip's at the end
+  of the drop-down (`SourceSettingsDialog::setClipCdl`).
+* The fuzz target `lut` reads arbitrary bytes as both kinds of file.
+
+## Left for 8.5d2
+
+The Color Management setting (Insert color transformations automatically in the source settings upon linking, Use CDL
+values from ASC_SOP and ASC_SAT bin columns when available with Auto applying them, Installed LUTs Project/Shared/Both,
+Select LUT file), the Color Encoding tab's Color Management Settings button, and CLF files through OpenColorIO.
+
 ## Tests
 
 * `tst_color_adapter`: the encoding with its column and JSON, Auto, bypass; segments' adapters, Refresh Sequence and
@@ -81,5 +113,8 @@ from 0 to 1:
 * `tst_frameflex_ui colorAdapters`: the Source monitor's and the Record monitor's pictures, Refresh Sequence > Color
   Adapters, Remove Color Adapters and its undo; the Color Encoding tab's Auto, Add, reorder, Delete, viewer, Bypass,
   Revert and Apply onto the clip.
+* `tst_color_adapter cdl` and `lutFiles`: the CDL's name and formulas; each LUT format's table, the refused products and
+  a broken file, installing, the External names and a folder's failures. `tst_frameflex_ui colorAdapters`: the clip's
+  CDL in the drop-down.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

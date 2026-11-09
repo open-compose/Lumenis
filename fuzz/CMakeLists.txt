@@ -19,8 +19,11 @@ add_library(lumenis_fuzz_targets STATIC
     target_fcpxml.cpp
     target_pict.cpp
     target_scc.cpp
-    # The PICT reader is built in here rather than linked from lumenis_media, which would bring FFmpeg.
+    target_lut.cpp
+    # The PICT and LUT readers are built in here rather than linked from lumenis_media, which would bring FFmpeg.
     ${PROJECT_SOURCE_DIR}/src/media/pict.cpp
+    ${PROJECT_SOURCE_DIR}/src/media/lut_file.cpp
+    ${PROJECT_SOURCE_DIR}/src/media/color_transform.cpp
 )
 target_include_directories(lumenis_fuzz_targets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(lumenis_fuzz_targets PRIVATE ${PROJECT_SOURCE_DIR}/src/media/include)
@@ -36,7 +39,7 @@ if(LUMENIS_FUZZ)
         message(FATAL_ERROR "LUMENIS_FUZZ needs Clang (libFuzzer); use the fuzz preset")
     endif()
     # One executable per target; the function each calls is fuzz<Name> in fuzz_targets.h.
-    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio" "fcpxml:fuzzFcpXml" "pict:fuzzPict" "scc:fuzzScc")
+    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio" "fcpxml:fuzzFcpXml" "pict:fuzzPict" "scc:fuzzScc" "lut:fuzzLut")
         string(REPLACE ":" ";" pair "${pair}")
         list(GET pair 0 name)
         list(GET pair 1 function)

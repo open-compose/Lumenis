@@ -357,9 +357,19 @@ private slots:
 
         // The Color Encoding tab (p.537-540; 8.5c2), from the Timeline's Source Settings: Auto, Add, dragging, Delete,
         // Bypass, Revert and Apply onto the clip.
+        // The clip's CDL columns (p.543): its CDL transformation in the drop-down.
+        {
+            model::BinItem withCdl = *bin->bin().item(clip.id);
+            withCdl.fields.insert(QStringLiteral("ASC_SOP"), QStringLiteral("(1.0 1.0 1.0)(0.0 0.0 0.0)(1.0 1.0 1.0)"));
+            bin->replaceItem(withCdl);
+        }
         bool asked = false;
         window.setSourceSettingsHook([&](SourceSettingsDialog& d) {
             if (!(d.colorEncoding() == e)) return false;
+            if (d.findChild<QComboBox*>(QStringLiteral("transformationChoice"))->findText(
+                    QStringLiteral("CDL ASC_SOP=(1 1 1)(0 0 0)(1 1 1) ASC_SAT=1")) < 0) {
+                return false;
+            }
             auto* list = d.findChild<QListWidget*>(QStringLiteral("colorTransformations"));
             if (!list || list->count() != 1) return false;
             const QColor before = d.shownFrame().pixelColor(5, 16);

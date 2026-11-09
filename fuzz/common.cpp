@@ -19,6 +19,7 @@ const std::vector<Target>& targets() {
         {"fcpxml", fuzzFcpXml},
         {"pict", fuzzPict},
         {"scc", fuzzScc},
+        {"lut", fuzzLut},
     };
     return all;
 }

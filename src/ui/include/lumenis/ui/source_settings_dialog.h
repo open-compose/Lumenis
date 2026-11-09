@@ -104,6 +104,8 @@ public:
     void deleteTransformation(int row);
     void moveTransformation(int from, int to);
     void autoTransformations();
+    // The clip's CDL transformation (media::cdlTransformationName), offered at the end of the drop-down; empty for none.
+    void setClipCdl(const QString& name);
     // The frame as the viewers show it: the transformations applied (bypassed: as it is).
     QImage shownFrame() const;
 

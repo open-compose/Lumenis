@@ -208,6 +208,19 @@ std::vector<Seed> seeds(const QString& target) {
         }
         add(QStringLiteral("matte.pct"), media::pictData(matte));
         add(QStringLiteral("opaque.pct"), media::pictData(matte, false));
+    } else if (target == QLatin1String("lut")) {
+        // A 1D and a 3D .cube, a Kodak KDM grid and an Autodesk table, each the smallest of its kind.
+        add(QStringLiteral("ramp.cube"), QByteArrayLiteral("TITLE \"Ramp\"\nLUT_1D_SIZE 2\n0 0 0\n1 1 1\n"));
+        QByteArray cube = "LUT_3D_SIZE 2\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n";
+        QByteArray kdm = "# IDENTIFICATION: 3DMODEL-3DLUT\n0 1023\n";
+        for (int i = 0; i < 8; ++i) {
+            cube += QByteArray::number(i & 1) + ' ' + QByteArray::number((i >> 1) & 1) + ' ' + QByteArray::number(i >> 2) + '\n';
+            kdm += QByteArray::number((i >> 2) * 4095) + ' ' + QByteArray::number(((i >> 1) & 1) * 4095) + ' ' +
+                   QByteArray::number((i & 1) * 4095) + '\n';
+        }
+        add(QStringLiteral("identity.cube"), cube);
+        add(QStringLiteral("kodak.3dl"), kdm);
+        add(QStringLiteral("discreet.lut"), QByteArrayLiteral("LUT: 3 2\n0\n1023\n0\n1023\n0\n1023\n"));
     } else if (target == QLatin1String("scc")) {
         // Two pop-on captions as our encoder sends them, and a roll-up line, at 01:00:00;00.
         const QByteArray popOn = model::popOnCaptionData({{30, 60, QStringLiteral("Seed one")}, {70, 90, QStringLiteral("Two\nrows")}}, 100);

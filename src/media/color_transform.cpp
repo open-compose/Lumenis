@@ -6,6 +6,7 @@
 
 #include <QHash>
 #include <QMutex>
+#include <QRegularExpression>
 
 #include <algorithm>
 #include <cmath>
@@ -100,10 +101,49 @@ QMutex& registryMutex() {
     return m;
 }
 
+// The numbers of an ASC_SOP value, "(s s s)(o o o)(p p p)": nine, or none.
+QList<double> sopNumbers(const QString& sop) {
+    static const QRegularExpression number(QStringLiteral("[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?"));
+    QList<double> out;
+    auto it = number.globalMatch(sop);
+    while (it.hasNext()) out << it.next().captured(0).toDouble();
+    return out.size() == 9 ? out : QList<double>();
+}
+
+// A CDL transformation's steps from its name.
+QList<ColorStep> cdlSteps(const QString& name) {
+    const qsizetype sat = name.indexOf(QStringLiteral("ASC_SAT="));
+    const QList<double> n = sopNumbers(name.mid(0, sat < 0 ? name.size() : sat).section(QLatin1Char('='), 1));
+    if (n.isEmpty()) return {};
+    const double saturation = sat < 0 ? 1.0 : name.mid(sat + 8).trimmed().toDouble();
+    ColorStep sop;
+    sop.mapping = [n](const std::array<double, 3>& c) {
+        std::array<double, 3> out{};
+        for (std::size_t i = 0; i < 3; ++i) {
+            const auto k = static_cast<qsizetype>(i);
+            const double v = clamp01(c[i] * n.at(k) + n.at(3 + k));
+            out[i] = std::pow(v, n.at(6 + k));
+        }
+        return out;
+    };
+    ColorStep sat709;
+    sat709.mapping = [saturation](const std::array<double, 3>& c) {
+        const double luma = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        std::array<double, 3> out{};
+        for (std::size_t i = 0; i < 3; ++i) out[i] = clamp01(luma + saturation * (c[i] - luma));
+        return out;
+    };
+    return {sop, sat709};
+}
+
 QList<ColorStep> stepsOf(const QStringList& names) {
     QMutexLocker lock(&registryMutex());
     QList<ColorStep> steps;
     for (const QString& n : names) {
+        if (isCdlTransformation(n)) {
+            steps += cdlSteps(n);
+            continue;
+        }
         const auto it = registry().steps.constFind(n);
         if (it != registry().steps.constEnd()) steps += *it;
     }
@@ -113,7 +153,9 @@ QList<ColorStep> stepsOf(const QStringList& names) {
 void run(std::array<double, 3>& c, const QList<ColorStep>& steps, qsizetype from) {
     for (qsizetype i = from; i < steps.size(); ++i) {
         const ColorStep& s = steps.at(i);
-        if (s.isMatrix) {
+        if (s.mapping) {
+            c = s.mapping(c);
+        } else if (s.isMatrix) {
             const auto& m = s.matrix;
             c = {m[0] * c[0] + m[1] * c[1] + m[2] * c[2], m[3] * c[0] + m[4] * c[1] + m[5] * c[2],
                  m[6] * c[0] + m[7] * c[1] + m[8] * c[2]};
@@ -124,6 +166,21 @@ void run(std::array<double, 3>& c, const QList<ColorStep>& steps, qsizetype from
 }
 
 } // namespace
+
+QString cdlTransformationName(const QString& sop, const QString& sat) {
+    const QList<double> n = sopNumbers(sop);
+    if (n.isEmpty()) return {};
+    auto group = [&](qsizetype from) {
+        return QStringLiteral("(%1 %2 %3)").arg(n.at(from)).arg(n.at(from + 1)).arg(n.at(from + 2));
+    };
+    bool ok = false;
+    const double s = sat.trimmed().toDouble(&ok);
+    return QStringLiteral("CDL ASC_SOP=%1%2%3 ASC_SAT=%4").arg(group(0), group(3), group(6)).arg(ok ? s : 1.0);
+}
+
+bool isCdlTransformation(const QString& name) {
+    return name.startsWith(QLatin1String("CDL ASC_SOP="));
+}
 
 QStringList colorTransformationNames() {
     QMutexLocker lock(&registryMutex());
@@ -151,7 +208,7 @@ QImage applyColorTransformations(const QImage& image, const QStringList& names) 
     if (steps.isEmpty() || image.isNull()) return image;
     // The curves before the first matrix, from the 8-bit input: one table per value.
     qsizetype firstMatrix = 0;
-    while (firstMatrix < steps.size() && !steps.at(firstMatrix).isMatrix) ++firstMatrix;
+    while (firstMatrix < steps.size() && !steps.at(firstMatrix).mixes()) ++firstMatrix;
     std::array<double, 256> table{};
     for (int i = 0; i < 256; ++i) {
         double v = i / 255.0;

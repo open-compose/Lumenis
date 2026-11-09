@@ -17,6 +17,7 @@
 #include "lumenis/model/safe_color_limiter.h"
 #include "lumenis/media/color_transform.h"
 #include "lumenis/media/frame_flex.h"
+#include "lumenis/media/lut_file.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/scopes.h"
 
@@ -1101,6 +1102,12 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     // Project settings first: they include the new-sequence timecode.
     settings_->setProject(project.folder);
     if (settingsWindow_) settingsWindow_->setProject(project);
+    // External LUTs (p.541-542; 8.5d1): the project's and every project's, listed as "External <name>".
+    {
+        QStringList failures;
+        media::registerLutFolders({media::projectLutFolder(project.folder), media::sharedLutFolder()}, &failures);
+        for (const QString& f : failures) ConsoleLog::instance().append(tr("LUT not installed: %1").arg(f));
+    }
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
     composer_->clear();
     composer_->setAspectRatio(project.settings.aspect);
@@ -3232,6 +3239,9 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
     }
     // Color Encoding (p.537-540): the first clip's.
     dialog.setColorEncoding(model::colorEncodingOf(first).value_or(model::ColorEncoding{}));
+    // "you can select the CDL option from the Color Transformation list" (p.543): the clip's ASC_SOP and ASC_SAT.
+    dialog.setClipCdl(media::cdlTransformationName(first.fields.value(QStringLiteral("ASC_SOP")),
+                                                   first.fields.value(QStringLiteral("ASC_SAT"))));
     dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate, const model::ColorEncoding& color) {
         for (const auto& [bin, id] : chosen) {
             BinDocument* doc = binContainer_->document(bin);

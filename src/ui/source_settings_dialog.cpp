@@ -522,6 +522,10 @@ void SourceSettingsDialog::moveTransformation(int from, int to) {
     colorChanged();
 }
 
+void SourceSettingsDialog::setClipCdl(const QString& name) {
+    if (!name.isEmpty() && transformationChoice_->findText(name) < 0) transformationChoice_->addItem(name);
+}
+
 void SourceSettingsDialog::autoTransformations() {
     model::ColorEncoding e = colorEncoding();
     e.transformations = model::autoTransformations(e.sourceSpace);

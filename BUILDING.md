@@ -1486,3 +1486,6 @@ cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exi
   are shared (docs/spec/bin-locking.md). Use `all` for a share Cutthulhu
   does not recognise, and to try locking on one machine with two users
   (start each with its own User profile).
+* `LUMENIS_SHARED_LUTS`: the folder of external LUTs every project lists
+  (ours: the application data's `ColorManagement/LUTs`; each project's own
+  are in its `LUTs` folder). docs/spec/color-adapters.md.

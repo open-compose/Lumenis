@@ -40,8 +40,11 @@ int fuzzPict(const std::uint8_t* data, std::size_t size);
 // SCC: model::parseScc reads the text, its caption data is decoded, written with model::writeScc and must read back
 // to the same data (target_scc.cpp).
 int fuzzScc(const std::uint8_t* data, std::size_t size);
+// LUT files: media::readLutData reads the bytes as a .cube and as a .3dl, and a LUT that reads maps colours to finite
+// values (target_lut.cpp).
+int fuzzLut(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict", "scc"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict", "scc", "lut"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;
