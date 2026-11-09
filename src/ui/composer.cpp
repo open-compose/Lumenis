@@ -1886,7 +1886,7 @@ model::BinItem Composer::monitorItem(const model::BinItem& item) const {
 
 void Composer::load(MonitorId monitor, const QString& binId, const model::BinItem& item) {
     stop();
-    state(monitor).load(binId, monitorItem(item));
+    state(monitor).load(binId, monitorItem(loadFilter_ ? loadFilter_(binId, item) : item));
     setActiveMonitor(monitor);
     refresh();
 }

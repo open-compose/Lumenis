@@ -678,6 +678,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   pillarboxed; a typed percentage makes Custom...; without margins the menu shows the picture's shape; Mix to White/Black
   at half; the right-click Target Mask lasts until the Composer setting is applied again; the preset "1.32:1" as the
   picture on p.551 reads.
+* Dynamic Relink (docs/spec/dynamic-relink.md, 8.6a): our managed media naming a clip's MobID as the Media Indexer's
+  resolutions; the setting's three tabs (the top area as a tab of its own); Keep Existing Media first on both tabs; the
+  Relink Parameters as menus starting with Any, and their values; Highest Quality as the project's raster, then pixels,
+  then bytes a frame; field order and colour space not compared; clips back on their own media when the setting is off;
+  Create new clips dimmed without Dynamic Relink; sequences' clips still getting new clips.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above
@@ -2818,7 +2823,8 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   * Skip media files already on the target drive;
   * Target Video Resolution;
   * Raster Dimensions: project, source, source 1/4, source 1/16 (p.355);
-  * Convert Audio Bit Depth.
+  * Convert Audio Bit Depth;
+  * Create new clips, offered with Dynamic Relink on (p.354-355; docs/spec/dynamic-relink.md).
 * Consolidate copies the picture without converting it. That works for DNx
   (managed media, or linked DNx files at the project's rate). Other media
   is skipped with a note in the Console: transcode it.

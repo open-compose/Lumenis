@@ -946,7 +946,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (ACES version, Output Color Space `ProjectSettings::outputColorSpace` through `MainWindow::setOutputColorSpace`, exported
   frames through `MainWindow::outputFrame`), the blue Video Quality Menu `Timeline::setFloatingPointPrecision` and Transcode
   in the working space (`ConsolidateOptions::acesWorkingSpace`; tests `tst_render_ui acesProject`, `tst_project_store
-  acesOutputColorSpace`), is done, so 8.5e and 8.5 are. Next: 8.6, MultiRez and Dynamic Relink and stereoscopic projects.
+  acesOutputColorSpace`), is done, so 8.5e and 8.5 are. 8.6, MultiRez and Dynamic Relink and stereoscopic projects, is in
+  four parts (ROADMAP). 8.6a, MultiRez media and the Dynamic Relink Project setting (docs/spec/dynamic-relink.md:
+  `src/media/dynamic_relink.*` with a clip's media as the sets naming its MobID, `MediaDatabase::setsOf`, quality matching
+  `media::chooseMedia`, the affinity link kept under "multiRez"; `src/ui/main_window_relink.cpp` relinking through
+  `Composer::setLoadFilter` and when the setting changes; Transcode's Create new clips `ConsolidateOptions::newClips`;
+  tests `tst_dynamic_relink`, `tst_render_ui dynamicRelink`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

@@ -71,6 +71,7 @@ add_library(lumenis_ui STATIC
     main_window_script.cpp
     main_window_services.cpp
     main_window_dmf.cpp
+    main_window_relink.cpp
     dynamic_media_folders_window.cpp
     source_settings_dialog.cpp
     menu_builder.cpp

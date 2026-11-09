@@ -170,6 +170,11 @@ public:
     using PhantomResolver =
         std::function<std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>(MonitorId)>;
     void setPhantomResolver(PhantomResolver resolver) { phantoms_ = std::move(resolver); }
+    // What an item becomes as it loads into a monitor: Dynamic Relink relinks a clip, or a sequence's clips, to the media
+    // its settings choose "whenever clips are loaded into the source monitor or the Timeline" (Editing Guide p.1107;
+    // MainWindow::dynamicRelinkItem). Without one items load as they are.
+    using LoadFilter = std::function<model::BinItem(const QString& binId, const model::BinItem& item)>;
+    void setLoadFilter(LoadFilter filter) { loadFilter_ = std::move(filter); }
     // Closed captions (7.4b; Editing Guide p.983): "Right-click the monitor where you want to preview the Closed
     // Captions, and select Show Captions." MainWindow gives the caption on a monitor's frame (the D1 data of a
     // sequence or a caption clip's own); shownCaption() is the one drawn at the position while Show Captions is on.
@@ -833,6 +838,7 @@ private:
     PictureResolver pictures_;
     MonitorOverride override_;
     PhantomResolver phantoms_;
+    LoadFilter loadFilter_;
     CaptionResolver captions_;
     bool showCaptions_[2] = {false, false}; // Source, Record
     QString displaySpace_[2];               // Source, Record; empty for the project's

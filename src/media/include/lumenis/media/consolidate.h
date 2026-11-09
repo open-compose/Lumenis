@@ -46,6 +46,11 @@ struct ConsolidateOptions {
     // ACES projects (8.5e4b2): the applied encoding goes on to the ACEScct working space (media::withAcesWorkingSpace), as
     // the clips play there (p.558).
     bool acesWorkingSpace = false;
+    // Transcode's "Create new clips" (p.354-355), offered with Dynamic Relink on: off, "the existing master clip is
+    // associated with both the original media file and the transcoded media file". The new media of a selected master
+    // clip then name its MobID (MultiRez, p.1099-1101; 8.6a) and no ".new" clip is made; sequences' clips still get new
+    // clips until partly online media come (8.6c).
+    bool newClips = true;
     MediaCreation creation; // its raster is the project's
 };
 
@@ -64,6 +69,8 @@ QString numberedName(const QString& name, const QString& suffix, const QStringLi
 struct ConsolidateResult {
     QList<model::BinItem> added;   // new clips and sequences, for the bin
     QList<model::BinItem> changed; // selected items now using the new media
+    // Master clips that have media at one more resolution (newClips off): Dynamic Relink chooses which they play.
+    QList<model::BinItem> associated;
     QStringList skipped;           // why items or clips were left as they were
     QString error;                 // what stopped it (cancelled too)
 };

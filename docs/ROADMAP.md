@@ -1518,7 +1518,19 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       ACES version and Output Color Space on export, the blue Video Quality Menu, Transcode in the working space
       (p.558-560); the Project tab's video output colour space waits for the Video Output modules (7.3c). So 8.5e and
       8.5 are done.
-  * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1110) and stereoscopic projects.
+  * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1121) and stereoscopic projects, in four parts. Our managed media
+    stand in for the Media Indexer: a clip's media at other resolutions are the files that name its MobID.
+    8.6a (done), MultiRez media and the Dynamic Relink Project setting (p.1099-1110, p.1120-1121, p.1169-1171): a master
+      clip's media at several resolutions, Transcode without Create new clips (p.354-355), the setting's Working and
+      Target tabs, quality matching, relinking clips loaded in the Source monitor and the Timeline, Override Working
+      Settings with Target Settings, Allow Mixed Frame Rate Media.
+    8.6b, the MultiRez button and its menu (p.1111-1116): Show Mismatches and Show Target Availability, Enable Clip
+      Coloring with Resolution Tracking, Find Next Mismatched or Unavailable Clip (Ctrl+/), Update Media Status, Show
+      Mismatched Render Ranges, Clip Text > Clip Resolutions (p.1104).
+    8.6c, partial and shared media (p.1100-1102, p.1116-1120): the MultiRez bin headings with full, half and empty
+      circles, clips sharing a source and timecode span, partially online media, the Delete dialog's affinity
+      resolutions, Cross Rate Dynamic Relink (p.1109-1110).
+    8.6d, stereoscopic projects (the guide's scattered stereoscopic pages, to be gathered first).
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New

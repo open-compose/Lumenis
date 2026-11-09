@@ -49,6 +49,10 @@ public:
 
     // Everything but the project's raster and name, and the progress.
     media::ConsolidateOptions options() const;
+    // "In a MediaCentral Production Management environment, with Dynamic Relink enabled, select this option to create
+    // new master clips for the transcoded media" (p.354-355): Create new clips is offered while Dynamic Relink is on
+    // (MainWindow::dynamicRelinkSettings); otherwise it is dimmed and new clips are made.
+    void setDynamicRelink(bool on);
 
     // The Target Drive(s) lists; each item's Qt::UserRole is the drive's root folder.
     QListWidget* drives() const { return videoDrives_; }
@@ -82,6 +86,7 @@ private:
     QComboBox* resolution_ = nullptr;
     QComboBox* raster_ = nullptr;
     QCheckBox* applyColorEncoding_ = nullptr;
+    QCheckBox* newClips_ = nullptr; // Create new clips (p.354-355)
     QPushButton* go_ = nullptr;
     QRadioButton* background_ = nullptr;
 };

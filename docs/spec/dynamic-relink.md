@@ -1,0 +1,100 @@
+# MultiRez and Dynamic Relink
+
+Editing Guide ch.31, p.1095-1121, and the Dynamic Relink setting, p.1169-1171. ROADMAP 8.6. Code:
+`src/media/dynamic_relink.*`, `src/ui/main_window_relink.cpp`, the "Dynamic Relink" Project setting in
+`src/ui/resources/settings.json`, Transcode's Create new clips in `src/ui/consolidate_dialog.*` and
+`src/media/consolidate.*`.
+
+## Media at several resolutions (8.6a)
+
+"MultiRez ... lets you create a master clip that is associated with multiple media files of different resolutions"
+(p.1095). "MultiRez is managed by the MediaCentral Production Index (Media Indexer)" (p.1096); we have none, and "In a
+MultiRez environment, relinking is source based" (p.1099).
+
+* Ours: our media database (`media::MediaDatabase`, docs/spec/native-model.md) stands in for the Media Indexer. A clip's
+  media at other resolutions are the managed media sets whose files name its MobID as their material package
+  (`MediaDatabase::setsOf`), as the source ID does in Media Composer.
+* The clip's "affinity media" (p.1101-1102) is the link it was made with. While dynamic relink has the clip on other
+  media, the link keeps it under `"multiRez"` (`media::affinityLink`), so the clip can go back to it.
+* Candidates (`media::mediaCandidates`): the affinity media while its files are there, and each set naming the MobID that
+  holds the clip's tracks for its whole length, at its start timecode. Newest first. Sets that hold only part of the clip
+  ("Partial Clips, Multiple Resolutions", p.1102) wait for 8.6c.
+* What quality matching reads of each (`media::MediaCandidate`): raster, frame rate, resolution name, codec family,
+  container, sample rate and bit depth, bytes a clip frame, and when it was made. The media database's index (version 4)
+  now records a file's raster, codec, sample rate and bit depth (`MediaFileInfo`). Linked affinity media are probed.
+
+### Transcode's Create new clips (p.354-355)
+
+"In a MediaCentral Production Management environment, with Dynamic Relink enabled, select this option to create new
+master clips for the transcoded media. If you do not select this option, the existing master clip is associated with
+both the original media file and the transcoded media file."
+
+* The Consolidate/Transcode dialog's Transcode options have Create new clips (`createNewClips`), on, dimmed unless the
+  Dynamic Relink setting is enabled (`ConsolidateDialog::setDynamicRelink`).
+* Off (`ConsolidateOptions::newClips`): a selected master clip's new media name its MobID and no ".new" clip is made
+  (`ConsolidateResult::associated`); MainWindow reads the media database again and relinks the clip by the setting.
+  Ours: sequences' clips still get new clips, as their new media cover only what the sequence uses (8.6c).
+
+## The Dynamic Relink setting (p.1106-1110, p.1169-1171)
+
+A Project setting ("Dynamic Relink settings are project settings", p.1107) with three tabs, ours: Dynamic Relink (the
+dialog's top area: Enable Dynamic Relink, Allow Mixed Frame Rate Media, Override Working Settings with Target Settings),
+Working Settings and Target Settings. Each of the two holds:
+
+* If no match is found: Use highest quality, Use lower bandwidth, Keep Existing Media, Offline (p.1170). Keep Existing
+  Media to start with (ours; p.1107 suggests Offline for the Target tab "because this setting provides a clearer
+  warning").
+* Video Relink Method: Most Recent, Highest Quality, Minimal bandwidth, Specific Resolution; Specific Resolution's Relink
+  Parameters Raster, Frame Rate, Codec Family, Compression Quality and Container; When multiple matches are found:
+  Prefer target raster, then prefer highest bandwidth, or Prefer lowest bandwidth (p.1170).
+* Audio Relink Method: Most Recent, Highest Quality, Most compressed, Specific Quality, with Codec Family, Bit Depth,
+  Sample Rate and Container, and Prefer highest or lowest bitrate (p.1170-1171). Ch.31 names the audio methods "Highest
+  Sample Rate, Highest Bit Depth, or Specific Quality" (p.1120); we follow the settings reference.
+* Ours: the parameters are menus whose first choice is Any (no filter). Their values: rasters from 720x480 to
+  4096x2160, frame rates 23.976 to 60, codec families Avid DNx, Apple ProRes, H.264, H.265, Uncompressed and Other, our
+  DNx resolutions for Compression Quality, containers MXF, QuickTime, MP4 and Other; audio PCM, AAC, Other, 16/24/32 bits,
+  32 to 96 kHz, MXF, WAV, Other.
+
+### Quality matching (p.1120-1121; `media::chooseMedia`)
+
+* Media at the project's frame rate are taken first. "In case of no media with current project frame rate, Media Composer
+  uses the most recent online compression out of all available for that object" (p.1169). With Allow Mixed Frame Rate
+  Media all rates are taken, and Specific Resolution's Frame Rate is a preference ("the Frame Rate pull down menu changes
+  from exact values to preferred values", p.1110).
+* Most Recent: the newest media. Highest Quality: "the least compressed and most highly defined media ... with a format
+  that most closely matches the project settings" (p.1120); ours: the project's raster first, then more pixels, then more
+  bytes a frame (our files do not record bit depth or chroma). Minimal bandwidth: the fewest bytes a frame.
+* Specific Resolution: the media passing every parameter set; of several, the project's raster then the most bytes a
+  frame, or the fewest. Sound-only clips go by the audio rules.
+* With no match, If no match is found decides; Offline puts the clip offline ("Relinking to offline does not delete
+  existing media", p.1170): its link is the affinity link marked unlinked with `"multiRezOffline"`, so it relinks when
+  the rules change. A clip the user unlinked (p.368) is left alone.
+* The seven queries of p.1121 (tape and timespan, size, field order, compression family, compression, bit depth, colour
+  space) are covered by the MobID and the parameters; ours does not compare field order or colour space.
+
+### When it relinks (`MainWindow::dynamicRelinkItem`, `dynamicRelinkLoaded`)
+
+* "Media Composer performs a dynamic relink whenever clips are loaded into the source monitor or the Timeline" (p.1107):
+  the Composer's load filter (`Composer::setLoadFilter`) relinks a clip, or every clip a loaded sequence uses, and stores
+  it in its bin, so every sequence using it plays the new media.
+* "Selecting this option and clicking 'Apply' or 'OK' will trigger immediate relink for any media loaded into Source
+  Monitor or the Timeline" (p.1170): a change to the setting relinks what the monitors have loaded. Override Working
+  Settings with Target Settings relinks to the Target tab; turning it off returns to the Working tab (p.1108-1109).
+* Ours: turning Dynamic Relink off puts the loaded clips back on their affinity media.
+* Not ours: Send to Playback, MediaCentral check-in, OMF alpha media (p.1106), Frame Chase editing (p.1111) and the
+  Production Management relink rules (p.1111).
+
+## Left for later
+
+* 8.6b: the MultiRez button and its menu, clip colouring for resolution tracking, Find Next Mismatched or Unavailable
+  Clip, Update Media Status, Show Mismatched Render Ranges, Clip Text > Clip Resolutions (p.1104, p.1111-1116).
+* 8.6c: the MultiRez bin headings (p.1116), partially online media and clips sharing a source and timecode span
+  (p.1100-1102, p.1118-1120), the Delete dialog's affinity (p.1117), Cross Rate Dynamic Relink (p.1109-1110).
+
+## Tests
+
+* `tst_dynamic_relink settingsFromValues`, `frameRates`, `multiRezClip`: the setting's values, the frame rate pool, and a
+  linked clip transcoded twice without Create new clips chosen by Most Recent, Minimal bandwidth, Specific Resolution,
+  each If no match is found, Offline and back, the affinity link kept through the media database.
+* `tst_render_ui dynamicRelink`: the setting applied to the loaded clip, Offline, Override with the Target tab, relinking
+  as a clip loads, off again, and Create new clips following the setting.

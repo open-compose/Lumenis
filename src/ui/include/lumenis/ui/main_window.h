@@ -3,6 +3,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/dynamic_media_folders.h"
+#include "lumenis/media/dynamic_relink.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -975,6 +976,15 @@ protected:
 public:
     // The Safe Colors project setting's limits and Actions (FX Guide ch.23; 6.10e4).
     model::SafeColorLimits safeColorLimits() const;
+    // The Dynamic Relink Project setting (Editing Guide p.1106-1110, p.1169-1171; 8.6a, main_window_relink.cpp).
+    media::DynamicRelinkSettings dynamicRelinkSettings() const;
+    // An item loading into a monitor or the Timeline (the Composer's load filter): with Dynamic Relink on, a clip, or
+    // each clip a sequence uses, relinked to the media the setting chooses and stored in its bin (p.1107). Returns the
+    // item as it loads.
+    model::BinItem dynamicRelinkItem(const QString& binId, const model::BinItem& item);
+    // Relinks the clips loaded in the monitors and those of the loaded sequences (p.1170); off, puts them back on their
+    // affinity media. How many changed.
+    int dynamicRelinkLoaded();
 
 private:
     // The Titler+ template open in the Record monitor (editTitleTemplate): where it is, its sequence as edited, and
@@ -1043,6 +1053,10 @@ private:
     CommandRegistry& commands_;
     const ext::ProviderRegistry& providers_;
     std::optional<model::ProjectEntry> project_;
+    // The Dynamic Relink setting as last applied: a change relinks what is loaded (applyDynamicRelinkSetting()).
+    std::optional<media::DynamicRelinkSettings> appliedRelink_;
+    void applyDynamicRelinkSetting();
+    bool dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& settings);
     PanelManager* panels_ = nullptr;
     BinContainer* binContainer_ = nullptr;
     Composer* composer_ = nullptr;

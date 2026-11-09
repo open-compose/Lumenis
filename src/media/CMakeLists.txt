@@ -4,6 +4,7 @@ add_library(lumenis_media STATIC
     optical_flow.cpp
     fields.cpp
     color_transform.cpp
+    dynamic_relink.cpp
     display_color.cpp
     aces.cpp
     lut_file.cpp

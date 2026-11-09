@@ -197,6 +197,13 @@ struct MediaFileInfo {
     std::int64_t frames = 0;
     Rational rate{25, 1};
     QString resolution; // "Avid DNx HQ", or the copied picture's codec
+    // What the file's stream holds, for quality matching (Dynamic Relink, p.1120-1121; 8.6a): a picture's raster and
+    // FFmpeg codec name, a sound's sample rate and bits a sample. 0 or empty when unknown.
+    int width = 0;
+    int height = 0;
+    QString codec;
+    int sampleRate = 0;
+    int bitDepth = 0;
     // The file's size, and its creation time (else its modification time).
     std::int64_t bytes = 0;
     QDateTime created;
@@ -249,13 +256,15 @@ public:
     // The media of the master clip with this MobID (its files' material
     // package), as for a clip imported from AAF (p.547).
     std::optional<MediaSet> setOf(const MobId& master) const;
+    // Every media set naming the master clip's MobID: its media at each resolution (MultiRez, p.1099-1101; 8.6a).
+    QList<MediaSet> setsOf(const MobId& master) const;
     // Whether the master clip with this MobID has video media at more than one resolution (Show local
     // media icons' "mixed resolution", p.1154). Worked out once per change to the files.
     bool hasMixedResolution(const MobId& master) const;
     // The projects with media on the drives.
     QStringList projects() const;
     // Points a managed clip at where its files are now. False if it is not
-    // a managed clip or a track's file is not found.
+    // a managed clip or a track's file is not found. Dynamic relink's affinity link ("multiRez") is kept.
     bool resolve(model::BinItem& item) const;
     // Forgets a file (deleted).
     void remove(const QString& path);

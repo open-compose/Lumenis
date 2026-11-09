@@ -48,7 +48,7 @@ const QString kFramesKey = QStringLiteral("comment_lumenis_frames");
 const QString kRateKey = QStringLiteral("comment_lumenis_rate");
 const QString kResolutionKey = QStringLiteral("comment_lumenis_resolution");
 // The index's layout; an index of another version is read again.
-constexpr int kIndexVersion = 3; // 3: each file's material package MobID
+constexpr int kIndexVersion = 4; // 3: each file's material package MobID; 4: its raster, codec, sample rate and depth
 
 // Frames to samples at `sampleRate`, exact in integers (a * b / c).
 std::int64_t samplesAt(std::int64_t frames, const Rational& rate, int sampleRate) {
@@ -1039,8 +1039,13 @@ QJsonObject MediaFileInfo::toJson() const {
                   {QStringLiteral("start"), start},    {QStringLiteral("frames"), static_cast<qint64>(frames)},
                   {QStringLiteral("rate"), rateText(rate)}, {QStringLiteral("resolution"), resolution},
                   {QStringLiteral("bytes"), static_cast<qint64>(bytes)}};
-    if (created.isValid()) o.insert(QStringLiteral("created"), created.toString(Qt::ISODate));
+    if (created.isValid()) o.insert(QStringLiteral("created"), created.toString(Qt::ISODateWithMs));
     if (!material.isNull()) o.insert(QStringLiteral("material"), QString::fromStdString(material.toString()));
+    if (width > 0) o.insert(QStringLiteral("width"), width);
+    if (height > 0) o.insert(QStringLiteral("height"), height);
+    if (!codec.isEmpty()) o.insert(QStringLiteral("codec"), codec);
+    if (sampleRate > 0) o.insert(QStringLiteral("sampleRate"), sampleRate);
+    if (bitDepth > 0) o.insert(QStringLiteral("bitDepth"), bitDepth);
     return o;
 }
 
@@ -1057,8 +1062,13 @@ MediaFileInfo MediaFileInfo::fromJson(const QJsonObject& o) {
     f.rate = rateFrom(o.value(QStringLiteral("rate")).toString());
     f.resolution = o.value(QStringLiteral("resolution")).toString();
     f.bytes = o.value(QStringLiteral("bytes")).toInteger();
-    f.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
+    f.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODateWithMs);
     f.material = MobId::fromString(o.value(QStringLiteral("material")).toString().toStdString()).value_or(MobId());
+    f.width = o.value(QStringLiteral("width")).toInt();
+    f.height = o.value(QStringLiteral("height")).toInt();
+    f.codec = o.value(QStringLiteral("codec")).toString();
+    f.sampleRate = o.value(QStringLiteral("sampleRate")).toInt();
+    f.bitDepth = o.value(QStringLiteral("bitDepth")).toInt();
     return f;
 }
 
@@ -1085,6 +1095,17 @@ std::optional<MediaFileInfo> readMediaFile(const QString& path) {
     QString material = m.value(QStringLiteral("material_package_umid"));
     if (material.startsWith(QLatin1String("0x"))) material = material.mid(2);
     f.material = MobId::fromString(material.toStdString()).value_or(MobId());
+    if (!info->streams.empty()) {
+        const StreamInfo& st = info->streams.front();
+        f.codec = st.codec;
+        if (st.kind == StreamKind::Video) {
+            f.width = st.width;
+            f.height = st.height;
+        } else {
+            f.sampleRate = st.sampleRate;
+            f.bitDepth = st.bitsPerSample;
+        }
+    }
     if (f.frames <= 0 && !info->streams.empty()) {
         // Files made before these were written: from the stream.
         const StreamInfo& st = info->streams.front();
@@ -1282,6 +1303,20 @@ std::optional<MediaSet> MediaDatabase::setOf(const MobId& master) const {
     return std::nullopt;
 }
 
+QList<MediaSet> MediaDatabase::setsOf(const MobId& master) const {
+    QList<MediaSet> out;
+    if (master.isNull()) return out;
+    QStringList ids;
+    for (const MediaFileInfo& f : files_) {
+        if (f.material == master && !ids.contains(f.mediaId)) ids << f.mediaId;
+    }
+    ids.sort();
+    for (const QString& id : ids) {
+        if (auto s = set(id)) out << *s;
+    }
+    return out;
+}
+
 // Replaces the link's paths with where the database has the files of its media id now; the item is
 // changed only when a path differs.
 bool MediaDatabase::resolve(model::BinItem& item) const {
@@ -1302,7 +1337,11 @@ bool MediaDatabase::resolve(model::BinItem& item) const {
     }
     if (l.videoStream < 0 && !l.audioPaths.isEmpty()) l.path = l.audioPaths.constFirst();
     if (l.path == link->path && l.audioPaths == link->audioPaths) return true;
-    item.link = l.toJson();
+    QJsonObject json = l.toJson();
+    for (const QString& kept : {QStringLiteral("multiRez"), QStringLiteral("multiRezOffline")}) {
+        if (item.link.contains(kept)) json.insert(kept, item.link.value(kept));
+    }
+    item.link = json;
     return true;
 }
 

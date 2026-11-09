@@ -5,6 +5,8 @@
 // when the mode returns.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/display_color.h"
+#include "lumenis/media/dynamic_relink.h"
+#include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/effect_render.h"
@@ -14,6 +16,7 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/render_dialogs.h"
@@ -33,6 +36,7 @@
 #include <QPushButton>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QRadioButton>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTest>
@@ -557,6 +561,105 @@ private slots:
         QCOMPARE(composer.displayColorSpace(MonitorId::Record), QStringLiteral("Project"));
         QCOMPARE(composer.displayed(MonitorId::Record, frame).pixel(1, 1),
                  media::toDisplayColorSpace(frame, QStringLiteral("ACES RGB"), QStringLiteral("DCI P3")).pixel(1, 1));
+    }
+
+    // Dynamic Relink (p.1106-1110, p.1169-1171; 8.6a): a clip with media at a second resolution, the setting applied to
+    // the loaded clip, Offline when nothing matches, back on the clip's own media when turned off; Transcode's Create
+    // new clips offered only with the setting on (p.354-355).
+    void dynamicRelink() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("red.mov"));
+        QVERIFY(writeMovie(movie, 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Rez"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("Rez.cthproj"));
+        project.settings.name = QStringLiteral("Rez");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem clip = *bin->bin().item(ids.first());
+        const QJsonObject original = clip.link;
+        // The clip's media at a second resolution, as Transcode without Create new clips makes it.
+        media::MediaCreation creation;
+        creation.videoDrive = drive;
+        creation.raster = QSize(256, 144);
+        creation.resolution = *media::findResolution(QStringLiteral("dnx_lb"));
+        creation.master = model::mobIdOf(clip);
+        QVERIFY(media::transcodeClip(clip, 0, -1, creation));
+        window.loadMediaDatabase();
+        // Off: loading changes nothing.
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, clip);
+        QCOMPARE(bin->bin().item(clip.id)->link, original);
+        // On: the loaded clip relinks to the most recent media (p.1170), the transcode.
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("enabled"), true);
+        settle();
+        QVERIFY(window.dynamicRelinkSettings().enabled);
+        auto link = media::Link::fromJson(bin->bin().item(clip.id)->link);
+        QVERIFY(link && link->isManaged());
+        QVERIFY(media::Link::fromJson(composer.state(MonitorId::Source).current()->item.link)->isManaged());
+        QCOMPARE(media::affinityLink(*bin->bin().item(clip.id)), original);
+        // Specific Resolution that nothing has, Offline if no match is found.
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("working.videoMethod"),
+                                   QStringLiteral("specificResolution"));
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("working.compression"),
+                                   QStringLiteral("Avid DNx 444"));
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("working.noMatch"), QStringLiteral("offline"));
+        settle();
+        QVERIFY(media::Link::fromJson(bin->bin().item(clip.id)->link)->unlinked);
+        // The Target tab matches the clip's own file (ffv1 is Other); Override uses it (p.1169).
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("target.videoMethod"),
+                                   QStringLiteral("specificResolution"));
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("target.codecFamily"), QStringLiteral("Other"));
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("overrideWorking"), true);
+        settle();
+        QCOMPARE(bin->bin().item(clip.id)->link, original);
+        // A clip loading is relinked as it loads: back to Working (offline), then load again.
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("overrideWorking"), false);
+        settle();
+        QVERIFY(media::Link::fromJson(bin->bin().item(clip.id)->link)->unlinked);
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("working.compression"),
+                                   QStringLiteral("Avid DNx LB"));
+        composer.loadDefault(binId, *bin->bin().item(clip.id));
+        QVERIFY(media::Link::fromJson(bin->bin().item(clip.id)->link)->isManaged());
+        // Off: back on its own media.
+        window.settings().setValue(QStringLiteral("Dynamic Relink"), QStringLiteral("enabled"), false);
+        settle();
+        QCOMPARE(bin->bin().item(clip.id)->link, original);
+        // Create new clips follows the setting.
+        ConsolidateDialog d(Rational(25), false);
+        auto* newClips = d.findChild<QCheckBox*>(QStringLiteral("createNewClips"));
+        QVERIFY(newClips && !newClips->isEnabled());
+        d.findChild<QRadioButton*>(QStringLiteral("transcodeMode"))->setChecked(true);
+        QVERIFY(d.options().newClips);
+        d.setDynamicRelink(true);
+        newClips->setChecked(false);
+        QVERIFY(!d.options().newClips);
+        media::setExtraMediaDrives({});
     }
 };
 

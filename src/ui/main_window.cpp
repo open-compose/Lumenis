@@ -917,6 +917,9 @@ void MainWindow::createPanels() {
         }
         return choice.clips ? ids : QStringList{};
     });
+    // Dynamic Relink "performs a dynamic relink whenever clips are loaded into the source monitor or the Timeline"
+    // (p.1107; main_window_relink.cpp).
+    composer_->setLoadFilter([this](const QString& binId, const model::BinItem& item) { return dynamicRelinkItem(binId, item); });
     // Bins opening find their managed clips' media in the database (p.358).
     binContainer_->setBinLoader([this](model::Bin& bin) {
         for (model::BinItem& item : bin.items) {
@@ -1101,6 +1104,7 @@ void MainWindow::createPanels() {
 // commands get their handlers, and the media database is read.
 void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
+    appliedRelink_.reset(); // the new project's Dynamic Relink setting is read afresh
     timeline_->setProjectHeight(project.settings.format.height);
     // "You will see a WaveformCache folder in the Avid Projects directory" (p.677): ours is in the
     // project's folder.
@@ -7763,6 +7767,7 @@ void MainWindow::consolidateTranscode() {
     dialog.setDrive(transcode.videoDrive);
     dialog.setResolution(transcode.resolution.id);
     dialog.setBitDepth(transcode.bitDepth);
+    dialog.setDynamicRelink(dynamicRelinkSettings().enabled);
     const bool ok = consolidateHook_ ? consolidateHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok) return;
     media::ConsolidateOptions options = dialog.options();
@@ -7840,6 +7845,19 @@ void MainWindow::applyConsolidate(const QString& binId, const media::Consolidate
         ids << item.id;
     }
     for (const model::BinItem& item : result.changed) storeClip(binId, item);
+    if (!result.associated.isEmpty()) {
+        // Transcode without Create new clips (p.354-355): the clips have media at one more resolution, found in the media
+        // database, and Dynamic Relink chooses which they play (8.6a).
+        loadMediaDatabase();
+        const media::DynamicRelinkSettings relink = dynamicRelinkSettings();
+        for (const model::BinItem& item : result.associated) {
+            ConsoleLog::instance().append(tr("Consolidate/Transcode: %1 has media at one more resolution.").arg(item.name));
+            if (const model::BinItem* now = doc->bin().item(item.id)) {
+                model::BinItem clip = *now;
+                dynamicRelinkClip(binId, clip, relink);
+            }
+        }
+    }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     for (const QString& why : result.skipped) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(why));
     if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(result.error));
@@ -7969,6 +7987,7 @@ void MainWindow::applySettings() {
     // Writing them fires Settings::changed, which applies everything again with them in place.
     if (legacyBinListsPending() && writeLegacyBinLists()) return;
     const Settings& s = *settings_;
+    applyDynamicRelinkSetting();
     // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
     // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412); Scratch Removal's Frame

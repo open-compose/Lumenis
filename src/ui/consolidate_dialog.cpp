@@ -174,6 +174,12 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     transformsRow->addWidget(frameFlex);
     transformsRow->addStretch();
     tv->addLayout(transformsRow);
+    // Create new clips (p.354-355): on by default, as it is what happens without Dynamic Relink.
+    newClips_ = new QCheckBox(tr("Create new clips"), transcodeBox_);
+    newClips_->setObjectName(QStringLiteral("createNewClips"));
+    newClips_->setChecked(true);
+    newClips_->setEnabled(false);
+    tv->addWidget(newClips_);
     layout->addWidget(transcodeBox_);
 
     // Audio: MXF OP-Atom PCM at 48 kHz; the bit depth can be chosen.
@@ -309,6 +315,7 @@ media::ConsolidateOptions ConsolidateDialog::options() const {
     o.skipOnTarget = !transcode_->isChecked() && skipOnTarget_->isChecked();
     o.raster = static_cast<media::ConsolidateOptions::Raster>(raster_->currentData().toInt());
     o.applyColorEncoding = transcode_->isChecked() && applyColorEncoding_->isChecked();
+    o.newClips = !transcode_->isChecked() || !newClips_->isEnabled() || newClips_->isChecked();
     o.creation.videoDrive = chosen(videoDrives_);
     o.creation.audioDrive = sameDrive_->isChecked() ? QString() : chosen(audioDrives_);
     if (const media::Resolution* r = media::findResolution(resolution_->currentData().toString())) {
@@ -318,6 +325,10 @@ media::ConsolidateOptions ConsolidateDialog::options() const {
     // as it is.
     o.creation.bitDepth = convertBitDepth_->isChecked() ? bitDepth_->currentData().toInt() : 24;
     return o;
+}
+
+void ConsolidateDialog::setDynamicRelink(bool on) {
+    newClips_->setEnabled(on);
 }
 
 // A small modal dialog of two choices; Keep is the default.

@@ -102,6 +102,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
     };
     // Makes the media of frames [in, out) (out -1: to the end): copied for Consolidate, otherwise
     // transcoded at the raster the options choose for this clip.
+    // The clip being transcoded is to keep the new media itself (Create new clips off).
+    bool associating = false;
     auto make = [&](const model::BinItem& clip, std::int64_t in, std::int64_t out, QString* error) {
         if (copy) {
             // The clip itself takes the copy unless masters stay linked: the files then name it.
@@ -111,6 +113,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         }
         MediaCreation creation = options.creation;
         creation.raster = rasterFor(clip, options.raster, options.creation.raster);
+        if (associating) creation.master = model::mobIdOf(clip);
         const auto encoding = model::colorAdapterOf(clip);
         if (options.applyColorEncoding && encoding) {
             creation.colorTransformations = encoding->applied();
@@ -130,10 +133,17 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 continue;
             }
             QString error;
+            associating = !copy && !options.newClips;
             auto made = make(item, 0, -1, &error);
+            associating = false;
             if (!made) {
                 result.error = error;
                 break;
+            }
+            if (!copy && !options.newClips) {
+                // The clip keeps its link; its new media wait in the media database for Dynamic Relink.
+                result.associated << item;
+                continue;
             }
             made->markers = item.markers;
             if (copy && !options.keepMastersLinked) {
