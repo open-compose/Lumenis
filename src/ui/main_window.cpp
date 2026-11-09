@@ -7907,6 +7907,8 @@ void MainWindow::applySettings() {
         composer_->setAdapterOptions(project_->settings.format.editRate, project_->settings.format.scan == ScanMode::Interlaced,
                                      s.flag(QStringLiteral("Render"), QStringLiteral("motionAdapterBlending")));
     }
+    // The monitors' Display Color Space converts from the project's colour space (p.544).
+    composer_->setProjectColorSpace(project_ ? project_->settings.colorSpace : QString());
     if (FullScreenView* view = fullScreen_.data()) {
         view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));

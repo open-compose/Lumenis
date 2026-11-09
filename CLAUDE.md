@@ -926,7 +926,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `media::sourceSpaceOfTransfer` from `StreamInfo::colorTransfer`, Use CDL values for Auto, Installed LUTs and Select LUT
   file `MainWindow::installLutFile`, the tab's Color Management Settings button `openColorManagementSetting`) and CLF
   files baked through OpenColorIO (`detail::ocioBakeFile`; tests `tst_color_adapter clfAndTransfers`, `tst_frameflex_ui
-  colorAdapters`), is done, so 8.5d is.
+  colorAdapters`), is done, so 8.5d is. 8.5e is in four parts (ROADMAP). 8.5e1, the monitors' Display Color Space
+  (`Composer::setDisplayColorSpace`/`displayed`, `src/media/display_color.*`; tests `tst_color_adapter displayColorSpace`,
+  `tst_composer_display displayColorSpace`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

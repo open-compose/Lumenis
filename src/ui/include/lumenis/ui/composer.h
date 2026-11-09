@@ -176,6 +176,14 @@ public:
     void setCaptionResolver(CaptionResolver resolver) { captions_ = std::move(resolver); }
     bool showsCaptions(MonitorId monitor) const;
     void setShowCaptions(MonitorId monitor, bool on);
+    // Display Color Space (p.544; 8.5e1), a choice of each monitor's in its right-click menu: what the computer's display
+    // is calibrated for (media::displayColorSpaces). Until one is chosen, the one the project's colour space is shown in
+    // (ours). The pictures are converted for it as they are drawn (displayed); scopes and exports are not.
+    QString displayColorSpace(MonitorId monitor) const;
+    void setDisplayColorSpace(MonitorId monitor, const QString& space);
+    // The project's colour space (the Format tab's Color Space), which the pictures are in; MainWindow sets it.
+    void setProjectColorSpace(const QString& space);
+    QImage displayed(MonitorId monitor, const QImage& image) const;
     std::optional<model::CaptionScreen> shownCaption(MonitorId monitor) const;
     std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const {
         return phantoms_ ? phantoms_(monitor) : std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>{};
@@ -817,6 +825,8 @@ private:
     PhantomResolver phantoms_;
     CaptionResolver captions_;
     bool showCaptions_[2] = {false, false}; // Source, Record
+    QString displaySpace_[2];               // Source, Record; empty for the project's
+    QString projectColorSpace_;
     int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
     int groupBank_ = 0;
     bool multiCamera_ = false;

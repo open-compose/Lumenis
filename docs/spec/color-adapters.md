@@ -125,6 +125,24 @@ from 0 to 1:
   (`detail::ocioBakeFile`) and kept as a 33-point cube (ours); without OpenColorIO in the build it is refused with that
   reason. The fuzz library refuses CLF files.
 
+## Display Color Space (p.544, p.559; 8.5e1)
+
+"Media Composer supports Rec. 709, BT/Rec. 2020 and DCI-P3 color spaces. The source and record viewers also support these
+colors if your monitor has been calibrated for them ... Right-click in the desired viewer (source /record), select
+Display Color Space, and choose from the list" (p.544).
+
+* Each monitor's right-click menu has Display Color Space with Rec.709, Rec.2020 and DCI-P3 (`Composer::
+  setDisplayColorSpace`), a choice of each monitor's like Show Captions. Ours: until one is chosen, the one the project's
+  colour space is shown in (`media::displaySpaceOfProject`); not kept between sessions.
+* The picture, in the project's colour space, is converted for the display as it is drawn (`Composer::displayed`,
+  `media::toDisplayColorSpace` in `src/media/display_color.*`); the scopes, renders and exports are not. Ours, as the guide
+  gives no numbers: Rec.709 and Rec.2020 displays are BT.1886 (gamma 2.4) with a D65 white, DCI-P3 is gamma 2.6 with the
+  DCI white, the primaries mapped through XYZ with a Bradford adaptation to the display's white; PQ and HLG pictures are
+  shown with their 203 cd/m² reference white (BT.2408) at the display's white and brighter values clipped; 601 projects are
+  shown as Rec.709.
+* ACES projects' pictures are not converted until their output transforms (8.5e4; "Select Display Color Space and choose
+  the ACES color space", p.559).
+
 ## Tests
 
 * `tst_color_adapter`: the encoding with its column and JSON, Auto, bypass; segments' adapters, Refresh Sequence and
@@ -139,5 +157,7 @@ from 0 to 1:
   colour spaces. `tst_frameflex_ui colorAdapters`: linking a linear file with and without Insert color transformations,
   Use CDL values with Auto, the Color Management Settings button, Select LUT file and its refusal. `tst_settings_window`:
   the setting in the User list.
+* `tst_color_adapter displayColorSpace`: white and black kept, BT.2087's 709 to 2020 matrix, PQ's and HLG's reference
+  white, alpha kept. `tst_composer_display displayColorSpace`: the menu, each monitor's choice, the converted picture.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

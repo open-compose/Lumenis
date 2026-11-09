@@ -666,7 +666,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the shared LUT folder in the application's data, the CDL transformation's name carrying its values, its place at the end
   of the drop-down. Color Management (8.5d2): Insert color transformations and Use CDL values off to start with, Installed
   LUTs on Project, Select LUT file using the saved choice, the colour space from the transfer characteristic alone, CLF
-  kept as a 33-point cube, the HDR conversion choices kept unused until 8.5e.
+  kept as a 33-point cube, the HDR conversion choices kept unused until 8.5e. Display Color Space (8.5e1): the
+  project's display until one is chosen, not kept between sessions; BT.1886 gamma 2.4 for Rec.709/2020 and gamma 2.6 with
+  the DCI white for DCI-P3, Bradford adaptation; PQ/HLG reference white 203 cd/m² at the display's white, clipped above.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

@@ -1,7 +1,8 @@
 // The Composer settings' Window tab (Editing Guide p.380, p.384-385, p.1158-1159;
 // docs/spec/composer-display.md): two rows of data with a second tracking display, the Fast Menu
 // and the gang icon; Flow Data Dynamically; Tick Marks in Position Bars; the middle Composer button
-// panel. Also Dynamic Play (p.401-402) and Display During Segment Drag (p.617-618, p.1219).
+// panel. Also Dynamic Play (p.401-402), Display During Segment Drag (p.617-618, p.1219) and the monitors' Display Color
+// Space (p.544).
 #include "lumenis/model/bin.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/model/sequence.h"
@@ -9,6 +10,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QJsonArray>
+#include <QMenu>
 #include <QJsonObject>
 #include <QSignalSpy>
 #include <QTest>
@@ -93,6 +95,48 @@ private slots:
         c.resize(900, Composer::kFlowHeight - 40);
         settle();
         QVERIFY(!info2->isVisible());
+    }
+
+    // "Right-click in the desired viewer (source /record), select Display Color Space, and choose from the list" (p.544):
+    // each monitor's own choice, starting with the project's; the picture is converted as it is drawn.
+    void displayColorSpace() {
+        Composer c;
+        c.resize(900, 360);
+        c.setProjectColorSpace(QStringLiteral("YCbCr 709"));
+        c.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(200, 40, 40));
+            return image;
+        });
+        c.show();
+        c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("a"), 100));
+        c.load(MonitorId::Record, QStringLiteral("bin"), clip(QStringLiteral("b"), 100));
+        settle();
+        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.709"));
+        auto centre = [&](MonitorId m) {
+            MonitorPicture* w = c.picture(m);
+            return w->grab().toImage().pixel(w->width() / 2, w->height() / 2);
+        };
+        QCOMPARE(centre(MonitorId::Record), qRgb(200, 40, 40));
+        QMenu* menu = c.contextMenu(MonitorId::Record);
+        auto* display = menu->findChild<QMenu*>(QStringLiteral("displayColorSpace"));
+        QVERIFY(display);
+        QStringList choices;
+        for (QAction* a : display->actions()) choices << a->text();
+        QCOMPARE(choices, (QStringList{QStringLiteral("Rec.709"), QStringLiteral("Rec.2020"), QStringLiteral("DCI-P3")}));
+        QVERIFY(display->findChild<QAction*>(QStringLiteral("Rec.709"))->isChecked());
+        display->findChild<QAction*>(QStringLiteral("Rec.2020"))->trigger();
+        delete menu;
+        settle();
+        QCOMPARE(c.displayColorSpace(MonitorId::Record), QStringLiteral("Rec.2020"));
+        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.709"));
+        // A Rec.709 red on a Rec.2020 display is less saturated: its green and blue code values rise.
+        const QRgb shown = centre(MonitorId::Record);
+        QVERIFY2(qGreen(shown) > 40 && qBlue(shown) > 40 && qRed(shown) < 200, qPrintable(QString::number(shown, 16)));
+        QCOMPARE(centre(MonitorId::Source), qRgb(200, 40, 40));
+        // A 2020 project's pictures start on a Rec.2020 display.
+        c.setProjectColorSpace(QStringLiteral("RGB 2020"));
+        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.2020"));
     }
 
     // Tick Marks in Position Bars (p.1159): invisible when off.

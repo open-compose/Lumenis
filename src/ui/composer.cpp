@@ -3,6 +3,7 @@
 #include "lumenis/ui/correction_monitors.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/display_color.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/titler.h"
@@ -10,6 +11,7 @@
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/theme.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QHash>
@@ -687,7 +689,7 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         const double q = composer_.qualityScale();
         auto paintFrame = [&](const QRect& area, std::int64_t frame) {
             const QSize decode(std::max(1, static_cast<int>(area.width() * q)), std::max(1, static_cast<int>(area.height() * q)));
-            const QImage image = composer_.pictureAt(MonitorId::Record, frame, decode);
+            const QImage image = composer_.displayed(MonitorId::Record, composer_.pictureAt(MonitorId::Record, frame, decode));
             if (image.isNull()) return;
             const QSize fit = image.size().scaled(area.size(), Qt::KeepAspectRatio);
             p.drawImage(QRect(area.left() + (area.width() - fit.width()) / 2, area.top() + (area.height() - fit.height()) / 2,
@@ -714,7 +716,8 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         const double q = composer_.qualityScale();
         const QSize decode(std::max(1, static_cast<int>(pic.width() * q)), std::max(1, static_cast<int>(pic.height() * q)));
         bool offline = false;
-        const QImage image = composer_.pictureAt(MonitorId::Record, composer_.trimFrame(*side), decode, &offline);
+        const QImage image =
+            composer_.displayed(MonitorId::Record, composer_.pictureAt(MonitorId::Record, composer_.trimFrame(*side), decode, &offline));
         if (!image.isNull()) {
             const QSize fit = image.size().scaled(pic.size(), Qt::KeepAspectRatio);
             p.setRenderHint(QPainter::SmoothPixmapTransform, composer_.smoothScaling());
@@ -742,7 +745,8 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         // Draft Quality and Best Performance decode fewer pixels (p.403).
         const double q = composer_.qualityScale();
         const QSize decode(std::max(1, static_cast<int>(pic.width() * q)), std::max(1, static_cast<int>(pic.height() * q)));
-        const QImage image = composer_.picture(monitor_, decode, &offline);
+        // Converted for the monitor's Display Color Space (p.544).
+        const QImage image = composer_.displayed(monitor_, composer_.picture(monitor_, decode, &offline));
         if (!image.isNull()) {
             // Scaled to fit, centred: other shapes than the project's are
             // letterboxed or pillarboxed.
@@ -2824,6 +2828,18 @@ QMenu* Composer::contextMenu(MonitorId monitor) {
     captions->setCheckable(true);
     captions->setChecked(showsCaptions(monitor));
     connect(captions, &QAction::toggled, this, [this, monitor](bool on) { setShowCaptions(monitor, on); });
+    // "Right-click in the desired viewer (source /record), select Display Color Space, and choose from the list" (p.544).
+    QMenu* display = menu->addMenu(tr("Display Color Space"));
+    display->setObjectName(QStringLiteral("displayColorSpace"));
+    auto* group = new QActionGroup(display);
+    for (const QString& space : media::displayColorSpaces()) {
+        QAction* a = display->addAction(space);
+        a->setObjectName(space);
+        a->setCheckable(true);
+        a->setChecked(space == displayColorSpace(monitor));
+        group->addAction(a);
+        connect(a, &QAction::triggered, this, [this, monitor, space] { setDisplayColorSpace(monitor, space); });
+    }
     if (monitor == MonitorId::Record) {
         // "right click in the Record Monitor and select Update Group"; "Right click in the Record Monitor and choose
         // Create Group" (p.1126).
@@ -2910,6 +2926,31 @@ void Composer::setMultiCameraMode(bool on) {
         active_ = MonitorId::Record;
     }
     refresh();
+}
+
+QString Composer::displayColorSpace(MonitorId monitor) const {
+    const QString& chosen = displaySpace_[monitor == MonitorId::Record ? 1 : 0];
+    if (!chosen.isEmpty()) return chosen;
+    // Until one is chosen, the one the project's pictures are in (ours).
+    const QString own = media::displaySpaceOfProject(projectColorSpace_);
+    return own.isEmpty() ? media::displayColorSpaces().constFirst() : own;
+}
+
+void Composer::setDisplayColorSpace(MonitorId monitor, const QString& space) {
+    if (!media::displayColorSpaces().contains(space)) return;
+    displaySpace_[monitor == MonitorId::Record ? 1 : 0] = space;
+    if (MonitorPicture* w = picture(monitor)) w->update();
+}
+
+void Composer::setProjectColorSpace(const QString& space) {
+    projectColorSpace_ = space;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (MonitorPicture* w = picture(m)) w->update();
+    }
+}
+
+QImage Composer::displayed(MonitorId monitor, const QImage& image) const {
+    return media::toDisplayColorSpace(image, projectColorSpace_, displayColorSpace(monitor));
 }
 
 bool Composer::showsCaptions(MonitorId monitor) const {

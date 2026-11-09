@@ -4,6 +4,7 @@ add_library(lumenis_media STATIC
     optical_flow.cpp
     fields.cpp
     color_transform.cpp
+    display_color.cpp
     lut_file.cpp
     frame_flex.cpp
     fluid_fx.cpp
@@ -78,6 +79,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/audio_input.h
     include/lumenis/media/dynamic_media_folders.h
     include/lumenis/media/color_transform.h
+    include/lumenis/media/display_color.h
     include/lumenis/media/lut_file.h
     include/lumenis/media/frame_flex.h
     include/lumenis/media/clap_host.h

@@ -2,6 +2,7 @@
 // kept with a clip and its column, Auto's transformations, segments' adapters through JSON, Refresh Sequence > Color
 // Adapters and Remove Color Adapters, and the built-in transformations' values.
 #include "lumenis/media/color_transform.h"
+#include "lumenis/media/display_color.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/lut_file.h"
 #include "lumenis/model/color_adapter.h"
@@ -221,6 +222,43 @@ private slots:
                                  QStringLiteral("smpte170m"), QStringLiteral("bt2020-10")}) {
             QVERIFY(model::sourceColorSpaces().contains(media::sourceSpaceOfTransfer(t)));
         }
+    }
+
+    // The monitors' Display Color Space (p.544; 8.5e1): white stays white, a project's own display needs no conversion,
+    // Rec.709 primaries sit inside Rec.2020's and DCI-P3's, and a PQ picture's reference white is the display's white.
+    void displayColorSpace() {
+        const QString hd = QStringLiteral("YCbCr 709");
+        QVERIFY(!media::convertsForDisplay(hd, QStringLiteral("Rec.709")));
+        QVERIFY(media::convertsForDisplay(hd, QStringLiteral("DCI-P3")));
+        QVERIFY(!media::convertsForDisplay(QStringLiteral("ACES RGB"), QStringLiteral("Rec.709")));
+        QVERIFY(media::convertsForDisplay(QStringLiteral("YCbCr 2020 / SMPTE 2084"), QStringLiteral("Rec.2020")));
+        for (const QString& display : media::displayColorSpaces()) {
+            const auto w = media::toDisplayColor({1.0, 1.0, 1.0}, hd, display);
+            QVERIFY2(near(w[0], 1.0, 2e-3) && near(w[1], 1.0, 2e-3) && near(w[2], 1.0, 2e-3), qPrintable(display));
+            const auto k = media::toDisplayColor({0.0, 0.0, 0.0}, hd, display);
+            QVERIFY(near(k[0], 0.0, 1e-6) && near(k[1], 0.0, 1e-6) && near(k[2], 0.0, 1e-6));
+        }
+        const auto red = media::toDisplayColor({1.0, 0.0, 0.0}, hd, QStringLiteral("Rec.2020"));
+        // BT.2087's 709 to 2020 matrix: red becomes (0.6274, 0.0691, 0.0164) in light, encoded at gamma 2.4.
+        QVERIFY(near(red[0], std::pow(0.6274, 1 / 2.4), 2e-3) && near(red[1], std::pow(0.0691, 1 / 2.4), 2e-3)
+                && near(red[2], std::pow(0.0164, 1 / 2.4), 2e-3));
+        const auto back = media::toDisplayColor({0.5, 0.3, 0.2}, hd, QStringLiteral("Rec.709"));
+        QVERIFY(near(back[0], 0.5, 1e-9) && near(back[1], 0.3, 1e-9));
+        // PQ's 203 cd/m² (code value 0.5806) is the display's white; brighter values clip.
+        const QString pq = QStringLiteral("YCbCr 2020 / SMPTE 2084");
+        const auto white = media::toDisplayColor({0.5806, 0.5806, 0.5806}, pq, QStringLiteral("Rec.2020"));
+        QVERIFY2(near(white[0], 1.0, 5e-3), qPrintable(QString::number(white[0])));
+        QCOMPARE(media::toDisplayColor({0.9, 0.9, 0.9}, pq, QStringLiteral("Rec.2020"))[0], 1.0);
+        // HLG's 75% signal is near the reference white too.
+        const auto hlg = media::toDisplayColor({0.75, 0.75, 0.75}, QStringLiteral("YCbCr 2020 / HLG"), QStringLiteral("Rec.2020"));
+        QVERIFY2(near(hlg[0], 1.0, 0.02), qPrintable(QString::number(hlg[0])));
+        // Pictures: unchanged when nothing converts, alpha kept otherwise.
+        QImage image(4, 2, QImage::Format_ARGB32);
+        image.fill(qRgba(255, 0, 0, 128));
+        QCOMPARE(media::toDisplayColorSpace(image, hd, QStringLiteral("Rec.709")), image);
+        const QImage p3 = media::toDisplayColorSpace(image, hd, QStringLiteral("DCI-P3"));
+        QCOMPARE(qAlpha(p3.pixel(1, 1)), 128);
+        QVERIFY(qGreen(p3.pixel(1, 1)) > 0);
     }
 
     // The built-in transformations (p.539-540).
