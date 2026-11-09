@@ -50,7 +50,8 @@ std::optional<model::EffectRender> renderEffect(const Composition& composition, 
         model::BinItemKind::RenderedEffect, error, keepOnCancel);
     if (!clip) return std::nullopt;
     if (clip->durationFrames <= 0) return failed(QObject::tr("Nothing was rendered."));
-    return model::EffectRender{{model::binItemToJson(*clip)}, model::renderKey(*composition.sequence, target)};
+    // Made at the proxy mode of now (8.5e2), nothing kept yet.
+    return model::EffectRender{{model::binItemToJson(*clip)}, model::renderKey(*composition.sequence, target), model::renderProxy(), {}};
 }
 
 } // namespace lumenis::media

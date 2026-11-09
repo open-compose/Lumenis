@@ -743,6 +743,12 @@ void MainWindow::createPanels() {
             c.sequence = &seq;
             c.tracks = shownVideoTracks(monitor, seq);
             c.size = size;
+            // In a proxy mode "each frame in the sequence is transcoded on-the-fly ... based on the proxy mode" (p.526):
+            // never more pixels than the proxy raster; the monitor scales the picture up.
+            if (project_ && project_->settings.proxy != 0) {
+                const QSize proxy = model::proxyRaster(project_->settings);
+                if (size.width() > proxy.width() || size.height() > proxy.height()) c.size = size.scaled(proxy, Qt::KeepAspectRatio);
+            }
             fillComposition(c, *loaded);
             c.effects = renderOnTheFly_ || composer_->isPlaying();
             // Dual Split's uncorrected part in Color Correction mode (FX Guide p.592).
@@ -1102,6 +1108,8 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     // Project settings first: they include the new-sequence timecode.
     settings_->setProject(project.folder);
     if (settingsWindow_) settingsWindow_->setProject(project);
+    // Renders are made and found at the project's proxy mode (p.527).
+    model::setRenderProxy(project.settings.proxy);
     // External LUTs (p.541-542; 8.5d1): the project's and every project's, listed as "External <name>".
     {
         QStringList failures;
@@ -1187,6 +1195,7 @@ void MainWindow::clearProject() {
     binContainer_->setProject({}, {}, Rational(24000, 1001));
     composer_->clear();
     timeline_->history().clear();
+    model::setRenderProxy(0);
     if (settingsWindow_) {
         settingsWindow_->hide();
         settingsWindow_->setProject(std::nullopt);
@@ -1419,6 +1428,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 SettingsWindow* MainWindow::showSettings() {
     if (!settingsWindow_) {
         settingsWindow_ = new SettingsWindow(*settings_, this);
+        connect(settingsWindow_, &SettingsWindow::proxyChanged, this, [this](int mode) { setProxyMode(mode); });
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
@@ -3306,6 +3316,33 @@ QStringList MainWindow::installLutFile(const QString& chosen) {
     return names;
 }
 
+// The Format tab's Proxy (8.5e2). "You can change the proxy mode at any time, however, any previously rendered media at
+// that proxy mode will go offline. Should you switch back to that proxy mode, the rendered proxy media will still be
+// available" (p.527): the render keys carry the mode, so the monitors and the Timeline's render dots follow.
+bool MainWindow::setProxyMode(int mode) {
+    if (!project_ || !model::proxyModes(project_->settings.format).contains(mode)) return false;
+    if (project_->settings.proxy == mode) return true;
+    model::ProjectSettings changed = project_->settings;
+    changed.proxy = mode;
+    QString error;
+    if (!model::ProjectStore::write(project_->file, changed, &error)) {
+        ConsoleLog::instance().append(tr("Proxy not changed: %1").arg(error));
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Proxy"), tr("The proxy mode could not be saved: %1").arg(error),
+                                    QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("proxyNotSaved"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+        if (settingsWindow_) settingsWindow_->setProject(project_);
+        return false;
+    }
+    project_->settings = changed;
+    model::setRenderProxy(mode);
+    if (settingsWindow_) settingsWindow_->setProject(project_);
+    composer_->refreshDisplay();
+    timeline_->setDisplay(timeline_->display()); // the render dots follow the mode
+    return true;
+}
+
 // The Color Encoding tab's Color Management Settings button (p.542): the User tab's Color Management setting.
 void MainWindow::openColorManagementSetting() {
     SettingsWindow* window = showSettings();
@@ -3874,6 +3911,9 @@ media::MediaCreation MainWindow::mediaCreation(const QString& tab) const {
     const QString kind = QStringLiteral("Media Creation");
     if (project_) {
         c.raster = QSize(project_->settings.format.width, project_->settings.format.height);
+        // Renders "use this proxy resolution" (p.527); Transcode's "Project Dimensions: Transcodes the media based on the
+        // project size and the proxy mode setting" (p.527).
+        if (tab == QLatin1String("render") || tab == QLatin1String("transcode")) c.raster = model::proxyRaster(project_->settings);
         c.project = project_->settings.name;
     }
     if (const media::Resolution* r = media::findResolution(settings_->text(kind, tab + QStringLiteral("Resolution")))) {
@@ -6422,7 +6462,8 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
     QList<model::EffectRender> replaced;
     for (const auto& [target, render] : made) {
         renders << render;
-        if (const auto before = model::renderOf(seq, target)) replaced << *before;
+        // A render of another proxy mode stays with the effect (EffectRender::kept, p.527), its media too.
+        if (const auto before = model::renderOf(seq, target); before && before->proxy == render.proxy) replaced << *before;
     }
     timeline_->changeRecordSequence(tr("Render Effect"), [&made](model::Sequence& s) {
         bool any = false;
@@ -6588,7 +6629,7 @@ void MainWindow::applyBackgroundRenders(const QString& binId, const QString& seq
             for (const model::RenderTarget& t : model::renderTargets(s, {target.track}, 0, s.duration())) {
                 if (model::renderKey(s, t) != render.key) continue;
                 if (replaced) {
-                    if (const auto before = model::renderOf(s, t)) replaced->append(*before);
+                    if (const auto before = model::renderOf(s, t); before && before->proxy == render.proxy) replaced->append(*before);
                 }
                 if (model::setRender(s, t, render)) {
                     any = true;

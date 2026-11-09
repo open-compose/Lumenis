@@ -816,6 +816,18 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
         add(tr("Aspect Ratio:"), QStringLiteral("%1:%2").arg(s.aspect.num()).arg(s.aspect.den()), "formatAspect");
         add(tr("Raster Dimension:"), QStringLiteral("%1 x %2").arg(s.format.width).arg(s.format.height),
             "formatRaster");
+        // Proxy (p.526-527, p.549-550; 8.5e2): "play your sequence at 1/4 or 1/16 of the current project resolution",
+        // only in high-resolution projects; a mode whose raster would be under 256 x 120 is not offered. The item texts
+        // are ours.
+        auto* proxy = new QComboBox;
+        proxy->setObjectName(QStringLiteral("formatProxy"));
+        for (const int mode : model::proxyModes(s.format)) {
+            proxy->addItem(mode == 0 ? tr("Off") : QStringLiteral("1/%1").arg(mode), mode);
+        }
+        proxy->setCurrentIndex(std::max(0, proxy->findData(s.proxy)));
+        proxy->setEnabled(proxy->count() > 1);
+        connect(proxy, &QComboBox::activated, this, [this, proxy](int index) { emit proxyChanged(proxy->itemData(index).toInt()); });
+        format_->addRow(tr("Proxy:"), proxy);
         add(tr("Color Space:"), s.colorSpace, "formatColorSpace");
         add(tr("Color Depth:"), s.colorDepth, "formatColorDepth");
         add(tr("Stereoscopic:"), s.stereoscopic, "formatStereoscopic");

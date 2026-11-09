@@ -928,7 +928,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   files baked through OpenColorIO (`detail::ocioBakeFile`; tests `tst_color_adapter clfAndTransfers`, `tst_frameflex_ui
   colorAdapters`), is done, so 8.5d is. 8.5e is in four parts (ROADMAP). 8.5e1, the monitors' Display Color Space
   (`Composer::setDisplayColorSpace`/`displayed`, `src/media/display_color.*`; tests `tst_color_adapter displayColorSpace`,
-  `tst_composer_display displayColorSpace`), is done.
+  `tst_composer_display displayColorSpace`), is done. 8.5e2, the proxy mode (the Format tab's Proxy `formatProxy`,
+  `ProjectSettings::proxy` with `model::proxyModes`/`proxyRaster`, `MainWindow::setProxyMode`; renders per mode through
+  `model::setRenderProxy` in the render key and `EffectRender::kept`; tests `tst_effect_render proxyModes`,
+  `tst_project_store proxyModes`, `tst_render_ui proxyMode`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

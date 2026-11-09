@@ -1,10 +1,13 @@
 // Rendering in the application (FX Guide p.57-61; docs/spec/rendering.md): Timeline > Render > Render at
 // Position and Render In/Out through the Render Effect dialog, the render kept with the effect as an undo
-// step, Clear Renders with its dialog and Undo, and renders going out of date when the effect changes.
+// step, Clear Renders with its dialog and Undo, and renders going out of date when the effect changes. Also the Format
+// tab's Proxy (Editing Guide p.526-527, p.549-550; 8.5e2): renders at the proxy raster, offline at another mode and back
+// when the mode returns.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
@@ -14,6 +17,7 @@
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
+#include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
@@ -386,6 +390,97 @@ private slots:
         QVERIFY(background->link.value(QStringLiteral("path")).toString().contains(QStringLiteral("/MXF/__bg.1/")));
         QVERIFY(bin->bin().item(background->id));
         media::setExtraMediaDrives({});
+    }
+
+    void proxyMode() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("red.mov"));
+        QVERIFY(writeMovie(movie, 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Big"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("Big.cthproj"));
+        project.settings.name = QStringLiteral("Big");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 1024;
+        project.settings.format.height = 576;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("renderVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Apply"), [](model::Sequence& s) {
+            s.track(QStringLiteral("V1"))->segments[0].effect =
+                model::Effect{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};
+            return true;
+        }));
+        composer.moveTo(MonitorId::Record, 5);
+        settle();
+        window.setRenderHook([&](RenderEffectDialog& d) {
+            const int at = d.driveMenu()->findData(QDir::cleanPath(drive));
+            if (at < 0) return false;
+            d.driveMenu()->setCurrentIndex(at);
+            return true;
+        });
+        auto renderedWidth = [&] {
+            const model::Sequence seq = recordSequence(composer);
+            const auto r = model::renderOf(seq, pipTarget(seq));
+            if (!r || !model::isRendered(seq, pipTarget(seq))) return 0;
+            const auto clip = model::binItemFromJson(r->clips.at(0));
+            media::VideoReader reader;
+            return clip && reader.open(clip->link.value(QStringLiteral("path")).toString()) ? reader.info().width : -1;
+        };
+        window.renderEffects(true);
+        settle();
+        QCOMPARE(renderedWidth(), 1024);
+
+        // The Format tab offers Off, 1/4 and 1/16 in a high-resolution project.
+        SettingsWindow* settings = window.showSettings();
+        auto* proxy = settings->findChild<QComboBox*>(QStringLiteral("formatProxy"));
+        QVERIFY(proxy);
+        QVERIFY(proxy->isEnabled());
+        QCOMPARE(proxy->count(), 3);
+        QCOMPARE(proxy->itemText(1), QStringLiteral("1/4"));
+        emit proxy->activated(1);
+        settle();
+        QCOMPARE(model::renderProxy(), 4);
+        QCOMPARE(model::ProjectStore::read(project.file)->proxy, 4);
+        // "any previously rendered media at that proxy mode will go offline" (p.527); rendered again at 1/4: 512 wide.
+        QCOMPARE(renderedWidth(), 0);
+        window.renderEffects(true);
+        settle();
+        QCOMPARE(renderedWidth(), 512);
+        // "Should you switch back to that proxy mode, the rendered proxy media will still be available" (p.527).
+        QVERIFY(window.setProxyMode(0));
+        QCOMPARE(renderedWidth(), 1024);
+        QVERIFY(window.setProxyMode(4));
+        QCOMPARE(renderedWidth(), 512);
+        QVERIFY(!window.setProxyMode(8));
+        // Transcode's Project Dimensions follow the proxy mode (p.527).
+        QCOMPARE(window.mediaCreation(QStringLiteral("transcode")).raster, QSize(512, 288));
+        QCOMPARE(window.mediaCreation(QStringLiteral("import")).raster, QSize(1024, 576));
+        QVERIFY(window.setProxyMode(0));
     }
 };
 

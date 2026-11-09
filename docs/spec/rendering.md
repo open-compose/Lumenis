@@ -9,6 +9,11 @@ ROADMAP 6.4 is in four parts: 6.4a, Render Effect and Clear Renders; 6.4b, parti
 the playback performance indicators and Render On-the-Fly; 6.4c, ExpertRender; 6.4d, the Render setting
 and precompute management (6.4d1) and background rendering (6.4d2).
 
+## Proxy modes (8.5e2)
+
+Renders are made at the Format tab's proxy mode and keep the renders of other modes: docs/spec/color-adapters.md, "The
+proxy mode".
+
 ## 6.4a: Render Effect and Clear Renders
 
 Code: the model in `src/model/effect_render.*` (`RenderTarget`, `renderTargets`, `renderTargetAt`,

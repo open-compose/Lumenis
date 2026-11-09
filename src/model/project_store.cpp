@@ -88,10 +88,28 @@ QJsonObject toJson(const ProjectSettings& s) {
     if (!s.filmType.isEmpty()) {
         o.insert(QStringLiteral("filmType"), s.filmType);
     }
+    if (s.proxy != 0) o.insert(QStringLiteral("proxy"), s.proxy);
     return o;
 }
 
 } // namespace
+
+QList<int> proxyModes(const ProjectFormat& format) {
+    QList<int> modes{0};
+    if (format.family != FormatFamily::HighRes) return modes;
+    for (const int mode : {4, 16}) {
+        const int divide = mode == 4 ? 2 : 4;
+        if (format.width / divide >= 256 && format.height / divide >= 120) modes << mode;
+    }
+    return modes;
+}
+
+QSize proxyRaster(const ProjectSettings& settings) {
+    const QSize full(settings.format.width, settings.format.height);
+    if (settings.proxy == 0 || !proxyModes(settings.format).contains(settings.proxy)) return full;
+    const int divide = settings.proxy == 4 ? 2 : 4;
+    return QSize(full.width() / divide / 2 * 2, full.height() / divide / 2 * 2);
+}
 
 ProjectStore::ProjectStore(QString root) : root_(QDir::cleanPath(std::move(root))) {}
 
@@ -216,6 +234,9 @@ std::optional<ProjectSettings> ProjectStore::read(const QString& file, QString* 
     s.colorDepth = o.value(QStringLiteral("colorDepth")).toString();
     s.stereoscopic = o.value(QStringLiteral("stereoscopic")).toString(QStringLiteral("Off"));
     s.filmType = o.value(QStringLiteral("filmType")).toString();
+    // A proxy mode the format does not offer is none.
+    s.proxy = o.value(QStringLiteral("proxy")).toInt();
+    if (!proxyModes(s.format).contains(s.proxy)) s.proxy = 0;
     s.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     s.modified = QDateTime::fromString(o.value(QStringLiteral("modified")).toString(), Qt::ISODate);
     return s;

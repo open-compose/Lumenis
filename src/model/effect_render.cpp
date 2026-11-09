@@ -116,11 +116,50 @@ const Effect* effectOf(const Sequence& sequence, const RenderTarget& target) {
     return s->effect ? &*s->effect : nullptr;
 }
 
+namespace {
+
+int proxyMode = 0;
+
+// A kept render ({clips, key, proxy}, EffectRender::kept).
+EffectRender keptRender(const QJsonObject& o) {
+    EffectRender r;
+    for (const QJsonValue& c : o.value(QStringLiteral("clips")).toArray()) {
+        if (!c.toObject().isEmpty()) r.clips << c.toObject();
+    }
+    r.key = o.value(QStringLiteral("key")).toString();
+    r.proxy = o.value(QStringLiteral("proxy")).toInt();
+    return r;
+}
+
+QJsonObject keptJson(const EffectRender& r) {
+    QJsonArray clips;
+    for (const QJsonObject& c : r.clips) clips.append(c);
+    return {{QStringLiteral("clips"), clips}, {QStringLiteral("key"), r.key}, {QStringLiteral("proxy"), r.proxy}};
+}
+
+} // namespace
+
+void setRenderProxy(int proxy) { proxyMode = proxy == 4 || proxy == 16 ? proxy : 0; }
+
+int renderProxy() { return proxyMode; }
+
 std::optional<EffectRender> renderOf(const Sequence& sequence, const RenderTarget& target) {
     const Segment* s = segmentOf(sequence, target);
     if (!s) return std::nullopt;
-    if (target.transition) return s->transition ? s->transitionRender : std::nullopt;
-    return s->effect ? s->render : std::nullopt;
+    std::optional<EffectRender> r;
+    if (target.transition) r = s->transition ? s->transitionRender : std::nullopt;
+    else r = s->effect ? s->render : std::nullopt;
+    // Back at a proxy mode a kept render was made at: it plays again (p.527).
+    if (r && !r->kept.isEmpty()) {
+        const QString key = renderKey(sequence, target);
+        if (r->key != key) {
+            for (const QJsonObject& k : r->kept) {
+                EffectRender other = keptRender(k);
+                if (!other.clips.isEmpty() && other.key == key) return other;
+            }
+        }
+    }
+    return r;
 }
 
 QString renderKey(const Sequence& sequence, const RenderTarget& target) {
@@ -144,6 +183,8 @@ QString renderKey(const Sequence& sequence, const RenderTarget& target) {
         tracks.insert(t.name(), pieces);
     }
     key.insert(QStringLiteral("tracks"), tracks);
+    // A render made at a proxy mode is that mode's (p.527); without one the key is as before 8.5e2.
+    if (proxyMode != 0) key.insert(QStringLiteral("proxy"), proxyMode);
     const QByteArray json = QJsonDocument(key).toJson(QJsonDocument::Compact);
     return QString::fromLatin1(QCryptographicHash::hash(json, QCryptographicHash::Sha1).toHex());
 }
@@ -199,13 +240,24 @@ bool setRender(Sequence& sequence, const RenderTarget& target, const std::option
     Track* t = sequence.track(target.track);
     if (!t || t->kind != TrackKind::Video || target.segment < 0 || target.segment >= t->segments.size()) return false;
     Segment& s = t->segments[target.segment];
-    if (target.transition) {
-        if (!s.transition) return false;
-        s.transitionRender = render;
-        return true;
+    if (target.transition ? !s.transition : !s.effect) return false;
+    std::optional<EffectRender>& slot = target.transition ? s.transitionRender : s.render;
+    std::optional<EffectRender> next = render;
+    if (next && slot) {
+        // The renders of other proxy modes stay (p.550: "Should you switch back to the previous proxy mode, the rendered
+        // proxy media will still be available"): the one replaced first, then those it kept, one per mode.
+        QList<EffectRender> candidates{*slot};
+        candidates.front().kept.clear();
+        for (const QJsonObject& k : slot->kept) candidates << keptRender(k);
+        QList<int> modes{next->proxy};
+        for (const QJsonObject& k : next->kept) modes << keptRender(k).proxy;
+        for (const EffectRender& c : candidates) {
+            if (c.clips.isEmpty() || modes.contains(c.proxy)) continue;
+            next->kept << keptJson(c);
+            modes << c.proxy;
+        }
     }
-    if (!s.effect) return false;
-    s.render = render;
+    slot = next;
     return true;
 }
 

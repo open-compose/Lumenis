@@ -186,6 +186,8 @@ public:
 signals:
     // A setting that opens a tool was opened (the Tool Palette, p.392).
     void toolRequested(const QString& tool);
+    // The Format tab's Proxy was changed (p.527: "click Proxy and choose the appropriate setting"; 8.5e2): 0, 4 or 16.
+    void proxyChanged(int mode);
 
 private:
     // Rebuilds the User Profile menu and selects the current user.

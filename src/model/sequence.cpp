@@ -83,7 +83,14 @@ const std::pair<TransitionAlignment, const char*> kAlignments[] = {
 QJsonObject renderToJson(const EffectRender& r) {
     QJsonArray clips;
     for (const QJsonObject& c : r.clips) clips.append(c);
-    return {{QStringLiteral("clips"), clips}, {QStringLiteral("key"), r.key}};
+    QJsonObject o{{QStringLiteral("clips"), clips}, {QStringLiteral("key"), r.key}};
+    if (r.proxy != 0) o.insert(QStringLiteral("proxy"), r.proxy);
+    if (!r.kept.isEmpty()) {
+        QJsonArray kept;
+        for (const QJsonObject& k : r.kept) kept.append(k);
+        o.insert(QStringLiteral("kept"), kept);
+    }
+    return o;
 }
 std::optional<EffectRender> renderFromJson(const QJsonValue& v) {
     const QJsonObject o = v.toObject();
@@ -96,6 +103,10 @@ std::optional<EffectRender> renderFromJson(const QJsonValue& v) {
     }
     if (r.clips.isEmpty()) return std::nullopt;
     r.key = o.value(QStringLiteral("key")).toString();
+    r.proxy = o.value(QStringLiteral("proxy")).toInt();
+    for (const QJsonValue& k : o.value(QStringLiteral("kept")).toArray()) {
+        if (!k.toObject().isEmpty()) r.kept << k.toObject();
+    }
     return r;
 }
 

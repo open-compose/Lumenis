@@ -711,6 +711,12 @@ public:
     // The Color Management setting's Select LUT file (8.5d2, p.539, p.541): `path` (asked for when empty) installed where
     // Installed LUTs says. Returns the names it is listed under; empty when nothing was installed (a message says why).
     QStringList installLutFile(const QString& path = {});
+    // The Format tab's Proxy (p.526-527, p.549-550; 8.5e2): the project's proxy mode (0, 4 or 16) saved with the project.
+    // The monitors' pictures are made at most at the proxy raster (model::proxyRaster), renders and Transcode's Project
+    // Dimensions at it; renders made at another mode go offline and come back with it (model::setRenderProxy). False
+    // when no project is open, its format does not offer the mode or the project file cannot be written (a message
+    // says why).
+    bool setProxyMode(int mode);
     void setLutFileHook(std::function<QString()> hook) { lutFileHook_ = std::move(hook); }
     // The Color Encoding tab's Color Management Settings button (p.542): the setting opened from the User tab; for tests
     // the hook gets the setting's entry instead of the dialog opening.

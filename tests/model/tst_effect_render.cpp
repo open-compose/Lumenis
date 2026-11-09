@@ -1,5 +1,6 @@
 // Rendering's model (FX Guide p.57-61; docs/spec/rendering.md): which effects can be rendered, render
-// keys going out of date, renders kept through JSON, and Clear Renders with its two options.
+// keys going out of date, renders kept through JSON, Clear Renders with its two options, and renders per proxy mode
+// (Editing Guide p.527, p.550; 8.5e2).
 #include "lumenis/model/effect_render.h"
 
 #include <QJsonArray>
@@ -53,7 +54,7 @@ QJsonObject precompute(std::int64_t frames) {
 }
 
 EffectRender rendered(const Sequence& s, const RenderTarget& t) {
-    return EffectRender{{precompute(t.length)}, renderKey(s, t)};
+    return EffectRender{{precompute(t.length)}, renderKey(s, t), 0, {}};
 }
 
 } // namespace
@@ -122,12 +123,50 @@ private slots:
         }
     }
 
+    // "If you change the proxy mode, any previously rendered media at that proxy mode will not be available for playback
+    // until you return to that proxy mode" (p.526): the mode is in the key, and the renders of other modes are kept.
+    void proxyModes() {
+        Sequence s = sample();
+        const RenderTarget pip = renderTargets(s, {QStringLiteral("V2")}, 0, 100).front();
+        const QString full = renderKey(s, pip);
+        QVERIFY(setRender(s, pip, rendered(s, pip)));
+        setRenderProxy(4);
+        QCOMPARE(renderProxy(), 4);
+        QVERIFY(renderKey(s, pip) != full);
+        QVERIFY(!isRendered(s, pip));
+        EffectRender quarter = rendered(s, pip);
+        quarter.proxy = 4;
+        QVERIFY(setRender(s, pip, quarter));
+        QVERIFY(isRendered(s, pip));
+        QCOMPARE(s.track(QStringLiteral("V2"))->segments[1].render->kept.size(), 1);
+        // Back to none: the first render plays again, and its key is as before.
+        setRenderProxy(0);
+        QCOMPARE(renderKey(s, pip), full);
+        QVERIFY(isRendered(s, pip));
+        QCOMPARE(renderOf(s, pip)->proxy, 0);
+        // Through JSON.
+        const Sequence back = Sequence::fromJson(s.toJson());
+        QVERIFY(isRendered(back, pip));
+        setRenderProxy(4);
+        QVERIFY(isRendered(back, pip));
+        QCOMPARE(renderOf(back, pip)->proxy, 4);
+        // A new render at 1/4 replaces the 1/4 one and keeps the full one once.
+        QVERIFY(setRender(s, pip, quarter));
+        QCOMPARE(s.track(QStringLiteral("V2"))->segments[1].render->kept.size(), 1);
+        // Removing drops them all.
+        QVERIFY(setRender(s, pip, std::nullopt));
+        setRenderProxy(0);
+        QVERIFY(!isRendered(s, pip));
+        setRenderProxy(7);
+        QCOMPARE(renderProxy(), 0);
+    }
+
     void partial() {
         // A render shorter than its effect is partial (p.150); a second precompute finishes it, the two
         // laid end to end.
         Sequence s = sample();
         const RenderTarget pip = *renderTargetAt(s, QStringLiteral("V2"), 30); // 40 frames
-        QVERIFY(setRender(s, pip, EffectRender{{precompute(15)}, renderKey(s, pip)}));
+        QVERIFY(setRender(s, pip, EffectRender{{precompute(15)}, renderKey(s, pip), 0, {}}));
         QVERIFY(!isRendered(s, pip));
         QVERIFY(isPartlyRendered(s, pip));
         QVERIFY(isRenderedAt(s, pip, 14));

@@ -143,6 +143,31 @@ Display Color Space, and choose from the list" (p.544).
 * ACES projects' pictures are not converted until their output transforms (8.5e4; "Select Display Color Space and choose
   the ACES color space", p.559).
 
+## The proxy mode (p.526-527, p.549-550; 8.5e2)
+
+"Set the proxy mode for the Timeline to 1/4 or 1/16: Effectively, this reduces the number of pixels to be processed as you
+can play your sequence at 1/4 or 1/16 of the current project resolution" (p.526); "Select File > Settings, click the
+Format tab, click Proxy and choose the appropriate setting" (p.527).
+
+* The Format tab's Proxy menu (`formatProxy`): Off, 1/4 and 1/16 (the texts are ours), only in high-resolution projects
+  ("The proxy mode is only available for high-resolution projects", p.526) and only while the smaller raster stays at
+  least 256 x 120 ("in a 960x540 project, only 1/4-proxy (480x270) will be available", p.65, p.355;
+  `model::proxyModes`). 1/4 is half the width and height, 1/16 a quarter (`model::proxyRaster`). The mode is saved in the
+  project file (`ProjectSettings::proxy`, "proxy"; `MainWindow::setProxyMode`); a file that cannot be written says why.
+* "During playback, each frame in the sequence is transcoded on-the-fly (no files created) based on the proxy mode"
+  (p.526): the monitors' pictures are composed at most at the proxy raster and scaled up to the monitor.
+* "When you render any effects applied on the sequence, however, the application creates new media at this resolution"
+  (p.526): renders are made at the proxy raster (`mediaCreation("render")`) and the mode is part of the render key
+  (`model::setRenderProxy`), so a render made at another mode is offline. "Should you switch back to that proxy mode, the
+  rendered proxy media will still be available" (p.527): a render replacing one of another mode keeps it in
+  `EffectRender::kept` (the latest of each mode), and `model::renderOf` returns it while its key matches.
+* Transcode's "Project Dimensions: Transcodes the media based on the project size and the proxy mode setting" (p.527):
+  `mediaCreation("transcode")` takes the proxy raster.
+* Ours: exports keep the project's raster ("When you want to output/export your sequence, you need to turn off the proxy
+  mode", p.527; unrendered effects are composed at full size, renders of a proxy mode are scaled up). The green dot of
+  resized clips ("Any clips that are resized will have a spatial adapter applied", p.527) is not shown: the whole picture
+  is made smaller, not each clip.
+
 ## Tests
 
 * `tst_color_adapter`: the encoding with its column and JSON, Auto, bypass; segments' adapters, Refresh Sequence and
@@ -159,5 +184,8 @@ Display Color Space, and choose from the list" (p.544).
   the setting in the User list.
 * `tst_color_adapter displayColorSpace`: white and black kept, BT.2087's 709 to 2020 matrix, PQ's and HLG's reference
   white, alpha kept. `tst_composer_display displayColorSpace`: the menu, each monitor's choice, the converted picture.
+* `tst_effect_render proxyModes`: the key per mode, renders kept and found again, through JSON, removed. `tst_project_store
+  proxyModes`: the modes per format, the rasters, the project file. `tst_render_ui proxyMode`: the Format tab's menu,
+  renders at 1024 and 512 wide, offline and back, Transcode's raster.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

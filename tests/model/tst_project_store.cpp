@@ -101,6 +101,38 @@ private slots:
         QVERIFY(error.contains(QStringLiteral("newer")));
     }
 
+    // The Format tab's Proxy (p.526-527): high-resolution projects only, never under 256 x 120 (p.355), kept in the file.
+    void proxyModes() {
+        lumenis::ProjectFormat hd = projectFormatPresets().front();
+        for (const lumenis::ProjectFormat& f : projectFormatPresets()) {
+            if (f.family == lumenis::FormatFamily::HD) hd = f;
+        }
+        QCOMPARE(lumenis::model::proxyModes(hd), QList<int>{0});
+        lumenis::ProjectFormat uhd = hd;
+        uhd.family = lumenis::FormatFamily::HighRes;
+        uhd.width = 3840;
+        uhd.height = 2160;
+        QCOMPARE(lumenis::model::proxyModes(uhd), (QList<int>{0, 4, 16}));
+        lumenis::ProjectFormat small = uhd;
+        small.width = 960;
+        small.height = 540;
+        QCOMPARE(lumenis::model::proxyModes(small), (QList<int>{0, 4}));
+        ProjectSettings s = settings(QStringLiteral("Proxy"));
+        s.format = uhd;
+        QCOMPARE(lumenis::model::proxyRaster(s), QSize(3840, 2160));
+        s.proxy = 4;
+        QCOMPARE(lumenis::model::proxyRaster(s), QSize(1920, 1080));
+        s.proxy = 16;
+        QCOMPARE(lumenis::model::proxyRaster(s), QSize(960, 540));
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("p.cthproj"));
+        QVERIFY(ProjectStore::write(file, s));
+        QCOMPARE(ProjectStore::read(file)->proxy, 16);
+        s.format = hd;
+        QVERIFY(ProjectStore::write(file, s));
+        QCOMPARE(ProjectStore::read(file)->proxy, 0);
+    }
+
     void userProfiles() {
         QTemporaryDir dir;
         const UserProfiles users(dir.filePath("Users"));

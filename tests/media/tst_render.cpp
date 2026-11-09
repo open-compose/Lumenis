@@ -76,7 +76,7 @@ private slots:
         // computed again. (The render's pictures here: green.)
         Sequence seq = sample();
         const RenderTarget pip = *renderTargetAt(seq, QStringLiteral("V2"), 8);
-        QVERIFY(setRender(seq, pip, EffectRender{{precompute(pip.length)}, renderKey(seq, pip)}));
+        QVERIFY(setRender(seq, pip, EffectRender{{precompute(pip.length)}, renderKey(seq, pip), 0, {}}));
         Composition c = composition(seq);
         QList<std::int64_t> asked;
         c.rendered = [&asked](const EffectRender&, std::int64_t frame, QSize size) -> std::optional<QImage> {
@@ -94,7 +94,7 @@ private slots:
         QVERIFY(composeFrame(c, 8).toImage().pixelColor(2, 2) != QColor(0, 255, 0));
         // Offline: computed too.
         Sequence again = sample();
-        QVERIFY(setRender(again, pip, EffectRender{{precompute(pip.length)}, renderKey(again, pip)}));
+        QVERIFY(setRender(again, pip, EffectRender{{precompute(pip.length)}, renderKey(again, pip), 0, {}}));
         Composition offline = composition(again);
         offline.rendered = [](const EffectRender&, std::int64_t, QSize) -> std::optional<QImage> { return std::nullopt; };
         QCOMPARE(composeFrame(offline, 8).toImage().pixelColor(2, 2), QColor(255, 0, 0));

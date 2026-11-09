@@ -5,6 +5,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 
@@ -26,10 +27,23 @@ struct ProjectSettings {
     QString colorDepth = QStringLiteral("10 bit");
     QString stereoscopic = QStringLiteral("Off");
     QString filmType; // empty when the project is not a film project
+    // The Format tab's Proxy (Editing Guide p.526-527, p.549-550; 8.5e2): 0 for none, 4 or 16 to play and render the
+    // sequence at 1/4 or 1/16 of the project's resolution ("you can play your sequence at 1/4 or 1/16 of the current
+    // project resolution", p.526). Only high-resolution projects have it (proxyModes).
+    int proxy = 0;
     // Stored in UTC; create() fills them in when they are invalid.
     QDateTime created;
     QDateTime modified;
 };
+
+// The proxy modes a format offers (p.526-527): 0 (none) always; for high-resolution formats ("The proxy mode is only
+// available for high-resolution projects", p.526) 4 and 16 while the smaller raster keeps "The minimum dimensions ... 256
+// pixels in width by 120 pixels in height" (p.65, p.355: "in a 960x540 project, only 1/4-proxy (480x270) will be
+// available and not 1/16-proxy (240x135)").
+QList<int> proxyModes(const ProjectFormat& format);
+// The raster pictures and renders are made at in a proxy mode: half the project's width and height for 1/4, a quarter
+// for 1/16 (even); the project's raster for none or a mode the format does not offer.
+QSize proxyRaster(const ProjectSettings& settings);
 
 // A project found in or created by a ProjectStore.
 struct ProjectEntry {

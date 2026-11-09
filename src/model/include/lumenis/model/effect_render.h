@@ -38,8 +38,13 @@ std::optional<RenderTarget> renderTargetAt(const Sequence& sequence, const QStri
 
 // The target's effect, or null when the sequence no longer has it.
 const Effect* effectOf(const Sequence& sequence, const RenderTarget& target);
-// The target's render, if it has one (in date or not).
+// The target's render, if it has one (in date or not): one kept from another proxy mode when that one is in date and the
+// stored one is not (EffectRender::kept), else the stored one.
 std::optional<EffectRender> renderOf(const Sequence& sequence, const RenderTarget& target);
+// The proxy mode renders are made and looked for at (0, 4 or 16; the project's Format tab, p.527): part of renderKey, so
+// a render made at another proxy mode is out of date. MainWindow sets it with the project.
+void setRenderProxy(int proxy);
+int renderProxy();
 // What a render of the target is made from: the effect and everything on its track and the video
 // tracks below it over the effect's frames (their clips, source frames, lengths, effects and
 // transitions, placed relative to the effect's start), as a hash. Moving the whole effect keeps the
@@ -55,7 +60,9 @@ bool isRendered(const Sequence& sequence, const RenderTarget& target);
 bool isPartlyRendered(const Sequence& sequence, const RenderTarget& target);
 // Whether its frame `frame` (counted from its start) has a render in date.
 bool isRenderedAt(const Sequence& sequence, const RenderTarget& target, std::int64_t frame);
-// Sets (or with nothing, removes) the target's render. False when the sequence has no such effect.
+// Sets (or with nothing, removes) the target's render. False when the sequence has no such effect. A render replacing one
+// made at another proxy mode keeps it (and those it kept) in its `kept`, the latest of each other mode; removing drops
+// them all.
 bool setRender(Sequence& sequence, const RenderTarget& target, const std::optional<EffectRender>& render);
 
 // ExpertRender (p.140-147): "ExpertRender attempts to generate a minimum set of effects to render for

@@ -1507,7 +1507,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       Use CDL values from ASC_SOP and ASC_SAT, Installed LUTs Project/Shared/Both, Select LUT file), our readers for
       the listed 1D and 3D LUT formats, CLF through OpenColorIO where it is installed, the ASC_SOP and ASC_SAT columns
       and the CDL transformation.
-    * 8.5e, in four parts: 8.5e1 (done), Display Color Space on the monitors (p.544); 8.5e2, the proxy mode (the Format
+    * 8.5e, in four parts: 8.5e1 (done), Display Color Space on the monitors (p.544); 8.5e2 (done), the proxy mode (the Format
       tab's Proxy 1/4 and 1/16, p.526-527, p.549-550: pictures and renders at the proxy raster, renders kept per proxy
       mode); 8.5e3, the Format tab's Mask Margins and the monitors' Target Mask (p.550-552, the Composer setting's Target
       Mask p.1191, Export's Enable Mask Regions); 8.5e4, ACES projects (p.557-560: the ACES colour space, ACES colour

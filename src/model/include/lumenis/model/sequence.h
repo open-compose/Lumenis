@@ -74,9 +74,16 @@ double segmentSourcePosition(const struct Segment& segment, std::int64_t offset)
 // it composite to over the effect's frames ("Media Composer renders the composite result of all tracks
 // into the top track", p.57). A render whose key no longer matches is out of date: the effect plays
 // unrendered.
+//
+// Proxy modes (Editing Guide p.527, p.550; 8.5e2): a render is made at the proxy mode of its time (`proxy`, 0 for none,
+// part of its key); "If you change the proxy mode, any previously rendered media at that proxy mode will not be available
+// for playback until you return to that proxy mode", so the renders made at other proxy modes are kept in `kept` (as
+// {clips, key, proxy}, the latest of each mode) and play again when their key matches (model::renderOf).
 struct EffectRender {
     QList<QJsonObject> clips;
     QString key;
+    int proxy = 0;
+    QList<QJsonObject> kept;
     bool operator==(const EffectRender&) const = default;
 };
 
