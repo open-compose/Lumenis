@@ -666,9 +666,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the shared LUT folder in the application's data, the CDL transformation's name carrying its values, its place at the end
   of the drop-down. Color Management (8.5d2): Insert color transformations and Use CDL values off to start with, Installed
   LUTs on Project, Select LUT file using the saved choice, the colour space from the transfer characteristic alone, CLF
-  kept as a 33-point cube, the HDR conversion choices kept unused until 8.5e. Display Color Space (8.5e1): the
-  project's display until one is chosen, not kept between sessions; BT.1886 gamma 2.4 for Rec.709/2020 and gamma 2.6 with
-  the DCI white for DCI-P3, Bradford adaptation; PQ/HLG reference white 203 cd/m² at the display's white, clipped above.
+  kept as a 33-point cube, the HDR conversion choices kept unused until 8.5e. Display Color Space (8.5e1, 8.5e4a):
+  the Viewer tab's choices (p.1161) in the right-click menu, which lasts until the setting is applied; BT.1886 gamma 2.4
+  for Rec709/Rec2020, the sRGB curve for SRGB and gamma 2.6 with the DCI white for DCI P3, Bradford adaptation; Rec709
+  (full range) shown as Rec709; PQ/HLG reference white 203 cd/m² at the display's white, clipped above.
   Proxy (8.5e2): the Format tab's Off, 1/4 and 1/16 texts; exports at the project's raster; no green dot for proxy
   resizing; the latest render of each other mode kept. Mask margins (8.5e3): presets centred, letterboxed or
   pillarboxed; a typed percentage makes Custom...; without margins the menu shows the picture's shape; Mix to White/Black
@@ -2117,7 +2118,7 @@ p.610–640, ch. 13 p.432–434).**
   The labels follow the guide.
   * **Bin** (p.1152–1154).
   * **Composer** (p.1158–1161): Window, Edit, Move, MultiCam and Viewer
-    tabs (Viewer: the Target Masks, 8.5e3; Resize Monitor to Image and the Color Spaces later).
+    tabs (Viewer: the Target Masks, 8.5e3, and Color Spaces, 8.5e4a; Resize Monitor to Image later).
   * **Effect Editor** (p.1171–1172): the Effect Editor's options
     (docs/spec/effect-keyframes.md).
   * **General** (p.1191–1193).

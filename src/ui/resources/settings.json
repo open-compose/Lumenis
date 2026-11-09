@@ -190,9 +190,9 @@
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
             {"key": "recordTargetMask", "type": "choice", "style": "menu", "label": "Record Monitor Target Mask", "default": "none", "page": 1161,
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
-            {"key": "sourceColorSpace", "type": "choice", "style": "menu", "label": "Source Monitor Color Space", "default": "project", "page": 1161, "later": true,
+            {"key": "sourceColorSpace", "type": "choice", "style": "menu", "label": "Source Monitor Color Space", "default": "project", "page": 1161,
              "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]},
-            {"key": "recordColorSpace", "type": "choice", "style": "menu", "label": "Record Monitor Color Space", "default": "project", "page": 1161, "later": true,
+            {"key": "recordColorSpace", "type": "choice", "style": "menu", "label": "Record Monitor Color Space", "default": "project", "page": 1161,
              "choices": [{"value": "project", "label": "Project"}, {"value": "rec709", "label": "Rec709"}, {"value": "rec709full", "label": "Rec709 (full range)"}, {"value": "srgb", "label": "SRGB"}, {"value": "dciP3", "label": "DCI P3"}, {"value": "rec2020", "label": "Rec2020"}, {"value": "acesProxy", "label": "ACESproxy"}]}
           ]
         }

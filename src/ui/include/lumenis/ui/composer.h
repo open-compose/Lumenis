@@ -178,8 +178,8 @@ public:
     bool showsCaptions(MonitorId monitor) const;
     void setShowCaptions(MonitorId monitor, bool on);
     // Display Color Space (p.544; 8.5e1), a choice of each monitor's in its right-click menu: what the computer's display
-    // is calibrated for (media::displayColorSpaces). Until one is chosen, the one the project's colour space is shown in
-    // (ours). The pictures are converted for it as they are drawn (displayed); scopes and exports are not.
+    // is calibrated for (media::displayColorSpaces), first set from the Composer setting's Viewer tab (p.1161; Project
+    // until then). The pictures are converted for it as they are drawn (displayed); scopes and exports are not.
     QString displayColorSpace(MonitorId monitor) const;
     void setDisplayColorSpace(MonitorId monitor, const QString& space);
     // The project's colour space (the Format tab's Color Space), which the pictures are in; MainWindow sets it.

@@ -2853,6 +2853,8 @@ QMenu* Composer::contextMenu(MonitorId monitor) {
         QAction* a = display->addAction(space);
         a->setObjectName(space);
         a->setCheckable(true);
+        // ACESproxy is for ACES projects (p.559, p.1161).
+        if (space == QLatin1String("ACESproxy")) a->setEnabled(projectColorSpace_.contains(QLatin1String("ACES")));
         a->setChecked(space == displayColorSpace(monitor));
         group->addAction(a);
         connect(a, &QAction::triggered, this, [this, monitor, space] { setDisplayColorSpace(monitor, space); });
@@ -2947,10 +2949,8 @@ void Composer::setMultiCameraMode(bool on) {
 
 QString Composer::displayColorSpace(MonitorId monitor) const {
     const QString& chosen = displaySpace_[monitor == MonitorId::Record ? 1 : 0];
-    if (!chosen.isEmpty()) return chosen;
-    // Until one is chosen, the one the project's pictures are in (ours).
-    const QString own = media::displaySpaceOfProject(projectColorSpace_);
-    return own.isEmpty() ? media::displayColorSpaces().constFirst() : own;
+    // Until one is chosen, Project: the setting's default (p.1161).
+    return chosen.isEmpty() ? media::displayColorSpaces().constFirst() : chosen;
 }
 
 void Composer::setDisplayColorSpace(MonitorId monitor, const QString& space) {

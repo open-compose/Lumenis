@@ -3,6 +3,7 @@
 // and the gang icon; Flow Data Dynamically; Tick Marks in Position Bars; the middle Composer button
 // panel. Also Dynamic Play (p.401-402), Display During Segment Drag (p.617-618, p.1219) and the monitors' Display Color
 // Space (p.544) and Target Mask (p.552, 8.5e3).
+#include "lumenis/media/display_color.h"
 #include "lumenis/media/target_mask.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/ui/composer.h"
@@ -113,7 +114,7 @@ private slots:
         c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("a"), 100));
         c.load(MonitorId::Record, QStringLiteral("bin"), clip(QStringLiteral("b"), 100));
         settle();
-        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.709"));
+        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Project"));
         auto centre = [&](MonitorId m) {
             MonitorPicture* w = c.picture(m);
             return w->grab().toImage().pixel(w->width() / 2, w->height() / 2);
@@ -124,20 +125,24 @@ private slots:
         QVERIFY(display);
         QStringList choices;
         for (QAction* a : display->actions()) choices << a->text();
-        QCOMPARE(choices, (QStringList{QStringLiteral("Rec.709"), QStringLiteral("Rec.2020"), QStringLiteral("DCI-P3")}));
-        QVERIFY(display->findChild<QAction*>(QStringLiteral("Rec.709"))->isChecked());
-        display->findChild<QAction*>(QStringLiteral("Rec.2020"))->trigger();
+        // The Composer setting's Viewer tab's choices (p.1161); ACESproxy only in ACES projects.
+        QCOMPARE(choices, media::displayColorSpaces());
+        QCOMPARE(choices.size(), 7);
+        QVERIFY(display->findChild<QAction*>(QStringLiteral("Project"))->isChecked());
+        QVERIFY(!display->findChild<QAction*>(QStringLiteral("ACESproxy"))->isEnabled());
+        display->findChild<QAction*>(QStringLiteral("Rec2020"))->trigger();
         delete menu;
         settle();
-        QCOMPARE(c.displayColorSpace(MonitorId::Record), QStringLiteral("Rec.2020"));
-        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.709"));
+        QCOMPARE(c.displayColorSpace(MonitorId::Record), QStringLiteral("Rec2020"));
+        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Project"));
         // A Rec.709 red on a Rec.2020 display is less saturated: its green and blue code values rise.
         const QRgb shown = centre(MonitorId::Record);
         QVERIFY2(qGreen(shown) > 40 && qBlue(shown) > 40 && qRed(shown) < 200, qPrintable(QString::number(shown, 16)));
         QCOMPARE(centre(MonitorId::Source), qRgb(200, 40, 40));
-        // A 2020 project's pictures start on a Rec.2020 display.
-        c.setProjectColorSpace(QStringLiteral("RGB 2020"));
-        QCOMPARE(c.displayColorSpace(MonitorId::Source), QStringLiteral("Rec.2020"));
+        // Rec709 shows a 709 project's picture as it is.
+        c.setDisplayColorSpace(MonitorId::Record, QStringLiteral("Rec709"));
+        settle();
+        QCOMPARE(centre(MonitorId::Record), qRgb(200, 40, 40));
     }
 
     // "Right-click in the source or record viewer and select Target Mask" (p.552): the project's mask margins drawn as

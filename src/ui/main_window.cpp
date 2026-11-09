@@ -15,6 +15,7 @@
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/display_color.h"
 #include "lumenis/media/target_mask.h"
 #include "lumenis/media/color_transform.h"
 #include "lumenis/media/frame_flex.h"
@@ -7978,6 +7979,9 @@ void MainWindow::applySettings() {
     // Mask margins (p.550-552; 8.5e3): the project's, shown as each monitor's Target Mask (the Composer setting's Viewer
     // tab, p.1161) and the Full Screen Playback setting's (p.1191).
     composer_->setMaskMargins(project_ ? project_->settings.mask : model::MaskMargins{});
+    // The Viewer tab's Source and Record Monitor Color Space (p.1161; 8.5e4a), as Display Color Space.
+    composer_->setDisplayColorSpace(MonitorId::Source, media::displayColorSpaceOfValue(s.text(QStringLiteral("Composer"), QStringLiteral("sourceColorSpace"))));
+    composer_->setDisplayColorSpace(MonitorId::Record, media::displayColorSpaceOfValue(s.text(QStringLiteral("Composer"), QStringLiteral("recordColorSpace"))));
     composer_->setTargetMask(MonitorId::Source, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("sourceTargetMask"))));
     composer_->setTargetMask(MonitorId::Record, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"))));
     if (FullScreenView* view = fullScreen_.data()) {

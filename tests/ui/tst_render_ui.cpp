@@ -504,6 +504,10 @@ private slots:
         window.settings().setValue(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"), QStringLiteral("blackMask"));
         settle();
         QCOMPARE(window.composer().targetMask(MonitorId::Record), model::TargetMask::BlackMask);
+        // And each monitor's Color Space (p.1161; 8.5e4a).
+        window.settings().setValue(QStringLiteral("Composer"), QStringLiteral("sourceColorSpace"), QStringLiteral("srgb"));
+        settle();
+        QCOMPARE(window.composer().displayColorSpace(MonitorId::Source), QStringLiteral("SRGB"));
     }
 };
 

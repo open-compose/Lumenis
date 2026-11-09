@@ -935,7 +935,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   tab's Mask Margins with `src/ui/target_settings_dialog.*`, `ProjectSettings::mask` and `src/model/mask_margins.*`,
   `MainWindow::setMaskMargins`; `Composer::setTargetMask`, the Composer setting's Viewer tab, Full Screen Playback's
   Target Mask, `media::paintTargetMask`/`burnMaskMargins` in `src/media/target_mask.*` for Export's Enable Mask Regions;
-  tests `tst_project_store maskMargins`, `tst_composer_display targetMask`, `tst_render_ui proxyMode`), is done.
+  tests `tst_project_store maskMargins`, `tst_composer_display targetMask`, `tst_render_ui proxyMode`), is done. 8.5e4
+  is in two parts (ROADMAP). 8.5e4a, the Viewer tab's Source and Record Monitor Color Space as Display Color Space's
+  choices (Project, Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, ACESproxy; `media::displayColorSpaceOfValue`;
+  tests `tst_color_adapter displayColorSpace`, `tst_composer_display displayColorSpace`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

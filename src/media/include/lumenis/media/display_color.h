@@ -15,15 +15,24 @@
 // The picture is in the project's colour space; a monitor's display colour space says what the computer's display is
 // calibrated for, so the picture is converted for it: decoded with the project's transfer, its primaries mapped to the
 // display's (Bradford-adapted to the display's white), encoded with the display's transfer. Ours, as the guide gives no
-// numbers: Rec.709 and Rec.2020 displays are BT.1886 (gamma 2.4) with a D65 white; DCI-P3 is gamma 2.6 with the DCI white
-// (0.314, 0.351); PQ and HLG pictures are shown with their reference white (203 cd/m², BT.2408) at the display's white,
-// brighter values clipped.
+// numbers: Rec709 and Rec2020 displays are BT.1886 (gamma 2.4) with a D65 white; SRGB has Rec. 709's primaries and the
+// sRGB curve; DCI P3 is gamma 2.6 with the DCI white (0.314, 0.351); PQ and HLG pictures are shown with their reference
+// white (203 cd/m², BT.2408) at the display's white, brighter values clipped.
+//
+// The choices are the Composer setting's Viewer tab's (p.1161, 8.5e4a): "You can choose the selected Project color
+// space, or Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, or ACESproxy color space". Project shows the picture as
+// it is. Rec709 (full range) is shown as Rec709, our pictures being full-range RGB (ours). ACESproxy is for ACES projects
+// (8.5e4b) and converts nothing yet.
 namespace lumenis::media {
 
-// The Display Color Space menu's choices, in the guide's order.
+// The Display Color Space menu's choices, in the guide's order (p.1161).
 QStringList displayColorSpaces();
+// The Composer setting's values for them ("project", "rec709", "rec709full", "srgb", "dciP3", "rec2020", "acesProxy"),
+// in the same order, and a value's choice (Project for unknown values).
+QStringList displayColorSpaceValues();
+QString displayColorSpaceOfValue(const QString& value);
 // The display colour space a project colour space (project_format.h's colorSpacesFor texts) is shown in without a
-// conversion: "Rec.709" for 601 and 709 projects, "Rec.2020" for the 2020 ones (PQ and HLG included), "DCI-P3". Empty
+// conversion: "Rec709" for 601 and 709 projects, "Rec2020" for the 2020 ones (PQ and HLG included), "DCI P3". Empty
 // for a colour space we do not convert (ACES RGB, until its output transforms, 8.5e4).
 QString displaySpaceOfProject(const QString& projectColorSpace);
 // Whether a picture in the project's colour space needs converting for `display`; false when they match or either is

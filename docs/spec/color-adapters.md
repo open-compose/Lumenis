@@ -125,23 +125,25 @@ from 0 to 1:
   (`detail::ocioBakeFile`) and kept as a 33-point cube (ours); without OpenColorIO in the build it is refused with that
   reason. The fuzz library refuses CLF files.
 
-## Display Color Space (p.544, p.559; 8.5e1)
+## Display Color Space (p.544, p.559, p.1161; 8.5e1, 8.5e4a)
 
 "Media Composer supports Rec. 709, BT/Rec. 2020 and DCI-P3 color spaces. The source and record viewers also support these
 colors if your monitor has been calibrated for them ... Right-click in the desired viewer (source /record), select
 Display Color Space, and choose from the list" (p.544).
 
-* Each monitor's right-click menu has Display Color Space with Rec.709, Rec.2020 and DCI-P3 (`Composer::
-  setDisplayColorSpace`), a choice of each monitor's like Show Captions. Ours: until one is chosen, the one the project's
-  colour space is shown in (`media::displaySpaceOfProject`); not kept between sessions.
+* The choices are the Composer setting's Viewer tab's (p.1161): "You can choose the selected Project color space, or
+  Rec709, Rec709 (full range), SRGB, DCI P3, Rec2020, or ACESproxy color space". Each monitor's right-click menu has
+  them under Display Color Space (`Composer::setDisplayColorSpace`), and the setting's Source and Record Monitor Color
+  Space set them as the setting is applied (`media::displayColorSpaceOfValue`); a right-click choice lasts until then
+  (ours). Project, the setting's default, shows the picture as it is. ACESproxy is offered in ACES projects only and
+  converts nothing until 8.5e4b. Not kept between sessions except through the setting.
 * The picture, in the project's colour space, is converted for the display as it is drawn (`Composer::displayed`,
   `media::toDisplayColorSpace` in `src/media/display_color.*`); the scopes, renders and exports are not. Ours, as the guide
-  gives no numbers: Rec.709 and Rec.2020 displays are BT.1886 (gamma 2.4) with a D65 white, DCI-P3 is gamma 2.6 with the
-  DCI white, the primaries mapped through XYZ with a Bradford adaptation to the display's white; PQ and HLG pictures are
-  shown with their 203 cd/m² reference white (BT.2408) at the display's white and brighter values clipped; 601 projects are
-  shown as Rec.709.
-* ACES projects' pictures are not converted until their output transforms (8.5e4; "Select Display Color Space and choose
-  the ACES color space", p.559).
+  gives no numbers: Rec709 and Rec2020 displays are BT.1886 (gamma 2.4) with a D65 white; SRGB has Rec. 709's primaries
+  and the sRGB curve; DCI P3 is gamma 2.6 with the DCI white; the primaries are mapped through XYZ with a Bradford
+  adaptation to the display's white; PQ and HLG pictures are shown with their 203 cd/m² reference white (BT.2408) at the
+  display's white and brighter values clipped; 601 projects are shown as Rec709. Rec709 (full range) is shown as Rec709:
+  our pictures are full-range RGB already. A display whose primaries and transfer are the project's converts nothing.
 
 ## The proxy mode (p.526-527, p.549-550; 8.5e2)
 
@@ -188,8 +190,7 @@ setting ... This is for viewing purposes only" (p.550).
 * Export's Enable Mask Regions (p.1175: "you can export your sequence with mask margins burned in", p.900) blacks the
   masked region of exported movie frames (`media::burnMaskMargins`).
 * Left: the Output Tool's Target Mask (p.552, with the hardware modules), Export's "Mask Margins active area" source
-  raster (p.894), the Viewer tab's Resize Monitor to Image and its Color Space options (p.1161: Project, Rec709, Rec709
-  (full range), SRGB, DCI P3, Rec2020, ACESproxy; with 8.5e4).
+  raster (p.894), the Viewer tab's Resize Monitor to Image (p.1161).
 
 ## Tests
 
@@ -206,7 +207,9 @@ setting ... This is for viewing purposes only" (p.550).
   Use CDL values with Auto, the Color Management Settings button, Select LUT file and its refusal. `tst_settings_window`:
   the setting in the User list.
 * `tst_color_adapter displayColorSpace`: white and black kept, BT.2087's 709 to 2020 matrix, PQ's and HLG's reference
-  white, alpha kept. `tst_composer_display displayColorSpace`: the menu, each monitor's choice, the converted picture.
+  white, SRGB, Project and ACESproxy, the setting's values, alpha kept. `tst_composer_display displayColorSpace`: the
+  menu's seven choices, each monitor's choice, the converted picture. `tst_render_ui proxyMode`: the Viewer tab's Source
+  Monitor Color Space.
 * `tst_effect_render proxyModes`: the key per mode, renders kept and found again, through JSON, removed. `tst_project_store
   proxyModes`: the modes per format, the rasters, the project file. `tst_render_ui proxyMode`: the Format tab's menu,
   renders at 1024 and 512 wide, offline and back, Transcode's raster.

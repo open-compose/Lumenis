@@ -58,7 +58,7 @@ Mat bradford(const Vec& from, const Vec& to) {
     return mul(inverse(m), mul(scale, m));
 }
 
-enum class Transfer { Gamma24, Gamma26, Pq, Hlg };
+enum class Transfer { Gamma24, Gamma26, Srgb, Pq, Hlg };
 
 struct Space {
     std::array<double, 8> xy; // red, green, blue, white
@@ -70,9 +70,11 @@ constexpr std::array<double, 8> kRec2020{0.708, 0.292, 0.170, 0.797, 0.131, 0.04
 constexpr std::array<double, 8> kDciP3{0.680, 0.320, 0.265, 0.690, 0.150, 0.060, 0.314, 0.351};
 
 std::optional<Space> displaySpace(const QString& display) {
-    if (display == QLatin1String("Rec.709")) return Space{kRec709, Transfer::Gamma24};
-    if (display == QLatin1String("Rec.2020")) return Space{kRec2020, Transfer::Gamma24};
-    if (display == QLatin1String("DCI-P3")) return Space{kDciP3, Transfer::Gamma26};
+    // Rec709 (full range) is shown as Rec709: our pictures are full-range RGB already (ours).
+    if (display == QLatin1String("Rec709") || display == QLatin1String("Rec709 (full range)")) return Space{kRec709, Transfer::Gamma24};
+    if (display == QLatin1String("SRGB")) return Space{kRec709, Transfer::Srgb};
+    if (display == QLatin1String("Rec2020")) return Space{kRec2020, Transfer::Gamma24};
+    if (display == QLatin1String("DCI P3")) return Space{kDciP3, Transfer::Gamma26};
     return std::nullopt;
 }
 
@@ -90,6 +92,7 @@ double decode(Transfer t, double v) {
     switch (t) {
     case Transfer::Gamma24: return std::pow(v, 2.4);
     case Transfer::Gamma26: return std::pow(v, 2.6);
+    case Transfer::Srgb: return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
     case Transfer::Pq: {
         // SMPTE ST 2084's EOTF, in cd/m², over the 203 cd/m² reference white.
         const double m1 = 2610.0 / 16384.0, m2 = 2523.0 / 4096.0 * 128.0, c1 = 3424.0 / 4096.0,
@@ -111,6 +114,7 @@ double decode(Transfer t, double v) {
 
 double encode(Transfer t, double light) {
     light = std::clamp(light, 0.0, 1.0);
+    if (t == Transfer::Srgb) return light <= 0.0031308 ? 12.92 * light : 1.055 * std::pow(light, 1.0 / 2.4) - 0.055;
     return t == Transfer::Gamma26 ? std::pow(light, 1.0 / 2.6) : std::pow(light, 1.0 / 2.4);
 }
 
@@ -133,22 +137,35 @@ std::optional<Conversion> conversion(const QString& project, const QString& disp
 } // namespace
 
 QStringList displayColorSpaces() {
-    return {QStringLiteral("Rec.709"), QStringLiteral("Rec.2020"), QStringLiteral("DCI-P3")};
+    return {QStringLiteral("Project"), QStringLiteral("Rec709"), QStringLiteral("Rec709 (full range)"), QStringLiteral("SRGB"),
+            QStringLiteral("DCI P3"),  QStringLiteral("Rec2020"), QStringLiteral("ACESproxy")};
+}
+
+QStringList displayColorSpaceValues() {
+    return {QStringLiteral("project"), QStringLiteral("rec709"), QStringLiteral("rec709full"), QStringLiteral("srgb"),
+            QStringLiteral("dciP3"),   QStringLiteral("rec2020"), QStringLiteral("acesProxy")};
+}
+
+QString displayColorSpaceOfValue(const QString& value) {
+    const qsizetype i = displayColorSpaceValues().indexOf(value);
+    return displayColorSpaces().value(i < 0 ? 0 : i);
 }
 
 QString displaySpaceOfProject(const QString& project) {
     if (project.contains(QLatin1String("ACES"))) return {};
-    if (project.contains(QLatin1String("2020"))) return QStringLiteral("Rec.2020");
-    if (project.contains(QLatin1String("P3"))) return QStringLiteral("DCI-P3");
-    if (project.contains(QLatin1String("709")) || project.contains(QLatin1String("601"))) return QStringLiteral("Rec.709");
+    if (project.contains(QLatin1String("2020"))) return QStringLiteral("Rec2020");
+    if (project.contains(QLatin1String("P3"))) return QStringLiteral("DCI P3");
+    if (project.contains(QLatin1String("709")) || project.contains(QLatin1String("601"))) return QStringLiteral("Rec709");
     return {};
 }
 
 bool convertsForDisplay(const QString& project, const QString& display) {
-    if (!displaySpace(display) || displaySpaceOfProject(project).isEmpty()) return false;
-    // A PQ or HLG picture needs its transfer converted even on a Rec.2020 display.
-    const bool hdr = project.contains(QLatin1String("2084")) || project.contains(QLatin1String("HLG"));
-    return hdr || displaySpaceOfProject(project) != display;
+    // "Project" (and ACESproxy, until 8.5e4b) is no display space: nothing to convert. Otherwise the picture is converted
+    // when the display's primaries or transfer differ from the project's (a PQ or HLG picture even on a Rec2020 display).
+    const auto src = projectSpace(project);
+    const auto dst = displaySpace(display);
+    if (!src || !dst) return false;
+    return src->xy != dst->xy || src->transfer != dst->transfer;
 }
 
 std::array<double, 3> toDisplayColor(const std::array<double, 3>& rgb, const QString& project, const QString& display) {
