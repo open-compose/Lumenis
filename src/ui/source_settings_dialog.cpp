@@ -321,6 +321,10 @@ SourceSettingsDialog::SourceSettingsDialog(const QString& clipName, const QImage
     bypass_ = new QCheckBox(tr("Bypass all color transformations"));
     bypass_->setObjectName(QStringLiteral("bypassColor"));
     colorLayout->addWidget(bypass_);
+    auto* managementButton = new QPushButton(tr("Color Management Settings"));
+    managementButton->setObjectName(QStringLiteral("colorManagementSettings"));
+    connect(managementButton, &QPushButton::clicked, this, &SourceSettingsDialog::openColorManagement);
+    colorLayout->addWidget(managementButton, 0, Qt::AlignLeft);
     connect(sourceSpace_, &QComboBox::currentIndexChanged, this, &SourceSettingsDialog::colorChanged);
     connect(bypass_, &QCheckBox::toggled, this, &SourceSettingsDialog::colorChanged);
     tabs->addTab(colorTab, tr("Color Encoding"));
@@ -522,13 +526,26 @@ void SourceSettingsDialog::moveTransformation(int from, int to) {
     colorChanged();
 }
 
-void SourceSettingsDialog::setClipCdl(const QString& name) {
+void SourceSettingsDialog::setClipCdl(const QString& name, bool onAuto) {
+    clipCdl_ = name;
+    cdlOnAuto_ = onAuto;
     if (!name.isEmpty() && transformationChoice_->findText(name) < 0) transformationChoice_->addItem(name);
+}
+
+void SourceSettingsDialog::openColorManagement() {
+    if (colorManagement_) colorManagement_();
+    // LUTs installed meanwhile join the list (p.542: "The LUT is now available in the list of color transformation").
+    const QString current = transformationChoice_->currentText();
+    transformationChoice_->clear();
+    transformationChoice_->addItems(media::colorTransformationNames());
+    if (!clipCdl_.isEmpty()) transformationChoice_->addItem(clipCdl_);
+    transformationChoice_->setCurrentText(current);
 }
 
 void SourceSettingsDialog::autoTransformations() {
     model::ColorEncoding e = colorEncoding();
     e.transformations = model::autoTransformations(e.sourceSpace);
+    if (cdlOnAuto_ && !clipCdl_.isEmpty()) e.transformations << clipCdl_;
     fillColor(e);
 }
 

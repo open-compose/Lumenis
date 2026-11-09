@@ -2,6 +2,7 @@
 // kept with a clip and its column, Auto's transformations, segments' adapters through JSON, Refresh Sequence > Color
 // Adapters and Remove Color Adapters, and the built-in transformations' values.
 #include "lumenis/media/color_transform.h"
+#include "lumenis/media/link.h"
 #include "lumenis/media/lut_file.h"
 #include "lumenis/model/color_adapter.h"
 #include "lumenis/model/sequence.h"
@@ -189,6 +190,37 @@ private slots:
         QCOMPARE(names, (QStringList{QStringLiteral("External Invert"), QStringLiteral("External Swap")}));
         QCOMPARE(failures.size(), 1);
         QVERIFY(failures.first().startsWith(QStringLiteral("Broken.cube: ")));
+    }
+
+    // CLF files (p.542) through OpenColorIO, kept as a cube; refused with the reason without it. The colour space a
+    // file's transfer names (p.538).
+    void clfAndTransfers() {
+        QTemporaryDir dir;
+        const QString clf = dir.filePath(QStringLiteral("Half.clf"));
+        QVERIFY(write(clf, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                           "<ProcessList id=\"half\" compCLFversion=\"3\">\n"
+                           "  <Matrix inBitDepth=\"32f\" outBitDepth=\"32f\">\n"
+                           "    <Array dim=\"3 3\">0.5 0 0 0 0.5 0 0 0 0.5</Array>\n"
+                           "  </Matrix>\n"
+                           "</ProcessList>\n"));
+        QString why;
+        const auto lut = media::readLutFile(clf, &why);
+        if (lut) {
+            QCOMPARE(lut->size3D, 33);
+            const auto c = lut->apply({1.0, 0.5, 0.0});
+            QVERIFY(near(c[0], 0.5, 1e-3) && near(c[1], 0.25, 1e-3) && near(c[2], 0.0, 1e-3));
+            QVERIFY(media::lutFilesIn(dir.path()).contains(clf));
+        } else {
+            QVERIFY2(why.contains(QStringLiteral("OpenColorIO")), qPrintable(why));
+        }
+        QCOMPARE(media::sourceSpaceOfTransfer(QStringLiteral("linear")), QStringLiteral("Linear"));
+        QCOMPARE(media::sourceSpaceOfTransfer(QStringLiteral("iec61966-2-1")), QStringLiteral("sRGB"));
+        QCOMPARE(media::sourceSpaceOfTransfer(QStringLiteral("bt709")), QStringLiteral("Rec.709"));
+        QVERIFY(media::sourceSpaceOfTransfer(QStringLiteral("smpte2084")).isEmpty());
+        for (const QString& t : {QStringLiteral("linear"), QStringLiteral("iec61966-2-1"), QStringLiteral("bt709"),
+                                 QStringLiteral("smpte170m"), QStringLiteral("bt2020-10")}) {
+            QVERIFY(model::sourceColorSpaces().contains(media::sourceSpaceOfTransfer(t)));
+        }
     }
 
     // The built-in transformations (p.539-540).

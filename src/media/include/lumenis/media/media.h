@@ -54,6 +54,8 @@ struct StreamInfo {
     Rational frameRate;   // edit rate
     Rational aspect{1, 1}; // display aspect ratio, e.g. 16:9
     QString pixelFormat;  // "yuv422p10le", ...
+    // FFmpeg's name for the transfer characteristic ("bt709", "linear", "iec61966-2-1" ...); empty when unspecified.
+    QString colorTransfer;
     bool interlaced = false;
     // Interlaced: whether the first field in time is on the even lines (FFmpeg's field order tt or tb);
     // true when the media does not say.
@@ -195,6 +197,9 @@ struct WriterSettings {
     std::int64_t bitRate = 0;
     // Full range (0-255) rather than legal range Y'CbCr (Color Levels, Editing Guide p.881; movie export, 7.1a).
     bool fullRange = false;
+    // The transfer characteristic the stream declares, by FFmpeg's name ("linear" ...); empty: Rec. 709 or 601 as the
+    // size says.
+    QString colorTransfer;
     // The video encoder's own options, e.g. OpenEXR's "format" ("half", "float"); and a fixed quality, FFmpeg's
     // qscale (1 best to 31), 0 for none (JPEG stills' Quality, 7.1b).
     QList<QPair<QString, QString>> videoOptions;

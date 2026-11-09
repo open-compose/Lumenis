@@ -921,7 +921,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   transcodeColorEncoding`), is done, so 8.5c is. 8.5d1, external LUTs and CDLs (`src/media/lut_file.*` reading .cube/.itx,
   .3dl and Autodesk tables, `registerLutFolders` from the project's `LUTs` and `sharedLutFolder()` with
   `LUMENIS_SHARED_LUTS`, "External <name>"; `media::cdlTransformationName` and the CDL formulas in `color_transform.cpp`;
-  `SourceSettingsDialog::setClipCdl`; fuzz target `lut`; tests `tst_color_adapter cdl`/`lutFiles`), is done.
+  `SourceSettingsDialog::setClipCdl`; fuzz target `lut`; tests `tst_color_adapter cdl`/`lutFiles`), is done. 8.5d2, the
+  Color Management User setting (Insert color transformations through `LinkOptions::insertColorTransformations` and
+  `media::sourceSpaceOfTransfer` from `StreamInfo::colorTransfer`, Use CDL values for Auto, Installed LUTs and Select LUT
+  file `MainWindow::installLutFile`, the tab's Color Management Settings button `openColorManagementSetting`) and CLF
+  files baked through OpenColorIO (`detail::ocioBakeFile`; tests `tst_color_adapter clfAndTransfers`, `tst_frameflex_ui
+  colorAdapters`), is done, so 8.5d is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

@@ -37,7 +37,8 @@ struct LutFile {
 // "Nucoda"; empty for none.
 QString lutProduct(const QString& firstLine);
 // Reads a LUT file; nothing, with `error` saying why, for one we cannot read. Avid DS, LUTher and Nucoda files are
-// recognised but not read (ours: their layouts are not published).
+// recognised but not read (ours: their layouts are not published). A .clf file (p.542) is read through OpenColorIO
+// and kept as a 33-point cube; without OpenColorIO it is refused with that reason.
 std::optional<LutFile> readLutFile(const QString& path, QString* error = nullptr);
 // The same from a file's bytes; `suffix` (".3dl" ...) tells a Lustre grid without its KDM first line.
 std::optional<LutFile> readLutData(const QByteArray& data, const QString& suffix, QString* error = nullptr);
@@ -46,7 +47,7 @@ ColorTransformation lutTransformation(const LutFile& lut);
 
 // The name an installed LUT has in the transformation list: "External " and the file's name without its suffix.
 QString externalLutName(const QString& path);
-// The LUT files in a folder (by suffix: .cube, .itx, .3dl, .lut, .txt), sorted by name.
+// The LUT files in a folder (by suffix: .cube, .itx, .3dl, .lut, .txt, .clf), sorted by name.
 QStringList lutFilesIn(const QString& folder);
 // Registers every LUT file of the folders (media::registerColorTransformation). Returns the names registered; files that
 // cannot be read are left out, with why in `failures` ("<file>: <why>").

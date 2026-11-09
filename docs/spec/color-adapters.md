@@ -100,11 +100,30 @@ from 0 to 1:
   of the drop-down (`SourceSettingsDialog::setClipCdl`).
 * The fuzz target `lut` reads arbitrary bytes as both kinds of file.
 
-## Left for 8.5d2
+## The Color Management setting and CLF files (p.539-544, p.1157-1158; 8.5d2)
 
-The Color Management setting (Insert color transformations automatically in the source settings upon linking, Use CDL
-values from ASC_SOP and ASC_SAT bin columns when available with Auto applying them, Installed LUTs Project/Shared/Both,
-Select LUT file), the Color Encoding tab's Color Management Settings button, and CLF files through OpenColorIO.
+* The User setting "Color Management" (settings.json; p.1157-1158, the Installed LUTs from p.539):
+  * "Insert color transformations automatically in the source settings upon linking": a linked clip's encoding takes
+    Auto's transformations for the colour space its media names (`LinkOptions::insertColorTransformations`). Ours: off
+    to start with ("Do not select this option if you want to work with the original media files").
+  * "Use CDL values from ASC_SOP and ASC_SAT bin columns when available": the Color Encoding tab's Auto adds the clip's
+    CDL ("click the Auto button on the Color Encoding tab", p.543; `SourceSettingsDialog::setClipCdl(name, true)`).
+    Ours: off to start with; a clip linked afresh has no CDL columns yet ("CDL transformations are only applied if the bin
+    columns of the master clip have already been populated via an ALE/EDL merge", p.539).
+  * "Automatic HDR conversions from SDR media (Rec709)": its two choices are kept for 8.5e's HDR projects.
+  * Installed LUTs, Project, Shared or Both, and the Select LUT file button (`MainWindow::installLutFile`): the file is
+    copied into the project's `LUTs` folder, every project's, or both, and listed as External; one that cannot be read
+    or copied says why in a message (`lutNotInstalled`) and the Console. Ours: the button uses the saved Installed LUTs
+    choice, as the button opens the file dialog before the setting's dialog is closed.
+* "For some known camera formats, the application reads the color space metadata within the source media" (p.538): a
+  linked clip's Source color space comes from its video's transfer characteristic (`StreamInfo::colorTransfer`,
+  `media::sourceSpaceOfTransfer`: bt709, smpte170m/bt470bg, bt2020-10/12, iec61966-2-1 and linear). Ours: by the
+  transfer alone; our own writer declares bt709 or smpte170m (`WriterSettings::colorTransfer` to change it).
+* "Right-click your clip, select Source Settings, click the Color Encoding tab and click Color Management Settings"
+  (p.542): the tab's button opens the setting (`MainWindow::openColorManagementSetting`) and fills the drop-down again.
+* "You can import CLF (Common LUT Format) files" (p.542): a `.clf` file is read through OpenColorIO's FileTransform
+  (`detail::ocioBakeFile`) and kept as a 33-point cube (ours); without OpenColorIO in the build it is refused with that
+  reason. The fuzz library refuses CLF files.
 
 ## Tests
 
@@ -116,5 +135,9 @@ Select LUT file), the Color Encoding tab's Color Management Settings button, and
 * `tst_color_adapter cdl` and `lutFiles`: the CDL's name and formulas; each LUT format's table, the refused products and
   a broken file, installing, the External names and a folder's failures. `tst_frameflex_ui colorAdapters`: the clip's
   CDL in the drop-down.
+* `tst_color_adapter clfAndTransfers`: a CLF matrix through OpenColorIO (or the refusal without it), the transfers'
+  colour spaces. `tst_frameflex_ui colorAdapters`: linking a linear file with and without Insert color transformations,
+  Use CDL values with Auto, the Color Management Settings button, Select LUT file and its refusal. `tst_settings_window`:
+  the setting in the User list.
 * `tst_media transcodeColorEncoding`: Transcode with and without Color encoding: the media's colours, the new clip's
   encoding and the segment's adapter.

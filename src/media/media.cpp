@@ -285,6 +285,9 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
         if (const char* pf = av_get_pix_fmt_name(static_cast<AVPixelFormat>(par->format))) {
             s.pixelFormat = QString::fromUtf8(pf);
         }
+        if (par->color_trc != AVCOL_TRC_UNSPECIFIED) {
+            if (const char* trc = av_color_transfer_name(par->color_trc)) s.colorTransfer = QString::fromUtf8(trc);
+        }
         s.interlaced = par->field_order != AV_FIELD_PROGRESSIVE && par->field_order != AV_FIELD_UNKNOWN;
         s.topFieldFirst = par->field_order != AV_FIELD_BB && par->field_order != AV_FIELD_BT;
         if (st->nb_frames > 0) {
@@ -1382,6 +1385,10 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->colorspace = d.rec709 ? AVCOL_SPC_BT709 : AVCOL_SPC_SMPTE170M;
             d.venc->color_primaries = d.rec709 ? AVCOL_PRI_BT709 : AVCOL_PRI_SMPTE170M;
             d.venc->color_trc = d.rec709 ? AVCOL_TRC_BT709 : AVCOL_TRC_SMPTE170M;
+            if (!s.colorTransfer.isEmpty()) {
+                const int trc = av_color_transfer_from_name(s.colorTransfer.toUtf8().constData());
+                if (trc >= 0) d.venc->color_trc = static_cast<AVColorTransferCharacteristic>(trc);
+            }
             d.venc->color_range = s.fullRange ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
             if (s.bitRate > 0) d.venc->bit_rate = s.bitRate;
             d.venc->thread_count = threads;

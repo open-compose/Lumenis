@@ -4,6 +4,7 @@
 // p.533-534); and a failed Export to File says why
 // (owner's report, 2026-11-08).
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/color_transform.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/motion_adapter.h"
@@ -363,9 +364,48 @@ private slots:
             withCdl.fields.insert(QStringLiteral("ASC_SOP"), QStringLiteral("(1.0 1.0 1.0)(0.0 0.0 0.0)(1.0 1.0 1.0)"));
             bin->replaceItem(withCdl);
         }
+        // "Insert color transformations automatically in the source settings upon linking" (p.1157): a file whose transfer
+        // says linear gets Auto's transformations; without the setting only its colour space.
+        {
+            const QString linear = dir.filePath(QStringLiteral("linear.mov"));
+            media::WriterSettings ws;
+            ws.format = QStringLiteral("mov");
+            ws.videoCodec = QStringLiteral("ffv1");
+            ws.pixelFormat = QStringLiteral("bgr0");
+            ws.width = 16;
+            ws.height = 16;
+            ws.frameRate = Rational(25);
+            ws.colorTransfer = QStringLiteral("linear");
+            media::MediaWriter w;
+            QVERIFY(w.open(linear, ws));
+            QImage frame(16, 16, QImage::Format_RGBA8888);
+            frame.fill(Qt::gray);
+            QVERIFY(w.writeVideo(frame));
+            QVERIFY(w.finish());
+            QStringList made = window.linkFiles(binId, {linear});
+            QCOMPARE(made.size(), 1);
+            auto encoding = model::colorEncodingOf(*bin->bin().item(made.first()));
+            QVERIFY(encoding && encoding->sourceSpace == QLatin1String("Linear") && encoding->transformations.isEmpty());
+            window.settings().setValue(QStringLiteral("Color Management"), QStringLiteral("insertAuto"), true);
+            made = window.linkFiles(binId, {linear});
+            encoding = model::colorEncodingOf(*bin->bin().item(made.first()));
+            QVERIFY(encoding && encoding->transformations == QStringList{QStringLiteral("Linear full range to REC709")});
+        }
+        // Color Management (8.5d2): Use CDL values makes Auto add the clip's CDL; the tab's button opens the setting.
+        window.settings().setValue(QStringLiteral("Color Management"), QStringLiteral("useCdl"), true);
+        int openedEntry = -2;
+        window.setColorManagementHook([&](int entry) { openedEntry = entry; });
         bool asked = false;
         window.setSourceSettingsHook([&](SourceSettingsDialog& d) {
             if (!(d.colorEncoding() == e)) return false;
+            d.findChild<QPushButton*>(QStringLiteral("colorManagementSettings"))->click();
+            if (openedEntry < 0) return false;
+            d.findChild<QComboBox*>(QStringLiteral("sourceColorSpace"))->setCurrentText(QStringLiteral("Rec.709"));
+            d.autoTransformations();
+            if (d.colorEncoding().transformations != QStringList{QStringLiteral("CDL ASC_SOP=(1 1 1)(0 0 0)(1 1 1) ASC_SAT=1")}) return false;
+            d.revert();
+            // Without the setting, Auto leaves the CDL out (it stays in the drop-down).
+            d.setClipCdl(QStringLiteral("CDL ASC_SOP=(1 1 1)(0 0 0)(1 1 1) ASC_SAT=1"), false);
             if (d.findChild<QComboBox*>(QStringLiteral("transformationChoice"))->findText(
                     QStringLiteral("CDL ASC_SOP=(1 1 1)(0 0 0)(1 1 1) ASC_SAT=1")) < 0) {
                 return false;
@@ -404,6 +444,28 @@ private slots:
         QVERIFY(stored && stored->transformations.size() == 2);
         QCOMPARE(model::cellText(*bin->bin().item(clip.id), QLatin1String(model::kColorTransformationsHeading)),
                  QStringLiteral("Gamma 2.6 to Linear, Levels scaling (full range to video levels)"));
+
+        // Select LUT file (p.539, p.541): installed in the project's LUTs folder and listed as External; a file that
+        // cannot be read says why.
+        const QString lut = dir.filePath(QStringLiteral("Warm.cube"));
+        {
+            QFile f(lut);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("LUT_1D_SIZE 2\n0 0 0\n1 0.9 0.8\n");
+        }
+        QCOMPARE(window.installLutFile(lut), QStringList{QStringLiteral("External Warm")});
+        QVERIFY(QFile::exists(QDir(project.folder).filePath(QStringLiteral("LUTs/Warm.cube"))));
+        QVERIFY(media::colorTransformationNames().contains(QStringLiteral("External Warm")));
+        const QString bad = dir.filePath(QStringLiteral("Bad.cube"));
+        {
+            QFile f(bad);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("nothing\n");
+        }
+        window.setLutFileHook([&] { return bad; });
+        QVERIFY(window.installLutFile().isEmpty());
+        settle();
+        QVERIFY(window.findChild<QMessageBox*>(QStringLiteral("lutNotInstalled")));
     }
 
     // The Source Settings dialog's FrameFlex tab (p.529-535): fields, buttons and the top viewer's drags change the box,

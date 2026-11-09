@@ -708,6 +708,14 @@ public:
     // Clip > Refresh Sequence > Color Adapters, or with `remove` Remove Color Adapters (p.478, p.544; 8.5c): video segments
     // take their clip's Color Adapter, or lose theirs. Returns how many segments changed.
     int refreshColorAdapters(bool remove);
+    // The Color Management setting's Select LUT file (8.5d2, p.539, p.541): `path` (asked for when empty) installed where
+    // Installed LUTs says. Returns the names it is listed under; empty when nothing was installed (a message says why).
+    QStringList installLutFile(const QString& path = {});
+    void setLutFileHook(std::function<QString()> hook) { lutFileHook_ = std::move(hook); }
+    // The Color Encoding tab's Color Management Settings button (p.542): the setting opened from the User tab; for tests
+    // the hook gets the setting's entry instead of the dialog opening.
+    void openColorManagementSetting();
+    void setColorManagementHook(std::function<void(int entry)> hook) { colorManagementHook_ = std::move(hook); }
     // Source Settings (8.5b1, p.527-535) for the clips selected in the active bin, or the Source monitor's clip; the hook
     // answers for tests (true for OK). False when there is no clip or it was cancelled.
     bool sourceSettings();
@@ -1173,6 +1181,8 @@ private:
     // While the Record monitor's Effect Preview is composed: the segment whose FrameFlex effect the Effect Editor shows,
     // drawn whole under its box (EffectEditor::framingSegment; 8.5b3).
     std::optional<model::Segment> framingPreview_;
+    std::function<QString()> lutFileHook_;
+    std::function<void(int)> colorManagementHook_;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
     void startSound(MonitorId monitor, int speed);

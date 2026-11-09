@@ -172,6 +172,34 @@ bool ocioConvert(float* rgba, std::size_t pixels, const QString& from, const QSt
     }
 }
 
+bool ocioBakeFile(const QString& path, int size, float* rgb, QString* error) {
+    if (size < 2) return false;
+    try {
+        OCIO::FileTransformRcPtr file = OCIO::FileTransform::Create();
+        file->setSrc(path.toUtf8().constData());
+        file->setInterpolation(OCIO::INTERP_LINEAR);
+        const OCIO::ConstConfigRcPtr raw = OCIO::Config::CreateRaw();
+        const OCIO::ConstCPUProcessorRcPtr cpu = raw->getProcessor(file)->getDefaultCPUProcessor();
+        const std::size_t n = static_cast<std::size_t>(size);
+        for (std::size_t b = 0; b < n; ++b) {
+            for (std::size_t g = 0; g < n; ++g) {
+                for (std::size_t r = 0; r < n; ++r) {
+                    float* p = rgb + ((b * n + g) * n + r) * 3;
+                    p[0] = static_cast<float>(r) / static_cast<float>(n - 1);
+                    p[1] = static_cast<float>(g) / static_cast<float>(n - 1);
+                    p[2] = static_cast<float>(b) / static_cast<float>(n - 1);
+                }
+            }
+        }
+        OCIO::PackedImageDesc image(rgb, static_cast<long>(n * n * n), 1, 3);
+        cpu->apply(image);
+        return true;
+    } catch (const std::exception& e) {
+        if (error) *error = QString::fromUtf8(e.what());
+        return false;
+    }
+}
+
 #else // without OpenColorIO
 
 bool ocioBuilt() {
@@ -193,6 +221,11 @@ bool ocioIsData(const QString&) {
 }
 bool ocioConvert(float*, std::size_t, const QString&, const QString&, QString* error) {
     if (error) *error = QStringLiteral("this build has no OpenColorIO");
+    return false;
+}
+
+bool ocioBakeFile(const QString&, int, float*, QString* error) {
+    if (error) *error = QStringLiteral("CLF files need OpenColorIO, which this build does not have");
     return false;
 }
 

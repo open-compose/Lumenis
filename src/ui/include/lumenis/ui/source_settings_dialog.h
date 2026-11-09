@@ -105,7 +105,14 @@ public:
     void moveTransformation(int from, int to);
     void autoTransformations();
     // The clip's CDL transformation (media::cdlTransformationName), offered at the end of the drop-down; empty for none.
-    void setClipCdl(const QString& name);
+    // With `onAuto` (the Color Management setting's "Use CDL values from ASC_SOP and ASC_SAT bin columns when
+    // available"), Auto adds it too: "click the Auto button on the Color Encoding tab" (p.543).
+    void setClipCdl(const QString& name, bool onAuto = false);
+    // "Right-click your clip, select Source Settings, click the Color Encoding tab and click Color Management Settings"
+    // (p.542): what the tab's button does (MainWindow opens the setting); the drop-down is filled again afterwards, for
+    // LUTs installed meanwhile.
+    void setColorManagementOpener(std::function<void()> open) { colorManagement_ = std::move(open); }
+    void openColorManagement();
     // The frame as the viewers show it: the transformations applied (bypassed: as it is).
     QImage shownFrame() const;
 
@@ -122,6 +129,9 @@ private:
     model::SpatialAdapter applied_;
     Applier applier_;
     bool appliedRate_ = false;
+    QString clipCdl_;
+    bool cdlOnAuto_ = false;
+    std::function<void()> colorManagement_;
     model::ColorEncoding appliedColor_;
     QComboBox* sourceSpace_ = nullptr;
     QListWidget* transformations_ = nullptr;

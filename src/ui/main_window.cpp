@@ -1429,6 +1429,8 @@ SettingsWindow* MainWindow::showSettings() {
             // The Transcript setting's Manage Speakers button (p.445).
             if (tool == QLatin1String("manageSpeakers")) manageSpeakers();
             if (tool == QLatin1String("manageTranscripts")) manageTranscripts();
+            // The Color Management setting's Select LUT file (p.539, p.541).
+            if (tool == QLatin1String("installLut")) installLutFile();
             // A Bin Layout setting: opened (p.92).
             if (tool == QLatin1String("binLayout")) {
                 const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
@@ -3241,7 +3243,9 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
     dialog.setColorEncoding(model::colorEncodingOf(first).value_or(model::ColorEncoding{}));
     // "you can select the CDL option from the Color Transformation list" (p.543): the clip's ASC_SOP and ASC_SAT.
     dialog.setClipCdl(media::cdlTransformationName(first.fields.value(QStringLiteral("ASC_SOP")),
-                                                   first.fields.value(QStringLiteral("ASC_SAT"))));
+                                                   first.fields.value(QStringLiteral("ASC_SAT"))),
+                      settings_ && settings_->flag(QStringLiteral("Color Management"), QStringLiteral("useCdl")));
+    dialog.setColorManagementOpener([this] { openColorManagementSetting(); });
     dialog.setApplier([this, chosen](const model::SpatialAdapter& a, bool atProjectRate, const model::ColorEncoding& color) {
         for (const auto& [bin, id] : chosen) {
             BinDocument* doc = binContainer_->document(bin);
@@ -3263,12 +3267,65 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
     return sourceSettingsHook_ ? sourceSettingsHook_(dialog) : dialog.exec() == QDialog::Accepted;
 }
 
+// The Color Management setting's Select LUT file (p.539, p.541-542; 8.5d2): "Browse for your file, select it and click Open
+// to install it", into the project's LUTs folder, every project's, or both, as Installed LUTs says. A file that cannot be
+// read or copied says why in a message.
+QStringList MainWindow::installLutFile(const QString& chosen) {
+    QString path = chosen;
+    if (path.isEmpty()) {
+        path = lutFileHook_ ? lutFileHook_()
+                            : QFileDialog::getOpenFileName(this, tr("Select LUT file"), QString(),
+                                                           tr("LUT files (*.cube *.itx *.3dl *.lut *.txt *.clf);;All files (*)"));
+    }
+    if (path.isEmpty()) return {};
+    const QString scope = settings_ ? settings_->text(QStringLiteral("Color Management"), QStringLiteral("lutScope")) : QString();
+    QStringList folders;
+    if (scope != QLatin1String("shared") && project_) folders << media::projectLutFolder(project_->folder);
+    if (scope == QLatin1String("shared") || scope == QLatin1String("both")) folders << media::sharedLutFolder();
+    folders.removeAll(QString());
+    QStringList names;
+    QString error = folders.isEmpty() ? tr("There is no folder to install it in: open a project, or name LUMENIS_SHARED_LUTS.") : QString();
+    for (const QString& folder : folders) {
+        QString why;
+        const QString name = media::installLut(path, folder, &why);
+        if (name.isEmpty()) {
+            error = why;
+            break;
+        }
+        if (!names.contains(name)) names << name;
+    }
+    if (!error.isEmpty()) {
+        ConsoleLog::instance().append(tr("LUT not installed: %1: %2").arg(QFileInfo(path).fileName(), error));
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Select LUT file"),
+                                    tr("%1 could not be installed: %2").arg(QFileInfo(path).fileName(), error), QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("lutNotInstalled"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+        return {};
+    }
+    return names;
+}
+
+// The Color Encoding tab's Color Management Settings button (p.542): the User tab's Color Management setting.
+void MainWindow::openColorManagementSetting() {
+    SettingsWindow* window = showSettings();
+    window->showTab(SettingsWindow::Tab::User);
+    const int entry = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Color Management"));
+    if (colorManagementHook_) {
+        colorManagementHook_(entry);
+        return;
+    }
+    if (entry >= 0) window->list(model::SettingsScope::User)->openEntry(entry);
+}
+
 // Without a project, the edit rate stays the LinkOptions default.
 media::LinkOptions MainWindow::linkOptions() const {
     media::LinkOptions o;
     if (project_) o.editRate = project_->settings.format.editRate;
     o.when = QDateTime::currentDateTimeUtc();
     o.sdWidescreen = settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("sdWidescreen"));
+    // The Color Management setting (p.539, p.1157).
+    o.insertColorTransformations = settings_ && settings_->flag(QStringLiteral("Color Management"), QStringLiteral("insertAuto"));
     // "If you are linking to clips, then the default is set to Center Keep Size" (p.475), as the Link setting says.
     if (settings_) {
         if (const auto r = model::reformatFromText(settings_->text(QStringLiteral("Link"), QStringLiteral("reformat")))) {

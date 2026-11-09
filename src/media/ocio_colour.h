@@ -33,4 +33,9 @@ bool ocioIsData(const QString& name);
 // (and leaves the pixels alone) when it cannot, with the reason in `error`.
 bool ocioConvert(float* rgba, std::size_t pixels, const QString& from, const QString& to, QString* error = nullptr);
 
+// "You can import CLF (Common LUT Format) files" (Editing Guide p.542; 8.5d2): the file's transform sampled on a cube of
+// `size` points a side (red changing fastest), RGB in `rgb` (size^3 * 3 floats). False, with `error`, when OpenColorIO
+// is not built in or cannot read the file. Needs no config.
+bool ocioBakeFile(const QString& path, int size, float* rgb, QString* error = nullptr);
+
 } // namespace lumenis::media::detail

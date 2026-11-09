@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/fields.h"
+#include "lumenis/model/color_adapter.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
 
@@ -409,6 +410,13 @@ std::optional<model::BinItem> linkClipUnchecked(const MediaInfo& info, const Lin
             // The pixel shape that stretches the stored size to the picture's.
             const double par = aspect.toDouble() * video->height / video->width;
             set("Pixel Aspect Ratio", fpsText(par));
+        }
+        // The media's colour space in the clip's Source Settings, and with the setting its transformations (8.5d2).
+        if (const QString space = sourceSpaceOfTransfer(video->colorTransfer); !space.isEmpty()) {
+            model::ColorEncoding encoding;
+            encoding.sourceSpace = space;
+            if (options.insertColorTransformations) encoding.transformations = model::autoTransformations(space);
+            model::setColorEncoding(item, encoding);
         }
         set("Color Space", isRgb(video->pixelFormat) ? QStringLiteral("RGB")
                            : video->height > 576 || video->codec == QLatin1String("dnxhd")
@@ -950,6 +958,15 @@ void FrameCache::clear() {
     readers_.clear();
     images_.clear();
     imageOrder_.clear();
+}
+
+QString sourceSpaceOfTransfer(const QString& transfer) {
+    if (transfer == QLatin1String("bt709")) return QStringLiteral("Rec.709");
+    if (transfer == QLatin1String("smpte170m") || transfer == QLatin1String("bt470bg")) return QStringLiteral("Rec.601");
+    if (transfer == QLatin1String("bt2020-10") || transfer == QLatin1String("bt2020-12")) return QStringLiteral("Rec.2020");
+    if (transfer == QLatin1String("iec61966-2-1")) return QStringLiteral("sRGB");
+    if (transfer == QLatin1String("linear")) return QStringLiteral("Linear");
+    return {};
 }
 
 } // namespace lumenis::media

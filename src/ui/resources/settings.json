@@ -109,6 +109,26 @@
       ]
     },
     {
+      "kind": "Color Management",
+      "scope": "user",
+      "page": 1157,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "insertAuto", "type": "bool", "label": "Insert color transformations automatically in the source settings upon linking", "default": false, "page": 1157},
+            {"key": "useCdl", "type": "bool", "label": "Use CDL values from ASC_SOP and ASC_SAT bin columns when available", "default": false, "page": 1158},
+            {"key": "hdrConversion", "type": "choice", "style": "radio", "label": "Automatic HDR conversions from SDR media (Rec709)", "default": "50", "page": 1158,
+             "choices": [{"value": "50", "label": "Map the white point of SDR to 50% for HLG projects and to 100 nits for PQ projects"},
+                         {"value": "75", "label": "Map the white point of SDR to 75% for HLG projects and to 203 nits for PQ projects"}]},
+            {"key": "lutScope", "type": "choice", "style": "radio", "label": "Installed LUTs", "default": "project", "page": 539,
+             "choices": [{"value": "project", "label": "Project"}, {"value": "shared", "label": "Shared"}, {"value": "both", "label": "Both"}]},
+            {"key": "installLut", "type": "button", "label": "Select LUT file", "page": 1158}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Composer",
       "scope": "user",
       "page": 1158,

@@ -6,6 +6,8 @@
 // - Autodesk "LUT: <channels> <entries>": the entries of each channel in turn, one integer per line.
 #include "lumenis/media/lut_file.h"
 
+#include "ocio_colour.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -15,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace lumenis::media {
 
@@ -228,6 +231,22 @@ QString lutProduct(const QString& firstLine) {
 }
 
 std::optional<LutFile> readLutFile(const QString& path, QString* error) {
+    // CLF: OpenColorIO reads it; we keep its transform as a 33-point cube (ours).
+    if (QFileInfo(path).suffix().compare(QLatin1String("clf"), Qt::CaseInsensitive) == 0) {
+        constexpr int kSize = 33;
+        std::vector<float> rgb(static_cast<std::size_t>(kSize) * kSize * kSize * 3);
+        QString why;
+        if (!detail::ocioBakeFile(path, kSize, rgb.data(), &why)) {
+            if (error) *error = why;
+            return std::nullopt;
+        }
+        LutFile lut;
+        lut.title = QFileInfo(path).completeBaseName();
+        lut.size3D = kSize;
+        lut.table3D.reserve(kSize * kSize * kSize);
+        for (std::size_t i = 0; i + 2 < rgb.size(); i += 3) lut.table3D.append({static_cast<double>(rgb[i]), static_cast<double>(rgb[i + 1]), static_cast<double>(rgb[i + 2])});
+        return lut;
+    }
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         if (error) *error = QObject::tr("The file cannot be opened.");
@@ -287,7 +306,7 @@ QStringList lutFilesIn(const QString& folder) {
     if (folder.isEmpty() || !dir.exists()) return {};
     QStringList out;
     const QStringList filters{QStringLiteral("*.cube"), QStringLiteral("*.itx"), QStringLiteral("*.3dl"), QStringLiteral("*.lut"),
-                              QStringLiteral("*.txt")};
+                              QStringLiteral("*.txt"), QStringLiteral("*.clf")};
     for (const QFileInfo& f : dir.entryInfoList(filters, QDir::Files, QDir::Name | QDir::IgnoreCase)) out << f.absoluteFilePath();
     return out;
 }

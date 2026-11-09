@@ -1502,8 +1502,8 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (levels scaling, gamma 2.6, linear, Cineon, sRGB, Log-C, C-Log; the Sony looks through a provider unless public
       curves exist), the Color Adapter on segments, the Color Transformations column, Refresh Sequence > Color
       Adapters and Remove Color Adapters, Transcode's Apply source transformations > Color encoding.
-    * 8.5d, LUTs, CLF and CDLs (p.539-544), in two parts (8.5d1 done: our LUT readers, the installed LUTs as External
-      transformations, the CDL transformation and the fuzz target `lut`; 8.5d2: the setting and CLF): the Color Management setting (Insert color transformations automatically,
+    * 8.5d (done), LUTs, CLF and CDLs (p.539-544), in two parts (8.5d1 done: our LUT readers, the installed LUTs as External
+      transformations, the CDL transformation and the fuzz target `lut`; 8.5d2 done: the setting and CLF): the Color Management setting (Insert color transformations automatically,
       Use CDL values from ASC_SOP and ASC_SAT, Installed LUTs Project/Shared/Both, Select LUT file), our readers for
       the listed 1D and 3D LUT formats, CLF through OpenColorIO where it is installed, the ASC_SOP and ASC_SAT columns
       and the CDL transformation.

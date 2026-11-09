@@ -99,6 +99,9 @@ struct LinkOptions {
     // Link settings, Link Options tab: "Always use 16:9 aspect ratio for SD
     // clips" (p.1204).
     bool sdWidescreen = false;
+    // The Color Management setting's "Insert color transformations automatically in the source settings upon linking"
+    // (p.539, p.1157; 8.5d2): the clip's encoding takes Auto's transformations for the colour space its media names.
+    bool insertColorTransformations = false;
     // Link Options' Reformatting option (p.1204): the new clips' Reformat attribute as its column text
     // (model::reformatText); empty sets none.
     QString reformat;
@@ -202,5 +205,10 @@ private:
     QHash<QString, int> patterns_;
     QList<QString> imageOrder_;
 };
+
+// "For some known camera formats, the application reads the color space metadata within the source media, and displays
+// the most appropriate color space" (p.538): the Source color space (model::sourceColorSpaces) for FFmpeg's transfer
+// characteristic; empty for one we do not map (ours: by the transfer alone).
+QString sourceSpaceOfTransfer(const QString& transfer);
 
 } // namespace lumenis::media

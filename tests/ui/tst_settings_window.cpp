@@ -84,7 +84,7 @@ private slots:
         QCOMPARE(schema.kindNames(SettingsScope::Project),
                  (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "General", "Media Creation", "Safe Colors", "Bin Layout", "Transcript", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
-                 (QStringList{"Audio", "Bin", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
+                 (QStringList{"Audio", "Bin", "Color Management", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Render", "Script", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
@@ -109,8 +109,10 @@ private slots:
                         ((o.page >= 879 && o.page <= 900) || (o.page >= 1173 && o.page <= 1187) || (o.key.startsWith(QLatin1String("dcp")) && o.page == 519));
                     // Transcript's Manage Speakers is described with the Transcript Tool (p.445), in the same chapter.
                     const bool transcriptChapter = k.kind == QLatin1String("Transcript") && o.page >= 436 && o.page <= 453;
+                    // Color Management's Installed LUTs are described with the Color Encoding tab (p.539).
+                    const bool colorChapter = k.kind == QLatin1String("Color Management") && o.page >= 536 && o.page <= 544;
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
-                                 exportChapter || transcriptChapter,
+                                 exportChapter || transcriptChapter || colorChapter,
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
@@ -311,12 +313,12 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 19);
+        QCOMPARE(list.topLevelItemCount(), 20);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});
         list.duplicateSelection();
-        QTreeWidgetItem* group = list.topLevelItem(13);
+        QTreeWidgetItem* group = list.topLevelItem(14);
         QCOMPARE(group->text(0), QStringLiteral("Timeline"));
         QCOMPARE(group->childCount(), 2);
         QVERIFY(!group->data(0, SettingsList::kEntryRole).isValid());

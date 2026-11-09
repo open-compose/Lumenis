@@ -24,6 +24,8 @@ add_library(lumenis_fuzz_targets STATIC
     ${PROJECT_SOURCE_DIR}/src/media/pict.cpp
     ${PROJECT_SOURCE_DIR}/src/media/lut_file.cpp
     ${PROJECT_SOURCE_DIR}/src/media/color_transform.cpp
+    # Without OpenColorIO here: CLF files are refused.
+    ${PROJECT_SOURCE_DIR}/src/media/ocio_colour.cpp
 )
 target_include_directories(lumenis_fuzz_targets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(lumenis_fuzz_targets PRIVATE ${PROJECT_SOURCE_DIR}/src/media/include)
