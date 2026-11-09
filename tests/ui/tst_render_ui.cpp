@@ -12,6 +12,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/stereo_clip.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -31,6 +32,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QLabel>
@@ -41,6 +43,7 @@
 #include <QToolButton>
 #include <QMenu>
 #include <QRadioButton>
+#include <QTableView>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTest>
@@ -54,8 +57,8 @@ void settle() {
     for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
 }
 
-// A 25 fps QuickTime file of red frames, picture only.
-bool writeMovie(const QString& path, int frames) {
+// A 25 fps QuickTime file of red (or `color`) frames, picture only.
+bool writeMovie(const QString& path, int frames, QColor color = QColor(255, 0, 0)) {
     media::WriterSettings s;
     s.format = QStringLiteral("mov");
     s.videoCodec = QStringLiteral("ffv1");
@@ -67,7 +70,7 @@ bool writeMovie(const QString& path, int frames) {
     if (!w.open(path, s)) return false;
     for (int i = 0; i < frames; ++i) {
         QImage image(64, 36, QImage::Format_RGBA8888);
-        image.fill(QColor(255, 0, 0));
+        image.fill(color);
         if (!w.writeVideo(image)) return false;
     }
     return w.finish();
@@ -813,6 +816,97 @@ private slots:
         QVERIFY(colors.option(QStringLiteral("resolution"))->isEnabled());
         QVERIFY(colors.swatch(QStringLiteral("unavailableColor")));
         media::setExtraMediaDrives({});
+    }
+
+    // The project's Stereoscopic option and Stereo Master Clips (Editing Guide p.65-66, p.243; 8.6d1): Create
+    // Stereoscopic Clip with the left eye found by name, the eye each mode shows in the Source monitor, the S3D Leading
+    // Eye, a 2D clip doubled in Side by Side, and the bin's right-click menu.
+    void stereoscopic() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString leftMovie = dir.filePath(QStringLiteral("shot_L.mov"));
+        const QString rightMovie = dir.filePath(QStringLiteral("shot_R.mov"));
+        QVERIFY(writeMovie(rightMovie, 10, QColor(0, 0, 255)));
+        QVERIFY(writeMovie(leftMovie, 12, QColor(255, 0, 0)));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("S3D"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("S3D.cthproj"));
+        project.settings.name = QStringLiteral("S3D");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        project.settings.stereoscopic = QStringLiteral("Right Eye Only");
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        // The right eye linked first: the left is still found by its name.
+        const QStringList ids = window.linkFiles(binId, {rightMovie, leftMovie});
+        QCOMPARE(ids.size(), 2);
+        BinView* view = window.binContainer().activeView();
+        QVERIFY(view);
+        view->selectIds(ids);
+        const QString stereoId = window.createStereoscopicClip();
+        QVERIFY(!stereoId.isEmpty());
+        const model::BinItem stereo = *bin->bin().item(stereoId);
+        QCOMPARE(stereo.name, QStringLiteral("shot_L S3D"));
+        QVERIFY(model::isStereoClip(stereo));
+        QCOMPARE(stereo.durationFrames, std::int64_t(10));
+        QCOMPARE(view->selectedIds(), QStringList{stereoId});
+        Composer& composer = window.composer();
+        auto colorAt = [&](int x) {
+            const QImage picture = composer.pictureAt(MonitorId::Source, 0, QSize(128, 72));
+            return picture.isNull() ? QColor() : QColor(picture.pixel(x, 36));
+        };
+        auto isRed = [](QColor c) { return c.isValid() && c.red() > 200 && c.blue() < 60; };
+        auto isBlue = [](QColor c) { return c.isValid() && c.blue() > 200 && c.red() < 60; };
+        // Right Eye Only: the right eye's blue.
+        composer.loadDefault(binId, stereo);
+        settle();
+        QVERIFY(isBlue(colorAt(64)));
+        // Leading Eye: the leading eye, Left until the S3D Leading Eye changes it.
+        QVERIFY(window.setProjectStereoscopic(QStringLiteral("Leading Eye")));
+        QCOMPARE(model::ProjectStore::read(project.file)->stereoscopic, QStringLiteral("Leading Eye"));
+        QVERIFY(isRed(colorAt(64)));
+        QCOMPARE(window.setStereoLeadingEye(model::Eye::Right), 1);
+        QCOMPARE(bin->bin().item(stereoId)->fields.value(QLatin1String(model::kLeadingEyeHeading)), QStringLiteral("Right"));
+        composer.loadDefault(binId, *bin->bin().item(stereoId));
+        settle();
+        QVERIFY(isBlue(colorAt(64)));
+        // Side by Side: the left eye on the left, the right eye on the right (each linked clip Center Keep Size, p.475: the
+        // picture in the middle of each half).
+        QVERIFY(window.setProjectStereoscopic(QStringLiteral("Side by Side")));
+        QVERIFY(isRed(colorAt(32)));
+        QVERIFY(isBlue(colorAt(96)));
+        // A 2D clip gives the same picture to both eyes.
+        composer.loadDefault(binId, *bin->bin().item(ids.at(1)));
+        settle();
+        QVERIFY(isRed(colorAt(32)));
+        QVERIFY(isRed(colorAt(96)));
+        QVERIFY(!window.setProjectStereoscopic(QStringLiteral("Sideways")));
+        // The bin's right-click menu: Create Stereoscopic Clip for two master clips, S3D Leading Eye for a stereo clip.
+        QWidget* table = view->table();
+        QVERIFY(table);
+        view->selectIds(ids);
+        std::unique_ptr<QMenu> menu(view->contextMenu(QPoint(-1, -1), table));
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("createStereoscopicClip")));
+        view->selectIds({stereoId});
+        menu.reset(view->contextMenu(QPoint(-1, -1), table));
+        QVERIFY(menu->findChild<QMenu*>(QStringLiteral("s3dLeadingEye")));
+        QVERIFY(!menu->findChild<QAction*>(QStringLiteral("createStereoscopicClip")));
     }
 };
 

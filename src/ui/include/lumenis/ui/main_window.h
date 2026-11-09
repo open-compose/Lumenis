@@ -4,6 +4,7 @@
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/dynamic_relink.h"
+#include "lumenis/model/stereo_clip.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -734,6 +735,13 @@ public:
     // Source Settings (8.5b1, p.527-535) for the clips selected in the active bin, or the Source monitor's clip; the hook
     // answers for tests (true for OK). False when there is no clip or it was cancelled.
     bool sourceSettings();
+    // Stereoscopic clips (8.6d1, docs/spec/stereoscopic.md): Create Stereoscopic Clip from the two master clips selected
+    // in the active bin (the new clip's id, empty when refused), and the selected stereo clips' S3D Leading Eye (how many
+    // changed).
+    QString createStereoscopicClip();
+    int setStereoLeadingEye(model::Eye eye);
+    // Sets the project's Stereoscopic option to one of stereoscopicModes() (p.65-66; not in SD projects but Off).
+    bool setProjectStereoscopic(const QString& mode);
     // The same for a Record monitor segment's clip (the Timeline's right-click Source Settings, 8.5b2), and for given
     // clips (bin, item id).
     bool sourceSettingsForSegment(const model::SegmentRef& ref);
@@ -1215,6 +1223,9 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
+    // adaptedFrame() for one eye: the clip's frame with its colour and spatial adapters.
+    QImage monoFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial,
+                     const std::optional<model::ColorEncoding>& color) const;
     QImage adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want, const std::optional<model::SpatialAdapter>& spatial,
                         const std::optional<model::ColorEncoding>& color = std::nullopt) const;
     // The sequences selected in the active bin (when it has the focus), else the Record monitor's, through `refresh`, each

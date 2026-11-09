@@ -1530,7 +1530,19 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     8.6c (done), partial and shared media (p.1100-1102, p.1116-1120): the MultiRez bin headings with full, half and empty
       circles, clips sharing a source and timecode span, partially online media, the Delete dialog's affinity
       resolutions, Cross Rate Dynamic Relink (p.1109-1110).
-    8.6d, stereoscopic projects (the guide's scattered stereoscopic pages, to be gathered first).
+    8.6d, stereoscopic projects, in three parts. The Editing Guide leaves "Working with Stereoscopic Clips" to the Help
+      (p.213), so how stereoscopic clips are made is ours; the project's options, the displays and the settings are in the
+      guide (p.65-66, p.243, p.403, p.478, p.562, p.959, p.1124, p.1162-1163, p.1190-1191, p.1216, p.1227).
+      8.6d1 (done, docs/spec/stereoscopic.md), stereoscopic clips and the project's Stereoscopic option: Stereo Master Clips made from a left and a right
+      eye master clip (p.213, p.243) with the S3D Leading Eye attribute, and pictures by the project's mode (Off,
+      Leading Eye, Left Eye Only, Right Eye Only, Side by Side, Over / Under, Full; p.65-66).
+      8.6d2, the S3D views and overlays: the Composer setting's Source and Record Monitor S3D View and S3D Overlay
+      (Mix, Difference, Frame Compatible, Mono, Anaglyph, B/W Anaglyph, Checkerboard, Compare; parallax guides,
+      p.1162-1163), Full Screen Playback's (p.1190-1191), the Video Output tool's (p.1227), the S3D Settings Project
+      setting with its parallax worked out (p.1216).
+      8.6d3, the rest: stereoscopic clips in group clips (p.1124), the List Tool's S3D Contributor (p.959), Refresh
+      Sequence > Stereo Correction Effects (p.478), the 2048 x 1080 S3D preset (p.562), interlaced stereoscopic
+      playback at Full Quality only (p.403).
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New

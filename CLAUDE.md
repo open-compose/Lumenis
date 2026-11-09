@@ -960,7 +960,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `BinAppearance::multiRezHeadings`/`multiRezCell` and `MainWindow::multiRezCell`, the Video column following the media,
   Delete's affinity files `media::affinityMediaFiles` by resolution, Cross Rate Dynamic Relink in `chooseMedia`, Transcode
   of sequences without new clips; tests `tst_dynamic_relink crossRate`/`partialAndShared`/`sequenceWithoutNewClips`,
-  `tst_render_ui multiRezButton`), is done. Next: 8.6d, stereoscopic projects.
+  `tst_render_ui multiRezButton`), is done. 8.6d is in three parts (ROADMAP). 8.6d1, stereoscopic clips and the
+  project's Stereoscopic option (docs/spec/stereoscopic.md: Stereo Master Clips in `src/model/stereo_clip.*` with both
+  eyes' links under the clip's Source Settings "stereo" and the S3D Leading Eye column, `MainWindow::createStereoscopicClip`/
+  `setStereoLeadingEye`/`setProjectStereoscopic` from the bin's right-click menu, the modes in `MainWindow::adaptedFrame`
+  with `media::frameCompatible` in `src/media/stereo.*`; tests `tst_stereo`, `tst_render_ui stereoscopic`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

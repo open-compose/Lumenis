@@ -26,6 +26,7 @@ add_library(lumenis_model STATIC
     motion_adapter.cpp
     color_adapter.cpp
     frame_flex.cpp
+    stereo_clip.cpp
     nest.cpp
     effect_template.cpp
     promote3d.cpp

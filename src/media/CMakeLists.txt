@@ -10,6 +10,7 @@ add_library(lumenis_media STATIC
     lut_file.cpp
     frame_flex.cpp
     target_mask.cpp
+    stereo.cpp
     fluid_fx.cpp
     render.cpp
     wipes.cpp

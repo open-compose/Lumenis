@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/group_clip.h"
 
 #include "lumenis/ui/brush_preview.h"
@@ -2296,6 +2297,30 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             QAction* settings = menu->addAction(tr("Source Settings"), this, [this] { emit commandRequested(QStringLiteral("bin.source_settings")); });
             settings->setObjectName(QStringLiteral("sourceSettings"));
             settings->setEnabled(!document_.isReadOnly());
+        }
+    }
+    // Stereoscopic clips (8.6d1; ours, the guide leaves making them to the Help, p.213): two master clips make one, and a
+    // stereo clip's S3D Leading Eye (p.66).
+    {
+        int masters = 0;
+        bool stereo = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            if (item && item->kind == model::BinItemKind::MasterClip) ++masters;
+            stereo = stereo || (item && model::isStereoClip(*item));
+        }
+        if (masters == 2 && !stereo) {
+            QAction* create = menu->addAction(tr("Create Stereoscopic Clip"), this,
+                                              [this] { emit commandRequested(QStringLiteral("bin.create_stereoscopic_clip")); });
+            create->setObjectName(QStringLiteral("createStereoscopicClip"));
+            create->setEnabled(!document_.isReadOnly());
+        }
+        if (stereo) {
+            QMenu* eye = menu->addMenu(tr("S3D Leading Eye"));
+            eye->setObjectName(QStringLiteral("s3dLeadingEye"));
+            eye->setEnabled(!document_.isReadOnly());
+            eye->addAction(tr("Left"), this, [this] { emit commandRequested(QStringLiteral("bin.s3d_leading_eye_left")); });
+            eye->addAction(tr("Right"), this, [this] { emit commandRequested(QStringLiteral("bin.s3d_leading_eye_right")); });
         }
     }
     // "Right-click on a template in the bin and choose Edit Template" (FX Guide p.320).

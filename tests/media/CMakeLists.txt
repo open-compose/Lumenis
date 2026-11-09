@@ -57,6 +57,7 @@ lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)
 lumenis_add_test(tst_dmf SOURCES tst_dmf.cpp LIBS lumenis::media)
 lumenis_add_test(tst_frame_flex SOURCES tst_frame_flex.cpp LIBS lumenis::media)
 lumenis_add_test(tst_color_adapter SOURCES tst_color_adapter.cpp LIBS lumenis::media)
+lumenis_add_test(tst_stereo SOURCES tst_stereo.cpp LIBS lumenis::media)
 # MultiRez and Dynamic Relink (docs/spec/dynamic-relink.md).
 lumenis_add_test(tst_dynamic_relink SOURCES tst_dynamic_relink.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)

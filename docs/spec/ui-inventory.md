@@ -689,6 +689,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   media (8.6c): a clip's source as its tape or source file, spans compared by timecode, partly online media not played,
   the headings as our resolutions and 32-96 kHz, ●/◐/○ as the circles, the Drive column left as it is, Delete's
   resolution boxes all ticked, whole multiples as cross rates.
+* Stereoscopic clips (8.6d1, docs/spec/stereoscopic.md; the guide leaves making them to the Help, p.213): Create
+  Stereoscopic Clip and the S3D Leading Eye submenu on the bin's right-click menu, the left eye found by its name's L or
+  Left ending else bin order, the name "<left> S3D", the shorter eye's length, refused in SD projects; the left eye on the
+  left or on top in Side by Side and Over / Under; Full showing the leading eye until the S3D views (8.6d2); the
+  Stereoscopic option changeable after the project is made (`MainWindow::setProjectStereoscopic`).
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

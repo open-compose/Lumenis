@@ -110,6 +110,8 @@
 #include "lumenis/ui/relink_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/source_settings_dialog.h"
+#include "lumenis/media/stereo.h"
+#include "lumenis/model/stereo_clip.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/theme.h"
@@ -3225,9 +3227,24 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
 // A clip's frame through its colour adapter (8.5c; media::applyColorTransformations) and spatial adapter (8.5a;
 // media::spatialAdaptedImage): the colours transformed, then the whole frame cut and fit into the project frame at `want`.
 // Without a spatial adapter, or a project, the frame as the cache scales it.
+// The project's Stereoscopic option (p.65-66; 8.6d1): one eye of a stereo clip, or both eyes frame compatible, every
+// 2D clip giving the same picture to both.
 QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
                                 const std::optional<model::SpatialAdapter>& spatial,
                                 const std::optional<model::ColorEncoding>& color) const {
+    const model::StereoMode mode = project_ ? model::stereoModeOf(project_->settings.stereoscopic) : model::StereoMode::Off;
+    if (model::isFrameCompatible(mode)) {
+        const QImage left = monoFrame(model::eyeClip(clip, model::Eye::Left), frame, want, spatial, color);
+        const QImage right = model::isStereoClip(clip) ? monoFrame(model::eyeClip(clip, model::Eye::Right), frame, want, spatial, color)
+                                                       : left;
+        return media::frameCompatible(left, right, mode == model::StereoMode::SideBySide, left.size());
+    }
+    return monoFrame(model::eyeClip(clip, model::shownEye(mode, clip)), frame, want, spatial, color);
+}
+
+QImage MainWindow::monoFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
+                             const std::optional<model::SpatialAdapter>& spatial,
+                             const std::optional<model::ColorEncoding>& color) const {
     QStringList transformations = color ? color->applied() : QStringList();
     // In ACES projects the media is ACES 2065 after its adapter, then the working space ACEScct (p.558).
     if (project_ && project_->settings.colorSpace.contains(QLatin1String("ACES"))) {
@@ -3376,6 +3393,23 @@ bool MainWindow::setProxyMode(int mode) {
     if (settingsWindow_) settingsWindow_->setProject(project_);
     composer_->refreshDisplay();
     timeline_->setDisplay(timeline_->display()); // the render dots follow the mode
+    return true;
+}
+
+// The project's Stereoscopic option (p.65-66). Ours: the Format tab shows it; this changes it, kept in the project file,
+// and the monitors show the clips again in the new mode.
+bool MainWindow::setProjectStereoscopic(const QString& mode) {
+    if (!project_) return false;
+    const std::vector<std::string> modes = stereoscopicModes();
+    if (std::find(modes.begin(), modes.end(), mode.toStdString()) == modes.end()) return false;
+    if (project_->settings.format.family == FormatFamily::SD && mode != QLatin1String("Off")) return false;
+    if (project_->settings.stereoscopic == mode) return true;
+    model::ProjectSettings changed = project_->settings;
+    changed.stereoscopic = mode;
+    if (!saveProjectSettings(changed, tr("Stereoscopic"))) return false;
+    if (settingsWindow_) settingsWindow_->setProject(project_);
+    frames_->clear();
+    composer_->refreshDisplay();
     return true;
 }
 
@@ -8603,6 +8637,10 @@ void MainWindow::installPanelHandlers() {
     });
     handle("bin.commit_multicam_edits", [this] { commitMulticamEdits(); });
     handle("bin.source_settings", [this] { sourceSettings(); });
+    // Stereoscopic clips (8.6d1; ours, p.213 leaves making them to the Help).
+    handle("bin.create_stereoscopic_clip", [this] { createStereoscopicClip(); });
+    handle("bin.s3d_leading_eye_left", [this] { setStereoLeadingEye(model::Eye::Left); });
+    handle("bin.s3d_leading_eye_right", [this] { setStereoLeadingEye(model::Eye::Right); });
     // The Transcript menus (8.2d; p.450-453, 2026.8 guide p.455-456).
     handle("bin.export_transcript", [this] { exportTranscripts(); });
     handle("bin.share_transcripts", [this] { shareTranscripts(); });
@@ -9520,6 +9558,58 @@ model::SafeColorLimits MainWindow::safeColorLimits() const {
         }
     }
     return model::SafeColorLimits::fromValues(values);
+}
+
+// Create Stereoscopic Clip (8.6d1): two master clips selected in the active bin become one Stereo Master Clip (p.243).
+// Ours: the left eye is the clip whose name ends in "L" or "Left" (after a space, "_", "-" or "."), else the first in
+// the bin; the new clip goes in the same bin, selected. "You can only work with stereoscopic material in an HD project"
+// (p.66): refused in SD projects.
+QString MainWindow::createStereoscopicClip() {
+    BinView* view = binContainer_->activeView();
+    if (!view || !project_) return {};
+    if (project_->settings.format.family == FormatFamily::SD) {
+        ConsoleLog::instance().append(tr("Stereoscopic clips need an HD or high-resolution project."));
+        return {};
+    }
+    BinDocument& doc = view->document();
+    QList<model::BinItem> clips;
+    for (const model::BinItem& item : doc.bin().items) {
+        if (view->selectedIds().contains(item.id)) clips << item;
+    }
+    if (clips.size() != 2) {
+        ConsoleLog::instance().append(tr("Select the left and right eye master clips to make a stereoscopic clip."));
+        return {};
+    }
+    static const QRegularExpression rightEye(QStringLiteral("(^|[ _.-])(r|right)$"), QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression leftEye(QStringLiteral("(^|[ _.-])(l|left)$"), QRegularExpression::CaseInsensitiveOption);
+    if (rightEye.match(clips.at(0).name).hasMatch() || leftEye.match(clips.at(1).name).hasMatch()) clips.swapItemsAt(0, 1);
+    QString error;
+    const auto stereo = model::makeStereoClip(clips.at(0), clips.at(1), &error);
+    if (!stereo) {
+        ConsoleLog::instance().append(tr("Create Stereoscopic Clip: %1").arg(error));
+        return {};
+    }
+    doc.addItem(*stereo);
+    view->selectIds({stereo->id});
+    return stereo->id;
+}
+
+// The S3D Leading Eye of the stereo clips selected in the active bin (p.66). Ours: from the bin's right-click menu.
+int MainWindow::setStereoLeadingEye(model::Eye eye) {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    int changed = 0;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* item = view->document().bin().item(id);
+        if (!item || !model::isStereoClip(*item)) continue;
+        model::BinItem clip = *item;
+        if (model::setLeadingEye(clip, eye)) {
+            storeClip(view->document().nodeId(), clip);
+            ++changed;
+        }
+    }
+    if (changed > 0) frames_->clear();
+    return changed;
 }
 
 } // namespace lumenis::ui
