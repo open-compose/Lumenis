@@ -67,6 +67,63 @@ private slots:
         QVERIFY(!store.remove(t.mob));
     }
 
+    // Peer-to-peer transcript sharing (p.451-452; 8.7b): entry locks between stations with the take-over, hosting, the
+    // shared folder as the store's default and an unreachable host.
+    void peerToPeerSharing() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        Transcript t;
+        t.mob = QStringLiteral("060a2b34.0101.0105.01010f20-13-00-00-00-123456");
+        t.clipName = QStringLiteral("Interview");
+        t.lines = {TranscriptLine{1, {{QStringLiteral("Hello"), 0.1, 0.5}}}};
+        const QString local = dir.filePath(QStringLiteral("Local"));
+        const QString shared = dir.filePath(QStringLiteral("Shared"));
+        QVERIFY(TranscriptStore(local).save(t));
+        // Hosting puts this station's transcripts in the shared folder and names the host.
+        qputenv("LUMENIS_STATION", "edit1");
+        QCOMPARE(hostTranscripts(local, shared), 1);
+        QCOMPARE(transcriptHost(shared), QStringLiteral("edit1"));
+        QCOMPARE(hostTranscripts(local, shared), 0);
+        const TranscriptStore store(shared);
+        QCOMPARE(store.mobs(), QStringList{t.mob}); // Host.json is not a transcript
+        // "Transcript entries lock when users are writing or editing them" (p.452).
+        QVERIFY(store.lock(t.mob));
+        QCOMPARE(store.lockOf(t.mob)->station, QStringLiteral("edit1"));
+        qputenv("LUMENIS_STATION", "edit2");
+        TranscriptLock held;
+        QVERIFY(!store.save(t, &held));
+        QCOMPARE(held.station, QStringLiteral("edit1"));
+        QVERIFY(!store.lock(t.mob));
+        // "can choose to abort on the other station and obtain the lock": edit1's next write fails.
+        QVERIFY(store.lock(t.mob, true));
+        qputenv("LUMENIS_STATION", "edit1");
+        QVERIFY(!store.save(t, &held));
+        QCOMPARE(held.station, QStringLiteral("edit2"));
+        store.unlock(t.mob); // not edit1's: kept
+        QVERIFY(store.lockOf(t.mob));
+        qputenv("LUMENIS_STATION", "edit2");
+        store.unlock(t.mob);
+        QVERIFY(!store.lockOf(t.mob));
+        qputenv("LUMENIS_STATION", "edit1");
+        QVERIFY(store.save(t));
+        QVERIFY(!store.lockOf(t.mob)); // a write lets its own lock go
+        // While sharing is on, every store reads and writes the shared database.
+        setTranscriptSharing(TranscriptSharing::Use, shared);
+        QCOMPARE(TranscriptStore().folder(), QDir::cleanPath(shared));
+        QVERIFY(sharedTranscriptsReachable());
+        QVERIFY(TranscriptStore().has(t.mob));
+        // The host offline: nothing to read.
+        setTranscriptSharing(TranscriptSharing::Use, dir.filePath(QStringLiteral("Gone")));
+        QVERIFY(!sharedTranscriptsReachable());
+        QVERIFY(!TranscriptStore().has(t.mob));
+        setTranscriptSharing(TranscriptSharing::Off, {});
+        QCOMPARE(TranscriptStore().folder(), TranscriptStore::localFolder());
+        // "Deleting a transcript removes it for all users sharing the database" (p.452).
+        QVERIFY(store.remove(t.mob));
+        QVERIFY(!TranscriptStore(shared).has(t.mob));
+        qunsetenv("LUMENIS_STATION");
+    }
+
     // Include/Exclude Bin in Transcription, kept in the project folder.
     void transcriptionBins() {
         QTemporaryDir dir;

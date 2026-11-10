@@ -141,26 +141,74 @@ private:
 };
 
 // The store of transcripts: a folder of "<MobID>.json" files. Thread-safe as long as one clip is written by one thread.
+// Peer-to-peer transcript sharing (p.451-452; 8.7b, docs/spec/transcripts.md): "Host Shared Transcripts: Allows the
+// current workstation's database to be accessed by other workstations. Use Shared Transcripts: References the database
+// on the host workstation. When transcript sharing is enabled, all transcript functionality reads and writes to the
+// hosting workstation's database." Ours: the database is a TranscriptStore folder on shared storage (in place of
+// Avid NEXIS, isSharedLocation in bin_lock.h); the host puts its own transcripts there (hostTranscripts) and every
+// station's TranscriptStore reads and writes it while sharing is on. "Hosting does not require Media Composer to be
+// running on the host station, but if the host is offline ... transcripts will not be available": a folder that cannot
+// be reached has no transcripts.
+enum class TranscriptSharing { Off, Host, Use };
+// Set by MainWindow from the Transcript setting; process-wide, as the store's default folder follows it.
+void setTranscriptSharing(TranscriptSharing sharing, const QString& folder);
+TranscriptSharing transcriptSharing();
+QString sharedTranscriptFolder();
+// Whether the shared database can be reached now; true while sharing is off.
+bool sharedTranscriptsReachable();
+
+// This workstation as other stations see it in a transcript lock: LUMENIS_STATION when set (tests), else
+// "<user>@<host>".
+QString transcriptStation();
+
+// "Transcript entries lock when users are writing or editing them" (p.452): who holds an entry and since when.
+struct TranscriptLock {
+    QString station;
+    QDateTime since;
+};
+
 class TranscriptStore {
 public:
     explicit TranscriptStore(QString folder = defaultFolder());
-    // LUMENIS_TRANSCRIPTS when set (tests), else "Transcripts" in the user's application data.
+    // The shared database while transcript sharing is on, else localFolder().
     static QString defaultFolder();
+    // This workstation's own database: LUMENIS_TRANSCRIPTS when set (tests), else "Transcripts" in the user's
+    // application data.
+    static QString localFolder();
     QString folder() const { return folder_; }
 
     bool has(const QString& mob) const;
     std::optional<Transcript> load(const QString& mob) const;
-    // Writes the transcript (creating the folder); false when it cannot be written.
-    bool save(const Transcript& transcript) const;
-    // Deletes a clip's transcript ("Delete Transcript", 2026.8 guide p.455); false when there was none.
+    // Writes the transcript (creating the folder), holding its lock while it writes. False when it cannot be written, or
+    // when another station holds the entry's lock (`heldBy` says who): its write wins until this station takes the lock
+    // over (lock with `takeOver`).
+    bool save(const Transcript& transcript, TranscriptLock* heldBy = nullptr) const;
+    // Deletes a clip's transcript ("Delete Transcript", 2026.8 guide p.455); false when there was none. In a shared
+    // database it is gone for everyone ("Deleting a transcript removes it for all users sharing the database", p.452).
     bool remove(const QString& mob) const;
     // Every transcribed clip's MobID.
     QStringList mobs() const;
 
+    // The entry's lock, if a station holds it.
+    std::optional<TranscriptLock> lockOf(const QString& mob) const;
+    // Takes the entry's lock for this station. False, with the holder in `heldBy`, when another station holds it, unless
+    // `takeOver`: "If a conflict occurs, users are prompted and can choose to abort on the other station and obtain the
+    // lock" (p.452); that station's next save then fails.
+    bool lock(const QString& mob, bool takeOver = false, TranscriptLock* heldBy = nullptr) const;
+    // Lets the entry's lock go, when this station holds it.
+    void unlock(const QString& mob) const;
+
 private:
     QString path(const QString& mob) const;
+    QString lockPath(const QString& mob) const;
     QString folder_;
 };
+
+// Host Shared Transcripts: copies the transcripts in `local` that `shared` does not have into it and notes this station
+// as the host ("Host.json"). Returns how many were copied; -1 when `shared` cannot be written.
+int hostTranscripts(const QString& local, const QString& shared);
+// The station that hosts the shared database at `folder`, empty when none does.
+QString transcriptHost(const QString& folder);
 
 // Which bins are transcribed (p.446-447): "right-click on a bin and choose Include Bin in Transcription or Exclude Bin
 // from Transcription". Kept in the project folder, not the bins ("When copying or moving bins on the macOS Finder or

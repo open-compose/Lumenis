@@ -712,6 +712,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Media, files of the same name and size not copied again and " 2" for a second of one name, the not-enough-space and
   offline lines; storage modules' workspaces after the media drives, Processing Options dimmed with Distributed Processing,
   jobs polled every two seconds.
+* Peer-to-peer transcript sharing (8.7b, docs/spec/transcripts.md): Host/Use Shared Transcripts as a Transcript Sharing
+  menu (with Off) and a Shared Transcripts Folder in the Transcript setting, any shared storage for Avid NEXIS, hosting
+  copying this station's transcripts in, lock files per entry, the "Transcript Locked" question, Console lines for a
+  folder off shared storage and an unreachable host.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

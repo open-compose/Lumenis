@@ -8171,6 +8171,7 @@ void MainWindow::applySettings() {
     if (legacyBinListsPending() && writeLegacyBinLists()) return;
     const Settings& s = *settings_;
     applyDynamicRelinkSetting();
+    applyTranscriptSharing();
     // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
     // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412); Scratch Removal's Frame

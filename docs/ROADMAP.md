@@ -1556,9 +1556,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       and Proxy Path columns (p.509-510), proxies in sequences (p.512) and Copy Media gathering managed media onto one
       drive (p.512-513). Distributed Processing and Avid NEXIS | EDGE (p.510-511, p.514-516) need Avid's servers: a
       provider hook only.
-    * 8.7b, peer-to-peer transcript sharing (p.451-452): Host Shared Transcripts and Use Shared Transcripts with our
-      transcript store on shared storage (as LUMENIS_SHARED_BINS finds it), entries locked while written with the
-      override prompt, deletes for everyone, the host's store read when the host is off.
+    * 8.7b, peer-to-peer transcript sharing (p.451-452), done (docs/spec/transcripts.md): Host Shared Transcripts and Use
+      Shared Transcripts with our transcript store on shared storage (as LUMENIS_SHARED_BINS finds it), entries locked
+      while written with the override prompt, deletes for everyone, the host's store read when the host is off.
     * 8.7c, sequence format changes and Universal Mastering (ch.36, p.1287, p.1294-1298, Symphony Option): Changing the
       Project and Sequence Format, 24p NTSC to 1080p/23.976 and 23.976p NTSC to 720p/23.976 (p.1294-1295), Editing at 60
       fps and showing 24p and 25p media (p.1295-1296), HD Universal Mastering with its audio conversion and Digital Cut

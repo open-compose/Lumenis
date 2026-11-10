@@ -196,7 +196,7 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
 * Share Transcripts (p.451): the selection's transcripts in one file with the project's Language Hint. Avid's .avt is
   undocumented, so ours is JSON, "cutthulhu-transcripts" with the suffix `.cttr` (`model::writeSharedTranscripts`).
   Importing needs the same Language Hint ("Project Transcript Language Hint settings need to match when exporting and
-  importing"). Peer-to-peer sharing over Avid NEXIS (p.451-452) waits for 8.7.
+  importing"). Peer-to-peer sharing is below (8.7b).
 * Delete Transcript also on the Transcript Tool's fast menu (2026.8 guide p.456: "The currently loaded transcript is
   immediately deleted"): every transcript it shows.
 * Manage Transcripts (2026.8 guide p.455-456), from Script > Manage Transcripts, the Find window's Settings and the
@@ -205,6 +205,38 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   window lists the current project's transcribed clips (clip, language, created, edited); Delete removes the selected
   ones, Import reads a shared transcripts file, Export shares them all (p.451: "transcripts for an entire project can be
   exported using the Manage Transcripts window"), Done closes it.
+
+## Peer-to-peer transcript sharing (8.7b)
+
+"Media Composer also supports shared transcript databases across workstations via Avid NEXIS ... Access to this
+functionality requires Avid NEXIS to be enabled" (p.451). Ours: any folder on shared storage, as bin locking finds it
+(`model::isSharedLocation`, `LUMENIS_SHARED_BINS`).
+
+* "Host Shared Transcripts: Allows the current workstation's database to be accessed by other workstations. Use Shared
+  Transcripts: References the database on the host workstation" (p.452). The guide does not say where these are; ours:
+  the Transcript setting's Transcript Sharing menu (Off, Host Shared Transcripts, Use Shared Transcripts) and Shared
+  Transcripts Folder (settings.json, applied by `MainWindow::applyTranscriptSharing`). Hosting copies this
+  workstation's transcripts into the folder and names this station as the host there (`model::hostTranscripts`,
+  `Host.json`); Use reads and writes the folder the host shares. A folder off shared storage, or none, leaves sharing
+  off with a line in the Console.
+* "When transcript sharing is enabled, all transcript functionality reads and writes to the hosting workstation's
+  database. New transcripts are added to the shared database, allowing multiple stations to process media
+  transcriptions simultaneously" (p.452): `model::setTranscriptSharing` makes the shared folder every
+  `TranscriptStore`'s default (`TranscriptStore::localFolder` stays this station's own). A station transcribing a clip
+  holds its entry's lock, so other stations skip that clip (`MainWindow::queueTranscription`).
+* "Transcript entries lock when users are writing or editing them. If a conflict occurs, users are prompted and can
+  choose to abort on the other station and obtain the lock" (p.452): a `<clip>.lock` file beside the entry with the
+  station (`model::transcriptStation`, `LUMENIS_STATION` for tests) and the time (`TranscriptStore::lockOf`/`lock`/
+  `unlock`). A save takes the lock while it writes and fails while another station holds it; `MainWindow::editTranscript`
+  holds it through an edit and `saveTranscript` asks the question ("Transcript Locked", Yes takes the lock over;
+  `setTranscriptTakeOverHook` for tests). The other station's next write then fails and says so in its Console.
+* "Deleting a transcript removes it for all users sharing the database" (p.452): Delete removes the entry and its lock
+  from the shared folder.
+* "Hosting does not require Media Composer to be running on the host station, but if the host is offline or the search
+  database is stopped, transcripts will not be available" (p.452): the folder is read wherever it is; when it cannot be
+  reached there are no transcripts, and the Console says so (`model::sharedTranscriptsReachable`).
+* "Media Composer transcripts are tied to master clips" and "Only users with access to the relevant shared projects and
+  media can view or edit associated transcripts" (p.452) hold as they are: entries are found by the clips' MobIDs.
 
 ## AutoCut (8.2e)
 
@@ -233,6 +265,9 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
 * `tst_group_clip autoCutFromSpeakers` and scenario `48-autocut.json`: the speakers' angles kept in the group, the
   switches; `tst_transcripts_ui autoCutFromTranscript` Assign to Camera Angle and the Timeline's AutoCut.
+* `tst_transcript peerToPeerSharing`: hosting, locks between stations and the take-over, the shared folder as the store's
+  default, an unreachable host, deletes; `tst_transcripts_ui peerToPeerSharing` the Transcript setting's sharing, the
+  take-over question, storage that is not shared.
 * `tst_transcript transcriptsOut`: the exported text read back as captions, captions with a limit and marks, Create
   SubCap's track, the shared file; `tst_transcripts_ui transcriptsOut` the bin's Transcript menu, Export Transcript,
   Share and Import with the Language Hint check, Delete, Export SubCap and Create SubCap on a sequence, Manage

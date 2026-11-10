@@ -285,6 +285,85 @@ private slots:
 
     // Manage Speaker Names (p.445): the project's names and those in its transcripts (dimmed when in no transcript), +,
     // rename, Merge and Clear/Delete, through the Transcript setting's Manage Speakers button.
+    // Peer-to-peer transcript sharing (p.451-452; 8.7b): the Transcript setting's Host Shared Transcripts and Use Shared
+    // Transcripts, the take-over question when another station holds an entry, and a folder not on shared storage.
+    void peerToPeerSharing() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        qputenv("LUMENIS_SHARED_BINS", "all");
+        qputenv("LUMENIS_STATION", "edit1");
+        const QString a = dir.filePath(QStringLiteral("a.wav"));
+        QVERIFY(writeTone(a, 1.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString bin = bins.newBin();
+        bins.openBin(bin);
+        QCOMPARE(window.linkFiles(bin, {a}).size(), qsizetype(1));
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(bins.document(bin)->bin().items.first()).toString());
+        t.clipName = QStringLiteral("a");
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("hi"), 0.1, 0.3}}}};
+        QVERIFY(model::TranscriptStore().save(t));
+
+        // Host Shared Transcripts: this station's transcripts go to the shared folder, which every store then uses.
+        const QString shared = dir.filePath(QStringLiteral("Shared"));
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("sharedFolder"), shared);
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("sharing"), QStringLiteral("host"));
+        QCOMPARE(model::transcriptSharing(), model::TranscriptSharing::Host);
+        QCOMPARE(model::TranscriptStore().folder(), QDir::cleanPath(shared));
+        QVERIFY(model::TranscriptStore().has(t.mob));
+        QCOMPARE(model::transcriptHost(shared), QStringLiteral("edit1"));
+
+        // Another station holds the entry: asked, No leaves it; Yes takes the lock and the edit goes in.
+        qputenv("LUMENIS_STATION", "edit2");
+        QVERIFY(model::TranscriptStore().lock(t.mob));
+        qputenv("LUMENIS_STATION", "edit1");
+        QStringList asked;
+        bool answer = false;
+        window.setTranscriptTakeOverHook([&](const QString& clip, const model::TranscriptLock& held) {
+            asked << clip + QLatin1Char('/') + held.station;
+            return answer;
+        });
+        auto rename = [](model::Transcript& x) {
+            x.speakers.insert(1, QStringLiteral("Ann"));
+            return true;
+        };
+        QVERIFY(!window.editTranscript(t.mob, rename));
+        QCOMPARE(asked, QStringList{QStringLiteral("a/edit2")});
+        QVERIFY(model::TranscriptStore().load(t.mob)->speakers.isEmpty());
+        answer = true;
+        QVERIFY(window.editTranscript(t.mob, rename));
+        QCOMPARE(model::TranscriptStore().load(t.mob)->speakerName(1), QStringLiteral("Ann"));
+        QVERIFY(!model::TranscriptStore().lockOf(t.mob));
+
+        // Use Shared Transcripts on another station's view of the same folder; the host offline leaves none.
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("sharing"), QStringLiteral("use"));
+        QCOMPARE(model::transcriptSharing(), model::TranscriptSharing::Use);
+        QVERIFY(model::TranscriptStore().has(t.mob));
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("sharedFolder"), dir.filePath(QStringLiteral("Gone")));
+        QVERIFY(!model::sharedTranscriptsReachable());
+        QVERIFY(!model::TranscriptStore().has(t.mob));
+
+        // Not shared storage: sharing stays off.
+        qputenv("LUMENIS_SHARED_BINS", "none");
+        window.settings().setValue(QStringLiteral("Transcript"), QStringLiteral("sharedFolder"), shared);
+        QCOMPARE(model::transcriptSharing(), model::TranscriptSharing::Off);
+        QCOMPARE(model::TranscriptStore().folder(), model::TranscriptStore::localFolder());
+        qunsetenv("LUMENIS_SHARED_BINS");
+        qunsetenv("LUMENIS_STATION");
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
     void manageSpeakerNames() {
         QTemporaryDir dir;
         qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());

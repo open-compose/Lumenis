@@ -5,6 +5,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/ext/transcription.h"
 #include "lumenis/media/transcription.h"
+#include "lumenis/model/bin_lock.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
@@ -31,6 +32,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDialog>
+#include <QMessageBox>
 #include <QSaveFile>
 #include <QPlainTextEdit>
 #include <QSet>
@@ -158,6 +160,10 @@ bool MainWindow::queueTranscription(const QString& binId, const model::BinItem& 
     const auto provider = transcriber();
     const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
     if (!provider || transcribing_.contains(mob)) return false;
+    // "allowing multiple stations to process media transcriptions simultaneously" (p.452): an entry another station
+    // holds is theirs to write; this station holds the lock while it transcribes.
+    const model::TranscriptStore lockStore;
+    if (!lockStore.lock(mob)) return false;
     transcribing_.insert(mob);
     ext::TranscriptionOptions options;
     // The Language Hint (p.448): empty is Multilingual, the engine detects the language.
@@ -169,13 +175,16 @@ bool MainWindow::queueTranscription(const QString& binId, const model::BinItem& 
         const auto t = media::transcribeClip(item, *provider, options, progress, &error);
         if (!t) {
             result.error = error;
-        } else if (!model::TranscriptStore(folder).save(*t)) {
-            result.error = QObject::tr("The transcript of \"%1\" could not be saved in %2.").arg(item.name, folder);
+        } else if (model::TranscriptLock held; !model::TranscriptStore(folder).save(*t, &held)) {
+            result.error = held.station.isEmpty()
+                               ? QObject::tr("The transcript of \"%1\" could not be saved in %2.").arg(item.name, folder)
+                               : QObject::tr("%1 took over the transcript of \"%2\"; it was not saved here.").arg(held.station, item.name);
         }
         return result;
     };
-    auto done = [this, mob, name = item.name](const media::ConsolidateResult& result) {
+    auto done = [this, mob, folder, name = item.name](const media::ConsolidateResult& result) {
         transcribing_.remove(mob);
+        model::TranscriptStore(folder).unlock(mob);
         if (!result.error.isEmpty() && console_) {
             console_->log()->appendPlainText(tr("Transcribing \"%1\": %2").arg(name, result.error));
         }
@@ -352,14 +361,95 @@ model::ShownTranscript MainWindow::shownTranscriptOf(const model::BinItem& item,
 bool MainWindow::editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit) {
     const model::TranscriptStore store;
     auto t = store.load(mob);
-    if (!t || !edit || !edit(*t)) return false;
-    if (!store.save(*t)) {
+    if (!t || !edit) return false;
+    // "Transcript entries lock when users are writing or editing them" (p.452).
+    if (!store.lock(mob) && !takeOverTranscriptLock(store, mob, t->clipName)) return false;
+    t = store.load(mob); // as it is now that this station holds it
+    const bool changed = t && edit(*t);
+    const bool saved = changed && store.save(*t);
+    store.unlock(mob);
+    if (!changed) return false;
+    if (!saved) {
         if (console_) console_->log()->appendPlainText(tr("The transcript of \"%1\" could not be saved.").arg(t->clipName));
         return false;
     }
     ++transcriptGeneration_;
     refreshTranscriptTool();
     return true;
+}
+
+// "If a conflict occurs, users are prompted and can choose to abort on the other station and obtain the lock. Use caution
+// when overriding locks—only do so if other stations are offline and not actively writing" (p.452).
+bool MainWindow::takeOverTranscriptLock(const model::TranscriptStore& store, const QString& mob, const QString& clipName) {
+    const auto held = store.lockOf(mob);
+    if (!held) return store.lock(mob);
+    bool take = false;
+    if (transcriptTakeOver_) {
+        take = transcriptTakeOver_(clipName, *held);
+    } else {
+        take = QMessageBox::question(this, tr("Transcript Locked"),
+                                     tr("The transcript of \"%1\" is locked by %2, who is writing or editing it. Abort it "
+                                        "there and obtain the lock?\n\nOnly do so if that station is offline and not "
+                                        "actively writing.")
+                                         .arg(clipName, held->station),
+                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
+    }
+    return take && store.lock(mob, true);
+}
+
+bool MainWindow::saveTranscript(const model::Transcript& transcript) {
+    const model::TranscriptStore store;
+    if (store.save(transcript)) return true;
+    if (!store.lockOf(transcript.mob) || !takeOverTranscriptLock(store, transcript.mob, transcript.clipName)) return false;
+    const bool ok = store.save(transcript);
+    store.unlock(transcript.mob);
+    return ok;
+}
+
+void MainWindow::applyTranscriptSharing() {
+    const QString mode = settings_->text(QStringLiteral("Transcript"), QStringLiteral("sharing"));
+    const QString folder = QDir::cleanPath(settings_->text(QStringLiteral("Transcript"), QStringLiteral("sharedFolder")));
+    model::TranscriptSharing sharing = mode == QLatin1String("host")  ? model::TranscriptSharing::Host
+                                       : mode == QLatin1String("use") ? model::TranscriptSharing::Use
+                                                                      : model::TranscriptSharing::Off;
+    auto say = [this](const QString& text) {
+        if (console_) console_->log()->appendPlainText(text);
+    };
+    if (sharing != model::TranscriptSharing::Off) {
+        // "Access to this functionality requires Avid NEXIS to be enabled" (p.451); ours: any shared storage.
+        if (settings_->text(QStringLiteral("Transcript"), QStringLiteral("sharedFolder")).trimmed().isEmpty()) {
+            say(tr("Transcript Sharing: set the Shared Transcripts Folder in the Transcript setting."));
+            sharing = model::TranscriptSharing::Off;
+        } else if (!model::isSharedLocation(folder)) {
+            say(tr("Transcript Sharing: %1 is not on shared storage; transcripts stay on this workstation.")
+                    .arg(QDir::toNativeSeparators(folder)));
+            sharing = model::TranscriptSharing::Off;
+        }
+    }
+    const QString shownFolder = sharing == model::TranscriptSharing::Off ? QString() : folder;
+    if (sharing == appliedSharing_ && shownFolder == appliedSharedFolder_) return;
+    if (sharing == model::TranscriptSharing::Host) {
+        const int copied = model::hostTranscripts(model::TranscriptStore::localFolder(), folder);
+        if (copied < 0) {
+            say(tr("Host Shared Transcripts: %1 cannot be written; transcripts stay on this workstation.")
+                    .arg(QDir::toNativeSeparators(folder)));
+            sharing = model::TranscriptSharing::Off;
+        } else {
+            say(tr("Host Shared Transcripts: %n transcript(s) of this workstation added to %1.", nullptr, copied)
+                    .arg(QDir::toNativeSeparators(folder)));
+        }
+    }
+    model::setTranscriptSharing(sharing, sharing == model::TranscriptSharing::Off ? QString() : folder);
+    appliedSharing_ = sharing;
+    appliedSharedFolder_ = sharing == model::TranscriptSharing::Off ? QString() : folder;
+    // "if the host is offline or the search database is stopped, transcripts will not be available" (p.452).
+    if (sharing == model::TranscriptSharing::Use && !model::sharedTranscriptsReachable()) {
+        say(tr("Use Shared Transcripts: the shared transcripts at %1 cannot be reached; transcripts are not available "
+               "until the host is back.")
+                .arg(QDir::toNativeSeparators(folder)));
+    }
+    ++transcriptGeneration_;
+    refreshTranscriptTool();
 }
 
 namespace {
@@ -453,7 +543,7 @@ void MainWindow::applySpeakerNameChange(const SpeakerNameChange& change) {
         default: break;
         }
         if (!did) continue;
-        if (store.save(*t)) {
+        if (saveTranscript(*t)) {
             changed = true;
         } else if (console_) {
             console_->log()->appendPlainText(tr("The transcript of \"%1\" could not be saved.").arg(t->clipName));

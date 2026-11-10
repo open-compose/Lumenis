@@ -3,11 +3,13 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QRegularExpression>
 #include <QStandardPaths>
+#include <QSysInfo>
 
 #include <algorithm>
 #include <utility>
@@ -141,12 +143,113 @@ QList<TranscriptLine> transcriptLines(const QList<EngineWord>& words, double pau
     return lines;
 }
 
+namespace {
+
+struct Sharing {
+    TranscriptSharing mode = TranscriptSharing::Off;
+    QString folder;
+};
+
+Sharing& sharing() {
+    static Sharing s;
+    return s;
+}
+
+} // namespace
+
+void setTranscriptSharing(TranscriptSharing mode, const QString& folder) {
+    sharing() = {folder.isEmpty() ? TranscriptSharing::Off : mode, QDir::cleanPath(folder)};
+}
+
+TranscriptSharing transcriptSharing() {
+    return sharing().mode;
+}
+
+QString sharedTranscriptFolder() {
+    return sharing().mode == TranscriptSharing::Off ? QString() : sharing().folder;
+}
+
+bool sharedTranscriptsReachable() {
+    return sharing().mode == TranscriptSharing::Off || QFileInfo(sharing().folder).isDir();
+}
+
+QString transcriptStation() {
+    const QString env = qEnvironmentVariable("LUMENIS_STATION");
+    if (!env.isEmpty()) return env;
+    QString user = qEnvironmentVariable("USER");
+    if (user.isEmpty()) user = qEnvironmentVariable("USERNAME");
+    return user + QLatin1Char('@') + QSysInfo::machineHostName();
+}
+
 TranscriptStore::TranscriptStore(QString folder) : folder_(std::move(folder)) {}
 
 QString TranscriptStore::defaultFolder() {
+    const QString shared = sharedTranscriptFolder();
+    return shared.isEmpty() ? localFolder() : shared;
+}
+
+QString TranscriptStore::localFolder() {
     const QString env = qEnvironmentVariable("LUMENIS_TRANSCRIPTS");
     if (!env.isEmpty()) return QDir::cleanPath(env);
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(QStringLiteral("Transcripts"));
+}
+
+QString TranscriptStore::lockPath(const QString& mob) const {
+    return QDir(folder_).filePath(fileStem(mob) + QStringLiteral(".lock"));
+}
+
+std::optional<TranscriptLock> TranscriptStore::lockOf(const QString& mob) const {
+    if (fileStem(mob).isEmpty()) return std::nullopt;
+    QFile f(lockPath(mob));
+    if (!f.open(QIODevice::ReadOnly)) return std::nullopt;
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    TranscriptLock lock{o.value(QStringLiteral("station")).toString(),
+                        QDateTime::fromString(o.value(QStringLiteral("since")).toString(), Qt::ISODate)};
+    if (lock.station.isEmpty()) return std::nullopt;
+    return lock;
+}
+
+bool TranscriptStore::lock(const QString& mob, bool takeOver, TranscriptLock* heldBy) const {
+    if (fileStem(mob).isEmpty() || !QDir().mkpath(folder_)) return false;
+    if (const auto held = lockOf(mob); held && held->station != transcriptStation() && !takeOver) {
+        if (heldBy) *heldBy = *held;
+        return false;
+    }
+    QSaveFile f(lockPath(mob));
+    if (!f.open(QIODevice::WriteOnly)) return false;
+    f.write(QJsonDocument(QJsonObject{{QStringLiteral("station"), transcriptStation()},
+                                      {QStringLiteral("since"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}})
+                .toJson(QJsonDocument::Compact));
+    return f.commit();
+}
+
+void TranscriptStore::unlock(const QString& mob) const {
+    if (const auto held = lockOf(mob); held && held->station == transcriptStation()) QFile::remove(lockPath(mob));
+}
+
+int hostTranscripts(const QString& local, const QString& shared) {
+    if (!QDir().mkpath(shared)) return -1;
+    const TranscriptStore from(local);
+    const TranscriptStore to(shared);
+    int copied = 0;
+    if (QDir::cleanPath(local) != QDir::cleanPath(shared)) {
+        for (const QString& mob : from.mobs()) {
+            if (to.has(mob)) continue;
+            if (const auto t = from.load(mob); t && to.save(*t)) ++copied;
+        }
+    }
+    QSaveFile f(QDir(shared).filePath(QStringLiteral("Host.json")));
+    if (!f.open(QIODevice::WriteOnly)) return -1;
+    f.write(QJsonDocument(QJsonObject{{QStringLiteral("station"), transcriptStation()},
+                                      {QStringLiteral("since"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate)}})
+                .toJson());
+    return f.commit() ? copied : -1;
+}
+
+QString transcriptHost(const QString& folder) {
+    QFile f(QDir(folder).filePath(QStringLiteral("Host.json")));
+    if (!f.open(QIODevice::ReadOnly)) return {};
+    return QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("station")).toString();
 }
 
 QString TranscriptStore::path(const QString& mob) const {
@@ -165,16 +268,28 @@ std::optional<Transcript> TranscriptStore::load(const QString& mob) const {
     return doc.isObject() ? Transcript::fromJson(doc.object()) : std::nullopt;
 }
 
-bool TranscriptStore::save(const Transcript& transcript) const {
+bool TranscriptStore::save(const Transcript& transcript, TranscriptLock* heldBy) const {
     if (fileStem(transcript.mob).isEmpty() || !QDir().mkpath(folder_)) return false;
+    // Held while it writes; a lock this station already had (an edit, a transcription) stays.
+    const bool hadLock = [&] {
+        const auto held = lockOf(transcript.mob);
+        return held && held->station == transcriptStation();
+    }();
+    if (!hadLock && !lock(transcript.mob, false, heldBy)) return false;
     QSaveFile f(path(transcript.mob));
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(QJsonDocument(transcript.toJson()).toJson(QJsonDocument::Compact));
-    return f.commit();
+    bool ok = f.open(QIODevice::WriteOnly);
+    if (ok) {
+        f.write(QJsonDocument(transcript.toJson()).toJson(QJsonDocument::Compact));
+        ok = f.commit();
+    }
+    if (!hadLock) unlock(transcript.mob);
+    return ok;
 }
 
 bool TranscriptStore::remove(const QString& mob) const {
-    return has(mob) && QFile::remove(path(mob));
+    if (!has(mob)) return false;
+    QFile::remove(lockPath(mob));
+    return QFile::remove(path(mob));
 }
 
 QStringList TranscriptStore::mobs() const {

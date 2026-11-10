@@ -602,7 +602,19 @@ public:
     int transcribeNow(const QStringList& mobs);
     // A change to a clip's transcript in the store (the Transcript Tool's edits, p.444-446); false when it changes
     // nothing or cannot be saved.
+    // The edit holds the entry's lock (p.452); when another station holds it, the user is asked whether to take it over.
     bool editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit);
+    // Peer-to-peer transcript sharing (p.451-452; 8.7b): the Transcript setting's Transcript Sharing (Off, Host Shared
+    // Transcripts, Use Shared Transcripts) and Shared Transcripts Folder, applied by applySettings. Hosting copies this
+    // workstation's transcripts into the folder first (model::hostTranscripts). The folder must be on shared storage
+    // (model::isSharedLocation); otherwise sharing stays off and the Console says why.
+    void applyTranscriptSharing();
+    // Writes a transcript to the store; when another station holds its lock, asks whether to "abort on the other station
+    // and obtain the lock" (p.452) and writes on yes.
+    bool saveTranscript(const model::Transcript& transcript);
+    // The question asked then (tests answer it): the clip's name and the lock's holder; true takes the lock over.
+    using TranscriptTakeOver = std::function<bool(const QString& clipName, const model::TranscriptLock& heldBy)>;
+    void setTranscriptTakeOverHook(TranscriptTakeOver hook) { transcriptTakeOver_ = std::move(hook); }
     TranscriptTool& transcriptTool() const { return *transcriptTool_; }
     // Manage Speaker Names (p.445, the Transcript setting's Manage Speakers): opens the window over the active one (window
     // modal, without blocking) and returns it; nullptr without a project. Its changes apply at once to the project's
@@ -1220,6 +1232,11 @@ private:
     QString lastSourceLoaded_;
     QString lastRecordLoaded_;
     int transcriptGeneration_ = 0;    // bumped when a transcript is made or changed
+    // The transcript sharing last applied (applyTranscriptSharing), and the take-over question.
+    model::TranscriptSharing appliedSharing_ = model::TranscriptSharing::Off;
+    QString appliedSharedFolder_;
+    TranscriptTakeOver transcriptTakeOver_;
+    bool takeOverTranscriptLock(const model::TranscriptStore& store, const QString& mob, const QString& clipName);
     void setUpTranscriptTool();
     bool transcriptionIndexing_ = true;
     TranscriptPathAsk transcriptPathHook_;

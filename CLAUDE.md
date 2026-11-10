@@ -986,7 +986,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::copyMediaRequest`/`copyMedia`/`runCopyMedia` from the bin's and the Sidebar's right-click menus) and the hook
   for shared workspaces and Distributed Processing (`ext::SharedStorageProvider` in `src/ext/.../shared_storage.h`,
   `MainWindow::mediaTargets`/`submitDistributedProxies`/`pollDistributedJobs`; tests `tst_copy_media`, `tst_render_ui
-  copyMedia`/`distributedProcessing`), is done, so 8.7a is.
+  copyMedia`/`distributedProcessing`), is done, so 8.7a is. 8.7b, peer-to-peer transcript sharing (docs/spec/transcripts.md:
+  the Transcript setting's Transcript Sharing and Shared Transcripts Folder through `MainWindow::applyTranscriptSharing`,
+  `model::setTranscriptSharing`/`hostTranscripts`, entry locks `TranscriptStore::lock`/`lockOf` with `LUMENIS_STATION`,
+  the take-over question in `MainWindow::saveTranscript`/`editTranscript`; tests `tst_transcript peerToPeerSharing`,
+  `tst_transcripts_ui peerToPeerSharing`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

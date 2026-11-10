@@ -1108,6 +1108,10 @@
             {"key": "subclipsGroups", "type": "choice", "style": "menu", "label": "Subclips/Groups", "default": "ask", "page": 449,
              "choices": [{"value": "ask", "label": "Ask"}, {"value": "master", "label": "Use Master Clips Transcripts"},
                          {"value": "transcribe", "label": "Transcribe Subclip or Group"}]},
+            {"key": "sharing", "type": "choice", "style": "menu", "label": "Transcript Sharing", "default": "off", "page": 452,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "host", "label": "Host Shared Transcripts"},
+                         {"value": "use", "label": "Use Shared Transcripts"}]},
+            {"key": "sharedFolder", "type": "text", "label": "Shared Transcripts Folder", "default": "", "page": 452},
             {"key": "manageSpeakers", "type": "button", "label": "Manage Speakers", "page": 445},
             {"key": "manageTranscripts", "type": "button", "label": "Manage Transcripts", "page": 453}
           ]
