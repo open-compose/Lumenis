@@ -59,6 +59,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   `LINUX_RUNNERS`, e.g. `["24.04","26.04"]`); BUILDING.md has the steps.
   Currently all three self-hosted runners are on (Linux: 26.04 only) and
   `HOSTED_CI` is off; the screenshot comparison runs on the WSL runner.
+  If the WSL runner goes offline (its job stays queued or is cancelled),
+  go on when the Windows and Mac jobs pass, with Linux checked locally (ci
+  preset, clang, GCC 15 check); come back to it when WSL is back (owner's
+  decision, 2026-11-10). ui-consistency waits for it too.
   Screenshots travel between jobs on `ci-screenshots/<branch>/<platform>`
   branches (`scripts/ci-screenshots.py`, `.ps1`), not artifacts: the
   artifact quota is used up. The
