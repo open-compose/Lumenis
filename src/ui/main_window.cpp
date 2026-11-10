@@ -4843,6 +4843,14 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     } else if (o.start == DigitalCutTool::Start::MarkInTime) {
         const auto tc = Timecode::parse(o.markIn.toStdString(), format);
         if (!tc) return fail(tr("The Mark IN time is not a timecode."));
+        // "Deck control for capture and digital cut is limited to 30 fps. A message box warns you if you try to mark an
+        // odd timecode value (such as 01:00:00:03)" (p.1296): 60 fps timecode on a 30 fps deck.
+        if (format.nominalFps >= 50 && tc->frameCount() % 2 != 0) {
+            const QString text = tr("Deck control is limited to 30 fps: %1 is an odd timecode value. Mark an even one.")
+                                     .arg(o.markIn);
+            if (!quietDigitalCut_) QMessageBox::warning(this, tr("Digital Cut"), text);
+            return fail(text);
+        }
         in = tc->frameCount();
     }
     if (o.remote && o.customOffset) in += o.frameOffset;

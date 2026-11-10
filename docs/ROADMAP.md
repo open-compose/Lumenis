@@ -1569,7 +1569,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         Mastering" choices with their remastered rates (`model::masteringConversions`); 8.7c2b (done) the Digital Cut
         tool's Output Format menu by project format (p.1298-1299) and the output at another frame rate, with the output
         formats and pulldown of 23.976p, 24p and 25p projects (p.932-938; `model::outputFormats`);
-      * 8.7c3, Editing at 60 fps (p.1295-1296: field steps beep, Draft plays at 30, one-second transitions, the deck's
+      * 8.7c3 (done), Editing at 60 fps (p.1295-1296: field steps beep, Draft plays at 30, one-second transitions, the deck's
         30 fps marks) and Displaying 24p and 25p Media (p.1296).
     * 8.7d, the Symphony Option items left in both guides after an audit (redefining a title's font replacement,
       p.994, among them); control surfaces (Avid Artist Color, ch.25 of the FX Guide) stay a provider hook

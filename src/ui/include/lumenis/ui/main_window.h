@@ -457,6 +457,9 @@ public:
     // The Digital Cut tool's Timecode Duration (p.936): the cut's length on the tape at the chosen output format; with 24
     // (NTSC) and a Dest. TC Rate of 30.00 fps, counted at 30 fps.
     void updateDigitalCutDuration();
+    // Tests: true stops the Digital Cut's message boxes (the odd 60 fps Mark IN, p.1296); the text still goes to the
+    // tool's status line and the Console.
+    void setQuietDigitalCut(bool quiet) { quietDigitalCut_ = quiet; }
     DigitalCutTool& digitalCutTool() { return *digitalCut_; }
     // AS-02 Export Volumes (7.2d; docs/spec/as02.md; p.901-904): File > New > Volume for Export makes an Export Volume
     // bin (its id; empty when cancelled); the bin's Properties button edits its volume; Commit writes its sequences not
@@ -1156,6 +1159,7 @@ private:
     DigitalCutTool* digitalCut_ = nullptr;
     VideoOutputTool* videoOutput_ = nullptr;
     bool digitalCutHalted_ = false;
+    bool quietDigitalCut_ = false;
     // The Digital Cut's receiver of the export's frames and sound (exportMovieFile's "sink" format).
     std::function<bool(const media::MovieSource&, const media::MovieExportOptions&, const std::function<bool(double)>&, QString*)> movieSink_;
     AudioTrackEffectTool* audioTrackEffect_ = nullptr;

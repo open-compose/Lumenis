@@ -298,6 +298,63 @@ private slots:
         QCOMPARE(tool.findChild<QLabel*>(QStringLiteral("dcDuration"))->text(), QStringLiteral("00:00:00:10"));
         media::setTapeDeckFolders({});
     }
+
+    // Editing at 60 fps (8.7c3): "Deck control for capture and digital cut is limited to 30 fps. A message box warns you
+    // if you try to mark an odd timecode value (such as 01:00:00:03)" (p.1296).
+    void sixtyFpsMarkIn() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("C001.mov"));
+        QVERIFY(writeMovie(movie, Rational(60000, 1001)));
+        const QString tape = dir.filePath(QStringLiteral("Sixty"));
+        QVERIFY(QDir().mkpath(tape));
+        media::setTapeDeckFolders({tape});
+        ext::ProviderRegistry providers;
+        providers.add(std::make_shared<media::FolderTapeDeckProvider>());
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.setQuietDigitalCut(true);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Sports"));
+        project.settings.name = QStringLiteral("Sports");
+        project.settings.format.group = "HD 720p"; // 720p/59.94, at a small raster for the test
+        project.settings.format.editRate = Rational(60000, 1001);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        QVERIFY(!window.composer().interlacedProject());
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.linkFiles(binId, {movie}).size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), bin->bin().items.first());
+        composer.state(MonitorId::Source).setPosition(0);
+        composer.state(MonitorId::Source).markIn();
+        composer.state(MonitorId::Source).setPosition(3);
+        composer.state(MonitorId::Source).markOut();
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        commands.action(QStringLiteral("file.output.digital_cut"))->trigger();
+        DigitalCutTool& tool = window.digitalCutTool();
+        QVERIFY(tool.chooseDeck(QStringLiteral("Sixty")));
+        DigitalCutTool::Options o = tool.options();
+        o.start = DigitalCutTool::Start::MarkInTime;
+        o.markIn = QStringLiteral("01:00:00:03");
+        tool.setOptions(o);
+        QCOMPARE(window.digitalCut(false), std::int64_t{-1});
+        QVERIFY(tool.findChild<QLabel*>(QStringLiteral("dcStatus"))->text().contains(QStringLiteral("30 fps")));
+        QVERIFY(media::tapeRecordings(tape).isEmpty());
+        o.markIn = QStringLiteral("01:00:00:04");
+        tool.setOptions(o);
+        QCOMPARE(window.digitalCut(false), std::int64_t{4});
+        QCOMPARE(media::tapeRecordings(tape).first().in, std::int64_t{3600 * 60 + 4});
+        media::setTapeDeckFolders({});
+    }
 };
 
 QTEST_MAIN(TestDigitalCut)

@@ -714,6 +714,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   jobs polled every two seconds.
 * Universal Mastering's sample rates (8.7c2a, docs/spec/sequence-format.md): the six conversions offered in every project,
   after the three plain rates, written as WAV.
+* Single-field step (8.7c3, docs/spec/sequence-format.md): field 1 shows the whole frame (the guide: "displays the
+  first field of every frame"); field 2 its lower lines, each shown twice; the "2" in the picture's upper right corner in
+  the palette's text colour. The 60 fps Mark IN warning is checked against the Digital Cut tool's Mark IN.
 * The Digital Cut's output formats (8.7c2b, docs/spec/digital-cut.md): the menu's descriptions shortened from the guide's
   table; the 1080 table's descriptions ours; the project's own play rate first; 23.976p SD projects offer the NTSC formats
   only (the guide's "all output play rates are available" read as Symphony's); SD downconverts letterboxed; the
@@ -1757,7 +1760,7 @@ These are recorded now so they are not entered from memory later.
     Source/Record mode, pop-up monitors, the Info and Timecode windows,
     the Tracking Information menu's panes and track timecodes, two
     information rows, Resize Monitor to Image, Hide Video, Play Standby,
-    field steps, snapping on the position bar, moving marks by dragging,
+    snapping on the position bar, moving marks by dragging,
     Loop Selected Clips, subclips and markers.
   * Composer settings (1.5).
 

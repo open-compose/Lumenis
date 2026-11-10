@@ -576,6 +576,19 @@ public:
     QMenu* proxyPlaybackMenu(QWidget* parent);
     // The share of the picture's width and height decoded at this quality.
     double qualityScale() const;
+    // "Draft Quality plays back at 30 fps. Full Quality plays back at 60 fps" (Editing Guide p.1295; 8.7c3): the frame a
+    // monitor shows at `position`. While playing at Draft Quality a clip of 50 frames a second or more shows every second
+    // frame; otherwise the position itself.
+    std::int64_t shownFrame(MonitorId monitor, std::int64_t position) const;
+    // Single-field step (p.399): "The single-field step feature is not available when you work with progressive
+    // formats" and in a 720p/59.94 project "Single-field step commands are deactivated; if you click a button, Media
+    // Composer beeps" (p.1295). Whether the project's format is interlaced (also set by setAdapterOptions); the Step
+    // Forward/Backward One Field commands beep in progressive projects.
+    void setInterlacedProject(bool interlaced);
+    bool interlacedProject() const { return interlacedProject_; }
+    // The field a monitor is parked on: 0 the first, 1 the second ("A number 2 displays in the upper right corner of the
+    // monitor to indicate you are parked on field 2 of a frame", p.399). Frame steps keep it; playing goes back to 0.
+    int parkedField(MonitorId monitor) const { return fields_.value(static_cast<int>(monitor)); }
     // Video Display settings: High-Quality Scaling for Real-Time Decode
     // (p.1224), for Full Quality only.
     void setHighQualityScaling(bool on);
@@ -876,6 +889,8 @@ private:
     std::int64_t playStart_ = 0;
     VideoQuality quality_ = VideoQuality::Full;
     bool fullQualityOnly_ = false;
+    QHash<int, int> fields_; // MonitorId -> the parked field
+
     model::ProxyPlayback proxyPlayback_ = model::ProxyPlayback::HighResolutionOnly;
     // Shows the proxy mode on every Play button: orange while a proxy is preferred.
     void showProxyPlayback();

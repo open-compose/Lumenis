@@ -1001,7 +1001,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   8.7c2b, the Digital Cut tool's Output Format menu (`model::outputFormats` in `src/model/output_format.*` with the
   2:3 cadences and Pullin B, `DigitalCutTool::setOutputFormats`, `MainWindow::digitalCut` laying frames and sound onto
   the tape's rate, `updateDigitalCutDuration`; tests `tst_sequence_format outputFormatsAndPulldown`, `tst_digital_cut
-  outputFormats`), is done, so 8.7c2 is.
+  outputFormats`), is done, so 8.7c2 is. 8.7c3, editing at 60 fps and 24p/25p display (single-field steps
+  `Composer::parkedField` beeping in progressive projects, Draft at 30 fps `Composer::shownFrame`, the 30 fps deck's odd
+  Mark IN in `MainWindow::digitalCut`; tests `tst_composer_display fieldStepsAndSixtyFps`, `tst_digital_cut
+  sixtyFpsMarkIn`), is done, so 8.7c is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

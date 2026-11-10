@@ -306,6 +306,70 @@ private slots:
         QCOMPARE(c.rate(), 0.0);
     }
 
+    // Single-field step (p.399) and editing at 60 fps (p.1295; 8.7c3): field steps beep in progressive projects and
+    // park on field 2 in interlaced ones; Draft Quality plays 60 fps clips at 30.
+    void fieldStepsAndSixtyFps() {
+        Composer c;
+        // Even lines red, odd lines blue: field 2 (the lower field) is blue.
+        c.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            for (int y = 0; y < size.height(); ++y) {
+                const QRgb colour = y % 2 ? qRgb(0, 0, 255) : qRgb(255, 0, 0);
+                for (int x = 0; x < size.width(); ++x) image.setPixel(x, y, colour);
+            }
+            return image;
+        });
+        c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("a"), 100));
+        c.moveTo(MonitorId::Source, 10);
+        // "The single-field step feature is not available when you work with progressive formats" (p.399).
+        QVERIFY(!c.interlacedProject());
+        QVERIFY(c.perform(QStringLiteral("move.step_forward_one_field")));
+        QCOMPARE(c.parkedField(MonitorId::Source), 0);
+        QCOMPARE(c.state(MonitorId::Source).position(), 10);
+        c.setInterlacedProject(true);
+        QVERIFY(c.perform(QStringLiteral("move.step_forward_one_field")));
+        QCOMPARE(c.parkedField(MonitorId::Source), 1);
+        QCOMPARE(c.state(MonitorId::Source).position(), 10);
+        QCOMPARE(c.picture(MonitorId::Source, QSize(16, 8)).pixel(0, 0), qRgb(0, 0, 255));
+        // Frame steps keep the field ("Subsequent single-frame steps are based on this field", p.399).
+        QVERIFY(c.perform(QStringLiteral("move.step_forward_one_frame")));
+        QCOMPARE(c.parkedField(MonitorId::Source), 1);
+        QVERIFY(c.perform(QStringLiteral("move.step_forward_one_field")));
+        QCOMPARE(c.state(MonitorId::Source).position(), 12);
+        QCOMPARE(c.parkedField(MonitorId::Source), 0);
+        QCOMPARE(c.picture(MonitorId::Source, QSize(16, 8)).pixel(0, 0), qRgb(255, 0, 0));
+        QVERIFY(c.perform(QStringLiteral("move.step_backward_one_field")));
+        QCOMPARE(c.state(MonitorId::Source).position(), 11);
+        QCOMPARE(c.parkedField(MonitorId::Source), 1);
+        QVERIFY(c.perform(QStringLiteral("move.step_backward_one_field")));
+        QCOMPARE(c.parkedField(MonitorId::Source), 0);
+        QCOMPARE(c.state(MonitorId::Source).position(), 11);
+        // Playing goes back to whole frames.
+        QVERIFY(c.perform(QStringLiteral("move.step_forward_one_field")));
+        c.play(1);
+        QCOMPARE(c.parkedField(MonitorId::Source), 0);
+        c.stop();
+
+        // "Draft Quality plays back at 30 fps. Full Quality plays back at 60 fps" (p.1295).
+        BinItem sixty = clip(QStringLiteral("b"), 600);
+        sixty.editRate = Rational(60000, 1001);
+        c.load(MonitorId::Source, QStringLiteral("bin"), sixty);
+        c.setVideoQuality(Composer::VideoQuality::Draft);
+        QCOMPARE(c.shownFrame(MonitorId::Source, 7), 7); // parked
+        c.play(1);
+        QCOMPARE(c.shownFrame(MonitorId::Source, 7), 6);
+        QCOMPARE(c.shownFrame(MonitorId::Source, 8), 8);
+        c.setVideoQuality(Composer::VideoQuality::Full);
+        QCOMPARE(c.shownFrame(MonitorId::Source, 7), 7);
+        c.stop();
+        // 25 fps clips play every frame at Draft Quality.
+        c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("c"), 100));
+        c.setVideoQuality(Composer::VideoQuality::Draft);
+        c.play(1);
+        QCOMPARE(c.shownFrame(MonitorId::Source, 7), 7);
+        c.stop();
+    }
+
     // Display During Segment Drag (p.617-618, p.1219): the four-frame display and its offset counter,
     // the Position Bar frame, or nothing.
     void segmentDragDisplay() {

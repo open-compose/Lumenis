@@ -82,6 +82,10 @@ real time (ours: the folder deck needs no real time; a hardware deck will).
   30.00 fps, the sequence duration in the Digital Cut tool matches the sequence
   duration in the Timeline" (p.936).
 
+In 50 and 60 fps projects "Deck control for capture and digital cut is limited
+to 30 fps" (p.1296): an odd Mark IN timecode is refused with a warning
+(docs/spec/sequence-format.md "Editing at 60 fps").
+
 ## Not yet
 
 The LTC Output menu and LTC at the destination rate (p.935-936), the SD

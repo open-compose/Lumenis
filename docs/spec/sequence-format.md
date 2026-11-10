@@ -72,3 +72,32 @@ edit rate refused), `tst_settings_window windowTabsAndUserProfiles` (the Project
 
 Tests: `tst_sequence_format universalMastering` (the table), `tst_clip_audio moreDialogs` (the menu) and
 `timecodeAndRateInTheApplication` (a clip remastered at 46080 Hz).
+
+## Editing at 60 fps (p.1295-1296; 8.7c3)
+
+* "Single-field step commands are deactivated; if you click a button, Media Composer beeps" (p.1295), as for every
+  progressive format: "The single-field step feature is not available when you work with progressive formats" (p.399).
+  Step Forward/Backward One Field (`Composer::perform`, `setInterlacedProject`, which `setAdapterOptions` also sets) beep
+  in progressive projects. In interlaced ones they park on field 2 ("A number 2 displays in the upper right corner of
+  the monitor to indicate you are parked on field 2 of a frame", p.399; `Composer::parkedField`), where the monitor shows
+  that field's lines (`media::fieldPicture`); "Subsequent single-frame steps are based on this field" (p.399); playing
+  goes back to field 1.
+* "Draft Quality plays back at 30 fps. Full Quality plays back at 60 fps" (p.1295): while playing at Draft Quality a
+  clip of 50 frames a second or more shows every second frame (`Composer::shownFrame`).
+* Marks and trims at 1/60th of a second are the sequence's own frames. "Transition effects default to one-second
+  duration (60 frames)" (p.1296): `Timeline::defaultTransitionLength` is one second of the timecode's frames.
+* "Deck control for capture and digital cut is limited to 30 fps. A message box warns you if you try to mark an odd
+  timecode value (such as 01:00:00:03)" (p.1296): the Digital Cut tool's Mark IN in 50 and 60 fps timecode
+  (`MainWindow::digitalCut`); the cut is not recorded. There is no Capture tool.
+* "1080i/50 and 1080i/59.94 are interlaced resolutions that you edit at 25 frames per second and 30 frames per second"
+  (p.1296): their edit rates are 25 and 29.97.
+
+## Displaying 24p and 25p Media (p.1296; 8.7c3)
+
+* "This section applies to you only if you are working with Standard Definition (SD) formats" (p.1296). The Source,
+  Record and pop-up monitors play the media at its own rate. The NTSC and PAL monitor's pulldown (2:3 at 23.976 or 24,
+  two extra fields a second at 24 PAL, 25 frame for frame) is the Digital Cut's (docs/spec/digital-cut.md "Output
+  formats"), which "Displaying Media During a Digital Cut" follows. A client monitor fed in real time through video
+  output hardware takes the same cadence when those modules come (7.3c).
+
+Tests: `tst_composer_display fieldStepsAndSixtyFps`, `tst_digital_cut sixtyFpsMarkIn`.

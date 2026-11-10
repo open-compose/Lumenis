@@ -4,6 +4,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/display_color.h"
+#include "lumenis/media/fields.h"
 #include "lumenis/media/target_mask.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
@@ -769,6 +770,16 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         }
         // Closed captions over the picture (p.983).
         if (const auto caption = composer_.shownCaption(monitor_)) paintCaption(p, pic, *caption);
+        // "A number 2 displays in the upper right corner of the monitor to indicate you are parked on field 2" (p.399).
+        if (composer_.parkedField(monitor_) == 1) {
+            p.save();
+            QFont f = font();
+            f.setBold(true);
+            p.setFont(f);
+            p.setPen(palette().color(QPalette::BrightText));
+            p.drawText(pic.adjusted(0, 6, -8, 0), Qt::AlignRight | Qt::AlignTop, QStringLiteral("2"));
+            p.restore();
+        }
         // The sawtooth marks on the IN and OUT frames (p.405-406).
         p.setPen(QPen(QColor(230, 230, 230), 2));
         auto saw = [&](int x, int dir) {
@@ -1856,7 +1867,26 @@ void Composer::clearUncommitted() {
 }
 
 QImage Composer::picture(MonitorId monitor, QSize size, bool* offline) const {
-    return pictureAt(monitor, state(monitor).position(), size, offline);
+    QImage image = pictureAt(monitor, shownFrame(monitor, state(monitor).position()), size, offline);
+    // Parked on field 2: that field's lines, each shown twice (p.399).
+    if (parkedField(monitor) == 1 && !image.isNull()) image = media::fieldPicture(image, 1, true, media::FieldFill::Duplicate);
+    return image;
+}
+
+std::int64_t Composer::shownFrame(MonitorId monitor, std::int64_t position) const {
+    const model::MonitorState& s = state(monitor);
+    if (!isPlaying() || quality_ != VideoQuality::Draft || s.isEmpty()) return position;
+    // "Draft Quality plays back at 30 fps" (p.1295): 60 fps clips show every second frame.
+    if (s.current()->item.editRate.toDouble() < 49.0) return position;
+    return position - position % 2;
+}
+
+void Composer::setInterlacedProject(bool interlaced) {
+    interlacedProject_ = interlaced;
+    if (!interlaced && !fields_.isEmpty()) {
+        fields_.clear();
+        refresh();
+    }
 }
 
 QImage Composer::pictureAt(MonitorId monitor, std::int64_t frame, QSize size, bool* offline) const {
@@ -2167,6 +2197,8 @@ void Composer::play(int speed) {
         stop();
         return;
     }
+    // Playing shows whole frames again (field 1, p.399).
+    fields_.remove(static_cast<int>(active_));
     if (speed_ == 0) {
         stats_ = {};
         playRanges_.clear();
@@ -2615,6 +2647,8 @@ bool Composer::handles(const QString& id) {
         QStringLiteral("move.step_forward_10_frames"),
         QStringLiteral("move.step_backward_one_frame"),
         QStringLiteral("move.step_forward_one_frame"),
+        QStringLiteral("move.step_backward_one_field"),
+        QStringLiteral("move.step_forward_one_field"),
         QStringLiteral("move.go_to_start"),
         QStringLiteral("move.go_to_end"),
         QStringLiteral("move.go_to_previous_event"),
@@ -2690,7 +2724,29 @@ bool Composer::perform(const QString& id) {
     } else {
         stop();
         // Moves and marks; positions are clamped by MonitorState.
-        if (id == QLatin1String("move.step_backward_one_frame")) {
+        if (id == QLatin1String("move.step_forward_one_field") || id == QLatin1String("move.step_backward_one_field")) {
+            // "Click the Step Forward One Field button or the Step Backward One Field button ... to view each field of a
+            // frame" (p.399); not in progressive projects, which beep (p.1295).
+            if (!interlacedProject_ || s.isEmpty()) {
+                QApplication::beep();
+            } else {
+                const bool forward = id.endsWith(QLatin1String("forward_one_field"));
+                const int field = parkedField(m);
+                if (forward && field == 0) {
+                    fields_.insert(static_cast<int>(m), 1);
+                } else if (forward) {
+                    if (s.position() < s.lastPosition()) {
+                        fields_.insert(static_cast<int>(m), 0);
+                        moveTo(m, s.position() + 1);
+                    }
+                } else if (field == 1) {
+                    fields_.insert(static_cast<int>(m), 0);
+                } else if (s.position() > 0) {
+                    fields_.insert(static_cast<int>(m), 1);
+                    moveTo(m, s.position() - 1);
+                }
+            }
+        } else if (id == QLatin1String("move.step_backward_one_frame")) {
             moveTo(m, s.position() - 1);
         } else if (id == QLatin1String("move.step_forward_one_frame")) {
             moveTo(m, s.position() + 1);
