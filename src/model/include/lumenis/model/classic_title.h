@@ -12,6 +12,7 @@
 
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QPointF>
 #include <QRectF>
 #include <QSizeF>
@@ -136,6 +137,9 @@ struct ClassicTitle {
     // "Auto Size mode adds or removes pages automatically as you add, delete, or reformat the text. Auto Size mode is
     // on by default when you click the Rolling Title button or the Crawling Title button" (p.343).
     bool autoSize = true;
+    // Font replacements made in this title (8.7d1, font_replacement.h): original family -> the family put in its place,
+    // so Object > Font Replacement can redefine it (p.994).
+    QMap<QString, QString> fontReplacements;
 
     bool operator==(const ClassicTitle&) const = default;
     QJsonObject toJson() const;

@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QColorDialog>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -504,6 +505,7 @@ void TitleToolWindow::buildMenus() {
     object->addSeparator();
     add(object, QStringLiteral("objectBold"), tr("Bold"), [this](bool on) { setBold(on); }, true);
     add(object, QStringLiteral("objectItalic"), tr("Italic"), [this](bool on) { setItalic(on); }, true);
+    add(object, QStringLiteral("fontReplacement"), tr("Font Replacement..."), [this](bool) { redefineFontReplacement(); });
     // Alignment (p.334).
     QMenu* alignment = menuBar_->addMenu(tr("Alignment"));
     add(alignment, QStringLiteral("showGrid"), tr("Show Alignment Grid"), [this](bool on) { setGridShown(on); }, true);
@@ -924,10 +926,119 @@ void TitleToolWindow::newTitle() {
     setTool(Tool::Text);
 }
 
+// ---- font replacement (8.7d1; p.993-994)
+
+QStringList TitleToolWindow::installedFonts() const {
+    return fontStore_.installed ? fontStore_.installed() : QFontDatabase::families();
+}
+
+std::optional<std::pair<QString, QString>> TitleToolWindow::askFontReplacement(const QStringList& unknown, const QString& shown) {
+    const QStringList available = installedFonts();
+    if (fontStore_.ask) return fontStore_.ask(unknown, shown, available);
+    // The Font Replacement dialog box: the Unknown Fonts menu on the left, the Available Fonts menu on the right, and a
+    // preview of each font in the text boxes (p.994).
+    QDialog box(this);
+    box.setObjectName(QStringLiteral("title:fontReplacementDialog"));
+    box.setWindowTitle(tr("Font Replacement"));
+    auto* layout = new QVBoxLayout(&box);
+    auto* message = new QLabel(&box);
+    message->setWordWrap(true);
+    message->setText(unknown.size() == 1 && !available.contains(shown, Qt::CaseInsensitive)
+                         ? tr("The font \"%1\" is not installed on this system. Choose a font to replace it.").arg(shown)
+                         : tr("Choose the original font and the font that replaces it."));
+    layout->addWidget(message);
+    auto* menus = new QGridLayout;
+    auto* unknownMenu = new QComboBox(&box);
+    unknownMenu->setObjectName(QStringLiteral("title:unknownFonts"));
+    unknownMenu->addItems(unknown);
+    unknownMenu->setCurrentText(shown);
+    auto* availableMenu = new QComboBox(&box);
+    availableMenu->setObjectName(QStringLiteral("title:availableFonts"));
+    availableMenu->addItems(available);
+    const QString current = title_.fontReplacements.value(shown);
+    if (!current.isEmpty()) availableMenu->setCurrentText(current);
+    auto preview = [&box](const QString& name) {
+        auto* line = new QLineEdit(tr("AaBbCcDd 0123"), &box);
+        line->setObjectName(name);
+        line->setReadOnly(true);
+        return line;
+    };
+    QLineEdit* before = preview(QStringLiteral("title:unknownPreview"));
+    QLineEdit* after = preview(QStringLiteral("title:availablePreview"));
+    auto showFonts = [=] {
+        before->setFont(QFont(unknownMenu->currentText()));
+        after->setFont(QFont(availableMenu->currentText()));
+    };
+    connect(unknownMenu, &QComboBox::currentTextChanged, &box, showFonts);
+    connect(availableMenu, &QComboBox::currentTextChanged, &box, showFonts);
+    showFonts();
+    menus->addWidget(new QLabel(tr("Unknown Fonts"), &box), 0, 0);
+    menus->addWidget(new QLabel(tr("Available Fonts"), &box), 0, 1);
+    menus->addWidget(unknownMenu, 1, 0);
+    menus->addWidget(availableMenu, 1, 1);
+    menus->addWidget(before, 2, 0);
+    menus->addWidget(after, 2, 1);
+    layout->addLayout(menus);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &box);
+    connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (box.exec() != QDialog::Accepted || unknownMenu->currentText().isEmpty() || availableMenu->currentText().isEmpty())
+        return std::nullopt;
+    return std::pair{unknownMenu->currentText(), availableMenu->currentText()};
+}
+
+QStringList TitleToolWindow::replaceUnknownFonts() {
+    const QStringList installed = installedFonts();
+    QStringList replaced;
+    QStringList left = model::unknownFonts(title_, installed);
+    if (left.isEmpty()) return replaced;
+    // "If you have the same font on both systems, the equivalent font appears automatically" (p.993); then the mapping.
+    const model::FontMap map = fontStore_.map ? fontStore_.map() : model::FontMap{};
+    const QStringList unmapped = model::applyFontMap(title_, map, installed);
+    for (const QString& f : left) {
+        if (!unmapped.contains(f)) replaced << f;
+    }
+    for (const QString& font : unmapped) {
+        // One message for each font in turn.
+        const auto answer = askFontReplacement({font}, font);
+        if (!answer || answer->second.isEmpty()) continue;
+        if (model::replaceFont(title_, answer->first, answer->second)) replaced << answer->first;
+        if (fontStore_.save) fontStore_.save(answer->first, answer->second);
+    }
+    if (!replaced.isEmpty()) {
+        refreshControls();
+        canvas_->update();
+    }
+    return replaced;
+}
+
+bool TitleToolWindow::redefineFontReplacement() {
+    finishEditing();
+    QStringList fonts = model::unknownFonts(title_, installedFonts());
+    for (auto it = title_.fontReplacements.constBegin(); it != title_.fontReplacements.constEnd(); ++it) {
+        if (!fonts.contains(it.key())) fonts << it.key();
+    }
+    if (fonts.isEmpty()) {
+        QApplication::beep();
+        return false;
+    }
+    const auto answer = askFontReplacement(fonts, fonts.first());
+    if (!answer) return false;
+    // "The system updates the font in the open title and records the new replacement information for future use" (p.994).
+    const ClassicTitle before = title_;
+    model::replaceFont(title_, answer->first, answer->second);
+    if (fontStore_.save) fontStore_.save(answer->first, answer->second);
+    commit(before);
+    return true;
+}
+
 // ---- saving (6.8d4a)
 
 void TitleToolWindow::openClip(const ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name, bool fastSaved) {
     setTitle(title);
+    // Replacing fonts is part of opening the title: the title is not changed by it until it is edited (ours).
+    if (!replaceUnknownFonts().isEmpty()) savedTitle_ = title_;
     clipBin_ = bin;
     clipId_ = itemId;
     clipName_ = name;

@@ -668,6 +668,89 @@ private slots:
         QVERIFY(!media::hdTitleFilter());
         media::setExtraMediaDrives({});
     }
+
+    // Font replacement (Editing Guide p.993-994; 8.7d1): a title whose font this system lacks asks for a replacement when
+    // it opens, the choice becomes the Site setting's mapping, the next title takes it without asking, and Object > Font
+    // Replacement redefines it.
+    void fontReplacement() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        int asked = 0;
+        QString answer = QStringLiteral("Alpha Sans");
+        window.setFontReplacementHooks(
+            [&](const QStringList& unknown, const QString& shown, const QStringList& available) -> std::optional<std::pair<QString, QString>> {
+                ++asked;
+                if (!unknown.contains(shown) || !available.contains(answer)) return std::nullopt;
+                return std::pair{shown, answer};
+            },
+            [] { return QStringList{QStringLiteral("Alpha Sans"), QStringLiteral("Beta Serif")}; });
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        window.settings().setSiteFolder(dir.filePath(QStringLiteral("Site")));
+        QDir().mkpath(dir.filePath(QStringLiteral("Site")));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        QVERIFY(window.binContainer().openBin(binId));
+        settle();
+        // Two titles set in a font from another system, saved without media.
+        model::ClassicTitle title;
+        model::ClassicObject text;
+        text.id = QStringLiteral("Text 1");
+        text.kind = model::ClassicKind::Text;
+        text.rect = QRectF(100, 100, 800, 0);
+        text.text = QStringLiteral("THE END");
+        text.family = QStringLiteral("Mac Only Sans");
+        title.objects << text;
+        TitleToolWindow::SaveRequest request;
+        request.bin = binId;
+        request.fastSave = true;
+        request.name = QStringLiteral("End");
+        QString error;
+        const QString first = window.saveClassicTitle(title, request, QString(), &error);
+        request.name = QStringLiteral("Start");
+        const QString second = window.saveClassicTitle(title, request, QString(), &error);
+        QVERIFY2(!first.isEmpty() && !second.isEmpty(), qPrintable(error));
+
+        // "If a title opens and the system does not recognize the font, you see a dialog box that lets you substitute
+        // the font in the title for one that is installed on the system" (p.993).
+        QVERIFY(window.reviseTitle(binId, first));
+        TitleToolWindow* tool = window.titleTool();
+        QVERIFY(tool);
+        QCOMPARE(asked, 1);
+        QCOMPARE(tool->title().objects.first().family, QStringLiteral("Alpha Sans"));
+        QVERIFY(!tool->isModified());
+        // "This replacement creates a font mapping, which is saved as a Site setting" (p.993).
+        QCOMPARE(window.fontReplacements().value(QStringLiteral("Mac Only Sans")), QStringLiteral("Alpha Sans"));
+        QVERIFY(QFile::exists(window.settings().path(model::SettingsScope::Site)));
+        // The next title takes the mapping without asking.
+        QVERIFY(window.reviseTitle(binId, second));
+        QCOMPARE(asked, 1);
+        QCOMPARE(tool->title().objects.first().family, QStringLiteral("Alpha Sans"));
+        // Object > Font Replacement: "Click the Unknown Fonts menu on the left, and select the original font. Click the
+        // Available Fonts menu on the right, and select the replacement font" (p.994); an undo step.
+        answer = QStringLiteral("Beta Serif");
+        QVERIFY(tool->findChild<QAction*>(QStringLiteral("title:fontReplacement")));
+        QVERIFY(tool->redefineFontReplacement());
+        QCOMPARE(asked, 2);
+        QCOMPARE(tool->title().objects.first().family, QStringLiteral("Beta Serif"));
+        QCOMPARE(window.fontReplacements().value(QStringLiteral("Mac Only Sans")), QStringLiteral("Beta Serif"));
+        QVERIFY(tool->undo());
+        QCOMPARE(tool->title().objects.first().family, QStringLiteral("Alpha Sans"));
+        tool->close();
+    }
 };
 
 QTEST_MAIN(TestTitleClips)

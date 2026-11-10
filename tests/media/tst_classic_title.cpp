@@ -7,6 +7,7 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/model/classic_title.h"
+#include "lumenis/model/font_replacement.h"
 #include "lumenis/model/title_clip.h"
 
 #include <QColor>
@@ -57,6 +58,51 @@ class TestClassicTitle : public QObject {
     Q_OBJECT
 
 private slots:
+    // Font replacement (Editing Guide p.993-994; 8.7d1): the unknown fonts of a title, the Site setting's mapping on
+    // them, replacing and redefining a replacement, and the replacements kept with the title.
+    void fontReplacement() {
+        model::ClassicTitle t;
+        model::ClassicObject text;
+        text.id = QStringLiteral("Text 1");
+        text.kind = model::ClassicKind::Text;
+        text.text = QStringLiteral("Credits");
+        text.family = QStringLiteral("Mac Only Sans");
+        model::TitleRun run;
+        run.from = 0;
+        run.to = 3;
+        run.format.family = QStringLiteral("Old Serif");
+        text.runs << run;
+        model::ClassicObject plain = text;
+        plain.id = QStringLiteral("Text 2");
+        plain.family = QStringLiteral("Common");
+        plain.runs.clear();
+        model::ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = model::ClassicKind::Box;
+        t.objects << text << plain << box;
+        const QStringList installed{QStringLiteral("Common"), QStringLiteral("Alpha"), QStringLiteral("Beta")};
+        QCOMPARE(model::titleFamilies(t), (QStringList{QStringLiteral("Mac Only Sans"), QStringLiteral("Old Serif"), QStringLiteral("Common")}));
+        QCOMPARE(model::unknownFonts(t, installed), (QStringList{QStringLiteral("Mac Only Sans"), QStringLiteral("Old Serif")}));
+        // "If you have the same font on both systems, the equivalent font appears automatically" (p.993): the mapping on
+        // the fonts it knows; a mapping onto a font this system lacks does not count.
+        const model::FontMap map{{QStringLiteral("Old Serif"), QStringLiteral("Beta")},
+                                 {QStringLiteral("Mac Only Sans"), QStringLiteral("Missing Too")}};
+        QCOMPARE(model::applyFontMap(t, map, installed), QStringList{QStringLiteral("Mac Only Sans")});
+        QCOMPARE(t.objects.at(0).runs.first().format.family, std::optional<QString>(QStringLiteral("Beta")));
+        // Replacing, then redefining: "your new font choice applies only to a title currently in the Title tool" (p.994).
+        QVERIFY(model::replaceFont(t, QStringLiteral("Mac Only Sans"), QStringLiteral("Alpha")));
+        QCOMPARE(t.objects.at(0).family, QStringLiteral("Alpha"));
+        QVERIFY(model::unknownFonts(t, installed).isEmpty());
+        QVERIFY(model::replaceFont(t, QStringLiteral("Mac Only Sans"), QStringLiteral("Beta")));
+        QCOMPARE(t.objects.at(0).family, QStringLiteral("Beta"));
+        QCOMPARE(t.objects.at(1).family, QStringLiteral("Common"));
+        QCOMPARE(t.fontReplacements.value(QStringLiteral("Mac Only Sans")), QStringLiteral("Beta"));
+        QVERIFY(!model::replaceFont(t, QStringLiteral("Mac Only Sans"), QStringLiteral("Beta")));
+        // Kept with the title, and the mapping as JSON.
+        QCOMPARE(model::ClassicTitle::fromJson(t.toJson()), t);
+        QCOMPARE(model::fontMapFromJson(model::fontMapToJson(map)), map);
+    }
+
     void model() {
         ClassicTitle t;
         QCOMPARE(t.newId(ClassicKind::Box), QStringLiteral("Box 1"));

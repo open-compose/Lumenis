@@ -1571,9 +1571,12 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         formats and pulldown of 23.976p, 24p and 25p projects (p.932-938; `model::outputFormats`);
       * 8.7c3 (done), Editing at 60 fps (p.1295-1296: field steps beep, Draft plays at 30, one-second transitions, the deck's
         30 fps marks) and Displaying 24p and 25p Media (p.1296).
-    * 8.7d, the Symphony Option items left in both guides after an audit (redefining a title's font replacement,
-      p.994, among them); control surfaces (Avid Artist Color, ch.25 of the FX Guide) stay a provider hook
-      (EXTENSIONS.md).
+    * 8.7d, the Symphony Option items left in both guides after an audit (docs/spec/symphony-audit.md), in two parts:
+      8.7d1 (done) the audit and font replacement for classic titles (p.993-994: `model::FontMap` in
+      `src/model/font_replacement.*`, the "Font Replacement" Site setting, Object > Font Replacement); 8.7d2 Mouse Jog
+      and Mouse Shuttle with smooth audio scrubbing (p.675) and the Frame view's represented frame by jog and shuttle
+      (p.251). Control surfaces (Avid Artist Color, ch.25 of the FX Guide; Command|8, p.699) get a provider hook later
+      (EXTENSIONS.md, not built yet).
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New
     Line, Group Speaker Lines and New Line After (2026.8 guide p.446);
@@ -1589,6 +1592,8 @@ decision, 2026-10-27):
   (p.288-292, p.645);
 * Batch Import and Batch Re-import (p.1098, p.230);
 * AutoSync (p.223);
+* the Import setting's Popup Report on AAF Import with Report As Comma Separated (p.237-238), and titles saved in more
+  than one aspect ratio for the online session (p.989) (from the Symphony Option audit, docs/spec/symphony-audit.md);
 * importing graphics with the Alpha options Use Existing, Invert Existing and Ignore, making Matte Key clips (FX Guide
   p.418-419, Editing Guide "Importing Media Files"), and reading PICT files there (`media::readPict`, 6.9c2);
 * film cut lists and optical lists in the List Tool, with Effect Grid coordinates and the Previsualization Markers'

@@ -714,6 +714,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   jobs polled every two seconds.
 * Universal Mastering's sample rates (8.7c2a, docs/spec/sequence-format.md): the six conversions offered in every project,
   after the three plain rates, written as WAV.
+* Font replacement (8.7d1, docs/spec/title-tool.md): the Site setting is one "Font Replacement" entry in place of
+  AvidFontSub.avt; replacing on opening is not a change to save; the dialog's message and preview text are ours.
 * Single-field step (8.7c3, docs/spec/sequence-format.md): field 1 shows the whole frame (the guide: "displays the
   first field of every frame"); field 2 its lower lines, each shown twice; the "2" in the picture's upper right corner in
   the palette's text colour. The 60 fps Mark IN warning is checked against the Digital Cut tool's Mark IN.

@@ -54,7 +54,7 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   object goes when typing ends. The safe action and title areas are 90% and 80% of the frame; the visible grid is 16 by
   9 squares of 120 pixels, the snap grid 30 pixels. Safe Colors holds saturation and brightness to 75% and 90%.
 * The New Title dialog's Marquee button is dimmed: Marquee is Avid's own application. The Marquee Title setting's
-  Ask Me, Windows > Title Tool and the Font Replacement dialog are not ours yet.
+  Ask Me and Windows > Title Tool are not ours yet. The Font Replacement dialog is 8.7d1 (below).
 * Saving the title (File > Save Title ...) comes with 6.8d4; until then the window keeps the title while it is open.
 
 ## 6.8d2: rolling and crawling titles
@@ -372,3 +372,26 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
 * The compositor's `classicTitleLayer` keys the title over a transparent picture and places that with `warp3dPicture`
   over the tracks below.
 * Tests: `tst_title_clips` (`titleMedia`: promotion, the moved title, undo).
+
+## Font replacement (p.993-994; 8.7d1)
+
+* "If a title opens and the system does not recognize the font, you see a dialog box that lets you substitute the font
+  in the title for one that is installed on the system. This replacement creates a font mapping, which is saved as a
+  Site setting" (p.993): `TitleToolWindow::replaceUnknownFonts` when a title opens (`openClip`, so revising from a bin
+  and in a sequence); the fonts are the title's text objects' and formatted characters' (`model::unknownFonts`), compared
+  with the installed families without case. "If you have the same font on both systems, the equivalent font appears
+  automatically" (p.993): the mapping's fonts are replaced without asking (`model::applyFontMap`), the others one dialog
+  each ("a new message identifies the next font"). Ours: replacing on opening is part of the opened title, not a change
+  to save.
+* "Media Composer saves font relationships as a site settings file named AvidFontSub.avt" (p.994): ours, one "Font
+  Replacement" entry in the Site settings (`MainWindow::fontReplacements`/`saveFontReplacement`), original family to
+  replacement.
+* Object > Font Replacement (p.994): the Font Replacement dialog box with the Unknown Fonts menu (the title's unknown
+  fonts and the ones it replaced, `ClassicTitle::fontReplacements`), the Available Fonts menu and "a preview of that
+  font ... in the text boxes"; "The system updates the font in the open title and records the new replacement
+  information for future use" (an undo step; `model::replaceFont` also changes text set in the earlier replacement).
+  "It does not affect the font replacement information in titles you have worked with previously."
+* Not yet: Re-create Title Media takes the title as saved; the mapping comes when a title opens in the Title Tool.
+
+Tests: `tst_classic_title fontReplacement` (the model), `tst_title_clips fontReplacement` (opening, the Site setting,
+redefining).

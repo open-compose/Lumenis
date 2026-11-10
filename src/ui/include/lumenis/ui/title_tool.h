@@ -9,6 +9,7 @@
 
 #include "lumenis/media/classic_title.h"
 #include "lumenis/model/classic_title.h"
+#include "lumenis/model/font_replacement.h"
 
 #include <QHash>
 #include <QImage>
@@ -234,6 +235,30 @@ public:
         std::function<void(const model::ClassicTitleStyle&)> save;
     };
     void setStyleStore(StyleStore store) { styleStore_ = std::move(store); }
+    // Font replacement (Editing Guide p.993-994; 8.7d1): the Site setting's mapping (`map`) and keeping a new replacement
+    // in it (`save`); for tests, what asks for a replacement (default: the Font Replacement dialog box, given the Unknown
+    // Fonts menu's fonts, the one shown first and the Available Fonts; it answers the original and its replacement) and
+    // the installed families (default: QFontDatabase::families()).
+    struct FontStore {
+        std::function<model::FontMap()> map;
+        std::function<void(const QString& original, const QString& replacement)> save;
+        using Ask = std::function<std::optional<std::pair<QString, QString>>(const QStringList& unknown, const QString& shown,
+                                                                             const QStringList& available)>;
+        Ask ask;
+        std::function<QStringList()> installed;
+    };
+    void setFontStore(FontStore store) { fontStore_ = std::move(store); }
+    // "If a title opens and the system does not recognize the font, you see a dialog box that lets you substitute the
+    // font in the title for one that is installed on the system ... If more than one font in the title needs
+    // replacement, the dialog box remains open after you click OK, and a new message identifies the next font" (p.993):
+    // the Site setting's mapping on the fonts it knows, then a question for each one left. openClip runs it and keeps
+    // the result as the opened title (not a change to save); the fonts replaced, in the order met.
+    QStringList replaceUnknownFonts();
+    // Object > Font Replacement (p.994): "Click the Unknown Fonts menu on the left, and select the original font. Click
+    // the Available Fonts menu on the right, and select the replacement font": the title's unknown fonts and the ones it
+    // replaced; the choice changes the open title (an undo step) and the Site setting. False when cancelled or there is
+    // nothing to replace.
+    bool redefineFontReplacement();
     QList<model::ClassicTitleStyle> styles() const;
     // Recalling a style (the Styles menu, the Save Style Parameter menu or its function key): its attributes on the
     // selected objects, else as the defaults ("The style attributes appear in the Title tool toolbar", p.363). False
@@ -394,6 +419,9 @@ private:
     QString templateFolder_;
     bool moveableTemplates_ = false;
     StyleStore styleStore_;
+    FontStore fontStore_;
+    QStringList installedFonts() const;
+    std::optional<std::pair<QString, QString>> askFontReplacement(const QStringList& unknown, const QString& shown);
     QList<model::ClassicTitleStyle> ownStyles_;
     std::function<std::optional<model::ClassicTitleStyle>(const model::ClassicTitleStyle&)> askStyle_;
     void saveStyleAs();

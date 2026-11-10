@@ -56,7 +56,8 @@ headers in `include/lumenis/<library>/`.
   extract, trims, effects, transitions, Change Source Track; the effect value
   `model::Effect` is in `effect.h`), `sequence_format.*` (Clip > Modify > Set
   Format, docs/spec/sequence-format.md), `universal_mastering.*` (HD Universal Mastering's conversions),
-  `output_format.*` (the Digital Cut's output formats and pulldown, docs/spec/digital-cut.md),
+  `output_format.*` (the Digital Cut's output formats and pulldown, docs/spec/digital-cut.md), `font_replacement.*`
+  (classic titles' font mappings, docs/spec/title-tool.md),
   `automation.*` (volume and pan keyframes), `audio_eq.*` (Audio EQ's
   bands and filters), `clip_coloring.*` (which colour a segment is drawn in,
   docs/spec/timeline-colors.md), `sync_dupes.*` (sync breaks and duplicate

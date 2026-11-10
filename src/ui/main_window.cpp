@@ -9701,6 +9701,29 @@ bool MainWindow::placeTitle(const model::BinItem& clip, const QString& bin, cons
     });
 }
 
+model::FontMap MainWindow::fontReplacements() const {
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::Site);
+    model::FontMap map;
+    for (int i : f.versions(QStringLiteral("Font Replacement"))) {
+        const model::FontMap one = model::fontMapFromJson(f.entries.at(i).values);
+        for (auto it = one.constBegin(); it != one.constEnd(); ++it) map.insert(it.key(), it.value());
+    }
+    return map;
+}
+
+void MainWindow::saveFontReplacement(const QString& original, const QString& replacement) {
+    const QString kind = QStringLiteral("Font Replacement");
+    model::SettingsFile& f = settings_->file(model::SettingsScope::Site);
+    model::FontMap map = fontReplacements();
+    map.insert(original, replacement);
+    const QList<int> versions = f.versions(kind);
+    int index = versions.isEmpty() ? -1 : versions.first();
+    if (index >= 0) f.entries[index].values = model::fontMapToJson(map);
+    else index = f.add(model::SettingEntry{kind, QString(), false, model::fontMapToJson(map)});
+    f.setActive(index);
+    settings_->commit(model::SettingsScope::Site);
+}
+
 QList<model::ClassicTitleStyle> MainWindow::titleStyles() const {
     QList<model::ClassicTitleStyle> out;
     const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
@@ -9850,6 +9873,14 @@ void MainWindow::openTitleTool(bool ask) {
         store.styles = [this] { return titleStyles(); };
         store.save = [this](const model::ClassicTitleStyle& style) { saveTitleStyle(style); };
         tool->setStyleStore(store);
+        // Font mappings as a Site setting ("Media Composer saves font relationships as a site settings file", p.994):
+        // one "Font Replacement" entry of original -> replacement families.
+        TitleToolWindow::FontStore fonts;
+        fonts.map = [this] { return fontReplacements(); };
+        fonts.save = [this](const QString& original, const QString& replacement) { saveFontReplacement(original, replacement); };
+        if (fontReplacementAsk_) fonts.ask = fontReplacementAsk_;
+        if (installedFontsHook_) fonts.installed = installedFontsHook_;
+        tool->setFontStore(fonts);
     }
     if (!tool->isVisible()) tool->newTitle();
     tool->updateBackground();

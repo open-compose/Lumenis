@@ -1004,7 +1004,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   outputFormats`), is done, so 8.7c2 is. 8.7c3, editing at 60 fps and 24p/25p display (single-field steps
   `Composer::parkedField` beeping in progressive projects, Draft at 30 fps `Composer::shownFrame`, the 30 fps deck's odd
   Mark IN in `MainWindow::digitalCut`; tests `tst_composer_display fieldStepsAndSixtyFps`, `tst_digital_cut
-  sixtyFpsMarkIn`), is done, so 8.7c is.
+  sixtyFpsMarkIn`), is done, so 8.7c is. 8.7d1, the Symphony Option audit (docs/spec/symphony-audit.md) and font
+  replacement for classic titles (`model::FontMap`/`replaceFont` in `src/model/font_replacement.*`,
+  `ClassicTitle::fontReplacements`, `TitleToolWindow::replaceUnknownFonts`/`redefineFontReplacement`, the "Font
+  Replacement" Site setting through `MainWindow::fontReplacements`; tests `tst_classic_title fontReplacement`,
+  `tst_title_clips fontReplacement`), is done; 8.7d2 is Mouse Jog and Mouse Shuttle.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

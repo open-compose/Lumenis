@@ -1004,6 +1004,17 @@ public:
     // existing name replaces it.
     QList<model::ClassicTitleStyle> titleStyles() const;
     void saveTitleStyle(const model::ClassicTitleStyle& style);
+    // Font replacement for classic titles (Editing Guide p.993-994; 8.7d1): the mapping kept as the "Font Replacement"
+    // Site setting ("Once you have defined a font replacement, Media Composer uses that definition across all projects
+    // and all users of the system", p.994), and adding one original -> replacement to it.
+    model::FontMap fontReplacements() const;
+    void saveFontReplacement(const QString& original, const QString& replacement);
+    // Tests: what answers the Title Tool's Font Replacement dialog and which font families are installed; set before the
+    // Title Tool first opens.
+    void setFontReplacementHooks(TitleToolWindow::FontStore::Ask ask, std::function<QStringList()> installed) {
+        fontReplacementAsk_ = std::move(ask);
+        installedFontsHook_ = std::move(installed);
+    }
 
     // Titler+ templates (FX Guide p.319-320, ROADMAP 6.8c4a). Edit Template, or a template dragged to the Record
     // monitor, "opens the template in the Record monitor" (model::titleTemplateSequence, under the bin id
@@ -1159,6 +1170,8 @@ private:
     DigitalCutTool* digitalCut_ = nullptr;
     VideoOutputTool* videoOutput_ = nullptr;
     bool digitalCutHalted_ = false;
+    TitleToolWindow::FontStore::Ask fontReplacementAsk_;
+    std::function<QStringList()> installedFontsHook_;
     bool quietDigitalCut_ = false;
     // The Digital Cut's receiver of the export's frames and sound (exportMovieFile's "sink" format).
     std::function<bool(const media::MovieSource&, const media::MovieExportOptions&, const std::function<bool(double)>&, QString*)> movieSink_;

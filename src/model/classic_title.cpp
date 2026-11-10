@@ -134,12 +134,18 @@ QJsonObject ClassicTitle::toJson() const {
         }
         list.append(j);
     }
-    return QJsonObject{{QStringLiteral("objects"), list},
-                       {QStringLiteral("videoBackground"), videoBackground},
-                       {QStringLiteral("backgroundColor"), backgroundColor},
-                       {QStringLiteral("motion"), QLatin1String(kMotions[static_cast<int>(motion)])},
-                       {QStringLiteral("pages"), pages},
-                       {QStringLiteral("autoSize"), autoSize}};
+    QJsonObject out{{QStringLiteral("objects"), list},
+                    {QStringLiteral("videoBackground"), videoBackground},
+                    {QStringLiteral("backgroundColor"), backgroundColor},
+                    {QStringLiteral("motion"), QLatin1String(kMotions[static_cast<int>(motion)])},
+                    {QStringLiteral("pages"), pages},
+                    {QStringLiteral("autoSize"), autoSize}};
+    if (!fontReplacements.isEmpty()) {
+        QJsonObject replaced;
+        for (auto it = fontReplacements.constBegin(); it != fontReplacements.constEnd(); ++it) replaced.insert(it.key(), it.value());
+        out.insert(QStringLiteral("fontReplacements"), replaced);
+    }
+    return out;
 }
 
 ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
@@ -183,6 +189,8 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
     t.motion = enumFrom(o.value(QStringLiteral("motion")), kMotions, ClassicMotion::Still);
     t.pages = std::max(1, o.value(QStringLiteral("pages")).toInt(1));
     t.autoSize = o.value(QStringLiteral("autoSize")).toBool(true);
+    const QJsonObject replaced = o.value(QStringLiteral("fontReplacements")).toObject();
+    for (auto it = replaced.constBegin(); it != replaced.constEnd(); ++it) t.fontReplacements.insert(it.key(), it.value().toString());
     return t;
 }
 
