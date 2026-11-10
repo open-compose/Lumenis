@@ -695,6 +695,16 @@ jobs:
               status=1
             fi
           done
+          # Memory: GCC 15 takes several GB for our largest files, and running out
+          # can stop WSL altogether, so the job is cancelled with no error of its own
+          # (2026-11-10). Warn when RAM and swap leave less than 3 GB per parallel
+          # compile (BUILDING.md, The self-hosted Windows or Linux job waits or fails).
+          jobs=${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
+          mem=$(awk '/^(MemTotal|SwapTotal):/ {kb += $2} END {print int(kb / 1048576)}' /proc/meminfo)
+          echo "$mem GB of memory and swap for $jobs parallel compiles"
+          if [ "$mem" -lt $((jobs * 3)) ]; then
+            echo "::warning::Only $mem GB of memory and swap for $jobs parallel compiles: the build may run out and stop WSL. Give WSL more memory in .wslconfig or lower CMAKE_BUILD_PARALLEL_LEVEL (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+          fi
           exit $status
 
       - name: Python packages for the checks

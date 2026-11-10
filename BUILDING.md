@@ -839,7 +839,15 @@ hand.
   hibernation, `wsl --shutdown`); once, the Linux job waited an hour for that
   (2026-11-10). The `keep-wsl` task now starts the distribution again within 5
   minutes: run `scripts\setup-windows-runner.ps1 keep-wsl <distribution>` once
-  more to update a task made before then (it only started at logon). Check
+  more to update a task made before then (it only started at logon).
+* *The Linux job is cancelled during Build and WSL has stopped:* the
+  compiles ran out of memory. GCC 15 takes several GB for our largest files,
+  the runner compiles `RUNNER_JOBS` (default 4) at once, and WSL gets only half
+  the PC's memory by default. Give it more in `%UserProfile%\.wslconfig`
+  (`[wsl2]`, `memory=16GB`, `swap=16GB`, then `wsl --shutdown`), or set
+  `CMAKE_BUILD_PARALLEL_LEVEL` lower in the runner's `.env`. The job's Disk
+  space step warns when memory and swap give less than 3 GB per compile;
+  `sudo journalctl -b -1 -k | grep -i oom` in WSL shows what was killed. Check
   `scripts\setup-windows-runner.ps1 status` and, in the distribution,
   `sudo scripts/setup-wsl-runner.sh status`; or set `WINDOWS_RUNNER` to
   `off` / take the version out of `LINUX_RUNNERS` until it is back.
