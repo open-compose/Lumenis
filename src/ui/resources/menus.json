@@ -130,6 +130,7 @@
         },
         "bin.autosequence",
         "bin.choose_columns",
+        "bin.create_proxies",
         "bin.hide_column",
         "bin.go_to_capture_mode",
         "bin.include_in_transcription",

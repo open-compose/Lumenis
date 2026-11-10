@@ -12,6 +12,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/proxy.h"
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/ui/list_tool.h"
@@ -1033,6 +1034,97 @@ private slots:
         QVERIFY(contributor);
         contributor->setCurrentIndex(2);
         QCOMPARE(window.listTool().options().s3dContributor, model::S3DContributor::Right);
+    }
+
+    // Proxy media (Editing Guide p.508-510; 8.7a): Create Proxies on the selected clip, its orange icon and proxy columns,
+    // the Play button's proxy modes and what the monitor plays, and proxies made as a Background Queue job.
+    void proxyMedia() {
+        if (!media::patentCodecsAllowed()) QSKIP("H.264 and DNx are left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString first = dir.filePath(QStringLiteral("one.mov"));
+        const QString second = dir.filePath(QStringLiteral("two.mov"));
+        QVERIFY(writeMovie(first, 8));
+        QVERIFY(writeMovie(second, 8, QColor(0, 0, 255)));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("P"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("P.cthproj"));
+        project.settings.name = QStringLiteral("P");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {first, second});
+        QCOMPARE(ids.size(), 2);
+        BinView* view = window.binContainer().activeView();
+        QVERIFY(view);
+        // The right-click menu offers Create Proxies (p.508).
+        view->selectIds({ids.at(0)});
+        std::unique_ptr<QMenu> menu(view->contextMenu(QPoint(-1, -1), view->table()));
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("createProxies")));
+        // Application: made at once.
+        QCOMPARE(window.makeProxies(drive, false), 1);
+        const model::BinItem clip = *bin->bin().item(ids.at(0));
+        const auto proxy = model::proxyOf(clip);
+        QVERIFY(proxy);
+        QVERIFY(proxy->folder.startsWith(drive));
+        // The proxy columns follow the Timeline's video quality (p.510).
+        QCOMPARE(window.proxyCell(clip, QStringLiteral("Proxy Video")), QStringLiteral("H.264"));
+        window.composer().setVideoQuality(Composer::VideoQuality::Draft);
+        QCOMPARE(window.proxyCell(clip, QStringLiteral("Proxy Video")), QStringLiteral("Avid DNx LB"));
+        window.composer().setVideoQuality(Composer::VideoQuality::Full);
+        QCOMPARE(window.proxyCell(clip, QStringLiteral("Proxy Offline")), QString());
+        // The Play button's right-click menu and proxy modes (p.509): orange while a proxy is preferred.
+        Composer& composer = window.composer();
+        std::unique_ptr<QMenu> play(composer.proxyPlaybackMenu(nullptr));
+        QCOMPARE(play->actions().size(), 3);
+        QVERIFY(play->actions().at(0)->isChecked());
+        QCOMPARE(model::ProxyMedia::pathOf(window.playedClip(clip).link), model::ProxyMedia::pathOf(clip.link));
+        play->actions().at(1)->trigger();
+        QCOMPARE(composer.proxyPlayback(), model::ProxyPlayback::ProxyPreferred);
+        auto* playButton = composer.findChild<QToolButton*>(QStringLiteral("play.play"));
+        QVERIFY(playButton);
+        QVERIFY(playButton->property("proxyMode").toBool());
+        QCOMPARE(model::ProxyMedia::pathOf(window.playedClip(clip).link), model::ProxyMedia::pathOf(proxy->h264Link));
+        composer.setVideoQuality(Composer::VideoQuality::Draft);
+        QCOMPARE(model::ProxyMedia::pathOf(window.playedClip(clip).link), model::ProxyMedia::pathOf(proxy->lbLink));
+        composer.setVideoQuality(Composer::VideoQuality::Full);
+        // The monitor plays the proxy: the clip's red at the proxy's raster.
+        composer.loadDefault(binId, clip);
+        settle();
+        const QImage picture = composer.pictureAt(MonitorId::Source, 0, QSize(128, 72));
+        QVERIFY(!picture.isNull());
+        const QColor c(picture.pixel(64, 36));
+        QVERIFY2(c.red() > 200 && c.blue() < 60, qPrintable(c.name()));
+        // High-Resolution Preferred: the clip's own media while it is online.
+        composer.setProxyPlayback(model::ProxyPlayback::HighResolutionPreferred);
+        QCOMPARE(model::ProxyMedia::pathOf(window.playedClip(clip).link), model::ProxyMedia::pathOf(clip.link));
+        composer.setProxyPlayback(model::ProxyPlayback::HighResolutionOnly);
+        QVERIFY(!playButton->property("proxyMode").toBool());
+        // Background Process: a job on the Background Queue; the clip takes its proxies when it is done.
+        view->selectIds({ids.at(1)});
+        QCOMPARE(window.makeProxies(drive, true), 1);
+        window.backgroundQueue().waitForIdle();
+        settle();
+        QVERIFY(model::hasProxy(*bin->bin().item(ids.at(1))));
     }
 
     // "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options" (p.403;

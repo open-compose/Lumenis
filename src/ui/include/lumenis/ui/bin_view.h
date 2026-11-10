@@ -340,6 +340,9 @@ struct BinAppearance {
     // circle). Without a cell function the columns are empty.
     static QStringList& multiRezHeadings();
     static std::function<QString(const model::BinItem&, const QString& heading)>& multiRezCell();
+    // The proxy columns (model::proxyHeadings(), p.509-510; 8.7a), also at the bottom of Choose Columns, with their cells
+    // from `proxyCell` (MainWindow::proxyCell: the Proxy Video column follows the Timeline's video quality).
+    static std::function<QString(const model::BinItem&, const QString& heading)>& proxyCell();
     // A frame's border colour in the Frame view by object type (p.1154); invalid for no border.
     static QColor typeColor(model::BinItemKind kind);
 };

@@ -1656,6 +1656,26 @@ void Composer::setupButton(MonitorId monitor, MappableButton* b, const QString& 
     }
     b->setObjectName(id);
     if (!c.buttons.contains(id)) c.buttons.insert(id, b);
+    // A button that was the Play button loses its orange.
+    if (id != QLatin1String("play.play") && b->property("proxyMode").toBool()) {
+        b->setProperty("proxyMode", false);
+        b->setStyleSheet(QString());
+    }
+    // The Play button's right-click proxy menu (p.509); other commands keep the button's own right-click.
+    if (id == QLatin1String("play.play") && !b->property("proxyMenu").toBool()) {
+        b->setProperty("proxyMenu", true);
+        b->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(b, &QWidget::customContextMenuRequested, this, [this, b](const QPoint& pos) {
+            if (b->command() != QLatin1String("play.play")) return;
+            std::unique_ptr<QMenu> menu(proxyPlaybackMenu(b));
+            menu->exec(b->mapToGlobal(pos));
+        });
+    }
+    if (id == QLatin1String("play.play")) {
+        const bool proxy = proxyPlayback_ != model::ProxyPlayback::HighResolutionOnly;
+        b->setProperty("proxyMode", proxy);
+        b->setStyleSheet(proxy ? QStringLiteral("QToolButton { background: #e0861a; }") : QString());
+    }
     // The Record monitor is always ganged (p.495).
     b->setEnabled(!later(id) && !(id == QLatin1String("other.gang") && monitor == MonitorId::Record));
 }
@@ -2502,6 +2522,37 @@ void Composer::setVideoQuality(VideoQuality quality) {
     quality_ = quality;
     refresh();
     emit videoQualityChanged(quality);
+}
+
+void Composer::setProxyPlayback(model::ProxyPlayback mode) {
+    if (proxyPlayback_ == mode) return;
+    proxyPlayback_ = mode;
+    showProxyPlayback();
+    refresh();
+    emit proxyPlaybackChanged(mode);
+}
+
+QMenu* Composer::proxyPlaybackMenu(QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    menu->setObjectName(QStringLiteral("proxyPlaybackMenu"));
+    for (const auto mode : {model::ProxyPlayback::HighResolutionOnly, model::ProxyPlayback::ProxyPreferred,
+                            model::ProxyPlayback::HighResolutionPreferred}) {
+        QAction* a = menu->addAction(tr(qPrintable(model::proxyPlaybackText(mode))));
+        a->setCheckable(true);
+        a->setChecked(proxyPlayback_ == mode);
+        connect(a, &QAction::triggered, this, [this, mode] { setProxyPlayback(mode); });
+    }
+    return menu;
+}
+
+void Composer::showProxyPlayback() {
+    const bool proxy = proxyPlayback_ != model::ProxyPlayback::HighResolutionOnly;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (QToolButton* b = column(m).buttons.value(QStringLiteral("play.play"))) {
+            b->setProperty("proxyMode", proxy);
+            b->setStyleSheet(proxy ? QStringLiteral("QToolButton { background: #e0861a; }") : QString());
+        }
+    }
 }
 
 void Composer::setFullQualityOnly(bool on) {

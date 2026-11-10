@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/proxy.h"
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/group_clip.h"
 
@@ -617,6 +618,8 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
                 p.drawRect(0, 0, 15, 15);
                 return QIcon(pm);
             }
+            // "Proxy media is displayed in a bin with an orange clip icon" (p.509).
+            if (model::hasProxy(item)) return glyphIcon(iconFor(item.kind), QColor(0xe0, 0x86, 0x1a));
             if (look.localMediaIcons && BinAppearance::mediaTint()) {
                 if (const QColor tint = BinAppearance::mediaTint()(item); tint.isValid()) return glyphIcon(iconFor(item.kind), tint);
             }
@@ -644,6 +647,9 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
     if (role != Qt::DisplayRole && role != Qt::EditRole) return {};
     if (BinAppearance::multiRezHeadings().contains(h)) {
         return BinAppearance::multiRezCell() ? BinAppearance::multiRezCell()(item, h) : QString();
+    }
+    if (model::proxyHeadings().contains(h)) {
+        return BinAppearance::proxyCell() ? BinAppearance::proxyCell()(item, h) : model::proxyCellText(item, h, true, {});
     }
     return model::cellText(item, h);
 }
@@ -843,6 +849,11 @@ std::function<QColor(const model::BinItem&)>& BinAppearance::mediaTint() {
 QStringList& BinAppearance::multiRezHeadings() {
     static QStringList headings;
     return headings;
+}
+
+std::function<QString(const model::BinItem&, const QString&)>& BinAppearance::proxyCell() {
+    static std::function<QString(const model::BinItem&, const QString&)> f;
+    return f;
 }
 
 std::function<QString(const model::BinItem&, const QString&)>& BinAppearance::multiRezCell() {
@@ -1910,6 +1921,10 @@ void BinView::chooseColumns() {
     for (const QString& h : BinAppearance::multiRezHeadings()) {
         if (!available.contains(h)) available << h;
     }
+    // The proxy columns (p.509-510), after them (ours).
+    for (const QString& h : model::proxyHeadings()) {
+        if (!available.contains(h)) available << h;
+    }
     ChooseColumnsDialog dialog(available, d.columns, this);
     if (dialog.exec() == QDialog::Accepted) setColumns(dialog.chosen());
 }
@@ -2297,6 +2312,19 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             QAction* settings = menu->addAction(tr("Source Settings"), this, [this] { emit commandRequested(QStringLiteral("bin.source_settings")); });
             settings->setObjectName(QStringLiteral("sourceSettings"));
             settings->setEnabled(!document_.isReadOnly());
+        }
+    }
+    // "Right-click on the asset(s) and select Create Proxies" (p.508).
+    {
+        bool proxyable = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            proxyable = proxyable || (item && model::canHaveProxy(*item));
+        }
+        if (proxyable) {
+            QAction* proxies = menu->addAction(tr("Create Proxies"), this, [this] { emit commandRequested(QStringLiteral("bin.create_proxies")); });
+            proxies->setObjectName(QStringLiteral("createProxies"));
+            proxies->setEnabled(!document_.isReadOnly());
         }
     }
     // Stereoscopic clips (8.6d1; ours, the guide leaves making them to the Help, p.213): two master clips make one, and a

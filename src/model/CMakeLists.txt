@@ -28,6 +28,7 @@ add_library(lumenis_model STATIC
     frame_flex.cpp
     stereo_clip.cpp
     stereo_view.cpp
+    proxy.cpp
     nest.cpp
     effect_template.cpp
     promote3d.cpp

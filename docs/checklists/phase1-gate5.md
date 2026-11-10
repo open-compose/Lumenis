@@ -126,6 +126,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Align and Fill > Fill Window |  | p.251 | works | ☐ | | |
 | AutoSequence |  | p.500 | works | ☐ | | |
 | Choose Columns |  | p.124 | works | ☐ | | |
+| Create Proxies |  | p.508 | works | ☐ | | |
 | Hide Column |  | p.268 | works | ☐ | | |
 | Go To Capture Mode |  | p.146 | *later* | ☐ | | |
 | Include Bin in Transcription |  | p.447 | works | ☐ | | |
@@ -333,6 +334,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 229 menu commands, 196 of them working with a project open; the
+* 230 menu commands, 197 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

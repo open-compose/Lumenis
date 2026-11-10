@@ -11,6 +11,7 @@ add_library(lumenis_media STATIC
     frame_flex.cpp
     target_mask.cpp
     stereo.cpp
+    proxy_media.cpp
     fluid_fx.cpp
     render.cpp
     wipes.cpp

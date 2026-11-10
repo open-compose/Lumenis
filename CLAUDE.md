@@ -973,7 +973,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   option in the Source monitor, the List Tool's S3D Contributor through `interop::edl::ExportOptions::s3dContributor`,
   Refresh Sequence > Stereo Correction Effects dimmed, the "2K DCI Full S3D" preset, Full Quality only through
   `Composer::setFullQualityOnly`; tests `tst_edl s3dContributor`, `tst_render_ui interlacedStereoFullQuality`), is done,
-  so 8.6d and 8.6 are.
+  so 8.6d and 8.6 are. 8.7 is in four parts (ROADMAP). 8.7a1, proxy media (docs/spec/proxy-media.md: `src/model/proxy.*`
+  kept in the clip's Source Settings "proxy", `media::makeProxyMedia` writing H.264 and DNx LB with AAC through the movie
+  export, `MainWindow::createProxies`/`makeProxies`/`playedClip`/`proxyCell` in `main_window_proxy.cpp`, the Create
+  Proxies window `proxy_dialogs.*`, the Play button's proxy menu `Composer::setProxyPlayback`, the orange icon and the
+  proxy columns through `BinAppearance::proxyCell`; tests `tst_proxy`, `tst_render_ui proxyMedia`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

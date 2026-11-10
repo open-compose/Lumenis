@@ -81,7 +81,9 @@ headers in `include/lumenis/<library>/`.
   `Avid MediaFiles/MXF`, the media database), `dynamic_relink.*` (MultiRez media and Dynamic Relink's quality
   matching, docs/spec/dynamic-relink.md; applied by `src/ui/main_window_relink.cpp`, the Timeline's MultiRez button in
   `src/ui/timeline_multirez.cpp`), `stereo.*` (frame-compatible stereoscopic pictures and the S3D Views; Stereo Master Clips in
-  `src/model/stereo_clip.*`, the views and S3D Settings in `src/model/stereo_view.*`, docs/spec/stereoscopic.md, applied by `MainWindow::adaptedFrame`), `consolidate.*`, `relink.*`,
+  `src/model/stereo_clip.*`, the views and S3D Settings in `src/model/stereo_view.*`, docs/spec/stereoscopic.md, applied by
+  `MainWindow::adaptedFrame`), `proxy_media.*` (proxy media, docs/spec/proxy-media.md; a clip's proxies in
+  `src/model/proxy.*`, Create Proxies and playback in `src/ui/main_window_proxy.cpp`), `consolidate.*`, `relink.*`,
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,

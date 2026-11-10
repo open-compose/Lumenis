@@ -743,6 +743,17 @@ public:
     int setStereoLeadingEye(model::Eye eye);
     // Sets the project's Stereoscopic option to one of stereoscopicModes() (p.65-66; not in SD projects but Off).
     bool setProjectStereoscopic(const QString& mode);
+    // Proxy media (8.7a, main_window_proxy.cpp, docs/spec/proxy-media.md). Bin > Create Proxies (p.508): the Create
+    // Proxies window, then makeProxies() with its drive and processing option. makeProxies() makes the proxies of the
+    // active bin's selected items' master clips on `drive` (a media drive's root), at once or as Background Queue jobs,
+    // and returns how many clips it made or queued.
+    int createProxies();
+    int makeProxies(const QString& drive, bool background);
+    // The clip as the monitors play it: its proxy's link in place of its own when the Play button's proxy mode and the
+    // Timeline's video quality call for it (model::playedProxyLink).
+    model::BinItem playedClip(const model::BinItem& clip) const;
+    // A clip's cell under a proxy heading (model::proxyCellText at the Timeline's video quality).
+    QString proxyCell(const model::BinItem& clip, const QString& heading) const;
     // The project's S3D Settings (p.1216; 8.6d2), whose parallax the S3D Overlay's guides show.
     model::S3DSettings s3dSettings() const;
     // The Record monitor's picture as the Video Output tool's S3D View and S3D Overlay show it (p.1226-1227), for the
@@ -1229,6 +1240,8 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
+    // The master clips the items give for Create Proxies, with their bins (main_window_proxy.cpp).
+    QList<std::pair<QString, model::BinItem>> proxyClips(const QList<std::pair<QString, model::BinItem>>& items) const;
     // The monitor's picture from `plain` as the S3D View and Overlay show it (8.6d2; main_window.cpp says how).
     QImage stereoPicture(MonitorId monitor, const std::function<QImage()>& plain) const;
     // While set, adaptedFrame() plays this eye of stereo clips (Leading: each clip's leading eye): how stereoPicture()

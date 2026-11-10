@@ -291,6 +291,7 @@
     {"id": "bin.commit_multicam_edits", "text": "Commit Multicam Edits"},
     {"id": "bin.source_settings", "text": "Source Settings"},
     {"id": "bin.create_stereoscopic_clip", "text": "Create Stereoscopic Clip"},
+    {"id": "bin.create_proxies", "text": "Create Proxies"},
     {"id": "bin.s3d_leading_eye_left", "text": "Left"},
     {"id": "bin.s3d_leading_eye_right", "text": "Right"},
     {"id": "bin.export_transcript", "text": "Export Transcript"},

@@ -298,6 +298,10 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     BinAppearance::multiRezCell() = [self = QPointer<MainWindow>(this)](const model::BinItem& item, const QString& heading) {
         return self ? self->multiRezCell(item, heading) : QString();
     };
+    // The proxy columns (p.509-510; 8.7a, main_window_proxy.cpp).
+    BinAppearance::proxyCell() = [self = QPointer<MainWindow>(this)](const model::BinItem& item, const QString& heading) {
+        return self ? self->proxyCell(item, heading) : QString();
+    };
     BinAppearance::mediaTint() = [self = QPointer<MainWindow>(this)](const model::BinItem& item) -> QColor {
         if (!self) return {};
         if (item.kind != model::BinItemKind::MasterClip && item.kind != model::BinItemKind::Subclip &&
@@ -354,6 +358,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
 MainWindow::~MainWindow() {
     BinAppearance::mediaTint() = nullptr;
     BinAppearance::multiRezCell() = nullptr;
+    BinAppearance::proxyCell() = nullptr;
     // An edit in progress (a bin being named) is committed now, while every
     // view is alive, not by the focus change as the window comes down.
     if (QWidget* focused = QApplication::focusWidget(); focused && isAncestorOf(focused)) focused->clearFocus();
@@ -804,7 +809,7 @@ void MainWindow::createPanels() {
         const auto shown = frameAt(monitor, at);
         if (!shown) return {};
         const auto& [item, frame] = *shown;
-        if (frames_->isOffline(item)) {
+        if (frames_->isOffline(playedClip(item))) {
             if (offline) *offline = true;
             return {};
         }
@@ -3261,9 +3266,11 @@ QImage MainWindow::adaptedFrame(const model::BinItem& clip, std::int64_t frame, 
     return monoFrame(model::eyeClip(clip, model::shownEye(mode, clip)), frame, want, spatial, color);
 }
 
-QImage MainWindow::monoFrame(const model::BinItem& clip, std::int64_t frame, QSize want,
+QImage MainWindow::monoFrame(const model::BinItem& source, std::int64_t frame, QSize want,
                              const std::optional<model::SpatialAdapter>& spatial,
                              const std::optional<model::ColorEncoding>& color) const {
+    // The Play button's proxy mode (p.509; 8.7a): the clip's proxy in place of its own media.
+    const model::BinItem clip = playedClip(source);
     QStringList transformations = color ? color->applied() : QStringList();
     // In ACES projects the media is ACES 2065 after its adapter, then the working space ACEScct (p.558).
     if (project_ && project_->settings.colorSpace.contains(QLatin1String("ACES"))) {
@@ -8764,6 +8771,8 @@ void MainWindow::installPanelHandlers() {
     handle("bin.source_settings", [this] { sourceSettings(); });
     // Stereoscopic clips (8.6d1; ours, p.213 leaves making them to the Help).
     handle("bin.create_stereoscopic_clip", [this] { createStereoscopicClip(); });
+    // Proxy media (8.7a, p.508).
+    handle("bin.create_proxies", [this] { createProxies(); });
     handle("bin.s3d_leading_eye_left", [this] { setStereoLeadingEye(model::Eye::Left); });
     handle("bin.s3d_leading_eye_right", [this] { setStereoLeadingEye(model::Eye::Right); });
     // The Transcript menus (8.2d; p.450-453, 2026.8 guide p.455-456).

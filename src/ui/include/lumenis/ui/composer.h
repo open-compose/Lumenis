@@ -5,6 +5,7 @@
 #include "lumenis/model/closed_captions.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/mask_margins.h"
+#include "lumenis/model/proxy.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/model/sequence.h"
 
@@ -565,6 +566,14 @@ public:
     // the quality is Full and setVideoQuality() keeps it so.
     void setFullQualityOnly(bool on);
     bool fullQualityOnly() const { return fullQualityOnly_; }
+    // The Play button's proxy mode (Editing Guide p.509; 8.7a): "Right-click the Play button and select Proxy
+    // Preferred ... The play button changes to orange indicating you are in Proxy mode" (ours: orange for both preferred
+    // modes). MainWindow::playedClip reads it.
+    void setProxyPlayback(model::ProxyPlayback mode);
+    model::ProxyPlayback proxyPlayback() const { return proxyPlayback_; }
+    // The Play button's right-click menu: High-Resolution Only, Proxy Preferred, High-Resolution Preferred. The caller
+    // owns it.
+    QMenu* proxyPlaybackMenu(QWidget* parent);
     // The share of the picture's width and height decoded at this quality.
     double qualityScale() const;
     // Video Display settings: High-Quality Scaling for Real-Time Decode
@@ -732,6 +741,8 @@ signals:
 
     // The Video Quality Menu button's setting changed.
     void videoQualityChanged(VideoQuality quality);
+    // The Play button's proxy mode changed.
+    void proxyPlaybackChanged(model::ProxyPlayback mode);
     // Media files dropped on a monitor from the Source Browser (p.316).
     void filesDropped(MonitorId monitor, const QStringList& paths);
     // A Titler+ template was dragged to the Record monitor, to be edited there (FX Guide p.320).
@@ -865,6 +876,9 @@ private:
     std::int64_t playStart_ = 0;
     VideoQuality quality_ = VideoQuality::Full;
     bool fullQualityOnly_ = false;
+    model::ProxyPlayback proxyPlayback_ = model::ProxyPlayback::HighResolutionOnly;
+    // Shows the proxy mode on every Play button: orange while a proxy is preferred.
+    void showProxyPlayback();
     bool smoothScaling_ = true;
     PlayStats stats_;
     QList<PlaybackRange> playRanges_;
