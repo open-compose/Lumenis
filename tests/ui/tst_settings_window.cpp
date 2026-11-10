@@ -18,6 +18,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFormLayout>
@@ -436,8 +437,17 @@ private slots:
         window.setProject(entry);
         QVERIFY(tabs->isTabEnabled(1));
         QCOMPARE(window.findChild<QLabel*>(QStringLiteral("formatProjectName"))->text(), QStringLiteral("Film"));
-        QCOMPARE(window.findChild<QLabel*>(QStringLiteral("formatProjectType"))->text(),
-                 QString::fromStdString(entry.settings.format.label()));
+        // Project Type: a menu of the formats with the project's edit rate (p.1287-1288), the project's first.
+        auto* type = window.findChild<QComboBox*>(QStringLiteral("formatProjectType"));
+        QVERIFY(type);
+        QCOMPARE(type->currentText(), QString::fromStdString(entry.settings.format.label()));
+        for (int i = 0; i < type->count(); ++i) {
+            const auto same = std::find_if(projectFormatPresets().begin(), projectFormatPresets().end(), [&](const ProjectFormat& f) {
+                return f.label() == type->itemText(i).toStdString();
+            });
+            QVERIFY(same != projectFormatPresets().end());
+            QCOMPARE(same->editRate, entry.settings.format.editRate);
+        }
 
         // The User Profile menu (p.1143-1145).
         QComboBox* profiles = window.userProfiles();
@@ -456,6 +466,49 @@ private slots:
         QCOMPARE(create.windowTitle(), QStringLiteral("Create User Profile"));
         create.nameEdit()->setText(QStringLiteral("  cy "));
         QCOMPARE(create.profileName(), QStringLiteral("cy"));
+    }
+
+    // Changing the Project Format (p.1287-1293; 8.7c1b): another format of the same edit rate, kept in the project file;
+    // new sequences take it; another edit rate is refused.
+    void changingProjectFormat() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath("Users"), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("P"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("P.cthproj"));
+        project.settings.name = QStringLiteral("P");
+        auto find = [](const std::string& label) {
+            return *std::find_if(projectFormatPresets().begin(), projectFormatPresets().end(),
+                                 [&](const ProjectFormat& f) { return f.label() == label; });
+        };
+        project.settings.format = find("1080p/23.976");
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString bin = window.binContainer().newBin();
+        window.binContainer().openBin(bin);
+        const QString before = window.binContainer().newSequence(bin);
+        QCOMPARE(window.binContainer().document(bin)->bin().item(before)->fields.value(QStringLiteral("Format")),
+                 QStringLiteral("1080p/23.976"));
+        // The same edit rate: changed, written, and new sequences use it.
+        const ProjectFormat uhd = find("UHD 23.976p");
+        QVERIFY(window.setProjectFormat(uhd));
+        QCOMPARE(window.project()->settings.format, uhd);
+        QCOMPARE(model::ProjectStore::read(project.file)->format, uhd);
+        const QString after = window.binContainer().newSequence(bin);
+        QCOMPARE(window.binContainer().document(bin)->bin().item(after)->fields.value(QStringLiteral("Format")),
+                 QStringLiteral("UHD 23.976p"));
+        // The sequence made before keeps its format.
+        QCOMPARE(window.binContainer().document(bin)->bin().item(before)->fields.value(QStringLiteral("Format")),
+                 QStringLiteral("1080p/23.976"));
+        // "You can select only projects with the same edit rate" (p.1288).
+        QVERIFY(!window.setProjectFormat(find("1080p/25")));
+        QCOMPARE(window.project()->settings.format, uhd);
     }
 
     void mainWindowAppliesSettings() {

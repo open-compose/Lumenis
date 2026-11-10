@@ -1120,6 +1120,7 @@ void MainWindow::createPanels() {
         if (!doc || !project_) return std::nullopt;
         model::BinItem item = model::newSequence(doc->bin(), project_->settings.format.editRate,
                                                  QDateTime::currentDateTimeUtc(), binContainer_->defaultStartTimecode());
+        item.fields.insert(QStringLiteral("Format"), binContainer_->sequenceFormat());
         // Default Sync Locks On (p.1220).
         if (timeline_->options().defaultSyncLocks) model::syncLockAllTracks(item);
         return std::make_pair(doc->nodeId(), item);
@@ -1168,6 +1169,7 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
         for (const QString& f : failures) ConsoleLog::instance().append(tr("LUT not installed: %1").arg(f));
     }
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
+    binContainer_->setSequenceFormat(QString::fromStdString(project.settings.format.label()));
     composer_->clear();
     composer_->setAspectRatio(project.settings.aspect);
     timeline_->history().clear();
@@ -1482,6 +1484,7 @@ SettingsWindow* MainWindow::showSettings() {
         connect(settingsWindow_, &SettingsWindow::proxyChanged, this, [this](int mode) { setProxyMode(mode); });
         connect(settingsWindow_, &SettingsWindow::maskMarginsChanged, this, [this](const model::MaskMargins& m) { setMaskMargins(m); });
         connect(settingsWindow_, &SettingsWindow::outputColorSpaceChanged, this, [this](const QString& s) { setOutputColorSpace(s); });
+        connect(settingsWindow_, &SettingsWindow::projectFormatChanged, this, [this](const ProjectFormat& f) { setProjectFormat(f); });
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
@@ -3419,6 +3422,25 @@ bool MainWindow::setProxyMode(int mode) {
     if (settingsWindow_) settingsWindow_->setProject(project_);
     composer_->refreshDisplay();
     timeline_->setDisplay(timeline_->display()); // the render dots follow the mode
+    return true;
+}
+
+bool MainWindow::setProjectFormat(const ProjectFormat& format) {
+    if (!project_ || format.editRate != project_->settings.format.editRate) return false;
+    if (project_->settings.format == format) return true;
+    model::ProjectSettings changed = project_->settings;
+    changed.format = format;
+    // "Aspect Ratio ... SD: Select either 4:3 or 16:9; HD: Always uses the 16:9 aspect ratio; High-Res: Automatically
+    // calculated based on project resolution" (p.1289): an SD project keeps its choice.
+    if (format.family != FormatFamily::SD || project_->settings.format.family != FormatFamily::SD) changed.aspect = format.defaultAspect();
+    if (!model::proxyModes(format).contains(changed.proxy)) changed.proxy = 0;
+    if (!saveProjectSettings(changed, tr("Format"))) return false;
+    model::setRenderProxy(changed.proxy);
+    binContainer_->setSequenceFormat(QString::fromStdString(format.label()));
+    if (settingsWindow_) settingsWindow_->setProject(project_);
+    frames_->clear();
+    applySettings();
+    composer_->refreshDisplay();
     return true;
 }
 

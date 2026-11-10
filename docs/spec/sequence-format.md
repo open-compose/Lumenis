@@ -31,3 +31,25 @@ sequences, 8.7c1b the project's format on the Format tab, 8.7c2 HD Universal Mas
 
 Tests: `tst_sequence_format` (same rate, another rate, markers, refused items), `tst_multichannel_ui setFormatOnSequences`
 (the dialog through Clip > Modify, the new and the modified sequence).
+
+## Changing the Project Format (p.1287-1293; 8.7c1b)
+
+* "Select File > Settings, and click the Format tab to change the format of the project to another format that shares the
+  same frame rate" (p.1287); "You can select only projects with the same edit rate" (p.1288): the Format tab's Project
+  Type is a menu (`formatProjectType`, `SettingsWindow::projectFormatChanged`) of the presets with the project's edit rate,
+  the project's own first; `MainWindow::setProjectFormat` writes the change to the project file and refuses another
+  edit rate.
+* "When you change the project format ... The available resolutions and, for some configurations, raster dimensions change
+  to those of the new project. Any new sequences you create use the format of the new project" (p.1287): the raster and
+  everything that follows it (proxy modes, mask margins' frame, renders' keys) come from the new format; new sequences
+  get it in their Format column (`BinContainer::setSequenceFormat`); existing sequences keep theirs ("If necessary, you can
+  then modify the format of an existing sequence", Set Format above). "The hardware changes to support input and output
+  for the new project" has no hardware here.
+* Aspect Ratio (p.1289): the table gives SD a choice of 4:3 or 16:9, HD always 16:9 and High-Res one calculated from the
+  project's resolution: an SD project changed to another SD format keeps its aspect ratio; otherwise it
+  is the new format's. Ours: a Proxy mode the new raster has no room for goes back to Off.
+* The table's other rows (Color Space, Color Depth, Mask Margins, Stereoscopic, Film, p.1290-1293) are the Format tab's
+  existing fields; Raster Dimension's custom and thin rasters are set when the project is made (New Project, p.65).
+
+Tests: `tst_settings_window changingProjectFormat` (the same edit rate, the file, new and old sequences' Format, another
+edit rate refused), `tst_settings_window windowTabsAndUserProfiles` (the Project Type menu's formats).

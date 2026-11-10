@@ -813,7 +813,20 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
             format_->addRow(label, l);
         };
         add(tr("Project Name:"), s.name, "formatProjectName");
-        add(tr("Project Type:"), formatText, "formatProjectType");
+        // "Select File > Settings, and click the Format tab to change the format of the project to another format that
+        // shares the same frame rate ... You can select only projects with the same edit rate" (p.1287-1288; 8.7c1b).
+        auto* type = new QComboBox;
+        type->setObjectName(QStringLiteral("formatProjectType"));
+        QList<ProjectFormat> sameRate{s.format};
+        for (const ProjectFormat& f : projectFormatPresets()) {
+            if (f.editRate == s.format.editRate && !sameRate.contains(f)) sameRate << f;
+        }
+        for (const ProjectFormat& f : sameRate) type->addItem(QString::fromStdString(f.label()));
+        type->setEnabled(sameRate.size() > 1);
+        connect(type, &QComboBox::activated, this, [this, sameRate](int index) {
+            if (index > 0 && index < sameRate.size()) emit projectFormatChanged(sameRate.at(index));
+        });
+        format_->addRow(tr("Project Type:"), type);
         add(tr("Aspect Ratio:"), QStringLiteral("%1:%2").arg(s.aspect.num()).arg(s.aspect.den()), "formatAspect");
         add(tr("Raster Dimension:"), QStringLiteral("%1 x %2").arg(s.format.width).arg(s.format.height),
             "formatRaster");

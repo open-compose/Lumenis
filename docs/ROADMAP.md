@@ -1563,7 +1563,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (docs/spec/sequence-format.md):
       * 8.7c1a (done), Clip > Modify > Set Format on sequences (p.1294): in place at the same edit rate, a new "<name>
         <rate> fps" sequence with its media unlinked at another (the 24p NTSC to 23.976 route, p.1294-1295);
-      * 8.7c1b, Changing the Project Format on the Format tab to a format of the same edit rate (p.1287-1293), new
+      * 8.7c1b (done), Changing the Project Format on the Format tab to a format of the same edit rate (p.1287-1293), new
         sequences in it;
       * 8.7c2, HD Universal Mastering (p.1297-1298): Change Sample Rate's six "for Universal Mastering" choices with their
         remastered rates and the Quality menu, and the Digital Cut tool's Output Format menu by project format;

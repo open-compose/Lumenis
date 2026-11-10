@@ -712,6 +712,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Media, files of the same name and size not copied again and " 2" for a second of one name, the not-enough-space and
   offline lines; storage modules' workspaces after the media drives, Processing Options dimmed with Distributed Processing,
   jobs polled every two seconds.
+* Changing the Project Format (8.7c1b, docs/spec/sequence-format.md): Project Type as a menu of the same-rate presets, the
+  project's first; SD aspect kept between SD formats; Proxy back to Off when the new raster has no such mode.
 * Set Format (8.7c1a, docs/spec/sequence-format.md): the Format menu as all project presets with the project's first, the
   dialog starting on Set Format for sequences, "<name> <rate> fps", segment times and markers kept, offline "offline-<id>"
   clips, no motion adapters, the message box and Console lines.

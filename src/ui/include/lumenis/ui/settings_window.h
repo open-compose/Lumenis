@@ -198,6 +198,8 @@ signals:
     void maskMarginsChanged(const lumenis::model::MaskMargins& margins);
     // The Format tab's Output Color Space in ACES projects (p.559; 8.5e4b2).
     void outputColorSpaceChanged(const QString& space);
+    // The Format tab's Project Type changed to another format of the same edit rate (p.1287-1288; 8.7c1b).
+    void projectFormatChanged(const lumenis::ProjectFormat& format);
 
 private:
     // Rebuilds the User Profile menu and selects the current user.

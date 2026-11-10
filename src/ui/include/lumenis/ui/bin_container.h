@@ -391,6 +391,10 @@ public:
     BinDocument* openBinAsSet(const QString& id, bool takeLock = true);
     // General settings "Default Starting TC" (p.1192) for new sequences.
     void setDefaultStartTimecode(const QString& tc) { startTimecode_ = tc; }
+    // The Format column of new sequences: the project's format ("Any new sequences you create use the format of the new
+    // project", p.1287); empty leaves it blank.
+    void setSequenceFormat(const QString& label) { sequenceFormat_ = label; }
+    const QString& sequenceFormat() const { return sequenceFormat_; }
     const QString& defaultStartTimecode() const { return startTimecode_; }
     // New sequences sync-lock all their tracks (Timeline settings, Default Sync Locks On, p.1220).
     void setDefaultSyncLocks(bool on) { defaultSyncLocks_ = on; }
@@ -515,6 +519,7 @@ private:
     Rational editRate_{24000, 1001};
     bool openFloating_ = false;
     QString startTimecode_;
+    QString sequenceFormat_;
     bool defaultSyncLocks_ = false;
     QList<BinDocument*> documents_;
     QMenu* binMenu_ = nullptr;

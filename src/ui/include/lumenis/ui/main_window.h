@@ -736,6 +736,11 @@ public:
     // when no project is open, its format does not offer the mode or the project file cannot be written (a message
     // says why).
     bool setProxyMode(int mode);
+    // Changing the Project Format (p.1287-1293; 8.7c1b): the Format tab's Project Type to another format of the same edit
+    // rate. "The available resolutions and ... raster dimensions change to those of the new project. Any new sequences
+    // you create use the format of the new project." The Proxy mode falls back to Off when the new raster has no such
+    // mode; existing sequences keep theirs (Set Format changes them, p.1294). False for another edit rate.
+    bool setProjectFormat(const ProjectFormat& format);
     // The Format tab's Mask Margins (p.550-551; 8.5e3): the project's, saved with it and shown by the monitors' Target
     // Mask. False without a project or when the project file cannot be written (a message says why).
     bool setMaskMargins(const model::MaskMargins& margins);
