@@ -200,6 +200,74 @@ private slots:
 
     // The Audio Mixdown dialog's Stereo, 5.1 and 7.1 (p.732): "a stereo or surround sound mixdown
     // goes to the next available stereo or surround sound track", else a new one.
+    // Clip > Modify > Set Format on a sequence (p.1294; 8.7c1): the dialog starts on it for sequences, the project's
+    // format first; another edit rate duplicates the sequence, the same one modifies it.
+    void setFormatOnSequences() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        BinItem seqItem = model::newSequence(bin->bin(), Rational(25), QDateTime::currentDateTimeUtc());
+        seqItem.name = QStringLiteral("Cut");
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment s;
+        s.clipId = QStringLiteral("band");
+        s.name = QStringLiteral("band");
+        s.sourceTrack = QStringLiteral("V1");
+        s.length = 50;
+        seq.track(QStringLiteral("V1"))->segments = {s};
+        seq.storeIn(seqItem);
+        bin->addItem(seqItem);
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({seqItem.id});
+        auto indexOf = [](const ModifyDialog& d, const std::string& label) {
+            const QList<ProjectFormat> list = d.formats();
+            for (int i = 0; i < list.size(); ++i) {
+                if (list.at(i).label() == label) return i;
+            }
+            return -1;
+        };
+        bool startedOnSetFormat = false;
+        std::string first;
+        window.setModifyHook([&](ModifyDialog& d) {
+            startedOnSetFormat = d.setsFormat();
+            first = d.formats().first().label();
+            d.chooseFormat(indexOf(d, "1080p/24"));
+            return true;
+        });
+        const int items = static_cast<int>(bin->bin().items.size());
+        QCOMPARE(window.modifySelection(), 1);
+        QVERIFY(startedOnSetFormat);
+        QCOMPARE(first, project.settings.format.label());
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), items + 1);
+        const BinItem& made = bin->bin().items.last();
+        QCOMPARE(made.name, QStringLiteral("Cut 24 fps"));
+        QCOMPARE(made.editRate, Rational(24));
+        QCOMPARE(made.durationFrames, 48);
+        // The same edit rate: modified in place.
+        window.setModifyHook([&](ModifyDialog& d) {
+            d.chooseFormat(indexOf(d, "1080i/50"));
+            return true;
+        });
+        view->selectIds({seqItem.id});
+        QCOMPARE(window.modifySelection(), 1);
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), items + 1);
+        QCOMPARE(bin->bin().item(seqItem.id)->fields.value(QStringLiteral("Format")), QStringLiteral("1080i/50"));
+    }
+
     void mixdownFormats() {
         AudioMixdownDialog::Setup setup;
         setup.sourceTracks = {QStringLiteral("A1")};

@@ -712,6 +712,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Media, files of the same name and size not copied again and " 2" for a second of one name, the not-enough-space and
   offline lines; storage modules' workspaces after the media drives, Processing Options dimmed with Distributed Processing,
   jobs polled every two seconds.
+* Set Format (8.7c1a, docs/spec/sequence-format.md): the Format menu as all project presets with the project's first, the
+  dialog starting on Set Format for sequences, "<name> <rate> fps", segment times and markers kept, offline "offline-<id>"
+  clips, no motion adapters, the message box and Console lines.
 * Peer-to-peer transcript sharing (8.7b, docs/spec/transcripts.md): Host/Use Shared Transcripts as a Transcript Sharing
   menu (with Off) and a Shared Transcripts Folder in the Transcript setting, any shared storage for Avid NEXIS, hosting
   copying this station's transcripts in, lock files per entry, the "Transcript Locked" question, Console lines for a

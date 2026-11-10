@@ -17,6 +17,8 @@ lumenis_add_test(tst_nest SOURCES tst_nest.cpp LIBS lumenis::model)
 lumenis_add_test(tst_effect_template SOURCES tst_effect_template.cpp LIBS lumenis::model)
 lumenis_add_test(tst_monitor SOURCES tst_monitor.cpp LIBS lumenis::model)
 lumenis_add_test(tst_sequence SOURCES tst_sequence.cpp LIBS lumenis::model)
+# Set Format on sequences (docs/spec/sequence-format.md).
+lumenis_add_test(tst_sequence_format SOURCES tst_sequence_format.cpp LIBS lumenis::model)
 lumenis_add_test(tst_subcap SOURCES tst_subcap.cpp LIBS lumenis::model)
 lumenis_add_test(tst_closed_captions SOURCES tst_closed_captions.cpp LIBS lumenis::model)
 lumenis_add_test(tst_multichannel SOURCES tst_multichannel.cpp LIBS lumenis::model)

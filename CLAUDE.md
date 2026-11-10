@@ -990,7 +990,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   the Transcript setting's Transcript Sharing and Shared Transcripts Folder through `MainWindow::applyTranscriptSharing`,
   `model::setTranscriptSharing`/`hostTranscripts`, entry locks `TranscriptStore::lock`/`lockOf` with `LUMENIS_STATION`,
   the take-over question in `MainWindow::saveTranscript`/`editTranscript`; tests `tst_transcript peerToPeerSharing`,
-  `tst_transcripts_ui peerToPeerSharing`), is done.
+  `tst_transcripts_ui peerToPeerSharing`), is done. 8.7c is in four parts (ROADMAP). 8.7c1a, Clip > Modify > Set Format
+  on sequences (docs/spec/sequence-format.md: `model::setSequenceFormat` in `src/model/sequence_format.*`, the Modify
+  dialog's Format menu, `MainWindow::modifySelection`; tests `tst_sequence_format`, `tst_multichannel_ui
+  setFormatOnSequences`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

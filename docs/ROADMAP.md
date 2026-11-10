@@ -1559,10 +1559,16 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     * 8.7b, peer-to-peer transcript sharing (p.451-452), done (docs/spec/transcripts.md): Host Shared Transcripts and Use
       Shared Transcripts with our transcript store on shared storage (as LUMENIS_SHARED_BINS finds it), entries locked
       while written with the override prompt, deletes for everyone, the host's store read when the host is off.
-    * 8.7c, sequence format changes and Universal Mastering (ch.36, p.1287, p.1294-1298, Symphony Option): Changing the
-      Project and Sequence Format, 24p NTSC to 1080p/23.976 and 23.976p NTSC to 720p/23.976 (p.1294-1295), Editing at 60
-      fps and showing 24p and 25p media (p.1295-1296), HD Universal Mastering with its audio conversion and Digital Cut
-      (p.1297-1298).
+    * 8.7c, sequence format changes and Universal Mastering (ch.36, p.1287, p.1294-1298, Symphony Option), in parts
+      (docs/spec/sequence-format.md):
+      * 8.7c1a (done), Clip > Modify > Set Format on sequences (p.1294): in place at the same edit rate, a new "<name>
+        <rate> fps" sequence with its media unlinked at another (the 24p NTSC to 23.976 route, p.1294-1295);
+      * 8.7c1b, Changing the Project Format on the Format tab to a format of the same edit rate (p.1287-1293), new
+        sequences in it;
+      * 8.7c2, HD Universal Mastering (p.1297-1298): Change Sample Rate's six "for Universal Mastering" choices with their
+        remastered rates and the Quality menu, and the Digital Cut tool's Output Format menu by project format;
+      * 8.7c3, Editing at 60 fps (p.1295-1296: field steps beep, Draft plays at 30, one-second transitions, the deck's
+        30 fps marks) and Displaying 24p and 25p Media (p.1296).
     * 8.7d, the Symphony Option items left in both guides after an audit (redefining a title's font replacement,
       p.994, among them); control surfaces (Avid Artist Color, ch.25 of the FX Guide) stay a provider hook
       (EXTENSIONS.md).

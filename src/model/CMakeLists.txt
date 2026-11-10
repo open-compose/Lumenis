@@ -9,6 +9,7 @@ add_library(lumenis_model STATIC
     locations.cpp
     monitor.cpp
     sequence.cpp
+    sequence_format.cpp
     clip_audio.cpp
     group_clip.cpp
     automation.cpp

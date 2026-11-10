@@ -3,6 +3,7 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QStandardItemModel>
@@ -43,7 +44,8 @@ std::optional<model::AudioFormat> pairOf(const model::BinItem& clip, int first) 
 
 } // namespace
 
-ModifyDialog::ModifyDialog(const QList<model::BinItem>& clips, QWidget* parent) : QDialog(parent) {
+ModifyDialog::ModifyDialog(const QList<model::BinItem>& clips, QWidget* parent, const std::optional<ProjectFormat>& projectFormat)
+    : QDialog(parent) {
     setObjectName(QStringLiteral("modifyDialog"));
     setWindowTitle(tr("Modify"));
     // The Modify Options menu, as the table on p.280 lists them.
@@ -58,9 +60,14 @@ ModifyDialog::ModifyDialog(const QList<model::BinItem>& clips, QWidget* parent) 
     options_->addItems(names);
     auto* items = qobject_cast<QStandardItemModel*>(options_->model());
     for (int i = 0; i < names.size(); ++i) {
-        if (names.at(i) != tr("Set Multichannel Audio") && items) items->item(i)->setEnabled(false);
+        if (names.at(i) != tr("Set Multichannel Audio") && names.at(i) != tr("Set Format") && items) {
+            items->item(i)->setEnabled(false);
+        }
     }
-    options_->setCurrentText(tr("Set Multichannel Audio"));
+    const bool allSequences = !clips.isEmpty() && std::all_of(clips.begin(), clips.end(), [](const model::BinItem& c) {
+        return c.kind == model::BinItemKind::Sequence;
+    });
+    options_->setCurrentText(allSequences ? tr("Set Format") : tr("Set Multichannel Audio"));
 
     for (const model::BinItem& c : clips) channels_ = std::max(channels_, model::audioChannelsOf(c));
     const int pairs = channels_ / 2;
@@ -110,10 +117,62 @@ ModifyDialog::ModifyDialog(const QList<model::BinItem>& clips, QWidget* parent) 
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(options_);
-    if (channels_ == 0) layout->addWidget(new QLabel(tr("The selected clips have no audio tracks."), this));
-    layout->addLayout(grid);
+    audioPage_ = new QWidget(this);
+    auto* audio = new QVBoxLayout(audioPage_);
+    audio->setContentsMargins(0, 0, 0, 0);
+    if (channels_ == 0) audio->addWidget(new QLabel(tr("The selected clips have no audio tracks."), audioPage_));
+    audio->addLayout(grid);
+    layout->addWidget(audioPage_);
+    // Set Format's Format menu (p.1294).
+    formatPage_ = new QWidget(this);
+    auto* format = new QHBoxLayout(formatPage_);
+    format->setContentsMargins(0, 0, 0, 0);
+    format->addWidget(new QLabel(tr("Format:"), formatPage_));
+    formatMenu_ = new QComboBox(formatPage_);
+    formatMenu_->setObjectName(QStringLiteral("setFormatMenu"));
+    if (projectFormat) formatList_ << *projectFormat;
+    for (const ProjectFormat& f : projectFormatPresets()) {
+        if (!formatList_.contains(f)) formatList_ << f;
+    }
+    for (const ProjectFormat& f : formatList_) formatMenu_->addItem(QString::fromStdString(f.label()));
+    format->addWidget(formatMenu_, 1);
+    layout->addWidget(formatPage_);
     layout->addWidget(buttons);
+    connect(options_, &QComboBox::currentIndexChanged, this, [this] { showOption(); });
     showFormats();
+    showOption();
+}
+
+void ModifyDialog::showOption() {
+    audioPage_->setVisible(!setsFormat());
+    formatPage_->setVisible(setsFormat());
+}
+
+bool ModifyDialog::setsFormat() const {
+    return options_->currentText() == tr("Set Format");
+}
+
+ProjectFormat ModifyDialog::chosenFormat() const {
+    const int i = formatMenu_->currentIndex();
+    return i >= 0 && i < formatList_.size() ? formatList_.at(i) : ProjectFormat{};
+}
+
+void ModifyDialog::chooseFormat(int index) {
+    formatMenu_->setCurrentIndex(index);
+}
+
+QList<model::SequenceFormatChange> ModifyDialog::applyFormat(const QList<model::BinItem>& clips, QStringList* errors) const {
+    QList<model::SequenceFormatChange> out;
+    const ProjectFormat format = chosenFormat();
+    for (const model::BinItem& clip : clips) {
+        QString error;
+        if (auto change = model::setSequenceFormat(clip, format, &error)) {
+            out << *change;
+        } else if (errors) {
+            *errors << error;
+        }
+    }
+    return out;
 }
 
 bool ModifyDialog::fits(int pair, model::AudioFormat format) const {

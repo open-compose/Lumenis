@@ -3785,10 +3785,30 @@ int MainWindow::modifySelection() {
         if (const model::BinItem* found = view->document().bin().item(id)) clips << *found;
     }
     if (clips.isEmpty()) return 0;
-    ModifyDialog dialog(clips, this);
+    std::optional<ProjectFormat> projectFormat;
+    if (project_) projectFormat = project_->settings.format;
+    ModifyDialog dialog(clips, this, projectFormat);
     const bool ok = modifyHook_ ? modifyHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok) return 0;
     QStringList errors;
+    if (dialog.setsFormat()) {
+        // "A message box tells you whether the sequence has been duplicated or modified" (p.1294).
+        QStringList said;
+        const QList<model::SequenceFormatChange> changes = dialog.applyFormat(clips, &errors);
+        for (const model::SequenceFormatChange& c : changes) {
+            if (c.duplicated) {
+                view->document().addItem(c.item);
+                said << tr("%1 was duplicated as %2, with its media unlinked.").arg(c.original, c.item.name);
+            } else {
+                storeClip(view->document().nodeId(), c.item);
+                said << tr("%1 was modified to %2.").arg(c.item.name, c.item.fields.value(QStringLiteral("Format")));
+            }
+        }
+        for (const QString& e : errors) said << e;
+        for (const QString& s : said) ConsoleLog::instance().append(tr("Set Format: %1").arg(s));
+        if (!said.isEmpty() && !modifyHook_) QMessageBox::information(this, tr("Set Format"), said.join(QLatin1Char('\n')));
+        return static_cast<int>(changes.size());
+    }
     const QList<model::BinItem> changed = dialog.apply(clips, &errors);
     for (const model::BinItem& item : changed) storeClip(view->document().nodeId(), item);
     for (const QString& e : errors) ConsoleLog::instance().append(tr("Modify: %1").arg(e));
