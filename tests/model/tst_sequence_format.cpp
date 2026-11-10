@@ -1,6 +1,7 @@
 // Set Format on sequences (Editing Guide p.1294; 8.7c1, docs/spec/sequence-format.md): a sequence modified in place at
 // the same edit rate, and a new sequence with its media unlinked when the edit rate changes.
 #include "lumenis/model/marker.h"
+#include "lumenis/model/output_format.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/sequence_format.h"
 #include "lumenis/model/universal_mastering.h"
@@ -46,6 +47,74 @@ private slots:
         QCOMPARE(masteredSampleRate(Rational(24), Rational(25)), 46080);
         QCOMPARE(masteredSampleRate(Rational(25), Rational(24000, 1001)), 50050);
         QCOMPARE(masteredSampleRate(Rational(25), Rational(25)), 48000);
+    }
+
+    // The Digital Cut tool's Output Format menu (p.933-937, p.1299): the formats by project, the pulldown cadences, the
+    // tape frames and the sound's speed.
+    void outputFormatsAndPulldown() {
+        auto labels = [](const ProjectFormat& p) {
+            QStringList out;
+            for (const OutputFormat& f : outputFormats(p)) out << f.label;
+            return out;
+        };
+        auto preset = [](const std::string& group, int height, const Rational& rate, ScanMode scan) {
+            for (const ProjectFormat& f : projectFormatPresets()) {
+                if (f.group == group && f.height == height && f.editRate == rate && f.scan == scan) return f;
+            }
+            return ProjectFormat{};
+        };
+        const Rational film(24000, 1001);
+        const Rational ntsc(30000, 1001);
+        // "the system will only display output options for one format" (p.933): NTSC or PAL by the project.
+        QCOMPARE(labels(preset("NTSC", 486, film, ScanMode::Progressive)),
+                 (QStringList{QStringLiteral("23.976 (NTSC)"), QStringLiteral("24 (NTSC)"), QStringLiteral("29.97 (NTSC)")}));
+        QCOMPARE(labels(preset("NTSC", 486, Rational(24), ScanMode::Progressive)).first(), QStringLiteral("24 (NTSC)"));
+        QCOMPARE(labels(preset("PAL", 576, Rational(25), ScanMode::Progressive)),
+                 (QStringList{QStringLiteral("25 (PAL)"), QStringLiteral("24 (PAL)")}));
+        // The table on p.1299.
+        QCOMPARE(labels(preset("HD 1080p", 1080, Rational(24), ScanMode::Progressive)),
+                 (QStringList{QStringLiteral("1080p24"), QStringLiteral("1080p23.976"), QStringLiteral("1080p25/PAL"),
+                              QStringLiteral("1080i59.94/NTSC")}));
+        QCOMPARE(labels(preset("HD 1080p", 1080, Rational(25), ScanMode::Progressive)).last(), QStringLiteral("1080i59.94 NTSC"));
+        const QList<OutputFormat> hd = outputFormats(preset("HD 1080i", 1080, ntsc, ScanMode::Interlaced));
+        QCOMPARE(hd.size(), 2);
+        QCOMPARE(hd.last().label, QStringLiteral("NTSC 30i"));
+        QCOMPARE(hd.last().height, 486);
+        QCOMPARE(labels(preset("HD 720p", 720, Rational(25), ScanMode::Progressive)), (QStringList{QStringLiteral("720p/25")}));
+
+        const QList<OutputFormat> sd = outputFormats(preset("NTSC", 486, film, ScanMode::Progressive));
+        const OutputFormat& telecine = sd.at(0);
+        QVERIFY(telecine.cadence);
+        QVERIFY(telecine.ntsc);
+        QVERIFY(sd.at(1).destinationRate);
+        auto fields = [](const OutputFormat& f, PulldownCadence c, bool fromB) {
+            QList<int> out;
+            for (int i = 0; i < 10; ++i) out << static_cast<int>(outputSourceFrame(f, i, c, fromB));
+            return out;
+        };
+        // AA BBB CC DDD, AA BBB CCC DD (p.937), and from a B frame BBB CC DDD AA (p.938).
+        QCOMPARE(fields(telecine, PulldownCadence::Standard, false), (QList<int>{0, 0, 1, 1, 1, 2, 2, 3, 3, 3}));
+        QCOMPARE(fields(telecine, PulldownCadence::Advanced, false), (QList<int>{0, 0, 1, 1, 1, 2, 2, 2, 3, 3}));
+        QCOMPARE(fields(telecine, PulldownCadence::Standard, true), (QList<int>{0, 0, 0, 1, 1, 2, 2, 2, 3, 3}));
+        QCOMPARE(outputFrameCount(telecine, 4), 5);
+        QCOMPARE(outputFrameCount(telecine, 24), 30);
+        // 24 (PAL): "one extra pulldown field occurring every 12th and 24th frame" (p.934): 24 frames in 50 fields.
+        const OutputFormat pal24 = outputFormats(preset("PAL", 576, Rational(24), ScanMode::Progressive)).first();
+        QCOMPARE(pal24.label, QStringLiteral("24 (PAL)"));
+        QCOMPARE(outputFrameCount(pal24, 24), 25);
+        int threes = 0;
+        for (int frame = 0, field = 0; frame < 24; ++frame) {
+            int n = 0;
+            while (outputSourceFrame(pal24, field) == frame) ++n, ++field;
+            if (n == 3) ++threes;
+        }
+        QCOMPARE(threes, 2);
+        // The sound's speed (p.935): 0.1% slower for 23.976 NTSC from 24p, 4.1% faster for 25 PAL.
+        QVERIFY(qAbs(outputSpeed(telecine, Rational(24)) - 0.999) < 1e-6);
+        QCOMPARE(outputSpeed(outputFormats(preset("PAL", 576, Rational(24), ScanMode::Progressive)).last(), Rational(24)), 25.0 / 24.0);
+        // 01:00:00:00 at 24 fps is 01:00:00:00 at 29.97 and at 25.
+        QCOMPARE(sameTimecodeFrames(86400, Rational(24), ntsc), 108000);
+        QCOMPARE(sameTimecodeFrames(86400, Rational(24), Rational(25)), 90000);
     }
 
     void sameRateModifies() {

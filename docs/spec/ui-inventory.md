@@ -714,6 +714,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   jobs polled every two seconds.
 * Universal Mastering's sample rates (8.7c2a, docs/spec/sequence-format.md): the six conversions offered in every project,
   after the three plain rates, written as WAV.
+* The Digital Cut's output formats (8.7c2b, docs/spec/digital-cut.md): the menu's descriptions shortened from the guide's
+  table; the 1080 table's descriptions ours; the project's own play rate first; 23.976p SD projects offer the NTSC formats
+  only (the guide's "all output play rates are available" read as Symphony's); SD downconverts letterboxed; the
+  sound resampled with the speed change, so it stays in sync with or without remastered audio; NTSC SD tapes lower field
+  first.
 * Changing the Project Format (8.7c1b, docs/spec/sequence-format.md): Project Type as a menu of the same-rate presets, the
   project's first; SD aspect kept between SD formats; Proxy back to Off when the new raster has no such mode.
 * Set Format (8.7c1a, docs/spec/sequence-format.md): the Format menu as all project presets with the project's first, the

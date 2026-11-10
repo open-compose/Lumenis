@@ -11,6 +11,7 @@ add_library(lumenis_model STATIC
     sequence.cpp
     sequence_format.cpp
     universal_mastering.cpp
+    output_format.cpp
     clip_audio.cpp
     group_clip.cpp
     automation.cpp

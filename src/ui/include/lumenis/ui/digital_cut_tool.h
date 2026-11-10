@@ -4,6 +4,7 @@
 #pragma once
 
 #include "lumenis/ext/deck.h"
+#include "lumenis/model/output_format.h"
 
 #include <QStringList>
 #include <QWidget>
@@ -13,6 +14,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QFormLayout;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
@@ -44,6 +46,12 @@ public:
         bool customOffset = false;
         int frameOffset = 0;          // -5 to 5 frames (p.930)
         QString outputMode;
+        // The Output Format menu's choice (p.933; 8.7c2b), the Video Pulldown Cadence (p.937), the RS-422 Output menu's
+        // Drop or Non-Drop for NTSC formats (p.935) and 24 (NTSC)'s Dest. TC Rate, 29.97 or 30.00 (p.936).
+        int outputFormat = 0;
+        model::PulldownCadence cadence = model::PulldownCadence::Standard;
+        bool dropFrame = false;
+        bool destination30 = false;
         int bitDepth = 8;
         QStringList sequenceTracks;   // the Sequence Track buttons that are on
         bool tapeVideo = true;        // the Enable Track buttons (Remote only)
@@ -62,6 +70,15 @@ public:
     // cannot access digital cut options without a sequence loaded", p.928).
     void setSequenceTracks(const QStringList& tracks);
 
+    // The Output Format menu (p.932-937, p.1298-1299): `model::outputFormats` of the project, its own first; the
+    // description, the cadence, timecode and destination rate menus follow the choice.
+    void setOutputFormats(const QList<model::OutputFormat>& formats);
+    // The chosen format; the project's own without any.
+    model::OutputFormat outputFormat() const;
+    bool chooseOutputFormat(const QString& label);
+    // The Timecode Duration display: the digital cut's length on the tape (p.936).
+    void setDuration(const QString& text);
+
     Options options() const;
     void setOptions(const Options& options);
     // The state line under the buttons: idle, previewing, recording, the last result.
@@ -75,10 +92,13 @@ signals:
     void haltRequested();
     // Check Decks (p.927): MainWindow lists the decks again.
     void checkDecksRequested();
+    // The output format, Dest. TC Rate or timecode menu changed: MainWindow works out the duration again.
+    void outputFormatChanged();
 
 private:
     void fillStartMenu();
     void updateEnabled();
+    void updateOutputRows();
 
     struct DeckEntry {
         std::shared_ptr<ext::DeckProvider> provider;
@@ -88,6 +108,14 @@ private:
     std::vector<std::shared_ptr<ext::DeckProvider>> providers_;
     QComboBox* outputMode_ = nullptr;
     QComboBox* bitDepth_ = nullptr;
+    QFormLayout* outputForm_ = nullptr;
+    QComboBox* outputFormat_ = nullptr;
+    QLabel* outputDescription_ = nullptr;
+    QComboBox* cadence_ = nullptr;
+    QComboBox* rs422_ = nullptr;
+    QComboBox* destRate_ = nullptr;
+    QLabel* duration_ = nullptr;
+    QList<model::OutputFormat> formats_;
     QCheckBox* entire_ = nullptr;
     QCheckBox* safe_ = nullptr;
     QCheckBox* stopOnDropped_ = nullptr;

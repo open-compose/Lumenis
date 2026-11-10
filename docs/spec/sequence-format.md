@@ -66,7 +66,8 @@ edit rate refused), `tst_settings_window windowTabsAndUserProfiles` (the Project
   beside the MXF media, as other rates off 48 kHz are; its Audio SR column says the rate). Quality (High, Medium, Low),
   Delete Original Media and Target Drive are the dialog's own (5.7b2). Ours: the conversions are offered in every
   project, not only 1080p ones. The remastered sound has as many samples per frame as the output needs (1920 a frame for
-  24 to 25 fps), so a digital cut at the mastered rate plays it at 48 kHz in sync; that output is 8.7c2b.
+  24 to 25 fps), so a digital cut at the mastered rate plays it at 48 kHz in sync. That output is the Digital Cut tool's
+  Output Format menu (8.7c2b, docs/spec/digital-cut.md "Output formats"), whose table (p.1299) is `model::outputFormats`.
 * Steps 10-14 (two new audio tracks, Overwrite at the sequence's first frame) are ordinary editing.
 
 Tests: `tst_sequence_format universalMastering` (the table), `tst_clip_audio moreDialogs` (the menu) and

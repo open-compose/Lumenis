@@ -454,6 +454,9 @@ public:
     // The Audio Project setting's Output Gain, dB (p.1150).
     double outputGainDb() const;
     std::int64_t digitalCut(bool preview);
+    // The Digital Cut tool's Timecode Duration (p.936): the cut's length on the tape at the chosen output format; with 24
+    // (NTSC) and a Dest. TC Rate of 30.00 fps, counted at 30 fps.
+    void updateDigitalCutDuration();
     DigitalCutTool& digitalCutTool() { return *digitalCut_; }
     // AS-02 Export Volumes (7.2d; docs/spec/as02.md; p.901-904): File > New > Volume for Export makes an Export Volume
     // bin (its id; empty when cancelled); the bin's Properties button edits its volume; Commit writes its sequences not

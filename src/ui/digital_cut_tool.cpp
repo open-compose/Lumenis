@@ -10,8 +10,11 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace lumenis::ui {
 
@@ -48,6 +51,35 @@ DigitalCutTool::DigitalCutTool(QWidget* parent) : QWidget(parent) {
     bitDepth_->addItem(tr("10-bit"), 10);
     output->addRow(tr("Output Mode:"), outputMode_);
     output->addRow(tr("Bit Depth:"), bitDepth_);
+    // The Output Format menu (p.933) with its description, and the menus some formats add: the Video Pulldown Cadence
+    // (p.937), the RS-422 Output timecode (p.935) and the Dest. TC Rate (p.936).
+    outputForm_ = output;
+    outputFormat_ = new QComboBox(this);
+    outputFormat_->setObjectName(QStringLiteral("dcOutputFormat"));
+    output->addRow(tr("Output Format:"), outputFormat_);
+    outputDescription_ = new QLabel(this);
+    outputDescription_->setObjectName(QStringLiteral("dcOutputDescription"));
+    outputDescription_->setWordWrap(true);
+    output->addRow(outputDescription_);
+    cadence_ = new QComboBox(this);
+    cadence_->setObjectName(QStringLiteral("dcCadence"));
+    cadence_->addItem(tr("Standard 2:3:2:3"), static_cast<int>(model::PulldownCadence::Standard));
+    cadence_->addItem(tr("Advanced 2:3:3:2"), static_cast<int>(model::PulldownCadence::Advanced));
+    output->addRow(tr("Video Pulldown Cadence:"), cadence_);
+    rs422_ = new QComboBox(this);
+    rs422_->setObjectName(QStringLiteral("dcRs422"));
+    rs422_->addItem(tr("Drop"), true);
+    rs422_->addItem(tr("Non-Drop"), false);
+    rs422_->setCurrentIndex(1);
+    output->addRow(tr("RS422 Output:"), rs422_);
+    destRate_ = new QComboBox(this);
+    destRate_->setObjectName(QStringLiteral("dcDestRate"));
+    destRate_->addItem(tr("29.97 fps"), false);
+    destRate_->addItem(tr("30.00 fps"), true);
+    output->addRow(tr("Dest. TC Rate:"), destRate_);
+    duration_ = new QLabel(this);
+    duration_->setObjectName(QStringLiteral("dcDuration"));
+    output->addRow(tr("Duration:"), duration_);
     layout->addLayout(output);
 
     auto check = [this](const QString& text, const char* name, bool on) {
@@ -177,8 +209,55 @@ DigitalCutTool::DigitalCutTool(QWidget* parent) : QWidget(parent) {
         }
         if (!command.isEmpty() && !decks_.empty()) deckMenu_->setCurrentIndex(0);
     });
+    connect(outputFormat_, &QComboBox::currentIndexChanged, this, [this] {
+        updateOutputRows();
+        emit outputFormatChanged();
+    });
+    for (QComboBox* menu : {cadence_, rs422_, destRate_})
+        connect(menu, &QComboBox::currentIndexChanged, this, &DigitalCutTool::outputFormatChanged);
     fillStartMenu();
     setSequenceTracks({});
+    updateOutputRows();
+}
+
+void DigitalCutTool::setOutputFormats(const QList<model::OutputFormat>& formats) {
+    const QString keep = outputFormat_->currentText();
+    formats_ = formats;
+    {
+        const QSignalBlocker block(outputFormat_);
+        outputFormat_->clear();
+        for (const model::OutputFormat& f : formats_) outputFormat_->addItem(f.label);
+        const int i = outputFormat_->findText(keep);
+        outputFormat_->setCurrentIndex(i >= 0 ? i : 0);
+    }
+    outputFormat_->setEnabled(formats_.size() > 1 && !running_);
+    updateOutputRows();
+}
+
+model::OutputFormat DigitalCutTool::outputFormat() const {
+    const int i = outputFormat_->currentIndex();
+    return i >= 0 && i < formats_.size() ? formats_.at(i) : model::OutputFormat{};
+}
+
+bool DigitalCutTool::chooseOutputFormat(const QString& label) {
+    const int i = outputFormat_->findText(label);
+    if (i < 0) return false;
+    outputFormat_->setCurrentIndex(i);
+    return true;
+}
+
+void DigitalCutTool::setDuration(const QString& text) { duration_->setText(text); }
+
+void DigitalCutTool::updateOutputRows() {
+    const model::OutputFormat f = outputFormat();
+    outputDescription_->setText(f.description);
+    outputForm_->setRowVisible(outputDescription_, !f.description.isEmpty());
+    // "you might have the option to select whether to use standard or advanced pulldown for output when you select
+    // 23.976 (NTSC)" (p.937); "If you select one of the three NTSC output formats, you need to indicate the timecode
+    // format for output" (p.935); "When you select 24 (NTSC) ... the Destination Timecode Rate menu ... opens" (p.936).
+    outputForm_->setRowVisible(cadence_, f.cadence);
+    outputForm_->setRowVisible(rs422_, f.ntsc);
+    outputForm_->setRowVisible(destRate_, f.destinationRate);
 }
 
 void DigitalCutTool::setDecks(std::vector<std::shared_ptr<ext::DeckProvider>> providers) {
@@ -268,6 +347,8 @@ void DigitalCutTool::updateEnabled() {
     markIn_->setEnabled(remote && !running_ && startMenu_->currentData().toInt() == static_cast<int>(Start::MarkInTime));
     // "Select the video and audio tracks to record to on the tape by using the Enable Track buttons" (Remote only).
     for (QPushButton* b : tapeButtons_) b->setEnabled(remote && !running_);
+    outputFormat_->setEnabled(formats_.size() > 1 && !running_);
+    for (QComboBox* menu : {cadence_, rs422_, destRate_}) menu->setEnabled(!running_);
     preview_->setEnabled(any && !running_);
     play_->setEnabled(any && !running_ && !decks_.empty());
     halt_->setEnabled(running_);
@@ -291,6 +372,10 @@ DigitalCutTool::Options DigitalCutTool::options() const {
     o.frameOffset = offset_->value();
     o.outputMode = outputMode_->currentText();
     o.bitDepth = bitDepth_->currentData().toInt();
+    o.outputFormat = std::max(0, outputFormat_->currentIndex());
+    o.cadence = static_cast<model::PulldownCadence>(cadence_->currentData().toInt());
+    o.dropFrame = rs422_->currentData().toBool();
+    o.destination30 = destRate_->currentData().toBool();
     for (QPushButton* b : sequenceButtons_) {
         if (b->isChecked()) o.sequenceTracks << b->text();
     }
@@ -319,6 +404,10 @@ void DigitalCutTool::setOptions(const Options& o) {
     preroll_->setValue(o.prerollSeconds);
     customOffset_->setChecked(o.customOffset);
     offset_->setValue(o.frameOffset);
+    if (o.outputFormat >= 0 && o.outputFormat < outputFormat_->count()) outputFormat_->setCurrentIndex(o.outputFormat);
+    cadence_->setCurrentIndex(cadence_->findData(static_cast<int>(o.cadence)));
+    rs422_->setCurrentIndex(rs422_->findData(o.dropFrame));
+    destRate_->setCurrentIndex(destRate_->findData(o.destination30));
     for (QPushButton* b : sequenceButtons_) b->setChecked(o.sequenceTracks.contains(b->text()));
     tapeButtons_.first()->setChecked(o.tapeVideo);
     for (int i = 1; i < tapeButtons_.size(); ++i) tapeButtons_.at(i)->setChecked(o.tapeAudio.contains(i));

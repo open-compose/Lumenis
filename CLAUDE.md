@@ -998,6 +998,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `BinContainer::setSequenceFormat`; test `tst_settings_window changingProjectFormat`), is done. 8.7c2a, Universal
   Mastering's remastered sample rates in Change Sample Rate (`model::masteringConversions` in
   `src/model/universal_mastering.*`; tests `tst_sequence_format universalMastering`, `tst_clip_audio`), is done.
+  8.7c2b, the Digital Cut tool's Output Format menu (`model::outputFormats` in `src/model/output_format.*` with the
+  2:3 cadences and Pullin B, `DigitalCutTool::setOutputFormats`, `MainWindow::digitalCut` laying frames and sound onto
+  the tape's rate, `updateDigitalCutDuration`; tests `tst_sequence_format outputFormatsAndPulldown`, `tst_digital_cut
+  outputFormats`), is done, so 8.7c2 is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

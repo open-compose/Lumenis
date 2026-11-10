@@ -51,6 +51,7 @@
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
+#include "lumenis/model/output_format.h"
 #include "lumenis/model/timewarp.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
@@ -2089,6 +2090,7 @@ void MainWindow::createTools() {
     connect(digitalCut_, &DigitalCutTool::previewRequested, this, [this] { digitalCut(true); });
     connect(digitalCut_, &DigitalCutTool::playRequested, this, [this] { digitalCut(false); });
     connect(digitalCut_, &DigitalCutTool::haltRequested, this, [this] { digitalCutHalted_ = true; });
+    connect(digitalCut_, &DigitalCutTool::outputFormatChanged, this, [this] { updateDigitalCutDuration(); });
     connect(digitalCut_, &DigitalCutTool::checkDecksRequested, this, [this] {
         digitalCut_->setDecks(providers_.usable<ext::DeckProvider>());
     });
@@ -4724,8 +4726,59 @@ void MainWindow::openDigitalCut() {
         }
     }
     digitalCut_->setSequenceTracks(tracks);
+    // The Output Format menu of the project (p.933, p.1299); "By default, the menus display the timecode format of the
+    // sequence you loaded into the Timeline" (p.935).
+    if (project_) digitalCut_->setOutputFormats(model::outputFormats(project_->settings.format));
+    if (const auto* loaded = composer_->state(MonitorId::Record).current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        DigitalCutTool::Options o = digitalCut_->options();
+        o.dropFrame = model::timecodeFormatOf(loaded->item).dropFrame;
+        digitalCut_->setOptions(o);
+    }
     digitalCut_->setStatus(tracks.isEmpty() ? tr("Load a sequence into the Record monitor.") : QString());
+    updateDigitalCutDuration();
     showTool(QStringLiteral("DigitalCut"));
+}
+
+namespace {
+
+// The tape's timecode for an output format: NTSC formats' drop or non-drop as the RS-422 Output menu says (p.935).
+TimecodeFormat tapeTimecodeFormat(const model::OutputFormat& format, bool dropFrame) {
+    return TimecodeFormat::forRate(format.tapeRate, format.ntsc && dropFrame);
+}
+
+// "You can determine the frame that ends a sequence by checking the Pullout column ... Type A or B in the Pullin column"
+// (p.938): a digital cut starting on a B frame.
+bool pullinB(const model::BinItem& item) {
+    return item.fields.value(QStringLiteral("Pullin")).trimmed().compare(QLatin1String("B"), Qt::CaseInsensitive) == 0;
+}
+
+} // namespace
+
+void MainWindow::updateDigitalCutDuration() {
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
+        digitalCut_->setDuration(QString());
+        return;
+    }
+    const DigitalCutTool::Options o = digitalCut_->options();
+    const model::OutputFormat of = digitalCut_->outputFormat();
+    if (of.tapeRate.num() == 0) return;
+    const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    if (!o.entireSequence) {
+        if (loaded->in) start = std::clamp<std::int64_t>(*loaded->in, 0, end);
+        if (loaded->out) end = std::clamp<std::int64_t>(*loaded->out + 1, start, end);
+    }
+    const std::int64_t tapeFrames = model::outputFrameCount(of, end - start, o.cadence, pullinB(loaded->item));
+    // "If you select 30.00 fps, the sequence duration in the Digital Cut tool matches the sequence duration in the
+    // Timeline" (p.936): the tape's length in seconds counted at 30 frames a second.
+    if (of.destinationRate && o.destination30) {
+        const auto frames30 = static_cast<std::int64_t>(std::llround(static_cast<double>(tapeFrames) * 30.0 / of.tapeRate.toDouble()));
+        digitalCut_->setDuration(QString::fromStdString(Timecode(frames30, TimecodeFormat::forRate(Rational(30), false)).toString()));
+        return;
+    }
+    digitalCut_->setDuration(QString::fromStdString(Timecode(tapeFrames, tapeTimecodeFormat(of, o.dropFrame)).toString()));
 }
 
 std::int64_t MainWindow::digitalCut(bool preview) {
@@ -4740,7 +4793,15 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     const DigitalCutTool::Options o = digitalCut_->options();
     const model::BinItem item = loaded->item;
     const model::Sequence seq = model::Sequence::fromItem(item);
-    const TimecodeFormat format = model::timecodeFormatOf(item);
+    // The output format (p.933, p.1299): the rate the frames play at, the tape's rate, fields and raster, and its
+    // timecode; the project's own format plays frame for frame.
+    model::OutputFormat of = digitalCut_->outputFormat();
+    if (of.tapeRate.num() == 0) {
+        of.playRate = item.editRate;
+        of.tapeRate = item.editRate;
+    }
+    const TimecodeFormat format = of.tapeRate == item.editRate && !of.ntsc ? model::timecodeFormatOf(item) : tapeTimecodeFormat(of, o.dropFrame);
+    const bool fromB = pullinB(item);
     // The range: the whole sequence with Entire Sequence, else its marks (p.929).
     std::int64_t start = 0;
     std::int64_t end = seq.duration();
@@ -4750,11 +4811,13 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     }
     std::int64_t black = 0;
     if (o.addBlack && !o.blackDuration.isEmpty()) {
-        const auto tc = Timecode::parse(o.blackDuration.toStdString(), TimecodeFormat::forRate(item.editRate, false));
+        const auto tc = Timecode::parse(o.blackDuration.toStdString(), TimecodeFormat::forRate(of.tapeRate, false));
         if (!tc) return fail(tr("Add Black at Tail needs a duration such as 00:00:05:00."));
         black = tc->frameCount();
     }
     if (end <= start) return fail(tr("There is nothing to record."));
+    // The sequence's frames as tape frames, with the pulldown the format adds (p.933).
+    const std::int64_t tapeFrames = model::outputFrameCount(of, end - start, o.cadence, fromB);
 
     // The deck: Remote mode cues it; Local mode records where the deck is, as a crash record (ours: the folder deck
     // has no buttons of its own to press).
@@ -4771,7 +4834,10 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     r.mode = o.remote ? o.mode : ext::DeckRecordMode::Crash;
     // Where on the tape (p.929-931): the sequence's own timecode, where the deck is, the Mark IN, or (crash record)
     // ignoring time; then the Custom Frame Offset.
-    std::int64_t in = model::startFrameOf(item) + start;
+    // Sequence Time on another tape rate: the sequence's start timecode's label at the tape's rate, then the marked
+    // start's frames as tape frames.
+    std::int64_t in = model::sameTimecodeFrames(model::startFrameOf(item), item.editRate, of.tapeRate) +
+                      model::outputFrameCount(of, start, o.cadence, fromB);
     if (!o.remote || o.start == DigitalCutTool::Start::RecordDeckTime || o.start == DigitalCutTool::Start::IgnoreTime) {
         in = session ? session->position() : 0;
     } else if (o.start == DigitalCutTool::Start::MarkInTime) {
@@ -4781,11 +4847,13 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     }
     if (o.remote && o.customOffset) in += o.frameOffset;
     r.in = std::max<std::int64_t>(0, in);
-    const QSize raster = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    // The tape's raster: the project's, or a downconvert's SD raster (p.1299).
+    const QSize raster = (of.width > 0 ? QSize(of.width, of.height) : QSize(project_->settings.format.width, project_->settings.format.height))
+                             .expandedTo(media::kMinimumRaster);
     r.width = raster.width();
     r.height = raster.height();
-    r.rateNum = static_cast<int>(item.editRate.num());
-    r.rateDen = static_cast<int>(item.editRate.den());
+    r.rateNum = static_cast<int>(of.tapeRate.num());
+    r.rateDen = static_cast<int>(of.tapeRate.den());
     const bool anyVideo = std::any_of(o.sequenceTracks.begin(), o.sequenceTracks.end(), [](const QString& t) { return t.startsWith(QLatin1Char('V')); });
     const bool anyAudio = std::any_of(o.sequenceTracks.begin(), o.sequenceTracks.end(), [](const QString& t) { return t.startsWith(QLatin1Char('A')); });
     // The Enable Track buttons in Remote mode; every track in Local mode. Our mix is stereo: the first two tape tracks
@@ -4798,12 +4866,12 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     r.channels = 2;
     const QString range = tr("%1 to %2 on the tape")
                               .arg(QString::fromStdString(Timecode(r.in, format).toString()),
-                                   QString::fromStdString(Timecode(r.in + (end - start) + black, format).toString()));
+                                   QString::fromStdString(Timecode(r.in + tapeFrames + black, format).toString()));
     // "The Digital Cut tool goes through the motions of an insert edit and shows you how the tape will appear ... but
     // does not actually change the master tape" (p.928): ours cues the deck and says what would be recorded.
     if (preview) {
         if (session && o.remote) session->cue(r.in);
-        digitalCut_->setStatus(tr("Preview: %1, %n frame(s).", "", static_cast<int>(end - start + black)).arg(range));
+        digitalCut_->setStatus(tr("Preview: %1, %n frame(s).", "", static_cast<int>(tapeFrames + black)).arg(range));
         return 0;
     }
     if (!r.video && r.audio.empty()) return fail(tr("No tracks are enabled to record onto."));
@@ -4817,16 +4885,48 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     std::int64_t written = 0;
     QString error;
     const float outputGain = static_cast<float>(std::pow(10.0, outputGainDb() / 20.0));
+    // The sound plays faster or slower with the picture (p.935: "0.1% slowdown", "4.1% speedup" ...).
+    const double speed = model::outputSpeed(of, item.editRate);
+    const bool sameSpeed = of.playRate == item.editRate;
+    // NTSC SD tapes have their lower field first; the others their upper.
+    const bool topFirst = !(of.ntsc && raster.height() == 486);
     movieSink_ = [&](const media::MovieSource& source, const media::MovieExportOptions&, const std::function<bool(double)>& progress,
                      QString* sinkError) {
         std::vector<std::vector<float>> planes;
+        std::vector<std::vector<float>> read;
+        // The sound of tape samples [from, from + count) at 48 kHz: the sequence's own when the frames play at its rate,
+        // else its sound from (from x speed) on, resampled linearly.
+        auto soundAt = [&](std::int64_t from, int count) {
+            if (sameSpeed) {
+                source.sound(from, count, planes);
+                return;
+            }
+            const double first = static_cast<double>(from) * speed;
+            const auto base = static_cast<std::int64_t>(std::floor(first));
+            const int span = static_cast<int>(std::ceil(static_cast<double>(count) * speed)) + 2;
+            source.sound(base, span, read);
+            planes.assign(read.size(), std::vector<float>(static_cast<std::size_t>(count), 0.0f));
+            for (std::size_t c = 0; c < read.size(); ++c) {
+                const std::vector<float>& samples = read[c];
+                for (int i = 0; i < count; ++i) {
+                    const double at = first + static_cast<double>(i) * speed - static_cast<double>(base);
+                    const auto k = static_cast<std::size_t>(at);
+                    const float t = static_cast<float>(at - static_cast<double>(k));
+                    const float a = k < samples.size() ? samples[k] : 0.0f;
+                    const float b = k + 1 < samples.size() ? samples[k + 1] : a;
+                    planes[c][static_cast<std::size_t>(i)] = a + (b - a) * t;
+                }
+            }
+        };
         auto sendFrame = [&](const QImage& picture, std::int64_t f, bool silent) {
-            QImage frame = media::fitMoviePicture(picture, raster, media::MovieScaling::Letterbox).convertToFormat(QImage::Format_RGBA8888);
-            const std::int64_t from = media::framesToSamples(f, item.editRate);
-            const int count = static_cast<int>(media::framesToSamples(f + 1, item.editRate) - from);
+            QImage frame = picture.size() == raster ? picture.convertToFormat(QImage::Format_RGBA8888)
+                                                    : media::fitMoviePicture(picture, raster, media::MovieScaling::Letterbox)
+                                                          .convertToFormat(QImage::Format_RGBA8888);
+            const std::int64_t from = media::framesToSamples(f, of.tapeRate);
+            const int count = static_cast<int>(media::framesToSamples(f + 1, of.tapeRate) - from);
             std::vector<float> interleaved(static_cast<std::size_t>(count) * 2, 0.0f);
             if (!silent && source.sound) {
-                source.sound(from, count, planes);
+                soundAt(from, count);
                 // Output Gain affects "both the speakers and record devices" (p.920).
                 if (outputGain != 1.0f) {
                     for (auto& plane : planes) {
@@ -4846,11 +4946,35 @@ std::int64_t MainWindow::digitalCut(bool preview) {
             ++written;
             return true;
         };
-        const std::int64_t total = source.frames + black;
+        // The sequence's frames, the last two kept for the fields that show them again.
+        QHash<std::int64_t, QImage> kept;
+        auto sequenceFrame = [&](std::int64_t n) {
+            n = std::clamp<std::int64_t>(n, 0, std::max<std::int64_t>(0, source.frames - 1));
+            if (auto it = kept.constFind(n); it != kept.constEnd()) return *it;
+            QImage picture = source.picture ? source.picture(n) : QImage();
+            if (picture.isNull()) {
+                picture = QImage(raster, QImage::Format_RGB32);
+                picture.fill(Qt::black);
+            }
+            picture = media::fitMoviePicture(picture, raster, media::MovieScaling::Letterbox).convertToFormat(QImage::Format_RGB32);
+            if (kept.size() >= 2) kept.remove(std::min(kept.keys().first(), kept.keys().last()));
+            kept.insert(n, picture);
+            return picture;
+        };
+        const std::int64_t total = tapeFrames + black;
         for (std::int64_t f = 0; f < total; ++f) {
             QImage picture;
-            if (f < source.frames && source.picture) {
-                picture = source.picture(f);
+            if (f < tapeFrames) {
+                // A tape frame's two fields from the frames playing at their times: the same frame, or (pulldown) two
+                // frames woven together (p.933).
+                if (of.interlaced) {
+                    const std::int64_t first = model::outputSourceFrame(of, 2 * f, o.cadence, fromB);
+                    const std::int64_t second = model::outputSourceFrame(of, 2 * f + 1, o.cadence, fromB);
+                    picture = first == second ? sequenceFrame(first)
+                                              : media::weaveFields(sequenceFrame(first), sequenceFrame(second), topFirst);
+                } else {
+                    picture = sequenceFrame(model::outputSourceFrame(of, f, o.cadence, fromB));
+                }
             } else {
                 picture = QImage(raster, QImage::Format_RGB32);
                 picture.fill(Qt::black); // Add Black at Tail
@@ -4859,7 +4983,7 @@ std::int64_t MainWindow::digitalCut(bool preview) {
                 picture = QImage(raster, QImage::Format_RGB32);
                 picture.fill(Qt::black);
             }
-            if (!sendFrame(picture, f, f >= source.frames)) return false;
+            if (!sendFrame(picture, f, f >= tapeFrames)) return false;
             // Halt Digital Cut, or the space bar (p.930), between frames.
             if ((progress && !progress(static_cast<double>(f + 1) / static_cast<double>(total))) || digitalCutHalted_) {
                 if (sinkError) *sinkError = tr("Halted.");
