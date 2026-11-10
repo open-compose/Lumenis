@@ -2327,6 +2327,11 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             proxies->setEnabled(!document_.isReadOnly());
         }
     }
+    // "Select the items in the bin you want to copy ... Right-click and select Copy Media" (p.512).
+    if (!selectedIds().isEmpty()) {
+        QAction* copy = menu->addAction(tr("Copy Media"), this, [this] { emit commandRequested(QStringLiteral("bin.copy_media")); });
+        copy->setObjectName(QStringLiteral("copyMedia"));
+    }
     // Stereoscopic clips (8.6d1; ours, the guide leaves making them to the Help, p.213): two master clips make one, and a
     // stereo clip's S3D Leading Eye (p.66).
     {

@@ -981,7 +981,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   kept in the clip's Source Settings "proxy", `media::makeProxyMedia` writing H.264 and DNx LB with AAC through the movie
   export, `MainWindow::createProxies`/`makeProxies`/`playedClip`/`proxyCell` in `main_window_proxy.cpp`, the Create
   Proxies window `proxy_dialogs.*`, the Play button's proxy menu `Composer::setProxyPlayback`, the orange icon and the
-  proxy columns through `BinAppearance::proxyCell`; tests `tst_proxy`, `tst_render_ui proxyMedia`), is done.
+  proxy columns through `BinAppearance::proxyCell`; tests `tst_proxy`, `tst_render_ui proxyMedia`), is done. 8.7a2,
+  Copy Media (`src/media/copy_media.*` with `media::planCopyMedia`, `CopyMediaDialog` in `proxy_dialogs.*`,
+  `MainWindow::copyMediaRequest`/`copyMedia`/`runCopyMedia` from the bin's and the Sidebar's right-click menus) and the hook
+  for shared workspaces and Distributed Processing (`ext::SharedStorageProvider` in `src/ext/.../shared_storage.h`,
+  `MainWindow::mediaTargets`/`submitDistributedProxies`/`pollDistributedJobs`; tests `tst_copy_media`, `tst_render_ui
+  copyMedia`/`distributedProcessing`), is done, so 8.7a is.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

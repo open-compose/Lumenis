@@ -2,6 +2,7 @@
 
 #include "lumenis/media/link.h"
 #include "lumenis/media/consolidate.h"
+#include "lumenis/media/copy_media.h"
 #include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/dynamic_relink.h"
 #include "lumenis/model/stereo_clip.h"
@@ -24,6 +25,7 @@
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
+#include "lumenis/ui/proxy_dialogs.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -38,6 +40,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 
 class QAction;
 class QTimer;
@@ -60,6 +63,7 @@ struct LoadedClip;
 namespace lumenis::ext {
 class ProviderRegistry;
 class TranscriptionProvider;
+class SharedStorageProvider;
 }
 
 namespace lumenis::ui {
@@ -749,6 +753,21 @@ public:
     // and returns how many clips it made or queued.
     int createProxies();
     int makeProxies(const QString& drive, bool background);
+    // Distributed Processing (p.510): a proxy job per master clip sent to the shared storage module that lists
+    // `workspaceId` (ext::SharedStorageProvider); the clips take their proxies when pollDistributedJobs() finds the jobs
+    // done (every two seconds while some are out). Returns the jobs sent.
+    int submitDistributedProxies(const QString& workspaceId);
+    void pollDistributedJobs();
+    int distributedJobsOut() const { return int(distributedJobs_.size()); }
+    // The drives media can go to: the media drives, then the storage modules' workspaces.
+    QList<MediaTarget> mediaTargets() const;
+    // Copy Media (p.512-513; 8.7a2): copyMediaRequest() gathers the files of the active bin's selected items or, given
+    // Sidebar ids, of every item in those bins and folders (closed bins are opened: "If you select bins that are closed,
+    // they will be opened at the time the copy function begins"). copyMedia() opens the Copy Media window on them and
+    // runs it; runCopyMedia() copies a request as the window left it and returns the files copied.
+    media::CopyMediaRequest copyMediaRequest(const QStringList& nodeIds = {});
+    int copyMedia(const QStringList& nodeIds = {});
+    int runCopyMedia(const media::CopyMediaRequest& request);
     // The clip as the monitors play it: its proxy's link in place of its own when the Play button's proxy mode and the
     // Timeline's video quality call for it (model::playedProxyLink).
     model::BinItem playedClip(const model::BinItem& clip) const;
@@ -1240,6 +1259,16 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
+    // A proxy job out on Distributed Processing (submitDistributedProxies).
+    struct DistributedJob {
+        std::shared_ptr<ext::SharedStorageProvider> storage;
+        std::string id;
+        QString binId;
+        QString clipId;
+        QString clipName;
+    };
+    QList<DistributedJob> distributedJobs_;
+    QTimer* distributedTimer_ = nullptr;
     // The master clips the items give for Create Proxies, with their bins (main_window_proxy.cpp).
     QList<std::pair<QString, model::BinItem>> proxyClips(const QList<std::pair<QString, model::BinItem>>& items) const;
     // The monitor's picture from `plain` as the S3D View and Overlay show it (8.6d2; main_window.cpp says how).

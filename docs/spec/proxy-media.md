@@ -1,7 +1,7 @@
 # Proxy media (8.7a)
 
 Editing Guide ch.16, "Working with Proxy Media" (p.508-516). 8.7a1 is the proxies and their playback; 8.7a2 Copy Media
-(p.512-513) and the hook for Avid NEXIS | EDGE (ROADMAP).
+(p.512-513) and the hook for shared workspaces and Distributed Processing (p.510-511, p.514-516).
 
 ## Making proxies (p.508-510; 8.7a1)
 
@@ -50,5 +50,57 @@ Editing Guide ch.16, "Working with Proxy Media" (p.508-516). 8.7a1 is the proxie
   when that one is gone). Ours: the sound plays from the clip's own media.
 * Sequences play their clips' proxies the same way (p.512).
 
+## Shared workspaces and Distributed Processing (p.508, p.510-511, p.514-516; 8.7a2)
+
+* "Select a local drive or choose an Avid NEXIS workspace to host assets and temporary files for the job. (Optional) Select
+  the Distributed Processing option ... The Distributed Processing option is only available after you select an Avid
+  NEXIS workspace" (p.510). Avid NEXIS, its client, Avid NEXIS | EDGE and Distributed Processing are Avid's servers and
+  protocols, not published (ROADMAP's "NEXIS / MediaCentral" row), so ours is a hook: `ext::SharedStorageProvider`
+  (`src/ext/include/lumenis/ext/shared_storage.h`, category SharedStorage). A storage module lists its mounted workspaces
+  (`workspaces()`), which follow the media drives in the Create Proxies and Copy Media drive menus
+  (`MainWindow::mediaTargets`, `ui::MediaTarget`); proxies written to a workspace go under its root as on a drive.
+* The Distributed Processing box (`proxyDistributed`) is on only for a workspace whose storage takes jobs; with it,
+  Processing Options is dimmed (ours: the jobs run on the workers). `MainWindow::submitDistributedProxies` sends one job per
+  master clip (`ext::ProxyJob`: the clip's JSON and the proxy raster); `pollDistributedJobs`, every two seconds while jobs
+  are out, gives a clip its proxies (`ext::ProxyJobStatus::proxyJson`, a `model::ProxyMedia`) when its job is done and says
+  why in the Console when it failed. "You can monitor the job progress through the Distributed Process Job Status app"
+  (p.510) is the vendor's.
+* The browser's Create Proxies and the NEXIS | EDGE Process app (p.510-511), and the remote workflow's prerequisites
+  (p.514-516), are outside the application.
+
+## Copy Media (p.512-513; 8.7a2)
+
+* "Select the items in the bin you want to copy or select the desired bin(s) in the Bin Container Sidebar ... Right-click and
+  select Copy Media" (p.512): `copyMedia` on the bin's right-click menu (`bin.copy_media`, commands.json; the guide names
+  no menu bar place, so it is in no menu) and `sidebarCopyMedia` on the Sidebar's right-click menu for bins and folders
+  (`BinContainer::copyMediaRequested`). "Selecting a folder is the same as selecting all items in the folder"; "If you
+  select bins that are closed, they will be opened at the time the copy function begins" (`MainWindow::copyMediaRequest`).
+  Ours: items selected in a bin copy that bin under Bins; bins with changes are saved first.
+* What is copied: the master clips the items give, as Create Proxies finds them (`MainWindow::proxyClips`, with a
+  sequence's subclips, groups and nests followed: "all of the sources for Group clips are copied", p.513); "If you select a
+  sequence to copy, the Copy Media workflow copies the entire media file of the original master clip" (p.512). Managed
+  media only: "Copy Media copies managed media. It will not copy Linked media" (p.512). Proxies are both proxy files;
+  renders are the precompute clips of the selected sequences' effects and transitions (and those kept from other proxy
+  modes). The Copy Media license note ("Media Composer | Ultimate", p.512) does not apply.
+* The window (`CopyMediaDialog` in `src/ui/proxy_dialogs.*`, laid out as the pictures on p.513): Bins; Managed media,
+  Proxy media, Renders; "Calculating Size..." then "Media size required: N MB" and "Bins size required: N MB" (and "All
+  selected files already exist at the target location"); Copy Media to: Media Drive (with Drive:) or Folder (with Set);
+  "Available Space: N GB"; Copy Bins to: with Set, "Use same as above" for a folder, and its own Available Space. "As soon
+  as the Copy Media window opens, size calculation begins based on the enabled checkboxes. Enabling or disabling checkboxes
+  changes the calculation and updates the total ... If there is not enough space, copying will not be allowed" (p.513): OK
+  is dimmed then, and while nothing is left to copy. Ours: Copy Bins to starts at the first drive; offline files are
+  counted and named in the Console; a line says when there is not enough space.
+* Where the files go (`media::planCopyMedia`, `src/media/copy_media.*`): on a drive, managed media and renders in
+  "Avid MediaFiles/MXF/<next number>" and proxies in "Avid MediaFiles/Proxy/<next number>" ("Managed media is placed into
+  a new folder within MXF and the folder is named using the next available number ... If no Avid MediaFiles folder or MXF
+  folder exists at the selected location, an Avid MediaFiles folder is created and the media is placed inside the MXF '1'
+  folder. Proxy media is placed in the Proxy folder based on the next available number", p.513); in a folder, "the media
+  appears in an 'Avid Copied Media' folder at the target location" (ours: proxies too); bins in "Avid Copied Bins" under
+  Copy Bins to. Ours: a file of the same name and size already there (in the drive's MXF and Proxy folders, or the folder's
+  Avid Copied Media) is not copied again; two files of one name going to one folder get " 2" on the second.
+* `MainWindow::runCopyMedia` copies what the window chose and reports in the Console.
+
 Tests: `tst_proxy` (the data, the modes, the columns, the files), `tst_render_ui proxyMedia` (Create Proxies,
-the columns, the Play button's menu and orange, the monitor, Background Process).
+the columns, the Play button's menu and orange, the monitor, Background Process), `tst_copy_media` (the plan on a drive and
+in a folder, the next numbers, files already there, sizes), `tst_render_ui copyMedia` (the menus, the files a selection
+gives, the window, the copies), `tst_render_ui distributedProcessing` (a storage module's workspace and jobs).

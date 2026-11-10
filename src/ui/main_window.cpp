@@ -8773,6 +8773,9 @@ void MainWindow::installPanelHandlers() {
     handle("bin.create_stereoscopic_clip", [this] { createStereoscopicClip(); });
     // Proxy media (8.7a, p.508).
     handle("bin.create_proxies", [this] { createProxies(); });
+    // Copy Media (8.7a2, p.512), from the bin's right-click menu and the Sidebar's.
+    handle("bin.copy_media", [this] { copyMedia(); });
+    connect(binContainer_, &BinContainer::copyMediaRequested, this, [this](const QStringList& ids) { copyMedia(ids); });
     handle("bin.s3d_leading_eye_left", [this] { setStereoLeadingEye(model::Eye::Left); });
     handle("bin.s3d_leading_eye_right", [this] { setStereoLeadingEye(model::Eye::Right); });
     // The Transcript menus (8.2d; p.450-453, 2026.8 guide p.455-456).

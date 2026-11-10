@@ -1546,8 +1546,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
   * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7, in four parts (planned
     2026-11-10, from the Editing Guide; 3.7 has the shared bins and projects of p.300-304, 6.10 the Symphony Option colour
     correction):
-    * 8.7a, proxy media (ch.16, p.508-513), in two parts: 8.7a1 (done, docs/spec/proxy-media.md) the proxies, their
-      playback and the bin's columns; 8.7a2 proxies in sequences, Copy Media and the provider hook. In full: Create Proxies from the bin's right-click and Fast menus with its window (a
+    * 8.7a, proxy media (ch.16, p.508-513), in two parts, done (docs/spec/proxy-media.md): 8.7a1 the proxies, their
+      playback and the bin's columns; 8.7a2 Copy Media (`src/media/copy_media.*`, `CopyMediaDialog`,
+      `MainWindow::copyMedia`) and the provider hook for shared workspaces and Distributed Processing
+      (`ext::SharedStorageProvider`). In full: Create Proxies from the bin's right-click and Fast menus with its window (a
       local drive or a shared workspace; Application or Background Process), proxy media at Avid DNx LB and H.264 by the
       Timeline's video quality (p.508-510), the orange clip icon, the Play button's High-Resolution Only, Proxy Preferred
       and High-Resolution Preferred with the orange Play button (p.509), the bin's Proxy Offline, Proxy Video, Proxy Audio

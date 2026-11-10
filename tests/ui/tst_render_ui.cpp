@@ -4,6 +4,8 @@
 // tab's Proxy (Editing Guide p.526-527, p.549-550; 8.5e2): renders at the proxy raster, offline at another mode and back
 // when the mode returns.
 #include "lumenis/ext/provider.h"
+#include "lumenis/ext/shared_storage.h"
+#include "lumenis/media/copy_media.h"
 #include "lumenis/media/display_color.h"
 #include "lumenis/media/dynamic_relink.h"
 #include "lumenis/media/link.h"
@@ -27,6 +29,7 @@
 #include "lumenis/ui/video_output_tool.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_tool.h"
+#include "lumenis/ui/proxy_dialogs.h"
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
@@ -40,6 +43,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QDoubleSpinBox>
 #include <QPushButton>
@@ -88,6 +92,40 @@ model::Sequence recordSequence(Composer& composer) {
 model::RenderTarget pipTarget(const model::Sequence& seq) {
     return *model::renderTargetAt(seq, QStringLiteral("V1"), 5);
 }
+
+// A storage module with one workspace that takes Distributed Processing jobs (ext::SharedStorageProvider, p.510): a job
+// runs until finish() gives it its proxies.
+class FakeStorage : public ext::SharedStorageProvider {
+public:
+    explicit FakeStorage(QString root) : root_(std::move(root)) {}
+    ext::ProviderInfo info() const override {
+        return {"test.storage", "Test storage", ext::Category::SharedStorage, ext::LicenseTier::OpenSource, "test", "1"};
+    }
+    std::vector<ext::SharedWorkspace> workspaces() const override {
+        return {{"ws1", "Shared Workspace", root_.toStdString(), true}};
+    }
+    bool submitProxyJob(const ext::ProxyJob& job, std::string* jobId, std::string* error) override {
+        (void)error;
+        jobs.push_back(job);
+        *jobId = "job" + std::to_string(jobs.size());
+        return true;
+    }
+    ext::ProxyJobStatus jobStatus(const std::string& jobId) const override {
+        ext::ProxyJobStatus s;
+        s.state = finished.empty() ? ext::ProxyJobStatus::State::Running : ext::ProxyJobStatus::State::Done;
+        s.proxyJson = finished;
+        (void)jobId;
+        return s;
+    }
+    void finish(const model::ProxyMedia& proxy) {
+        finished = QJsonDocument(proxy.toJson()).toJson(QJsonDocument::Compact).toStdString();
+    }
+    std::vector<ext::ProxyJob> jobs;
+    std::string finished;
+
+private:
+    QString root_;
+};
 
 } // namespace
 
@@ -1125,6 +1163,197 @@ private slots:
         window.backgroundQueue().waitForIdle();
         settle();
         QVERIFY(model::hasProxy(*bin->bin().item(ids.at(1))));
+    }
+
+    // Copy Media (p.512-513; 8.7a2): the right-click menus, the files a selection gives (managed media only, the bins), the
+    // window's sizes, targets and Use same as above, and the copy to a folder and to a drive.
+    void copyMedia() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("one.mov"));
+        QVERIFY(writeMovie(movie, 8));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("P"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("P.cthproj"));
+        project.settings.name = QStringLiteral("P");
+        project.settings.format.family = FormatFamily::HighRes;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        // A managed clip of the same media.
+        media::MediaCreation creation;
+        creation.videoDrive = drive;
+        creation.raster = QSize(256, 144);
+        creation.resolution = *media::findResolution(QStringLiteral("dnx_lb"));
+        const auto managed = media::transcodeClip(*bin->bin().item(ids.first()), 0, -1, creation);
+        QVERIFY(managed);
+        bin->addItem(*managed);
+        BinView* view = window.binContainer().activeView();
+        QVERIFY(view);
+        view->selectIds({ids.first(), managed->id});
+        // The bin's right-click menu (p.512).
+        std::unique_ptr<QMenu> menu(view->contextMenu(QPoint(-1, -1), view->table()));
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("copyMedia")));
+        // "Copy Media copies managed media. It will not copy Linked media" (p.512); the bin goes too.
+        media::CopyMediaRequest request = window.copyMediaRequest();
+        QCOMPARE(request.managedFiles.size(), int(media::linkOf(*managed)->files().size()));
+        QVERIFY(!request.managedFiles.contains(QFileInfo(movie).absoluteFilePath()));
+        QCOMPARE(request.binFiles, QStringList{QFileInfo(bin->path()).absoluteFilePath()});
+        QVERIFY(!bin->isDirty());
+
+        // The window: the sizes, the drive, then a folder with Use same as above (p.513).
+        CopyMediaDialog dialog(window.mediaTargets(), request);
+        QCOMPARE(dialog.status(), QStringLiteral("Calculating Size..."));
+        QVERIFY(!dialog.canCopy());
+        dialog.recalculate();
+        QVERIFY2(dialog.status().contains(QStringLiteral("Media size required:")), qPrintable(dialog.status()));
+        QVERIFY(dialog.status().contains(QStringLiteral("Bins size required:")));
+        QVERIFY(dialog.canCopy());
+        QCOMPARE(dialog.request().target, drive);
+        QVERIFY(dialog.findChild<QLabel*>(QStringLiteral("copySpace"))->text().startsWith(QStringLiteral("Available Space:")));
+        dialog.setCopyToFolder(true);
+        dialog.recalculate();
+        QVERIFY(!dialog.canCopy()); // no folder set yet
+        const QString out = dir.filePath(QStringLiteral("Out"));
+        dialog.setFolder(out);
+        dialog.recalculate();
+        QVERIFY(dialog.canCopy());
+        QCOMPARE(dialog.request().binsTarget, out);
+        dialog.setChecked(QStringLiteral("bins"), false);
+        dialog.recalculate();
+        QVERIFY(!dialog.status().contains(QStringLiteral("Bins size required:")));
+        dialog.setChecked(QStringLiteral("bins"), true);
+        dialog.recalculate();
+        const int files = int(request.managedFiles.size()) + 1;
+        QCOMPARE(window.runCopyMedia(dialog.request()), files);
+        QVERIFY(QFileInfo::exists(QDir(out).filePath(QStringLiteral("Avid Copied Media/") +
+                                                     QFileInfo(request.managedFiles.first()).fileName())));
+        QVERIFY(QFileInfo::exists(QDir(out).filePath(QStringLiteral("Avid Copied Bins/") + QFileInfo(bin->path()).fileName())));
+        // Again: "All selected files already exist at the target location".
+        dialog.recalculate();
+        QVERIFY(dialog.status().contains(QStringLiteral("All selected files already exist at the target location")));
+        QVERIFY(!dialog.canCopy());
+        QCOMPARE(window.runCopyMedia(dialog.request()), 0);
+
+        // The Sidebar: Copy Media on a bin, and on a folder holding it, takes all its items (p.512).
+        BinSidebar* sidebar = window.binContainer().sidebar();
+        QMenu sideMenu;
+        window.binContainer().sidebarMenu(&sideMenu, binId, sidebar);
+        QVERIFY(sideMenu.findChild<QAction*>(QStringLiteral("sidebarCopyMedia")));
+        view->selectIds({});
+        request = window.copyMediaRequest({binId});
+        QCOMPARE(request.managedFiles.size(), int(media::linkOf(*managed)->files().size()));
+        // To the drive the media is on: already there, only the bin goes.
+        request.target = drive;
+        request.binsTarget = drive;
+        QCOMPARE(window.runCopyMedia(request), 1);
+        // To another drive: its next MXF folder.
+        const QString other = dir.filePath(QStringLiteral("Other"));
+        QDir().mkpath(QDir(other).filePath(QStringLiteral("Avid MediaFiles/MXF/1")));
+        request.target = other;
+        request.binsTarget = other;
+        QCOMPARE(QFileInfo(media::planCopyMedia(request).mediaFolder).fileName(), QStringLiteral("2"));
+        QCOMPARE(window.runCopyMedia(request), files);
+        QVERIFY(QFileInfo::exists(QDir(media::mediaFilesFolder(other)).filePath(
+            QStringLiteral("MXF/2/") + QFileInfo(request.managedFiles.first()).fileName())));
+        media::setExtraMediaDrives({});
+    }
+
+    // Distributed Processing through a storage module (p.510; ext::SharedStorageProvider): its workspace in the Create
+    // Proxies window, the option only for it, the job sent and its proxies taken when it is done.
+    void distributedProcessing() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("one.mov"));
+        QVERIFY(writeMovie(movie, 8));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        auto storage = std::make_shared<FakeStorage>(dir.filePath(QStringLiteral("Shared")));
+        providers.add(storage);
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("P"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("P.cthproj"));
+        project.settings.name = QStringLiteral("P");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 1920;
+        project.settings.format.height = 1080;
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        window.binContainer().activeView()->selectIds(ids);
+
+        // The workspace after the drives; "The Distributed Processing option is only available after you select an Avid
+        // NEXIS workspace" (p.510).
+        const QList<MediaTarget> targets = window.mediaTargets();
+        QVERIFY(targets.size() >= 2);
+        QVERIFY(!targets.first().isWorkspace());
+        QCOMPARE(targets.last().name, QStringLiteral("Shared Workspace"));
+        CreateProxiesDialog dialog(targets);
+        auto* option = dialog.findChild<QCheckBox*>(QStringLiteral("proxyDistributed"));
+        QVERIFY(!option->isEnabled());
+        dialog.setTarget(int(targets.size()) - 1);
+        QVERIFY(option->isEnabled());
+        dialog.setDistributed(true);
+        QVERIFY(dialog.distributed());
+        QVERIFY(!dialog.findChild<QComboBox*>(QStringLiteral("proxyProcessing"))->isEnabled());
+
+        // One job per master clip, with the clip and the proxy raster.
+        QCOMPARE(window.submitDistributedProxies(QStringLiteral("ws1")), 1);
+        QCOMPARE(int(storage->jobs.size()), 1);
+        QCOMPARE(storage->jobs.front().width, 960);
+        QVERIFY(QString::fromStdString(storage->jobs.front().clipJson).contains(ids.first()));
+        window.pollDistributedJobs();
+        QCOMPARE(window.distributedJobsOut(), 1);
+        QVERIFY(!model::hasProxy(*bin->bin().item(ids.first())));
+        model::ProxyMedia proxy;
+        proxy.folder = dir.filePath(QStringLiteral("Shared/Avid MediaFiles/Proxy/1"));
+        proxy.h264Link = QJsonObject{{QStringLiteral("path"), QDir(proxy.folder).filePath(QStringLiteral("one.proxy.mp4"))}};
+        proxy.lbLink = QJsonObject{{QStringLiteral("path"), QDir(proxy.folder).filePath(QStringLiteral("one.proxy_lb.mov"))}};
+        proxy.raster = QSize(960, 540);
+        storage->finish(proxy);
+        window.pollDistributedJobs();
+        QCOMPARE(window.distributedJobsOut(), 0);
+        const auto taken = model::proxyOf(*bin->bin().item(ids.first()));
+        QVERIFY(taken);
+        QCOMPARE(taken->folder, proxy.folder);
+        media::setExtraMediaDrives({});
     }
 
     // "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options" (p.403;

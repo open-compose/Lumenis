@@ -83,7 +83,8 @@ headers in `include/lumenis/<library>/`.
   `src/ui/timeline_multirez.cpp`), `stereo.*` (frame-compatible stereoscopic pictures and the S3D Views; Stereo Master Clips in
   `src/model/stereo_clip.*`, the views and S3D Settings in `src/model/stereo_view.*`, docs/spec/stereoscopic.md, applied by
   `MainWindow::adaptedFrame`), `proxy_media.*` (proxy media, docs/spec/proxy-media.md; a clip's proxies in
-  `src/model/proxy.*`, Create Proxies and playback in `src/ui/main_window_proxy.cpp`), `consolidate.*`, `relink.*`,
+  `src/model/proxy.*`, Create Proxies, playback and Copy Media in `src/ui/main_window_proxy.cpp`, the windows in
+  `src/ui/proxy_dialogs.*`), `copy_media.*` (Copy Media's plan and copy), `consolidate.*`, `relink.*`,
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,
@@ -125,7 +126,8 @@ headers in `include/lumenis/<library>/`.
   `src/ui/send_to_dialog.*` (docs/spec/send-to.md); the Simplified AAF's spans are `src/model/simplify_export.*`; Export to Device goes through `ext::ExportDeviceProvider`
   (`src/ext/include/lumenis/ext/export_device.h`, `src/media/xdcam_disk.*`, `src/ui/export_device_dialog.*`); AS-11 and AS-02 are bmxtranswrap rewraps (`src/media/as11.*`), Export Volumes
   `src/model/export_volume.*` and `src/ui/export_volume_dialog.*`; the Digital Cut tool `src/ui/digital_cut_tool.*` records
-  onto `ext::DeckProvider` decks (`src/ext/include/lumenis/ext/deck.h`, the folder tape `src/media/tape_deck.*`); the Video Output tool
+  onto `ext::DeckProvider` decks (`src/ext/include/lumenis/ext/deck.h`; shared workspaces and Distributed Processing for
+  proxies come from `ext::SharedStorageProvider`, `src/ext/include/lumenis/ext/shared_storage.h`, the folder tape `src/media/tape_deck.*`); the Video Output tool
   `src/ui/video_output_tool.*` drives `ext::VideoOutputProvider` hardware, with `src/media/test_patterns.*`. The SubCap
   effect's captions and caption files (Avid DS, EBU N19) are `src/model/subcap.*`, its picture `src/media/subcap.cpp`
   and its dialogs `src/ui/subcap_dialogs.*` (docs/spec/subcap.md). Closed captions on D1 (SCC, CEA-608, TTML) are

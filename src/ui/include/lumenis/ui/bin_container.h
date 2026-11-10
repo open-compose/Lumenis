@@ -447,6 +447,9 @@ signals:
     void editTemplateRequested(const QString& binId, const QString& itemId);
     // BinView::commandRequested from any bin.
     void commandRequested(const QString& commandId);
+    // The Sidebar's Copy Media on the selected bins and folders (p.512: "you can also select bins and folders within the
+    // Bin Container Sidebar"); MainWindow::copyMedia.
+    void copyMediaRequested(const QStringList& nodeIds);
     // A new bin was made in the project (newBin()), before it opens.
     void binCreated(const QString& id);
     // Media files dropped on a bin from the Source Browser, to link (p.317).

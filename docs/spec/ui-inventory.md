@@ -707,6 +707,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   least 256 by 144) in Avid MediaFiles/Proxy/1 with the sound of 48 kHz media only, the proxy columns after the MultiRez
   headings with Proxy Offline as "V"/"V A", orange Play for both preferred modes and the mode kept for the session, the
   other proxy file when one is gone, sound played from the clip's own media.
+* Copy Media and Distributed Processing (8.7a2, docs/spec/proxy-media.md): Copy Media in no menu bar menu, bin items copying
+  their own bin under Bins, bins saved first, Copy Bins to starting at the first drive, proxies in a folder's Avid Copied
+  Media, files of the same name and size not copied again and " 2" for a second of one name, the not-enough-space and
+  offline lines; storage modules' workspaces after the media drives, Processing Options dimmed with Distributed Processing,
+  jobs polled every two seconds.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

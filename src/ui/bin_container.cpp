@@ -1567,6 +1567,14 @@ QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sid
                             [this, ids] { lockProjectBins(ids, model::BinLockKind::Protected); });
             menu->addAction(tr("Unlock Project Bin"), this, [this, ids] { unlockProjectBins(ids); });
         }
+        // Copy Media on the selected bins and folders, or the one right-clicked (p.512).
+        if ((n->kind == model::BinNode::Kind::Bin || n->kind == model::BinNode::Kind::Folder) && !bins_->isInTrash(id)) {
+            QStringList ids = sidebar->selectedNodes();
+            if (!ids.contains(id)) ids = {id};
+            menu->addSeparator();
+            QAction* copy = menu->addAction(tr("Copy Media"), this, [this, ids] { emit copyMediaRequested(ids); });
+            copy->setObjectName(QStringLiteral("sidebarCopyMedia"));
+        }
         // "right-click on a bin and choose Include Bin in Transcription or Exclude Bin from Transcription" (p.447): the
         // Bin menu's commands, on the Sidebar's selection.
         if (n->kind == model::BinNode::Kind::Bin && !bins_->isInTrash(id) && transcriptionStatus_) {
