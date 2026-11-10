@@ -217,6 +217,7 @@
             "clip.refresh_sequence.aspect_ratio_reformatting",
             "clip.refresh_sequence.color_adapters",
             "clip.refresh_sequence.remove_color_adapters",
+            "clip.refresh_sequence.stereo_correction_effects",
             "clip.refresh_sequence.group_clips",
             "clip.refresh_sequence.all_frameflex"
           ]

@@ -2307,6 +2307,8 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
             QAction* a = menu.addAction(qualityIcon(q), text);
             a->setCheckable(true);
             a->setChecked(composer_.videoQuality() == q);
+            // Interlaced stereoscopic material plays at Full Quality only (p.403).
+            a->setEnabled(q == Composer::VideoQuality::Full || !composer_.fullQualityOnly());
             connect(a, &QAction::triggered, this, [this, choice = q] { composer_.setVideoQuality(choice); });
         }
         menu.addSeparator();

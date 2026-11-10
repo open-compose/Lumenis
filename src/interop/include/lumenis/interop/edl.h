@@ -3,6 +3,7 @@
 #include "lumenis/core/mob_id.h"
 #include "lumenis/core/rational.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/stereo_clip.h"
 
 #include <QDateTime>
 #include <QList>
@@ -93,6 +94,9 @@ struct ExportOptions {
     // nullopt: the segment's name is its reel and its IN point is counted from 00:00:00:00, with a
     // warning.
     std::function<std::optional<model::BinItem>(const MobId& mob, const QString& clipId)> resolve;
+    // S3D Contributor (p.959): a stereoscopic clip's segment is listed as the contributing eye's master clip (its name,
+    // reel and timecode, found through `resolve` by the eye's MobID and id; its name alone when it is gone).
+    model::S3DContributor s3dContributor = model::S3DContributor::Monoscopic;
 };
 
 // What an export made.

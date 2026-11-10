@@ -698,7 +698,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Mono's eyes and Amber-Blue where the guide lists them, Difference as mid gray plus half the brightness difference, the
   anaglyphs as channel swaps, Compare's diagonal, Full Frame side by side, Follow S/R as the Video Output tool's default;
   the parallax guides as vertical line pairs about the centre; S3D Settings' units, defaults and parallax formula, the
-  calculated values written into the setting.
+  calculated values written into the setting. 8.6d3: groups in the Source monitor showing each clip's leading eye unless
+  Left/Right Eye Only, the S3D Contributor for EDLs only, Refresh Sequence > Stereo Correction Effects dimmed (no
+  source-side stereo effects described), the S3D preset turning Stereoscopic on as Full, Full Quality only in interlaced
+  projects with Stereoscopic on.
 * Scripts (docs/spec/scriptsync.md): the script kept in its bin item instead of an .avc file, a changed script saved
   when another opens, tabs as 8 columns, a 600-pixel text width to start with, an empty number removing a scene or page,
   the status bar's wording, the editor's own undo. Slates (8.3b): where slates stand (halfway across the text column, above

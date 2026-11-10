@@ -560,6 +560,11 @@ public:
     enum class VideoQuality { Full, Draft, Best };
     void setVideoQuality(VideoQuality quality);
     VideoQuality videoQuality() const { return quality_; }
+    // "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options. When
+    // you are working with interlaced stereoscopic material, other options are not available" (p.403; 8.6d3): while on,
+    // the quality is Full and setVideoQuality() keeps it so.
+    void setFullQualityOnly(bool on);
+    bool fullQualityOnly() const { return fullQualityOnly_; }
     // The share of the picture's width and height decoded at this quality.
     double qualityScale() const;
     // Video Display settings: High-Quality Scaling for Real-Time Decode
@@ -859,6 +864,7 @@ private:
     // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;
     VideoQuality quality_ = VideoQuality::Full;
+    bool fullQualityOnly_ = false;
     bool smoothScaling_ = true;
     PlayStats stats_;
     QList<PlaybackRange> playRanges_;

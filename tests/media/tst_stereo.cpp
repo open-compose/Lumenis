@@ -59,9 +59,16 @@ private slots:
         QCOMPARE(eyes->rightLink, right.link);
         QCOMPARE(eyes->leftName, QStringLiteral("Shot L"));
         QCOMPARE(eyes->rightName, QStringLiteral("Shot R"));
-        // Kept through JSON.
+        // Kept through JSON, with the eyes' clip ids and MobIDs (8.6d3).
         const auto again = StereoClip::fromJson(eyes->toJson());
         QVERIFY(again && again->rightLink == right.link && again->leadingEye == Eye::Left);
+        QCOMPARE(again->rightId, right.id);
+        QVERIFY(again->leftMob == left.mobId);
+        QCOMPARE(eyeSource(*again, Eye::Right).name, QStringLiteral("Shot R"));
+        QVERIFY(eyeSource(*again, Eye::Left).mob == left.mobId);
+        // The List Tool's S3D Contributor (p.959): Monoscopic is the leading eye.
+        QCOMPARE(contributingEye(*again, S3DContributor::Monoscopic), Eye::Left);
+        QCOMPARE(contributingEye(*again, S3DContributor::Right), Eye::Right);
     }
 
     void refusals() {

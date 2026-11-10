@@ -107,6 +107,7 @@ private:
     QCheckBox* clipNames_ = nullptr;
     QCheckBox* markers_ = nullptr;
     QCheckBox* optimize_ = nullptr;
+    QComboBox* s3dContributor_ = nullptr;
     QSpinBox* startEvent_ = nullptr;
     QPushButton* preview_ = nullptr;
     QPushButton* save_ = nullptr;

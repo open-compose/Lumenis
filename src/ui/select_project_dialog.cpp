@@ -725,6 +725,10 @@ void SelectProjectDialog::updateFormatDependentFields() {
     // progressive HD formats (p.67).
     stereoscopic_->setEnabled(family != FormatFamily::SD);
     if (family == FormatFamily::SD) stereoscopic_->setCurrentIndex(0);
+    // The "2048 x 1080 S3D (stereoscopic)" preset (p.562; ours): choosing it turns Stereoscopic on, as Full, when it is Off.
+    if (key && QString::fromStdString(key->group).endsWith(QLatin1String(" S3D")) && stereoscopic_->currentIndex() == 0) {
+        stereoscopic_->setCurrentText(QStringLiteral("Full"));
+    }
     updateFilmFields();
 }
 

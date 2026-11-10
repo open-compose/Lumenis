@@ -13,6 +13,8 @@
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/stereo_clip.h"
+#include "lumenis/model/group_clip.h"
+#include "lumenis/ui/list_tool.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -1013,6 +1015,62 @@ private slots:
         QVERIFY(voView);
         voView->setCurrentIndex(voView->findData(QStringLiteral("anaglyphGreenMagenta")));
         QCOMPARE(vo.values().value(QStringLiteral("s3dView")).toString(), QStringLiteral("anaglyphGreenMagenta"));
+        // A group of the stereo clip and a 2D clip in the Source monitor (p.1124; 8.6d3): no S3D View, the leading eye.
+        setView("anaglyphRedCyan");
+        model::GroupOptions options;
+        options.sync = model::GroupSync::Inpoints;
+        options.marks = [](const model::BinItem&, bool) -> std::optional<std::int64_t> { return 0; };
+        QString why;
+        const auto group = model::groupClips(bin->bin(), {{binId, *bin->bin().item(stereoId)}, {binId, *bin->bin().item(ids.at(1))}},
+                                             options, &why);
+        QVERIFY2(group, qPrintable(why));
+        bin->addItem(*group);
+        composer.loadDefault(binId, *bin->bin().item(group->id));
+        settle();
+        QCOMPARE(colorAt(64), QColor(255, 0, 0));
+        // The List Tool's S3D Contributor (p.959).
+        QComboBox* contributor = window.listTool().findChild<QComboBox*>(QStringLiteral("listS3DContributor"));
+        QVERIFY(contributor);
+        contributor->setCurrentIndex(2);
+        QCOMPARE(window.listTool().options().s3dContributor, model::S3DContributor::Right);
+    }
+
+    // "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options" (p.403;
+    // 8.6d3): in an interlaced stereoscopic project the Video Quality Menu keeps Full Quality.
+    void interlacedStereoFullQuality() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("I"));
+        project.file = QDir(project.folder).filePath(QStringLiteral("I.cthproj"));
+        project.settings.name = QStringLiteral("I");
+        project.settings.format.family = FormatFamily::HD;
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 1920;
+        project.settings.format.height = 1080;
+        project.settings.format.scan = ScanMode::Interlaced;
+        project.settings.stereoscopic = QStringLiteral("Side by Side");
+        QDir().mkpath(project.folder);
+        QVERIFY(model::ProjectStore::write(project.file, project.settings));
+        window.setProject(project);
+        settle();
+        Composer& composer = window.composer();
+        QVERIFY(composer.fullQualityOnly());
+        composer.setVideoQuality(Composer::VideoQuality::Draft);
+        QCOMPARE(composer.videoQuality(), Composer::VideoQuality::Full);
+        // Off: the other qualities come back.
+        QVERIFY(window.setProjectStereoscopic(QStringLiteral("Off")));
+        settle();
+        QVERIFY(!composer.fullQualityOnly());
+        composer.setVideoQuality(Composer::VideoQuality::Draft);
+        QCOMPARE(composer.videoQuality(), Composer::VideoQuality::Draft);
     }
 };
 

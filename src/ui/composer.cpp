@@ -2497,10 +2497,16 @@ void Composer::tick() {
 }
 
 void Composer::setVideoQuality(VideoQuality quality) {
+    if (fullQualityOnly_) quality = VideoQuality::Full;
     if (quality_ == quality) return;
     quality_ = quality;
     refresh();
     emit videoQualityChanged(quality);
+}
+
+void Composer::setFullQualityOnly(bool on) {
+    fullQualityOnly_ = on;
+    if (on) setVideoQuality(VideoQuality::Full);
 }
 
 void Composer::setHighQualityScaling(bool on) {

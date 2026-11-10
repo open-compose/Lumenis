@@ -52,6 +52,8 @@ std::vector<ProjectFormat> buildPresets() {
     add("2K", Hi, 2048, 1536, P, {"24", "25", "29.97", "30", "47.952", "48", "50", "59.94", "60", "100", "119.88", "120"});
     add("2K DCI Flat", Hi, 1998, 1080, P, cinema);
     add("2K DCI Full", Hi, 2048, 1080, P, cinema);
+    // "2048 x 1080 S3D (stereoscopic)" (p.562): the 2K DCI Full raster, for stereoscopic projects.
+    add("2K DCI Full S3D", Hi, 2048, 1080, P, cinema);
     add("2K DCI Scope", Hi, 2048, 858, P, cinema);
     add("2K DCI Full Aperture", Hi, 2048, 1556, P, cinema);
     add("4K DCI Flat", Hi, 3996, 2160, P, cinema);

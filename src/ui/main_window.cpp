@@ -3428,6 +3428,8 @@ bool MainWindow::setProjectStereoscopic(const QString& mode) {
     if (!saveProjectSettings(changed, tr("Stereoscopic"))) return false;
     if (settingsWindow_) settingsWindow_->setProject(project_);
     frames_->clear();
+    // What follows the option: Full Quality only for interlaced stereoscopic projects (p.403), the S3D Views.
+    applySettings();
     composer_->refreshDisplay();
     return true;
 }
@@ -3441,8 +3443,22 @@ bool MainWindow::setProjectStereoscopic(const QString& mode) {
 QImage MainWindow::stereoPicture(MonitorId monitor, const std::function<QImage()>& plain) const {
     const model::StereoMode mode = project_ ? model::stereoModeOf(project_->settings.stereoscopic) : model::StereoMode::Off;
     if (eyeOverride_ || !(mode == model::StereoMode::Full || model::isFrameCompatible(mode))) return plain();
-    // "While viewing stereoscopic clips in the source monitor, the stereoscopic view is turned off" for group splits (p.1124).
-    if (monitor == MonitorId::Source && (composer_->multiCameraMode() || composer_->groupSplit() > 1)) return plain();
+    // Groups in the Source monitor (p.1124, 8.6d3): "while viewing stereoscopic clips in the source monitor, the
+    // stereoscopic view is turned off. You can choose to display either the left eye image, the right eye image, or the
+    // image set as the leading eye. This view mode is set by the Stereoscopic option": Left or Right Eye Only, else
+    // (ours) the leading eye.
+    const model::LoadedClip* sourceClip = composer_->state(MonitorId::Source).current();
+    if (monitor == MonitorId::Source &&
+        (composer_->multiCameraMode() || (sourceClip && sourceClip->item.kind == model::BinItemKind::Group))) {
+        struct Restore {
+            std::optional<model::S3DView::MonoEye>& eye;
+            ~Restore() { eye.reset(); }
+        } restore{eyeOverride_};
+        eyeOverride_ = mode == model::StereoMode::LeftEyeOnly    ? model::S3DView::MonoEye::Left
+                       : mode == model::StereoMode::RightEyeOnly ? model::S3DView::MonoEye::Right
+                                                                 : model::S3DView::MonoEye::Leading;
+        return plain();
+    }
     const QString kind = QStringLiteral("Composer");
     const bool source = monitor == MonitorId::Source;
     const QString monitorView = settings_->text(kind, source ? QStringLiteral("sourceS3DView") : QStringLiteral("recordS3DView"));
@@ -8195,6 +8211,10 @@ void MainWindow::applySettings() {
     composer_->setDisplayColorSpace(MonitorId::Record, media::displayColorSpaceOfValue(s.text(QStringLiteral("Composer"), QStringLiteral("recordColorSpace"))));
     composer_->setTargetMask(MonitorId::Source, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("sourceTargetMask"))));
     composer_->setTargetMask(MonitorId::Record, model::targetMaskFrom(s.text(QStringLiteral("Composer"), QStringLiteral("recordTargetMask"))));
+    // "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options" (p.403;
+    // ours: in an interlaced project whose Stereoscopic option is on).
+    composer_->setFullQualityOnly(project_ && project_->settings.format.scan == ScanMode::Interlaced &&
+                                  model::stereoModeOf(project_->settings.stereoscopic) != model::StereoMode::Off);
     // S3D Settings (p.1216; 8.6d2): Parallax Near and Far are "automatically calculated" unless set to Manual; the
     // calculated values are kept in the setting so that it shows them. The monitors show the S3D Views anew.
     if (project_) {

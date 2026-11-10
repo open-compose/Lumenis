@@ -1540,10 +1540,29 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       (Mix, Difference, Frame Compatible, Mono, Anaglyph, B/W Anaglyph, Checkerboard, Compare; parallax guides,
       p.1162-1163), Full Screen Playback's (p.1190-1191), the Video Output tool's (p.1227), the S3D Settings Project
       setting with its parallax worked out (p.1216).
-      8.6d3, the rest: stereoscopic clips in group clips (p.1124), the List Tool's S3D Contributor (p.959), Refresh
+      8.6d3 (done), the rest: stereoscopic clips in group clips (p.1124), the List Tool's S3D Contributor (p.959), Refresh
       Sequence > Stereo Correction Effects (p.478), the 2048 x 1080 S3D preset (p.562), interlaced stereoscopic
       playback at Full Quality only (p.403).
-  * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
+  * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7, in four parts (planned
+    2026-11-10, from the Editing Guide; 3.7 has the shared bins and projects of p.300-304, 6.10 the Symphony Option colour
+    correction):
+    * 8.7a, proxy media (ch.16, p.508-513): Create Proxies from the bin's right-click and Fast menus with its window (a
+      local drive or a shared workspace; Application or Background Process), proxy media at Avid DNx LB and H.264 by the
+      Timeline's video quality (p.508-510), the orange clip icon, the Play button's High-Resolution Only, Proxy Preferred
+      and High-Resolution Preferred with the orange Play button (p.509), the bin's Proxy Offline, Proxy Video, Proxy Audio
+      and Proxy Path columns (p.509-510), proxies in sequences (p.512) and Copy Media gathering managed media onto one
+      drive (p.512-513). Distributed Processing and Avid NEXIS | EDGE (p.510-511, p.514-516) need Avid's servers: a
+      provider hook only.
+    * 8.7b, peer-to-peer transcript sharing (p.451-452): Host Shared Transcripts and Use Shared Transcripts with our
+      transcript store on shared storage (as LUMENIS_SHARED_BINS finds it), entries locked while written with the
+      override prompt, deletes for everyone, the host's store read when the host is off.
+    * 8.7c, sequence format changes and Universal Mastering (ch.36, p.1287, p.1294-1298, Symphony Option): Changing the
+      Project and Sequence Format, 24p NTSC to 1080p/23.976 and 23.976p NTSC to 720p/23.976 (p.1294-1295), Editing at 60
+      fps and showing 24p and 25p media (p.1295-1296), HD Universal Mastering with its audio conversion and Digital Cut
+      (p.1297-1298).
+    * 8.7d, the Symphony Option items left in both guides after an audit (redefining a title's font replacement,
+      p.994, among them); control surfaces (Avid Artist Color, ch.25 of the FX Guide) stay a provider hook
+      (EXTENSIONS.md).
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New
     Line, Group Speaker Lines and New Line After (2026.8 guide p.446);

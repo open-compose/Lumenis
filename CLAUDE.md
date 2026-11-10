@@ -969,7 +969,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `media::stereoView`/`drawParallaxGuides`; the Composer setting's Viewer tab, Full Screen Playback through
   `FullScreenView::setPictureSource`, the Video Output tool's `s3dView`/`s3dOverlay`; `MainWindow::stereoPicture` composing
   each eye through `eyeOverride_`; the "S3D" Project setting with the parallax worked out in `applySettings`; tests
-  `tst_stereo`, `tst_render_ui stereoViews`), is done.
+  `tst_stereo`, `tst_render_ui stereoViews`), is done. 8.6d3, the rest (stereo clips in groups shown by the Stereoscopic
+  option in the Source monitor, the List Tool's S3D Contributor through `interop::edl::ExportOptions::s3dContributor`,
+  Refresh Sequence > Stereo Correction Effects dimmed, the "2K DCI Full S3D" preset, Full Quality only through
+  `Composer::setFullQualityOnly`; tests `tst_edl s3dContributor`, `tst_render_ui interlacedStereoFullQuality`), is done,
+  so 8.6d and 8.6 are.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

@@ -6,7 +6,7 @@ Editing Guide p.65-66 (the project's Stereoscopic option), p.213 (stereoscopic f
 ("search for “Working with Stereoscopic Clips” in the Media Composer Family Help", p.213), which we do not have, so
 the commands that make and change them are ours (see the watch list in ui-inventory.md).
 
-8.6d1 is the clips and the project's option; 8.6d2 (below) the S3D views and settings; 8.6d3 groups, lists and presets
+8.6d1 is the clips and the project's option; 8.6d2 (below) the S3D views and settings; 8.6d3 (below) groups, lists and presets
 (ROADMAP).
 
 ## Stereo Master Clips (p.243; 8.6d1)
@@ -87,3 +87,32 @@ Tests: `tst_stereo` (the model and the pictures), `tst_render_ui stereoscopic` (
   (`MainWindow::applySettings`), and the drop-downs are Calculated or Manual.
 
 Tests: `tst_stereo viewValues`/`viewPictures`/`parallaxAndGuides`, `tst_render_ui stereoViews`.
+
+## Groups, lists, presets and playback (8.6d3)
+
+* "Stereoscopic clips can be used for multicam editing in the same manner as regular clips ... (You can mix both regular
+  and stereoscopic clips in a group clip.)" (p.1124): a Stereo Master Clip is a master clip, so Group Clips takes it.
+  "While viewing stereoscopic clips in the source monitor, the stereoscopic view is turned off. You can choose to display
+  either the left eye image, the right eye image, or the image set as the leading eye. This view mode is set by the
+  Stereoscopic option in the Project Format dialog box": a group in the Source monitor, whole or split, and MultiCamera
+  mode show Left Eye Only's left eye, Right Eye Only's right eye, else (ours) each clip's leading eye, with no S3D View
+  (`MainWindow::stereoPicture`).
+* The List Tool's S3D Contributor (p.959; Formatting tab, `listS3DContributor`): "Monoscopic: Set this option for
+  standard sequences, or if you only want to use the 'leading eye' clips in a stereoscopic sequence. S3D Left: Only
+  displays the left eye clips. S3D Right: Only displays the right eye clips." A stereo clip's segment is listed as that
+  eye's master clip: its name for FROM CLIP NAME, its reel and timecode (`interop::edl::ExportOptions::s3dContributor`,
+  `model::contributingEye`/`eyeSource`; the clip keeps its eyes' ids and MobIDs). When the eye's clip is gone its name is
+  still listed, with a warning. Ours: only the EDL output takes it; OpenTimelineIO lists the clip as it is.
+* Refresh Sequence > Stereo Correction Effects (p.478): "Refreshes the sequence so that all source-side effects applied
+  to stereoscopic clips in the bins are updated accordingly in the sequence." Neither guide describes such effects (the
+  FX Guide's S3D category lists none, p.37), and our clips carry no source-side effects, so the command is in the menu
+  dimmed (no handler) until they come (watch list).
+* "2048 x 1080 S3D (stereoscopic)" (p.562): the "2K DCI Full S3D" preset in core/project_format, the 2K DCI Full raster;
+  ours: choosing it in the Select Project dialog turns Stereoscopic on as Full when it is Off.
+* "Media Composer can only play back interlaced stereoscopic material using one of the Full Quality options. When you are
+  working with interlaced stereoscopic material, other options are not available" (p.403): ours, in an interlaced project
+  whose Stereoscopic option is on, `Composer::setFullQualityOnly` keeps Full Quality and the Video Quality Menu dims the
+  others.
+
+Tests: `tst_stereo makeStereoClip`, `tst_edl s3dContributor`, `tst_render_ui stereoViews` (the group and the List Tool),
+`tst_render_ui interlacedStereoFullQuality`.

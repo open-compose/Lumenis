@@ -22,6 +22,10 @@ QJsonObject StereoClip::toJson() const {
                        {QStringLiteral("right"), rightLink},
                        {QStringLiteral("leftName"), leftName},
                        {QStringLiteral("rightName"), rightName},
+                       {QStringLiteral("leftId"), leftId},
+                       {QStringLiteral("rightId"), rightId},
+                       {QStringLiteral("leftMob"), QString::fromStdString(leftMob.toString())},
+                       {QStringLiteral("rightMob"), QString::fromStdString(rightMob.toString())},
                        {QStringLiteral("leadingEye"), eyeText(leadingEye)}};
 }
 
@@ -32,6 +36,10 @@ std::optional<StereoClip> StereoClip::fromJson(const QJsonObject& o) {
     if (s.leftLink.isEmpty() || s.rightLink.isEmpty()) return std::nullopt;
     s.leftName = o.value(QStringLiteral("leftName")).toString();
     s.rightName = o.value(QStringLiteral("rightName")).toString();
+    s.leftId = o.value(QStringLiteral("leftId")).toString();
+    s.rightId = o.value(QStringLiteral("rightId")).toString();
+    s.leftMob = MobId::fromString(o.value(QStringLiteral("leftMob")).toString().toStdString()).value_or(MobId{});
+    s.rightMob = MobId::fromString(o.value(QStringLiteral("rightMob")).toString().toStdString()).value_or(MobId{});
     s.leadingEye = o.value(QStringLiteral("leadingEye")).toString() == QLatin1String("Right") ? Eye::Right : Eye::Left;
     return s;
 }
@@ -66,6 +74,10 @@ std::optional<BinItem> makeStereoClip(const BinItem& left, const BinItem& right,
     s.rightLink = right.link;
     s.leftName = left.name;
     s.rightName = right.name;
+    s.leftId = left.id;
+    s.rightId = right.id;
+    s.leftMob = mobIdOf(left);
+    s.rightMob = mobIdOf(right);
     out.sourceSettings.insert(kStereoKey, s.toJson());
     out.fields.insert(QLatin1String(kLeadingEyeHeading), eyeText(s.leadingEye));
     out.link = s.leftLink;
@@ -80,6 +92,17 @@ bool setLeadingEye(BinItem& item, Eye eye) {
     item.fields.insert(QLatin1String(kLeadingEyeHeading), eyeText(eye));
     item.link = eye == Eye::Right ? s->rightLink : s->leftLink;
     return true;
+}
+
+EyeSource eyeSource(const StereoClip& stereo, Eye eye) {
+    return eye == Eye::Right ? EyeSource{stereo.rightName, stereo.rightId, stereo.rightMob}
+                             : EyeSource{stereo.leftName, stereo.leftId, stereo.leftMob};
+}
+
+Eye contributingEye(const StereoClip& stereo, S3DContributor contributor) {
+    if (contributor == S3DContributor::Left) return Eye::Left;
+    if (contributor == S3DContributor::Right) return Eye::Right;
+    return stereo.leadingEye;
 }
 
 StereoMode stereoModeOf(const QString& text) {

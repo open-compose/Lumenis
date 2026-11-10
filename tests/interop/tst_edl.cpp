@@ -2,6 +2,7 @@
 #include "lumenis/interop/edl.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/titler.h"
 
@@ -98,6 +99,7 @@ private slots:
     void guessedRate();
     void malformed();
     void reelNames();
+    void s3dContributor();
     void roundTrip();
     void centredTransition();
     void optimize();
@@ -453,6 +455,71 @@ void TestEdl::reelNames() {
     QVERIFY(!lost.warnings.filter(QStringLiteral("clips not found")).isEmpty());
     // Not a sequence.
     QVERIFY(!edl::exportText(tape).ok);
+}
+
+// The List Tool's S3D Contributor (p.959): a stereoscopic clip's segment is listed as its leading eye's master clip
+// (Monoscopic), its left eye's or its right eye's: each eye's name and reel.
+void TestEdl::s3dContributor() {
+    auto clip = [](const QString& name, const QString& tape) {
+        model::BinItem c;
+        c.id = model::newItemId();
+        c.kind = model::BinItemKind::MasterClip;
+        c.name = name;
+        c.mobId = MobId::generate();
+        c.editRate = Rational(25);
+        c.durationFrames = 100;
+        c.link = QJsonObject{{QStringLiteral("path"), QStringLiteral("/m/") + name + QStringLiteral(".mov")}};
+        c.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+        c.fields.insert(QStringLiteral("Tape"), tape);
+        return c;
+    };
+    const model::BinItem left = clip(QStringLiteral("shot_L"), QStringLiteral("LEFTCAM"));
+    const model::BinItem right = clip(QStringLiteral("shot_R"), QStringLiteral("RIGHTCAM"));
+    model::BinItem stereo = *model::makeStereoClip(left, right);
+    QVERIFY(model::setLeadingEye(stereo, model::Eye::Right));
+    model::BinItem seq;
+    seq.id = QStringLiteral("s");
+    seq.kind = model::BinItemKind::Sequence;
+    seq.name = QStringLiteral("Seq");
+    seq.editRate = Rational(25);
+    seq.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+    model::Sequence s;
+    model::Segment g;
+    g.clipId = stereo.id;
+    g.name = stereo.name;
+    g.sourceTrack = QStringLiteral("V1");
+    g.sourceIn = 10;
+    g.length = 25;
+    s.ensureTrack(QStringLiteral("V1"));
+    s.overwrite(QStringLiteral("V1"), 0, {g});
+    s.storeIn(seq);
+    const QList<model::BinItem> items{left, right, stereo};
+    edl::ExportOptions o;
+    o.upperCase = false;
+    o.resolve = [items](const MobId& mob, const QString& id) -> std::optional<model::BinItem> {
+        for (const model::BinItem& i : items) {
+            if (i.id == id || (!mob.isNull() && model::mobIdOf(i) == mob)) return i;
+        }
+        return std::nullopt;
+    };
+    // Monoscopic: the leading eye, here the right.
+    auto mono = edl::exportText(seq, o);
+    QVERIFY2(mono.text.contains(QStringLiteral("* FROM CLIP NAME:  shot_R")), qPrintable(mono.text));
+    QVERIFY2(mono.text.contains(QStringLiteral("RIGHTCAM")), qPrintable(mono.text));
+    o.s3dContributor = model::S3DContributor::Left;
+    auto l = edl::exportText(seq, o);
+    QVERIFY2(l.text.contains(QStringLiteral("* FROM CLIP NAME:  shot_L")), qPrintable(l.text));
+    QVERIFY2(l.text.contains(QStringLiteral("LEFTCAM")), qPrintable(l.text));
+    o.s3dContributor = model::S3DContributor::Right;
+    QVERIFY(edl::exportText(seq, o).text.contains(QStringLiteral("RIGHTCAM")));
+    // The eye's clip gone: its name is still listed, with a warning.
+    o.resolve = [stereo](const MobId&, const QString& id) -> std::optional<model::BinItem> {
+        return id == stereo.id ? std::optional<model::BinItem>(stereo) : std::nullopt;
+    };
+    o.s3dContributor = model::S3DContributor::Left;
+    const auto gone = edl::exportText(seq, o);
+    QVERIFY(gone.text.contains(QStringLiteral("* FROM CLIP NAME:  shot_L")));
+    QVERIFY(!gone.warnings.filter(QStringLiteral("eye clips not found")).isEmpty());
 }
 
 // A sequence of the import's own form (tape sources, transitions starting at their cut, a motion

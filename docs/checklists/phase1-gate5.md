@@ -184,6 +184,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Refresh Sequence > Aspect Ratio and Reformatting Options |  | p.478 | works | ☐ | | |
 | Refresh Sequence > Color Adapters |  | p.478 | works | ☐ | | |
 | Refresh Sequence > Remove Color Adapters |  | p.544 | works | ☐ | | |
+| Refresh Sequence > Stereo Correction Effects |  | p.478 | *later* | ☐ | | |
 | Refresh Sequence > Group Clips |  | p.478 | works | ☐ | | |
 | Refresh Sequence > All FrameFlex including creative framing |  | p.478 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
@@ -332,6 +333,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 228 menu commands, 196 of them working with a project open; the
+* 229 menu commands, 196 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

@@ -20,12 +20,17 @@ inline constexpr char kLeadingEyeHeading[] = "S3D Leading Eye";
 
 enum class Eye { Left, Right };
 
-// What a Stereo Master Clip keeps of its two eyes: their master clips' links and names, and its leading eye.
+// What a Stereo Master Clip keeps of its two eyes: their master clips' links, names, ids and MobIDs (the "contributing
+// left and right eye master clips", p.1124, which the List Tool's S3D Contributor lists, p.959), and its leading eye.
 struct StereoClip {
     QJsonObject leftLink;
     QJsonObject rightLink;
     QString leftName;
     QString rightName;
+    QString leftId;
+    QString rightId;
+    MobId leftMob;
+    MobId rightMob;
     Eye leadingEye = Eye::Left;
     QJsonObject toJson() const;
     static std::optional<StereoClip> fromJson(const QJsonObject& o);
@@ -40,6 +45,20 @@ inline bool isStereoClip(const BinItem& item) { return stereoClipOf(item).has_va
 // shorter eye's, leading eye Left. Nothing, with the reason, when either is not a master clip with media or their rates
 // differ.
 std::optional<BinItem> makeStereoClip(const BinItem& left, const BinItem& right, QString* error = nullptr);
+
+// One eye's contributing master clip: its name, bin item id and MobID.
+struct EyeSource {
+    QString name;
+    QString id;
+    MobId mob;
+};
+EyeSource eyeSource(const StereoClip& stereo, Eye eye);
+
+// The List Tool's S3D Contributor (p.959): "Monoscopic: Set this option for standard sequences, or if you only want to
+// use the 'leading eye' clips in a stereoscopic sequence"; "S3D Left: Only displays the left eye clips"; S3D Right.
+enum class S3DContributor { Monoscopic, Left, Right };
+// The eye a stereo clip contributes: Left or Right, or its leading eye for Monoscopic.
+Eye contributingEye(const StereoClip& stereo, S3DContributor contributor);
 
 // Sets the S3D Leading Eye: the clip's link becomes that eye's, so 2D use plays it.
 bool setLeadingEye(BinItem& item, Eye eye);

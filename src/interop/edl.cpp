@@ -731,13 +731,22 @@ private:
     struct Source {
         QString reel;
         std::int64_t in = 0;
+        QString name; // a stereoscopic clip's contributing eye's name; empty: the segment's
     };
     Source sourceOf(const model::Segment& s) {
         std::optional<model::BinItem> clip;
         if (options_.resolve) clip = options_.resolve(s.sourceMobId(), s.clipId);
         if (!clip) {
             notes_.add(QStringLiteral("clips not found: the segment's name is its reel, its IN point from 00:00:00:00"));
-            return {reelText(s.name), s.sourceIn};
+            return {reelText(s.name), s.sourceIn, QString()};
+        }
+        // A stereoscopic clip contributes one eye's master clip (S3D Contributor, p.959).
+        QString name;
+        if (const auto stereo = model::stereoClipOf(*clip)) {
+            const model::EyeSource eye = model::eyeSource(*stereo, model::contributingEye(*stereo, options_.s3dContributor));
+            name = eye.name;
+            if (auto eyeClip = options_.resolve(eye.mob, eye.id)) clip = std::move(eyeClip);
+            else notes_.add(QStringLiteral("stereoscopic clips' eye clips not found: their names listed"));
         }
         std::int64_t start = detail::timecodeFrames(clip->fields.value(QStringLiteral("Start")), clip->editRate).value_or(0);
         const int clipFps = TimecodeFormat::forRate(clip->editRate, false).nominalFps;
@@ -745,7 +754,7 @@ private:
             notes_.add(QStringLiteral("clips at other frame rates: their timecode counted at the sequence's"));
             start = detail::startAtRate(start, clipFps, rate_);
         }
-        return {reelOf(*clip), start + s.sourceIn};
+        return {reelOf(*clip), start + s.sourceIn, name};
     }
 
     // A track's segments as pieces, with each transition's cut moved to where it starts.
@@ -780,7 +789,7 @@ private:
                 const Source src = sourceOf(s);
                 p.reel = src.reel;
                 p.srcIn = src.in;
-                p.name = s.name;
+                p.name = src.name.isEmpty() ? s.name : src.name;
                 p.speed = s.effect ? speedOf(*s.effect) : std::nullopt;
                 // A motion effect uses the source frames its speed covers; a freeze frame (speed 0)
                 // one frame.

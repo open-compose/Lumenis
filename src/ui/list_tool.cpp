@@ -213,6 +213,11 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     auto* formLayout = new QFormLayout(formatting);
     optimize_ = new QCheckBox(tr("Optimize EDL"), formatting);
     formLayout->addRow(optimize_);
+    // S3D Contributor (p.959): Monoscopic, S3D Left, S3D Right.
+    s3dContributor_ = new QComboBox(formatting);
+    s3dContributor_->setObjectName(QStringLiteral("listS3DContributor"));
+    s3dContributor_->addItems({tr("Monoscopic"), tr("S3D Left"), tr("S3D Right")});
+    formLayout->addRow(tr("S3D Contributor"), s3dContributor_);
     formLayout->addRow(tr("Source TC"), menu({tr("Start"), tr("VITC"), tr("Sound_TC"), tr("Film_TC"), tr("TC24")}, formatting));
     formLayout->addRow(tr("Record TC"), menu({tr("TC1")}, formatting));
     formLayout->addRow(tr("Reel ID Type"), menu({tr("Tape"), tr("Sound_Roll"), tr("Camera_Roll"), tr("Lab_Roll"), tr("Disk_Label")}, formatting));
@@ -377,6 +382,9 @@ interop::edl::ExportOptions ListTool::options() const {
     o.clipNames = clipNames_->isChecked();
     o.markers = markers_->isChecked();
     o.optimize = optimize_->isChecked();
+    o.s3dContributor = s3dContributor_->currentIndex() == 1   ? model::S3DContributor::Left
+                       : s3dContributor_->currentIndex() == 2 ? model::S3DContributor::Right
+                                                              : model::S3DContributor::Monoscopic;
     o.startEvent = startEvent_->value();
     o.resolve = resolve_;
     return o;
