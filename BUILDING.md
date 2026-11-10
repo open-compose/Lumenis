@@ -834,7 +834,12 @@ hand.
 ### The self-hosted Windows or Linux job waits or fails
 
 * *Queued for a long time:* the PC is off or asleep, you are logged off
-  (WSL only runs while you are logged on), or a runner is stopped. Check
+  (WSL only runs while you are logged on), or a runner is stopped. WSL can
+  also stop while you are logged on (a WSL update from the Store, sleep or
+  hibernation, `wsl --shutdown`); once, the Linux job waited an hour for that
+  (2026-11-10). The `keep-wsl` task now starts the distribution again within 5
+  minutes: run `scripts\setup-windows-runner.ps1 keep-wsl <distribution>` once
+  more to update a task made before then (it only started at logon). Check
   `scripts\setup-windows-runner.ps1 status` and, in the distribution,
   `sudo scripts/setup-wsl-runner.sh status`; or set `WINDOWS_RUNNER` to
   `off` / take the version out of `LINUX_RUNNERS` until it is back.

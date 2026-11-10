@@ -26,7 +26,8 @@
 
     keep-wsl starts a WSL distribution when you log on to Windows and keeps it
     running, so the Linux runner inside it (scripts/setup-wsl-runner.sh) can
-    take jobs. WSL only runs while you are logged on.
+    take jobs; if WSL stops while you are logged on, it is started again
+    within 5 minutes. WSL only runs while you are logged on.
 
     builds lets you open the folder where CI keeps each .msi it builds (the
     newest five): "Cutthulhu Builds" in the runner's own profile
@@ -199,17 +200,23 @@ function Remove-Runner([string]$Token) {
 function Set-KeepWsl([string]$Distribution) {
     if (-not $Distribution) { throw 'usage: scripts\setup-windows-runner.ps1 keep-wsl <distribution> (see: wsl --list)' }
     # At logon, start the distribution and keep it running; hidden, low
-    # priority. WSL needs a logged-on user.
+    # priority. WSL needs a logged-on user. WSL can also stop while you stay
+    # logged on (a WSL update from the Store, sleep or hibernation,
+    # `wsl --shutdown`), which ends the task's `sleep`; so the task is also
+    # tried every 5 minutes and starts again when it is not running (a running
+    # one is left alone: MultipleInstances IgnoreNew). Run keep-wsl again to
+    # update an older task that only started at logon.
     $name = "Keep WSL $Distribution running"
     $action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\wsl.exe' `
         -Argument "-d $Distribution --exec sleep infinity"
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+    $atLogOn = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+    $every5 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
     $settings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-        -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 7
-    Register-ScheduledTask -Force -TaskName $name -Action $action -Trigger $trigger -Settings $settings `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 7 -MultipleInstances IgnoreNew -StartWhenAvailable
+    Register-ScheduledTask -Force -TaskName $name -Action $action -Trigger @($atLogOn, $every5) -Settings $settings `
         -Description 'Keeps the WSL distribution running for its GitHub Actions runner (Cutthulhu CI).' | Out-Null
     Start-ScheduledTask -TaskName $name
-    Write-Host "'$name' registered and started; it starts again each time you log on."
+    Write-Host "'$name' registered and started; it starts again when you log on and within 5 minutes if WSL stops."
 }
 
 function Set-BuildsFolder {
