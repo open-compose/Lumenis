@@ -10,6 +10,7 @@ add_library(lumenis_model STATIC
     monitor.cpp
     sequence.cpp
     sequence_format.cpp
+    universal_mastering.cpp
     clip_audio.cpp
     group_clip.cpp
     automation.cpp

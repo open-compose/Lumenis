@@ -15,6 +15,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/clip_audio_dialogs.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/model/universal_mastering.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -152,7 +153,10 @@ private slots:
         QVERIFY(!read.userBits());
         ChangeSampleRateDialog rate({{QStringLiteral("Media"), QStringLiteral("/media")}});
         QCOMPARE(rate.sampleRate(), 48000);
-        QCOMPARE(rate.rateMenu()->count(), 3);
+        // 32, 44.1 and 48 kHz, then the six Universal Mastering conversions (p.1298).
+        QCOMPARE(rate.rateMenu()->count(), 9);
+        QCOMPARE(rate.rateMenu()->itemText(4), QStringLiteral("24fps -> 25fps for Universal Mastering"));
+        QCOMPARE(rate.rateMenu()->itemData(4).toInt(), 46080);
         rate.rateMenu()->setCurrentIndex(1);
         QCOMPARE(rate.sampleRate(), 44100);
         QCOMPARE(rate.filterSize(), 64); // High
@@ -249,6 +253,20 @@ private slots:
         }
         QVERIFY2(tc, qPrintable(error));
         QCOMPARE(QString::fromStdString(tc->toString()), QStringLiteral("10:00:00:00"));
+
+        // "24fps -> 25fps for Universal Mastering" (p.1298): the sound remastered at 46080 Hz (p.1297).
+        hooks.sampleRate = [&drive] {
+            MainWindow::SampleRateChoice c;
+            c.rate = model::masteringConversions().at(1).sampleRate;
+            c.drive = drive;
+            return std::optional(c);
+        };
+        window.setClipAudioHooks(hooks);
+        QCOMPARE(window.changeSampleRate(), 1);
+        QCOMPARE(bin->bin().item(linked.id)->fields.value(QStringLiteral("Audio SR")), QStringLiteral("46080"));
+        media::AudioReader mastered;
+        QVERIFY(mastered.open(media::linkOf(*bin->bin().item(linked.id))->audioFile(0), -1));
+        QCOMPARE(mastered.sampleRate(), 46080);
     }
 
     // The commands on a bin's selection.

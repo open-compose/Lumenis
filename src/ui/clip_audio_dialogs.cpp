@@ -1,5 +1,6 @@
 // The Apply Clip Gain, Auto VO, Read Audio Timecode and Change Sample Rate dialogs (clip_audio_dialogs.h).
 #include "lumenis/ui/clip_audio_dialogs.h"
+#include "lumenis/model/universal_mastering.h"
 
 #include "lumenis/model/clip_audio.h"
 
@@ -120,6 +121,9 @@ ChangeSampleRateDialog::ChangeSampleRateDialog(const QList<std::pair<QString, QS
     rate_->addItem(tr("32 kHz"), 32000);
     rate_->addItem(tr("44.1 kHz"), 44100);
     rate_->addItem(tr("48 kHz"), 48000);
+    // HD Universal Mastering (p.1297-1298; 8.7c2a): "Click the Sample Rate menu, and select the appropriate conversion
+    // option", each at its remastered rate (written as WAV beside the MXF media, as the other rates off 48 kHz are).
+    for (const model::MasteringConversion& c : model::masteringConversions()) rate_->addItem(c.label, c.sampleRate);
     rate_->setCurrentIndex(2); // "The broadcast standard ... is 48 kHz"
     quality_ = new QComboBox(this);
     quality_->setObjectName(QStringLiteral("quality"));

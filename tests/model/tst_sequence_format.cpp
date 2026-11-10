@@ -3,6 +3,7 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/sequence_format.h"
+#include "lumenis/model/universal_mastering.h"
 
 #include <QTest>
 
@@ -34,6 +35,19 @@ class TestSequenceFormat : public QObject {
     Q_OBJECT
 
 private slots:
+    // HD Universal Mastering's remastered rates (p.1297): the guide's table, from 48 kHz.
+    void universalMastering() {
+        const QList<MasteringConversion>& list = masteringConversions();
+        QCOMPARE(list.size(), 6);
+        QList<int> rates;
+        for (const MasteringConversion& c : list) rates << c.sampleRate;
+        QCOMPARE(rates, (QList<int>{47952, 46080, 48048, 50050, 50000, 46034}));
+        QCOMPARE(list.first().label, QStringLiteral("23.97fps -> 24fps for Universal Mastering"));
+        QCOMPARE(masteredSampleRate(Rational(24), Rational(25)), 46080);
+        QCOMPARE(masteredSampleRate(Rational(25), Rational(24000, 1001)), 50050);
+        QCOMPARE(masteredSampleRate(Rational(25), Rational(25)), 48000);
+    }
+
     void sameRateModifies() {
         Sequence s = Sequence::withDefaultTracks();
         s.splice(QStringLiteral("V1"), 0, {piece(QStringLiteral("a"), 10, 48)});

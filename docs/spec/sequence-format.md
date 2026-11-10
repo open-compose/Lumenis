@@ -53,3 +53,21 @@ Tests: `tst_sequence_format` (same rate, another rate, markers, refused items), 
 
 Tests: `tst_settings_window changingProjectFormat` (the same edit rate, the file, new and old sequences' Format, another
 edit rate refused), `tst_settings_window windowTabsAndUserProfiles` (the Project Type menu's formats).
+
+## HD Universal Mastering: the audio (p.1297-1298; 8.7c2a)
+
+* "HD Universal Mastering preserves synchronization with the converted video by remastering audio at a different sample
+  rate to generate replacement audio tracks from previously mixed-down audio clips" (p.1297): the table's six conversions
+  and rates are `model::masteringConversions()` (`src/model/universal_mastering.*`); each rate is 48000 x the original
+  frame rate / the mastered one, to the sample (`model::masteredSampleRate`: 47952, 46034, 48048, 46080, 50000, 50050).
+* "Select the mixed-down audio clip in the bin, and ... Select Clip > Audio > Change Sample Rate ... Click the Sample Rate
+  menu, and select the appropriate conversion option" (p.1298): Change Sample Rate's menu (`ChangeSampleRateDialog`) lists
+  them after 32, 44.1 and 48 kHz, with the guide's texts, and writes the clip's sound again at the remastered rate (a WAV
+  beside the MXF media, as other rates off 48 kHz are; its Audio SR column says the rate). Quality (High, Medium, Low),
+  Delete Original Media and Target Drive are the dialog's own (5.7b2). Ours: the conversions are offered in every
+  project, not only 1080p ones. The remastered sound has as many samples per frame as the output needs (1920 a frame for
+  24 to 25 fps), so a digital cut at the mastered rate plays it at 48 kHz in sync; that output is 8.7c2b.
+* Steps 10-14 (two new audio tracks, Overwrite at the sequence's first frame) are ordinary editing.
+
+Tests: `tst_sequence_format universalMastering` (the table), `tst_clip_audio moreDialogs` (the menu) and
+`timecodeAndRateInTheApplication` (a clip remastered at 46080 Hz).

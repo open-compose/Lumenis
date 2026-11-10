@@ -1565,8 +1565,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         <rate> fps" sequence with its media unlinked at another (the 24p NTSC to 23.976 route, p.1294-1295);
       * 8.7c1b (done), Changing the Project Format on the Format tab to a format of the same edit rate (p.1287-1293), new
         sequences in it;
-      * 8.7c2, HD Universal Mastering (p.1297-1298): Change Sample Rate's six "for Universal Mastering" choices with their
-        remastered rates and the Quality menu, and the Digital Cut tool's Output Format menu by project format;
+      * 8.7c2, HD Universal Mastering (p.1297-1298), in two parts: 8.7c2a (done) Change Sample Rate's six "for Universal
+        Mastering" choices with their remastered rates (`model::masteringConversions`); 8.7c2b the Digital Cut tool's
+        Output Format menu by project format (p.1298-1299) and the output at another frame rate, with the output formats
+        and pulldown of 23.976p, 24p and 25p projects (p.932-938);
       * 8.7c3, Editing at 60 fps (p.1295-1296: field steps beep, Draft plays at 30, one-second transitions, the deck's
         30 fps marks) and Displaying 24p and 25p Media (p.1296).
     * 8.7d, the Symphony Option items left in both guides after an audit (redefining a title's font replacement,

@@ -55,7 +55,7 @@ headers in `include/lumenis/<library>/`.
 * **Editing.** Model: `src/model/sequence.*` (splice, overwrite, lift,
   extract, trims, effects, transitions, Change Source Track; the effect value
   `model::Effect` is in `effect.h`), `sequence_format.*` (Clip > Modify > Set
-  Format, docs/spec/sequence-format.md),
+  Format, docs/spec/sequence-format.md), `universal_mastering.*` (HD Universal Mastering's conversions),
   `automation.*` (volume and pan keyframes), `audio_eq.*` (Audio EQ's
   bands and filters), `clip_coloring.*` (which colour a segment is drawn in,
   docs/spec/timeline-colors.md), `sync_dupes.*` (sync breaks and duplicate
