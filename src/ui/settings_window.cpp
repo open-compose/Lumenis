@@ -695,6 +695,9 @@ SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(pa
     // Format: the project's format, from New Project (p.1146).
     auto* format = new QWidget;
     format_ = new QFormLayout(format);
+    // Fields fill the row on every platform (macOS's style keeps them at their size hint otherwise), so that menus sized
+    // from a minimum (Project Type) still show their text.
+    format_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     tabs_->addTab(format, tr("Format"));
 
     project_ = new SettingsList(settings, SettingsScope::Project);
@@ -823,6 +826,10 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
         }
         for (const ProjectFormat& f : sameRate) type->addItem(QString::fromStdString(f.label()));
         type->setEnabled(sameRate.size() > 1);
+        // Not sized from its longest format name: the arrow's padding differs by platform style, and the tab's width
+        // (and the cross-platform screenshot) would follow it.
+        type->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        type->setMinimumContentsLength(1);
         connect(type, &QComboBox::activated, this, [this, sameRate](int index) {
             if (index > 0 && index < sameRate.size()) emit projectFormatChanged(sameRate.at(index));
         });
