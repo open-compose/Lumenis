@@ -40,6 +40,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QItemSelectionModel>
+#include <QCursor>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -48,6 +49,7 @@
 #include <QMimeData>
 #include <QUrl>
 #include <QMouseEvent>
+#include <QTimer>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -485,6 +487,17 @@ void BinDocument::setFramePositions(const QHash<QString, QPoint>& positions) {
     if (bin_.display.framePositions == positions) return;
     bin_.display.framePositions = positions;
     touch();
+}
+
+bool BinDocument::setRepresentedFrame(const QString& id, std::int64_t frame) {
+    const model::BinItem* item = bin_.item(id);
+    if (!item || isReadOnly()) return false;
+    frame = std::clamp<std::int64_t>(frame, 0, std::max<std::int64_t>(0, item->durationFrames - 1));
+    if (bin_.display.representedFrames.value(id, 0) == frame) return false;
+    if (frame == 0) bin_.display.representedFrames.remove(id);
+    else bin_.display.representedFrames.insert(id, frame);
+    touch();
+    return true;
 }
 
 void BinDocument::deleteCustomColumn(const QString& heading) {
@@ -947,7 +960,230 @@ QImage BinFrameView::picture(const QString& id, QSize size) const {
         }
     }
     MediaFrames* frames = MediaFrames::instance();
-    return item && frames ? frames->thumbnail(*item, 0, size) : QImage();
+    return item && frames ? frames->thumbnail(*item, representedFrame(id), size) : QImage();
+}
+
+// ---- the frame identifying a clip (8.7d3; p.251)
+
+namespace {
+
+// As the monitors' Mouse Jog (Composer::kJogPixels): a frame every four pixels.
+constexpr int kFrameJogPixels = 4;
+
+// The mouse and the keys that end mouse control, for a Frame view's Mouse Jog and Mouse Shuttle.
+class FrameMouseFilter : public QObject {
+public:
+    explicit FrameMouseFilter(BinFrameView* view) : QObject(view), view_(view), last_(QCursor::pos()) {}
+
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            const QPoint at = static_cast<QMouseEvent*>(event)->globalPosition().toPoint();
+            const int dx = at.x() - last_.x();
+            last_ = at;
+            if (dx != 0) view_->mouseControlMoved(dx);
+            return false;
+        }
+        case QEvent::MouseButtonDblClick:
+            view_->stopMouseControl();
+            return true;
+        case QEvent::KeyPress: {
+            const int key = static_cast<QKeyEvent*>(event)->key();
+            if (key == Qt::Key_Space || key == Qt::Key_Escape) {
+                view_->stopMouseControl();
+                return true;
+            }
+            return false;
+        }
+        default:
+            return QObject::eventFilter(watched, event);
+        }
+    }
+
+private:
+    BinFrameView* view_;
+    QPoint last_;
+};
+
+bool isRepresentKey(const QKeyEvent* key, bool kHeld) {
+    if (key->modifiers() & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier)) return false;
+    switch (key->key()) {
+    case Qt::Key_K:
+    case Qt::Key_Home:
+    case Qt::Key_End:
+    case Qt::Key_N:
+    case Qt::Key_Semicolon:
+        return true;
+    case Qt::Key_L:
+    case Qt::Key_J:
+        return kHeld;
+    default:
+        return false;
+    }
+}
+
+} // namespace
+
+std::int64_t BinFrameView::representedFrame(const QString& id) const {
+    return document_.bin().display.representedFrames.value(id, 0);
+}
+
+QStringList BinFrameView::representedItems(bool beep) const {
+    QStringList ids;
+    if (selectionModel()) {
+        for (const QModelIndex& i : selectionModel()->selectedIndexes()) {
+            const QString id = i.data(BinItemModel::kIdRole).toString();
+            const model::BinItem* item = document_.bin().item(id);
+            // "If you have group or multigroup clips in the bin and want to change the displayed frame, use controls in
+            // Source/Record mode" (p.251).
+            if (!item || item->kind == model::BinItemKind::Group || item->durationFrames <= 1 || ids.contains(id)) continue;
+            ids << id;
+        }
+    }
+    if (ids.isEmpty() && beep) QApplication::beep();
+    return ids;
+}
+
+bool BinFrameView::stepRepresented(std::int64_t frames) {
+    bool moved = false;
+    for (const QString& id : representedItems(false)) moved |= document_.setRepresentedFrame(id, representedFrame(id) + frames);
+    if (moved) viewport()->update();
+    return moved;
+}
+
+bool BinFrameView::representEnd(bool last) {
+    bool moved = false;
+    for (const QString& id : representedItems(true)) {
+        const model::BinItem* item = document_.bin().item(id);
+        moved |= document_.setRepresentedFrame(id, last ? item->durationFrames - 1 : 0);
+    }
+    if (moved) viewport()->update();
+    return moved;
+}
+
+void BinFrameView::connectRollTimer(bool shuttle) {
+    if (!rollTimer_) rollTimer_ = new QTimer(this);
+    disconnect(rollTimer_, nullptr, this, nullptr);
+    if (shuttle) {
+        // Shuttling: whole frames as the speed adds up, 25 ticks a second, a frame a second for each pixel.
+        rollTimer_->setInterval(40);
+        connect(rollTimer_, &QTimer::timeout, this, [this] {
+            shuttleCarry_ += mouseOffset_ * 0.04;
+            const auto frames = static_cast<std::int64_t>(shuttleCarry_);
+            shuttleCarry_ -= static_cast<double>(frames);
+            if (frames != 0) stepRepresented(frames);
+        });
+    } else {
+        rollTimer_->setInterval(1000 / kRollFps);
+        connect(rollTimer_, &QTimer::timeout, this, [this] {
+            if (!stepRepresented(rollDirection_)) roll(0);
+        });
+    }
+}
+
+void BinFrameView::roll(int direction) {
+    direction = direction > 0 ? 1 : direction < 0 ? -1 : 0;
+    if (direction != 0 && representedItems(true).isEmpty()) direction = 0;
+    rollDirection_ = direction;
+    if (!rollTimer_) connectRollTimer(false);
+    if (direction == 0) {
+        if (mouseControl_ != MouseControl::Shuttle) rollTimer_->stop();
+        return;
+    }
+    stepRepresented(direction);
+    rollTimer_->start();
+}
+
+void BinFrameView::startMouseControl(MouseControl mode) {
+    if (mode == MouseControl::None) {
+        stopMouseControl();
+        return;
+    }
+    if (representedItems(true).isEmpty()) return;
+    roll(0);
+    mouseControl_ = mode;
+    mouseOffset_ = 0;
+    shuttleCarry_ = 0;
+    if (!mouseFilter_) {
+        mouseFilter_ = new FrameMouseFilter(this);
+        qApp->installEventFilter(mouseFilter_);
+    }
+    if (mode == MouseControl::Shuttle) {
+        connectRollTimer(true);
+        rollTimer_->start();
+    }
+}
+
+void BinFrameView::stopMouseControl() {
+    if (mouseControl_ == MouseControl::None) return;
+    const bool shuttling = mouseControl_ == MouseControl::Shuttle;
+    mouseControl_ = MouseControl::None;
+    if (mouseFilter_) {
+        qApp->removeEventFilter(mouseFilter_);
+        mouseFilter_->deleteLater();
+        mouseFilter_ = nullptr;
+    }
+    if (shuttling && rollTimer_) {
+        rollTimer_->stop();
+        connectRollTimer(false); // back to K+L rolling
+    }
+}
+
+void BinFrameView::mouseControlMoved(double dx) {
+    if (mouseControl_ == MouseControl::Jog) {
+        mouseOffset_ += dx;
+        const auto frames = static_cast<std::int64_t>(mouseOffset_ / kFrameJogPixels);
+        if (frames == 0) return;
+        mouseOffset_ -= static_cast<double>(frames) * kFrameJogPixels;
+        stepRepresented(frames);
+    } else if (mouseControl_ == MouseControl::Shuttle) {
+        mouseOffset_ = std::clamp(mouseOffset_ + dx, -300.0, 300.0);
+    }
+}
+
+bool BinFrameView::event(QEvent* event) {
+    // The keys that change the frame go to the Frame view, not to the commands mapped to them, while clips are selected.
+    if (event->type() == QEvent::ShortcutOverride) {
+        const auto* key = static_cast<QKeyEvent*>(event);
+        if (isRepresentKey(key, kHeld_) && !representedItems(false).isEmpty()) {
+            event->accept();
+            return true;
+        }
+    }
+    return QListView::event(event);
+}
+
+void BinFrameView::keyPressEvent(QKeyEvent* event) {
+    if (!isRepresentKey(event, kHeld_) || representedItems(false).isEmpty()) {
+        QListView::keyPressEvent(event);
+        return;
+    }
+    switch (event->key()) {
+    case Qt::Key_K: kHeld_ = true; break;
+    case Qt::Key_L:
+    case Qt::Key_J:
+        if (!event->isAutoRepeat()) roll(event->key() == Qt::Key_L ? 1 : -1);
+        break;
+    case Qt::Key_Home: representEnd(false); break;
+    case Qt::Key_End: representEnd(true); break;
+    case Qt::Key_N: startMouseControl(MouseControl::Jog); break;
+    case Qt::Key_Semicolon: startMouseControl(MouseControl::Shuttle); break;
+    default: break;
+    }
+    event->accept();
+}
+
+void BinFrameView::keyReleaseEvent(QKeyEvent* event) {
+    if (!event->isAutoRepeat()) {
+        // "When you see the frame that you want to use, release the keys" (p.251).
+        if (event->key() == Qt::Key_K) {
+            kHeld_ = false;
+            roll(0);
+        } else if ((event->key() == Qt::Key_L || event->key() == Qt::Key_J) && rollDirection_ != 0) {
+            roll(0);
+        }
+    }
+    QListView::keyReleaseEvent(event);
 }
 
 QSize BinFrameView::frameSize(int step) {

@@ -31,6 +31,8 @@ class QToolButton;
 // Text, Frame and Script views together. BinContainer (bin_container.h) opens
 // the documents and creates the views.
 
+class QTimer;
+
 namespace lumenis::ui {
 
 // An open bin: the bin's contents, where it is saved, and whether it has
@@ -88,6 +90,9 @@ public:
     void setScript(const QString& id, const QString& text);
     void setColumnWidth(const QString& heading, int width);
     void setFramePositions(const QHash<QString, QPoint>& positions);
+    // The frame identifying a clip in Frame view (p.251; 8.7d3), clamped to the clip; the first frame takes it out of
+    // the bin's list. False when nothing changes.
+    bool setRepresentedFrame(const QString& id, std::int64_t frame);
     // Custom columns (p.268-269): deleting one deletes what was typed in it.
     void deleteCustomColumn(const QString& heading);
     // Renames the column, its contents, width and sort keys. False if `from`
@@ -257,9 +262,36 @@ public:
     // until MediaFrames has it (thumbnailReady then repaints).
     QImage picture(const QString& id, QSize size) const;
 
+    // "To change the frame identifying the clip" (Editing Guide p.251; 8.7d3): "Press and hold the K key (Pause) on
+    // the keyboard and press the L key (Play Forward) to roll the footage within the frame forward at slow speed. To
+    // move backward through the footage, press and hold the K key and press the J key"; "Use the Home key or End key
+    // to change the represented frame", and jog or shuttle with the mouse (N, ;). These act on the selected clips,
+    // groups aside ("use controls in Source/Record mode", p.251, so they beep).
+    std::int64_t representedFrame(const QString& id) const;
+    // Moves the selected clips' frames by `frames`; false when none could move.
+    bool stepRepresented(std::int64_t frames);
+    // Home and End: the first or the last frame of each selected clip.
+    bool representEnd(bool last);
+    // K with L (1) or J (-1): rolling at kRollFps (ours) until stopRolling(); 0 stops.
+    static constexpr int kRollFps = 8;
+    void roll(int direction);
+    void stopRolling() { roll(0); }
+    int rolling() const { return rollDirection_; }
+    // Mouse Jog (N) and Mouse Shuttle (;) on the selected clips' frames, as in the monitors (p.402-403): jog a frame
+    // every four pixels; shuttle at a frame a second for each pixel since it started. A double-click, the space bar
+    // or Escape ends it.
+    enum class MouseControl { None, Jog, Shuttle };
+    void startMouseControl(MouseControl mode);
+    void stopMouseControl();
+    MouseControl mouseControl() const { return mouseControl_; }
+    void mouseControlMoved(double dx);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     bool viewportEvent(QEvent* event) override;
+    bool event(QEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
 
 public:
     // After every layout, frames placed by hand go back where they were.
@@ -270,8 +302,19 @@ private:
 
     void storePositions(const QModelIndexList& moved);
     QPoint snapped(const QPoint& p) const;
+    // The selected items that have frames to show (not groups); a beep and empty when there are none.
+    QStringList representedItems(bool beep) const;
+    // Connects the timer to K+L rolling (or, while shuttling, to the shuttle's speed).
+    void connectRollTimer(bool shuttle);
 
     BinDocument& document_;
+    bool kHeld_ = false;
+    int rollDirection_ = 0;
+    QTimer* rollTimer_ = nullptr;
+    MouseControl mouseControl_ = MouseControl::None;
+    double mouseOffset_ = 0;
+    double shuttleCarry_ = 0;
+    QObject* mouseFilter_ = nullptr;
 };
 
 // Script view (p.252-254): frames down the left, the clip's details above

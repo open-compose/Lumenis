@@ -158,6 +158,9 @@ struct BinDisplay {
     int frameSize = kDefaultFrameSize;     // Enlarge/Reduce Frame (p.250)
     // Keyed by BinItem::id.
     QHash<QString, QPoint> framePositions; // Frame view items placed by hand (p.250)
+    // The frame identifying each clip in Frame view, from its start ("To change the frame identifying the clip ...
+    // Media Composer saves your choice as part of the bin configuration", p.251); items not here show their first.
+    QHash<QString, std::int64_t> representedFrames;
     SnapToGrid snap = SnapToGrid::Disable;
     QList<BinSortKey> sort; // the last sort, for Sort Again
     // The last sift's criteria, kept so that Show Sifted can show it again.

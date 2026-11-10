@@ -710,6 +710,10 @@ std::optional<Bin> BinFile::read(const QString& path, QString* error) {
         const QJsonArray xy = it.value().toArray();
         bin.display.framePositions.insert(it.key(), QPoint(xy.at(0).toInt(), xy.at(1).toInt()));
     }
+    const QJsonObject represented = d.value(QStringLiteral("representedFrames")).toObject();
+    for (auto it = represented.begin(); it != represented.end(); ++it) {
+        bin.display.representedFrames.insert(it.key(), static_cast<std::int64_t>(it.value().toDouble()));
+    }
     bin.display.snap = snapFromName(d.value(QStringLiteral("snapToGrid")).toString());
     for (const QJsonValue& k : d.value(QStringLiteral("sort")).toArray()) {
         const QJsonObject ko = k.toObject();
@@ -746,6 +750,10 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
     for (auto it = bin.display.framePositions.cbegin(); it != bin.display.framePositions.cend(); ++it) {
         positions.insert(it.key(), QJsonArray{it.value().x(), it.value().y()});
     }
+    QJsonObject represented;
+    for (auto it = bin.display.representedFrames.cbegin(); it != bin.display.representedFrames.cend(); ++it) {
+        represented.insert(it.key(), static_cast<double>(it.value()));
+    }
     QJsonArray sort;
     for (const BinSortKey& k : bin.display.sort) {
         sort.append(QJsonObject{{QStringLiteral("heading"), k.heading}, {QStringLiteral("ascending"), k.ascending}});
@@ -767,6 +775,7 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
         {QStringLiteral("background"), bin.display.background},
         {QStringLiteral("frameSize"), bin.display.frameSize},
         {QStringLiteral("framePositions"), positions},
+        {QStringLiteral("representedFrames"), represented},
         {QStringLiteral("snapToGrid"), QLatin1String(snapName(bin.display.snap))},
         {QStringLiteral("sort"), sort},
         {QStringLiteral("sift"), sift},

@@ -714,6 +714,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   jobs polled every two seconds.
 * Universal Mastering's sample rates (8.7c2a, docs/spec/sequence-format.md): the six conversions offered in every project,
   after the three plain rates, written as WAV.
+* The Frame view's represented frame (8.7d3): K+L and K+J roll at 8 frames a second; the keys K, L, J, Home, End, N
+  and ; go to the Frame view while it has clips selected; L alone is not ours there.
 * Mouse Jog and Mouse Shuttle (8.7d2, docs/spec/composer-display.md): 4 pixels a frame for jogging, 1 fps a pixel for
   shuttling; sound only at whole multiples of normal speed; clicks while on go to the mouse control.
 * Font replacement (8.7d1, docs/spec/title-tool.md): the Site setting is one "Font Replacement" entry in place of
@@ -1578,7 +1580,10 @@ These are recorded now so they are not entered from memory later.
     Show Unsifted, and "(sifted)" on the bin's tab.
   * Frame view: Enlarge and Reduce Frame (eight sizes), frames dragged
     anywhere and kept there, Align to Grid, Align Selected to Grid, Fill
-    Window, Fill Sorted, Snap to Grid, and the tooltip.
+    Window, Fill Sorted, Snap to Grid, and the tooltip. Changing the frame
+    identifying a clip (8.7d3; p.251): K with L or J rolls it at 8 frames a
+    second (ours), Home and End, Mouse Jog and Shuttle (N, ;) on the selected
+    clips, kept in the bin ("representedFrames"); groups beep.
   * Script view: a frame, the name and duration, and a text box per clip;
     clips dragged up or down.
   * Set Clip Color, the Color column, Set Background Color, Clip > Lock
@@ -1633,8 +1638,7 @@ These are recorded now so they are not entered from memory later.
     Set <column> for selected clips.
   * The Bin settings dialog (Favorite Bins placement, auto-save interval)
     comes with Settings in 1.5.
-  * Frame view border colours and icons, changing the represented frame,
-    Faster Thumbnails. "Show reference clips" shows items marked as not
+  * Frame view border colours and icons (U3h), Faster Thumbnails. "Show reference clips" shows items marked as not
     placed by the user (`BinItem::userPlaced`); only bins read from Media
     Composer (3.3b) will have them.
   * Copies are clones only in name: a change to one does not yet reach

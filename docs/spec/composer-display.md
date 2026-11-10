@@ -90,8 +90,7 @@ Code:
   it, not to the window under the mouse.
 * "if you are shuttling with the mouse and you press the L key, the playback speeds up to the next normal play rate"
   (p.403): `Composer::shuttleFaster`, 1, 2, 3, 5 or 8 times normal; the mouse goes on from there.
-* The Frame view's represented frame by jog and shuttle (p.251) comes with the Frame view's own frame changing
-  (8.7d3).
+* The Frame view's represented frame by jog and shuttle (p.251) is the Frame view's own (8.7d3, `BinFrameView`).
 
 Test: `tst_composer_display mouseJogAndShuttle`.
 

@@ -19,6 +19,7 @@
 #include <QMenu>
 #include <QPlainTextEdit>
 #include <QJsonArray>
+#include <QKeyEvent>
 #include <QSignalSpy>
 #include <QStackedWidget>
 #include <QTabWidget>
@@ -405,6 +406,70 @@ private slots:
         f.view->setBackground(QStringLiteral("#303050"));
         QCOMPARE(f.view->table()->palette().color(QPalette::Base), QColor(0x30, 0x30, 0x50));
         QCOMPARE(f.view->frameView()->palette().color(QPalette::Base), QColor(0x30, 0x30, 0x50));
+    }
+
+    // "To change the frame identifying the clip" (p.251; 8.7d3): K with L or J rolls the frame, Home and End go to the
+    // first and last, the mouse jogs it; the choice is kept with the bin; groups are left alone.
+    void frameIdentifyingTheClip() {
+        Fixture f;
+        f.view->setMode(model::BinViewMode::Frame);
+        BinFrameView* frames = f.view->frameView();
+        Fixture::settle();
+        // Nothing selected: nothing to change.
+        QVERIFY(!frames->representEnd(true));
+        f.view->selectIds({f.ids.at(1)});
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), 0);
+        // "Use the Home key or End key to change the represented frame."
+        QTest::keyClick(frames, Qt::Key_End);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), 99);
+        QTest::keyClick(frames, Qt::Key_Home);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), 0);
+        // "Press and hold the K key (Pause) on the keyboard and press the L key (Play Forward) to roll the footage
+        // within the frame forward at slow speed": one frame at once, then kRollFps a second until the keys go.
+        QTest::keyPress(frames, Qt::Key_K);
+        QTest::keyPress(frames, Qt::Key_L);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), 1);
+        QCOMPARE(frames->rolling(), 1);
+        QTRY_VERIFY_WITH_TIMEOUT(frames->representedFrame(f.ids.at(1)) >= 3, 2000);
+        QTest::keyRelease(frames, Qt::Key_L);
+        QCOMPARE(frames->rolling(), 0);
+        const std::int64_t rolled = frames->representedFrame(f.ids.at(1));
+        QTest::keyPress(frames, Qt::Key_J);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), rolled - 1);
+        QTest::keyRelease(frames, Qt::Key_J);
+        QTest::keyRelease(frames, Qt::Key_K);
+        // Without K, L is not ours.
+        QTest::keyClick(frames, Qt::Key_L);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), rolled - 1);
+        // Mouse Jog: a frame every four pixels; Escape ends it.
+        frames->startMouseControl(BinFrameView::MouseControl::Jog);
+        QCOMPARE(frames->mouseControl(), BinFrameView::MouseControl::Jog);
+        frames->mouseControlMoved(9);
+        QCOMPARE(frames->representedFrame(f.ids.at(1)), rolled + 1);
+        QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QCoreApplication::sendEvent(frames, &escape);
+        QCOMPARE(frames->mouseControl(), BinFrameView::MouseControl::None);
+        // "Media Composer saves your choice as part of the bin configuration."
+        QCOMPARE(f.doc().bin().display.representedFrames.value(f.ids.at(1)), rolled + 1);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("b.bin"));
+        QVERIFY(model::BinFile::write(path, f.doc().bin()));
+        const auto read = model::BinFile::read(path);
+        QVERIFY(read);
+        QCOMPARE(read->display.representedFrames, f.doc().bin().display.representedFrames);
+        // "If you have group or multigroup clips in the bin and want to change the displayed frame, use controls in
+        // Source/Record mode."
+        model::BinItem group;
+        group.id = model::newItemId();
+        group.name = QStringLiteral("Group");
+        group.kind = model::BinItemKind::Group;
+        group.durationFrames = 100;
+        group.editRate = Rational(25);
+        f.doc().addItem(group);
+        Fixture::settle();
+        f.view->selectIds({group.id});
+        QVERIFY(!frames->representEnd(true));
+        QCOMPARE(frames->representedFrame(group.id), 0);
     }
 
     void frameViewSizesAndAlignment() {
