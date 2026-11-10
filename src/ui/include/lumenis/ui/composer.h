@@ -628,6 +628,26 @@ public:
     // 1x speed"). The other direction starts again at normal speed. Ours: the speed stops rising at 8
     // times normal; sound plays only at whole multiples of normal speed.
     void playDynamic(int direction, bool slowStart);
+    // Mouse Jog and Mouse Shuttle (Editing Guide p.402-403, p.675; 8.7d2): "Press the N key to activate mouse control
+    // for jogging. Press the semicolon (;) key to activate mouse control for shuttling ... Move the mouse to the right
+    // to jog or play forward or to the left to jog or play backward." Jog moves the active monitor a frame for every
+    // kJogPixels the mouse moves (ours); shuttle plays at a speed set by how far the mouse has moved since shuttling
+    // started or paused, kShuttleFpsPerPixel frames a second a pixel (ours), "all the way from 1 to 300 fps". "Click the
+    // mouse button" pauses shuttling; "Double-click the mouse button or press the space bar" (or "the Escape key",
+    // p.675) quits. "if you are shuttling with the mouse and you press the L key, the playback speeds up to the next
+    // normal play rate". While on, an application event filter feeds the mouse and those keys here.
+    enum class MouseControl { None, Jog, Shuttle };
+    static constexpr int kJogPixels = 4;
+    static constexpr double kShuttleFpsPerPixel = 1.0;
+    void startMouseControl(MouseControl mode);
+    void stopMouseControl();
+    MouseControl mouseControl() const { return mouseControl_; }
+    // The mouse moved `dx` pixels to the right (negative: left).
+    void mouseControlMoved(double dx);
+    // The click: shuttling pauses at the position, and the next movement starts from a standstill.
+    void pauseMouseShuttle();
+    // L while shuttling: forward at the next of the normal play rates (1, 2, 3, 5 and 8 times normal).
+    void shuttleFaster();
     void setDynamicPlay(int acceleration, int slowStartPresses);
     // The current speed as a multiple of normal (negative: reverse); 0 when stopped.
     double rate() const;
@@ -798,6 +818,12 @@ private:
     bool kHeld_ = false;
     int speed_ = 0;
     bool slow_ = false; // slow play (playSlow())
+    MouseControl mouseControl_ = MouseControl::None;
+    double mouseOffset_ = 0;   // shuttle: pixels moved since shuttling started or paused; jog: pixels not yet a frame
+    QObject* mouseFilter_ = nullptr;
+    // Plays the active monitor at `multiple` times normal speed (negative: reverse): whole speeds with sound, as J and
+    // L; between them on the wall clock without sound, as Dynamic Play.
+    void playAtMultiple(double multiple);
     double fraction_ = 0; // Dynamic Play between whole speeds: the multiple of normal (speed_ is +-1)
     int dynamicDirection_ = 0; // Dynamic Play is playing this way
     int dynamicSteps_ = 0;     // twelfths of an octave of speed above normal

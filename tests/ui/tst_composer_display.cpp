@@ -12,6 +12,8 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QJsonArray>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QMenu>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -304,6 +306,57 @@ private slots:
         QCOMPARE(c.rate(), 2.0);
         c.stop();
         QCOMPARE(c.rate(), 0.0);
+    }
+
+    // Mouse Jog and Mouse Shuttle (p.402-403, p.675; 8.7d2): jogging a frame every few pixels, shuttling at a speed set
+    // by the mouse up to 300 fps, the click pausing, L to the next play rate, Escape and a double-click quitting.
+    void mouseJogAndShuttle() {
+        Composer c;
+        c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("a"), 10000));
+        c.moveTo(MonitorId::Source, 100);
+        QVERIFY(c.perform(QStringLiteral("play.mouse_jog")));
+        QCOMPARE(c.mouseControl(), Composer::MouseControl::Jog);
+        // "Move the mouse to the right to jog or play forward or to the left to jog or play backward" (p.402).
+        c.mouseControlMoved(2 * Composer::kJogPixels + 1);
+        QCOMPARE(c.state(MonitorId::Source).position(), 102);
+        c.mouseControlMoved(Composer::kJogPixels - 1);
+        QCOMPARE(c.state(MonitorId::Source).position(), 103);
+        c.mouseControlMoved(-3 * Composer::kJogPixels);
+        QCOMPARE(c.state(MonitorId::Source).position(), 100);
+        QVERIFY(!c.isPlaying());
+        // "To deactivate jog or shuttle, press the space bar or the Escape key" (p.675).
+        QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QCoreApplication::sendEvent(&c, &escape);
+        QCOMPARE(c.mouseControl(), Composer::MouseControl::None);
+
+        // Shuttle: 50 pixels to the right is 50 fps, two times normal at 25 fps, with sound.
+        QVERIFY(c.perform(QStringLiteral("play.mouse_shuttle")));
+        QCOMPARE(c.mouseControl(), Composer::MouseControl::Shuttle);
+        c.mouseControlMoved(50 / Composer::kShuttleFpsPerPixel);
+        QCOMPARE(c.speed(), 2);
+        QCOMPARE(c.rate(), 2.0);
+        // Between the fixed rates: 40 fps.
+        c.mouseControlMoved(-10 / Composer::kShuttleFpsPerPixel);
+        QCOMPARE(c.rate(), 1.6);
+        // "if you are shuttling with the mouse and you press the L key, the playback speeds up to the next normal play
+        // rate" (p.403).
+        QKeyEvent l(QEvent::KeyPress, Qt::Key_L, Qt::NoModifier);
+        QCoreApplication::sendEvent(&c, &l);
+        QCOMPARE(c.rate(), 2.0);
+        // "Click the mouse button" pauses; moving on starts from a standstill, here backward.
+        c.pauseMouseShuttle();
+        QCOMPARE(c.rate(), 0.0);
+        QCOMPARE(c.mouseControl(), Composer::MouseControl::Shuttle);
+        c.mouseControlMoved(-30 / Composer::kShuttleFpsPerPixel);
+        QCOMPARE(c.rate(), -1.2);
+        // "They can vary all the way from 1 to 300 fps" (p.675).
+        c.mouseControlMoved(10000);
+        QCOMPARE(c.rate(), 12.0);
+        // "Double-click the mouse button or press the space bar" quits.
+        QMouseEvent twice(QEvent::MouseButtonDblClick, QPointF(1, 1), QPointF(1, 1), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&c, &twice);
+        QCOMPARE(c.mouseControl(), Composer::MouseControl::None);
+        QVERIFY(!c.isPlaying());
     }
 
     // Single-field step (p.399) and editing at 60 fps (p.1295; 8.7c3): field steps beep in progressive projects and

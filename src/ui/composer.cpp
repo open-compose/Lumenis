@@ -22,7 +22,9 @@
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QCursor>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QLabel>
 #include <QMenu>
 #include <QMimeData>
@@ -2262,6 +2264,167 @@ void Composer::playDynamic(int direction, bool slowStart) {
     dynamicSteps_ = steps;
 }
 
+// ---- Mouse Jog and Mouse Shuttle (8.7d2; p.402-403, p.675)
+
+namespace {
+
+// Feeds the mouse and the keys that end or speed up mouse control to the Composer while it is on.
+class MouseControlFilter : public QObject {
+public:
+    MouseControlFilter(Composer* composer) : QObject(composer), composer_(composer), last_(QCursor::pos()) {}
+
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        switch (event->type()) {
+        case QEvent::MouseMove: {
+            const QPoint at = static_cast<QMouseEvent*>(event)->globalPosition().toPoint();
+            const int dx = at.x() - last_.x();
+            last_ = at;
+            if (dx != 0) composer_->mouseControlMoved(dx);
+            return false;
+        }
+        case QEvent::MouseButtonPress:
+            // "To pause shuttling with the mouse: Click the mouse button."
+            if (composer_->mouseControl() == Composer::MouseControl::Shuttle) composer_->pauseMouseShuttle();
+            return true;
+        case QEvent::MouseButtonRelease:
+            return true;
+        case QEvent::MouseButtonDblClick:
+            // "To quit jogging or shuttling with the mouse: Double-click the mouse button or press the space bar."
+            composer_->stopMouseControl();
+            return true;
+        case QEvent::KeyPress: {
+            const int key = static_cast<QKeyEvent*>(event)->key();
+            if (key == Qt::Key_Space || key == Qt::Key_Escape) {
+                composer_->stopMouseControl();
+                return true;
+            }
+            if (key == Qt::Key_L && composer_->mouseControl() == Composer::MouseControl::Shuttle) {
+                composer_->shuttleFaster();
+                return true;
+            }
+            return false;
+        }
+        default:
+            return QObject::eventFilter(watched, event);
+        }
+    }
+
+private:
+    Composer* composer_;
+    QPoint last_;
+};
+
+} // namespace
+
+void Composer::startMouseControl(MouseControl mode) {
+    if (mode == MouseControl::None) {
+        stopMouseControl();
+        return;
+    }
+    if (state(active_).isEmpty()) return;
+    stop();
+    mouseControl_ = mode;
+    mouseOffset_ = 0;
+    if (!mouseFilter_) {
+        mouseFilter_ = new MouseControlFilter(this);
+        qApp->installEventFilter(mouseFilter_);
+    }
+}
+
+void Composer::stopMouseControl() {
+    if (mouseControl_ == MouseControl::None) return;
+    const bool shuttling = mouseControl_ == MouseControl::Shuttle;
+    mouseControl_ = MouseControl::None;
+    mouseOffset_ = 0;
+    if (mouseFilter_) {
+        qApp->removeEventFilter(mouseFilter_);
+        mouseFilter_->deleteLater();
+        mouseFilter_ = nullptr;
+    }
+    if (shuttling) stop();
+}
+
+void Composer::mouseControlMoved(double dx) {
+    model::MonitorState& s = state(active_);
+    if (mouseControl_ == MouseControl::None || s.isEmpty()) return;
+    mouseOffset_ += dx;
+    if (mouseControl_ == MouseControl::Jog) {
+        // A frame for every kJogPixels; what is left over waits for the next movement.
+        const auto frames = static_cast<std::int64_t>(mouseOffset_ / kJogPixels);
+        if (frames == 0) return;
+        mouseOffset_ -= static_cast<double>(frames) * kJogPixels;
+        moveTo(active_, s.position() + frames);
+        return;
+    }
+    // Shuttle: "playback rates using the mouse do not occur at fixed increments. They can vary all the way from 1 to
+    // 300 fps" (p.675).
+    const int nominal = std::max(1, TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps);
+    const double fps = std::clamp(mouseOffset_ * kShuttleFpsPerPixel, -300.0, 300.0);
+    mouseOffset_ = fps / kShuttleFpsPerPixel;
+    if (std::abs(fps) < 1.0) {
+        stop();
+        return;
+    }
+    playAtMultiple(fps / nominal);
+}
+
+void Composer::pauseMouseShuttle() {
+    stop();
+    mouseOffset_ = 0;
+}
+
+void Composer::shuttleFaster() {
+    const model::MonitorState& s = state(active_);
+    if (mouseControl_ != MouseControl::Shuttle || s.isEmpty()) return;
+    // "the playback speeds up to the next normal play rate (30, 60, 90, 150, or 240 fps for NTSC ...)" (p.403).
+    const double now = rate();
+    int next = kSpeeds[std::size(kSpeeds) - 1];
+    for (int sp : kSpeeds) {
+        if (sp > now + 1e-9) {
+            next = sp;
+            break;
+        }
+    }
+    const int nominal = std::max(1, TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps);
+    mouseOffset_ = next * nominal / kShuttleFpsPerPixel;
+    play(next);
+}
+
+void Composer::playAtMultiple(double multiple) {
+    const model::MonitorState& s = state(active_);
+    if (s.isEmpty() || multiple == 0) {
+        stop();
+        return;
+    }
+    const int dir = multiple > 0 ? 1 : -1;
+    const double size = std::abs(multiple);
+    const double whole = std::round(size);
+    if (std::abs(size - whole) < 1e-9 && whole >= 1) {
+        if (speed_ != dir * static_cast<int>(whole) || fraction_ > 0) play(dir * static_cast<int>(whole)); // with sound
+        return;
+    }
+    if (speed_ == 0) {
+        stats_ = {};
+        playRanges_.clear();
+    }
+    if (loop_) {
+        stopAt_.reset();
+        endLoop();
+    }
+    const bool restart = speed_ != dir || fraction_ == 0;
+    speed_ = dir;
+    slow_ = false;
+    fraction_ = size;
+    if (restart) {
+        carry_ = 0;
+        playStart_ = s.position();
+        clock_.restart();
+        timer_->start();
+        refresh();
+        emit playStarted(active_, 0); // no sound between whole speeds
+    }
+}
+
 double Composer::rate() const {
     if (speed_ == 0) return 0;
     if (fraction_ > 0) return speed_ * fraction_;
@@ -2642,6 +2805,8 @@ bool Composer::handles(const QString& id) {
         QStringLiteral("play.play_forward"),
         QStringLiteral("play.dynamic_play_forward"),
         QStringLiteral("play.dynamic_play_reverse"),
+        QStringLiteral("play.mouse_jog"),
+        QStringLiteral("play.mouse_shuttle"),
         QStringLiteral("play.play_in_to_out"),
         QStringLiteral("move.step_backward_10_frames"),
         QStringLiteral("move.step_forward_10_frames"),
@@ -2714,6 +2879,9 @@ bool Composer::perform(const QString& id) {
         // "If you press Alt ... while you tap the Dynamic Play keys, start play starts at a lower
         // speed" (p.402).
         playDynamic(id.endsWith(QLatin1String("forward")) ? 1 : -1, QApplication::keyboardModifiers() & Qt::AltModifier);
+    } else if (id == QLatin1String("play.mouse_jog") || id == QLatin1String("play.mouse_shuttle")) {
+        // The Mouse Jog and Mouse Shuttle buttons, N and ; (p.402).
+        startMouseControl(id == QLatin1String("play.mouse_jog") ? MouseControl::Jog : MouseControl::Shuttle);
     } else if (id == QLatin1String("play.pause")) {
         stop();
     } else if (id == QLatin1String("play.play_in_to_out")) {

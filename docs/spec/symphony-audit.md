@@ -9,8 +9,8 @@ through every mention in the 2025.12 Editing Guide (36 lines) and FX Guide (216)
 | Item | Page | Status |
 | --- | --- | --- |
 | Popup Report on AAF Import, Report As Comma Separated (CSV) | p.237-238 | Phase 9: the Import setting's popup report is not built yet, CSV with it. |
-| Changing a Frame view's represented frame by jogging or shuttling with the mouse (Home/End too) | p.251 | 8.7d2, with Mouse Jog and Mouse Shuttle. |
-| Smooth audio scrubbing with the mouse: Mouse Jog and Mouse Shuttle on the Play tab ("You can also use the mouse to perform smooth audio scrubbing of selected tracks") | p.675 | 8.7d2. |
+| Changing a Frame view's represented frame by jogging or shuttling with the mouse (Home/End too) | p.251 | 8.7d3, with the Frame view's frame changing (K+L, K+J, Home, End), which is not built yet either. |
+| Smooth audio scrubbing with the mouse: Mouse Jog and Mouse Shuttle on the Play tab ("You can also use the mouse to perform smooth audio scrubbing of selected tracks") | p.402-403, p.675 | Built (8.7d2, docs/spec/composer-display.md). |
 | Command\|8 and MCS-3000X with separate solo and mute buttons | p.699 | Control surfaces: a provider hook still to be added (EXTENSIONS.md). |
 | "All output options for PAL and NTSC are available to you" in the Digital Cut tool | p.933 | Ours: Media Composer's rule, the project's own family only (8.7c2b, watch list). |
 | Conversion between video formats, title resizing included, "handled automatically by your Avid input/output hardware" | p.933 | Hardware modules (7.3c). |

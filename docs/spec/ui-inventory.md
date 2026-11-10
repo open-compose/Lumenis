@@ -714,6 +714,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   jobs polled every two seconds.
 * Universal Mastering's sample rates (8.7c2a, docs/spec/sequence-format.md): the six conversions offered in every project,
   after the three plain rates, written as WAV.
+* Mouse Jog and Mouse Shuttle (8.7d2, docs/spec/composer-display.md): 4 pixels a frame for jogging, 1 fps a pixel for
+  shuttling; sound only at whole multiples of normal speed; clicks while on go to the mouse control.
 * Font replacement (8.7d1, docs/spec/title-tool.md): the Site setting is one "Font Replacement" entry in place of
   AvidFontSub.avt; replacing on opening is not a change to save; the dialog's message and preview text are ours.
 * Single-field step (8.7c3, docs/spec/sequence-format.md): field 1 shows the whole frame (the guide: "displays the

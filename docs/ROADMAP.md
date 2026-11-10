@@ -1573,9 +1573,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
         30 fps marks) and Displaying 24p and 25p Media (p.1296).
     * 8.7d, the Symphony Option items left in both guides after an audit (docs/spec/symphony-audit.md), in two parts:
       8.7d1 (done) the audit and font replacement for classic titles (p.993-994: `model::FontMap` in
-      `src/model/font_replacement.*`, the "Font Replacement" Site setting, Object > Font Replacement); 8.7d2 Mouse Jog
-      and Mouse Shuttle with smooth audio scrubbing (p.675) and the Frame view's represented frame by jog and shuttle
-      (p.251). Control surfaces (Avid Artist Color, ch.25 of the FX Guide; Command|8, p.699) get a provider hook later
+      `src/model/font_replacement.*`, the "Font Replacement" Site setting, Object > Font Replacement); 8.7d2 (done) Mouse
+      Jog and Mouse Shuttle with smooth audio scrubbing (p.402-403, p.675; `Composer::startMouseControl`); 8.7d3 the
+      Frame view's represented frame: "To change the frame identifying the clip", K+L and K+J, Home and End, and jog and
+      shuttle with the mouse (p.251), kept with the bin. Control surfaces (Avid Artist Color, ch.25 of the FX Guide; Command|8, p.699) get a provider hook later
       (EXTENSIONS.md, not built yet).
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New

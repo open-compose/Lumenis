@@ -1008,7 +1008,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   replacement for classic titles (`model::FontMap`/`replaceFont` in `src/model/font_replacement.*`,
   `ClassicTitle::fontReplacements`, `TitleToolWindow::replaceUnknownFonts`/`redefineFontReplacement`, the "Font
   Replacement" Site setting through `MainWindow::fontReplacements`; tests `tst_classic_title fontReplacement`,
-  `tst_title_clips fontReplacement`), is done; 8.7d2 is Mouse Jog and Mouse Shuttle.
+  `tst_title_clips fontReplacement`), is done. 8.7d2, Mouse Jog and Mouse Shuttle (`Composer::startMouseControl`/
+  `mouseControlMoved`/`shuttleFaster` with an application event filter; test `tst_composer_display mouseJogAndShuttle`),
+  is done; 8.7d3 is the Frame view's represented frame (p.251).
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

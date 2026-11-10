@@ -73,6 +73,28 @@ Code:
   rising at 8 times normal (the top J and L speed, p.401); sound plays only at whole multiples of
   normal speed, and between them play is silent, as slow play is; the Play button shows the rate.
 
+## Mouse Jog and Mouse Shuttle (8.7d2; p.402-403, p.675)
+
+* "Press the N key to activate mouse control for jogging. Press the semicolon (;) key to activate mouse control for
+  shuttling", or the Mouse Jog and Mouse Shuttle buttons on the Play tab (p.402-403): `play.mouse_jog` and
+  `play.mouse_shuttle` through `Composer::startMouseControl` on the active monitor. While on, an application event
+  filter (`MouseControlFilter` in composer.cpp) feeds the mouse's movement to `Composer::mouseControlMoved`.
+* "Move the mouse to the right to jog or play forward or to the left to jog or play backward" (p.403). Jog: a frame for
+  every `kJogPixels` (4, ours), so digital audio scrub follows each step. Shuttle: `kShuttleFpsPerPixel` (1, ours)
+  frames a second for each pixel moved since shuttling started or paused; "playback rates using the mouse do not occur
+  at fixed increments. They can vary all the way from 1 to 300 fps" (p.675). Whole multiples of normal speed play with
+  sound (smooth audio scrub up to three times, as J-K-L); the speeds between play on the wall clock without sound, as
+  Dynamic Play.
+* "To pause shuttling with the mouse: Click the mouse button. To quit jogging or shuttling with the mouse: Double-click
+  the mouse button or press the space bar" (p.403); "or the Escape key" (p.675). Clicks while mouse control is on go to
+  it, not to the window under the mouse.
+* "if you are shuttling with the mouse and you press the L key, the playback speeds up to the next normal play rate"
+  (p.403): `Composer::shuttleFaster`, 1, 2, 3, 5 or 8 times normal; the mouse goes on from there.
+* The Frame view's represented frame by jog and shuttle (p.251) comes with the Frame view's own frame changing
+  (8.7d3).
+
+Test: `tst_composer_display mouseJogAndShuttle`.
+
 ## Display During Segment Drag (U2e4; p.617-618, p.1219)
 
 * "Position Bar: When this option is selected, Media Composer shows the frame at the blue position bar
