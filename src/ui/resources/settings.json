@@ -645,7 +645,10 @@
             {"key": "colorScaling", "type": "choice", "style": "radio", "label": "Color Scaling", "default": "legal", "page": 1195,
              "choices": [{"value": "legal", "label": "Do not modify, treat as Legal Range"}, {"value": "full", "label": "Scale from Full Range to Legal Range", "later": true}]},
             {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "ignore", "page": 1196,
-             "choices": [{"value": "invert", "label": "Invert on import (white = opaque)", "later": true}, {"value": "noInvert", "label": "Do not invert (black = opaque)", "later": true}, {"value": "ignore", "label": "Ignore"}]},
+             "choices": [{"value": "invert", "label": "Invert on import (white = opaque)"}, {"value": "noInvert", "label": "Do not invert (black = opaque)"}, {"value": "ignore", "label": "Ignore"}]},
+            {"key": "dilateFill", "type": "bool", "label": "Dilate Fill", "default": false, "page": 1196},
+            {"key": "alphaEncoding", "type": "choice", "style": "radio", "label": "Alpha Encoding", "default": "uncompressed", "page": 1196, "later": true,
+             "choices": [{"value": "uncompressed", "label": "Uncompressed"}, {"value": "rle", "label": "RLE"}]},
             {"key": "frameImportDuration", "type": "int", "label": "Frame Import Duration", "suffix": "seconds", "min": 1, "max": 3600, "default": 10, "page": 1196},
             {"key": "autodetectSequences", "type": "bool", "label": "Autodetect Sequentially Numbered Files", "default": true, "page": 1197}
           ]

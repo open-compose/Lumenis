@@ -17,6 +17,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/model/matte_key_clip.h"
 #include "lumenis/model/title_clip.h"
 
 #include "effect_drawing.h"
@@ -525,6 +526,47 @@ Picture classicTitleLayer(const Composition& c, const model::Segment& segment, s
     return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, span);
 }
 
+// A Matte Key clip's segment (9.2b; lumenis/model/matte_key_clip.h; Editing Guide p.218, p.1196): its fill precompute
+// keyed over `below` by its matte precompute, with the Matte Key effect's Foreground parameters (FX Guide p.474), and
+// Scaling, Position and Crop as a title's. A still's one frame plays all along. Missing precomputes show black and count
+// as missing.
+Picture matteKeyClipLayer(const Composition& c, const model::Segment& segment, std::int64_t offset, const Picture& below, bool* missing) {
+    const int w = c.size.width(), h = c.size.height();
+    const model::MatteKeyMedia media = model::matteKeyMediaOf(*segment.effect);
+    auto offline = [&] {
+        if (missing) *missing = true;
+        return Picture::solid(w, h, Qt::black);
+    };
+    if (media.isEmpty() || !c.source) return offline();
+    const std::int64_t frames = std::max<std::int64_t>(media.frames, 1);
+    const std::int64_t frame = frames == 1 ? 0 : std::clamp<std::int64_t>(segment.nestIn + offset, 0, frames - 1);
+    auto pictureOf = [&](const QString& clip) {
+        model::Segment s;
+        s.clipId = clip;
+        s.binId = media.binId;
+        s.sourceTrack = QStringLiteral("V1");
+        s.length = frames;
+        return c.source(s, frame, c.size);
+    };
+    const std::optional<QImage> fill = pictureOf(media.fill), matte = pictureOf(media.matte);
+    if (!fill || !matte || fill->isNull() || matte->isNull()) return offline();
+    Picture fillPicture = Picture::fromImage(*fill, w, h, c.interpolation);
+    Picture mattePicture = Picture::fromImage(*matte, w, h, c.interpolation);
+    const std::int64_t length = std::max<std::int64_t>(segment.length, 1);
+    const double time = length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0;
+    const model::EffectSpan span(length);
+    const QJsonObject& p = segment.effect->parameters;
+    if (p.contains(QStringLiteral("Scaling")) || p.contains(QStringLiteral("Position")) || p.contains(QStringLiteral("Crop"))) {
+        model::Effect placed{QStringLiteral("Image"), QStringLiteral("Resize"), {}};
+        for (const char* cat : {"Scaling", "Position", "Crop", model::kKeyframesKey}) {
+            if (p.contains(QLatin1String(cat))) placed.parameters.insert(QLatin1String(cat), p.value(QLatin1String(cat)));
+        }
+        fillPicture = imageEffectPicture(placed, fillPicture, time, span);
+        mattePicture = imageEffectPicture(placed, mattePicture, time, span);
+    }
+    return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, span);
+}
+
 // Stamp (FX Guide p.298-299, p.584-585): "The Stamp category of the 3D Warp effect lets you make certain
 // effects ... remain on screen while other effects come and go, even though the effect segment itself has
 // ended." The track's stamp buffer at `frame`: every Stamp Image press on the track's 3D effects at or before
@@ -661,6 +703,11 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         } else if (tf->segment && tf->segment->effect && model::isClassicTitleEffect(*tf->segment->effect)) {
             // A Title Effect clip's segment is media, keyed whether or not effects are computed.
             result = classicTitleLayer(c, *tf->segment, tf->offset, result, missing);
+            result.quantize(c.precision);
+            continue;
+        } else if (tf->segment && tf->segment->effect && model::isMatteKeyClipEffect(*tf->segment->effect)) {
+            // So is a Matte Key clip's (9.2b).
+            result = matteKeyClipLayer(c, *tf->segment, tf->offset, result, missing);
             result.quantize(c.precision);
             continue;
         } else {

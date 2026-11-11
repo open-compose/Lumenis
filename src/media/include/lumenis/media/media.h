@@ -125,6 +125,10 @@ std::optional<MediaInfo> probe(const QString& path, QString* error = nullptr);
 // next frame continues decoding; other frames seek to the keyframe before
 // them and decode forward, so every frame is exact.
 // Not thread-safe: one thread at a time (FrameCache gives each open file its own lock).
+// Whether an FFmpeg pixel format ("rgba", "yuva420p", "ya8" ...) carries an alpha channel (9.2b: graphics and movies
+// imported as Matte Key clips, Editing Guide p.1196). False for an unknown name.
+bool pixelFormatHasAlpha(const QString& pixelFormat);
+
 class VideoReader {
 public:
     VideoReader();

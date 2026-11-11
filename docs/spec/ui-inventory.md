@@ -47,6 +47,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Graphics import (docs/spec/graphics-import.md): Matte Key clips as Title
+  items with "<name>.fill" and ".matte" precomputes, Dilate Fill's one-pixel
+  bleed, Ignore as the Alpha Channel default.
 * Batch Import (docs/spec/batch-import.md): Batch Import and Batch Re-import
   doing the same, the mixed-rate message's words, clips at another rate left
   out with a Console line, the earlier media kept as another resolution.

@@ -1944,4 +1944,11 @@ void registerProviders(ext::ProviderRegistry& registry) {
     registry.add(std::make_shared<WhisperProvider>());
 }
 
+bool pixelFormatHasAlpha(const QString& pixelFormat) {
+    const AVPixelFormat pf = av_get_pix_fmt(pixelFormat.toUtf8().constData());
+    if (pf == AV_PIX_FMT_NONE) return false;
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pf);
+    return desc && (desc->flags & AV_PIX_FMT_FLAG_ALPHA) != 0;
+}
+
 } // namespace lumenis::media

@@ -76,6 +76,7 @@ add_library(lumenis_ui STATIC
     main_window_relink.cpp
     main_window_print.cpp
     main_window_batch_import.cpp
+    main_window_graphics.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp
     dynamic_media_folders_window.cpp

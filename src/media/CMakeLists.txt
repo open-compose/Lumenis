@@ -65,6 +65,7 @@ add_library(lumenis_media STATIC
     playback.cpp
     managed.cpp
     batch_import.cpp
+    graphic_import.cpp
     consolidate.cpp
     relink.cpp
     mixdown.cpp

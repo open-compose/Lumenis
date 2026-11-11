@@ -35,6 +35,7 @@
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/ltc.h"
+#include "lumenis/media/graphic_import.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
 #include "lumenis/model/audio_eq.h"
@@ -6548,7 +6549,7 @@ QJsonObject MainWindow::importSettingsSnapshot() const {
     // The Import setting's options that importClipMedia() reads (p.1196-1199).
     QJsonObject o;
     for (const char* key : {"frameImportDuration", "convertSampleRate", "skipPullRates", "convertBitDepth", "bwfAlignment",
-                            "centerPanMono"}) {
+                            "centerPanMono", "alphaChannel", "dilateFill"}) {
         const QString k = QString::fromLatin1(key);
         o.insert(k, settings_->value(QStringLiteral("Import"), k));
     }
@@ -6610,8 +6611,10 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     QStringList timelines;
     QStringList fcp;
     QStringList captions;
+    QStringList picts;
     for (const QString& p : allPaths) {
         (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive)   ? aaf
+         : media::isPictFile(p)                                 ? picts
          : p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
          : interop::ale::isShotLog(p)                           ? logs
          : interop::otio::isOtioFile(p)                         ? timelines
@@ -6623,7 +6626,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
                           importScc(binId, captions);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
-    if (!doc || paths.isEmpty()) return fromAaf;
+    if (!doc || (paths.isEmpty() && picts.isEmpty())) return fromAaf;
     const media::LinkOptions options = linkOptions();
     // Import settings (p.1196-1197): numbered stills as one clip, and how
     // long a single picture lasts.
@@ -6653,12 +6656,35 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     QProgressDialog progress(tr("Importing..."), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("importProgress"));
     QStringList ids;
+    // PICT files (p.1231), which FFmpeg does not read (9.2b).
+    for (const QString& path : picts) {
+        QString error;
+        if (const auto made = importPictFile(path, importSettings, creation, *doc, &error)) {
+            ids << made->id;
+        } else {
+            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+        }
+    }
+    const media::AlphaHandling alpha = importAlphaHandling(importSettings);
     for (int i = 0; i < clips.size(); ++i) {
         const model::BinItem& clip = clips.at(i);
         progress.setLabelText(tr("Importing %1 (%2 of %3)").arg(clip.name).arg(i + 1).arg(clips.size()));
         const std::function<bool(double)> step = progressOn(progress);
         creation.progress = [&](double done) { return step((i + done) / static_cast<double>(clips.size())); };
         QString error;
+        // A picture with an alpha channel is a Matte Key clip, without its sound (p.1196), unless the alpha is ignored.
+        if (alpha != media::AlphaHandling::Ignore) {
+            const auto link = media::linkOf(clip);
+            if (const auto source = link && link->videoStream >= 0 ? media::alphaSourceOf(link->path) : std::nullopt) {
+                if (const auto key = importMatteKeyClip(clip, *source, importSettings, creation, *doc, &error)) {
+                    ids << key->id;
+                } else {
+                    ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));
+                    if (progress.wasCanceled()) break;
+                }
+                continue;
+            }
+        }
         const auto made = importClipMedia(clip, importSettings, creation, &error);
         if (!made) {
             ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));

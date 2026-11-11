@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/matte_key_clip.h"
 #include "lumenis/model/proxy.h"
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/group_clip.h"
@@ -961,6 +962,13 @@ QImage BinFrameView::picture(const QString& id, QSize size, bool now) const {
     }
     MediaFrames* frames = MediaFrames::instance();
     if (!item || !frames) return {};
+    // A Matte Key clip (9.2b) shows its fill precompute's frame.
+    if (const auto key = model::matteKeyClipSegment(*item)) {
+        const model::MatteKeyMedia media = model::matteKeyMediaOf(*key->effect);
+        const model::BinItem* fill = media.binId == document_.nodeId() ? document_.bin().item(media.fill) : nullptr;
+        if (!fill) return {};
+        return now ? frames->frame(*fill, 0, size) : frames->thumbnail(*fill, 0, size);
+    }
     return now ? frames->frame(*item, representedFrame(id), size) : frames->thumbnail(*item, representedFrame(id), size);
 }
 

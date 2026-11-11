@@ -51,6 +51,7 @@ add_library(lumenis_model STATIC
     titler.cpp
     classic_title.cpp
     title_clip.cpp
+    matte_key_clip.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp

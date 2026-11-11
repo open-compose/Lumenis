@@ -7,6 +7,7 @@
 #include "lumenis/media/dynamic_relink.h"
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/stereo_view.h"
+#include "lumenis/media/graphic_import.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -350,6 +351,18 @@ public:
     // the Import setting's Audio tab, center pan. The result carries the snapshot. Nothing, with `error`, when it fails.
     std::optional<model::BinItem> importClipMedia(model::BinItem clip, const QJsonObject& importSettings,
                                                   media::MediaCreation creation, QString* error = nullptr);
+    // Graphics on import (9.2b, main_window_graphics.cpp, docs/spec/graphics-import.md; p.217-218, p.1196, p.1231). The
+    // Alpha Channel option of an Import settings snapshot.
+    media::AlphaHandling importAlphaHandling(const QJsonObject& importSettings) const;
+    // A picture with alpha imported as a Matte Key clip (model/matte_key_clip.h): fill and matte precomputes and the clip
+    // into `doc`, named and placed as `clip` says (its Source File and Path). Returns the Matte Key clip.
+    std::optional<model::BinItem> importMatteKeyClip(const model::BinItem& clip, const media::AlphaSource& source,
+                                                     const QJsonObject& importSettings, media::MediaCreation creation,
+                                                     BinDocument& doc, QString* error = nullptr);
+    // A PICT file imported into `doc`: a Matte Key clip when it has alpha and the alpha is not ignored, else a master
+    // clip lasting the Frame Import Duration.
+    std::optional<model::BinItem> importPictFile(const QString& path, const QJsonObject& importSettings,
+                                                 media::MediaCreation creation, BinDocument& doc, QString* error = nullptr);
     // Clip > Batch Import and Batch Re-import (9.2a, main_window_batch_import.cpp, docs/spec/batch-import.md; p.233-237,
     // p.1097-1098): the message box (Offline only / All clips / Cancel), then the Batch Import dialog on the active
     // bin's selected imported master clips and the clips its selected sequences use, then runBatchImport(). Returns the

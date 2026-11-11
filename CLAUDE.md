@@ -1019,6 +1019,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   9.2a, Batch Import and Batch Re-import (docs/spec/batch-import.md: `src/media/batch_import.*`, `BatchImportDialog` in
   `src/ui/batch_import_dialog.*`, `main_window_batch_import.cpp` with `MainWindow::batchImport`/`runBatchImport`, the
   Import settings kept with each clip through `importSettingsSnapshot`/`importClipMedia`; test `tst_batch_import`), is done.
+  9.2b, graphics with alpha as Matte Key clips and PICT files (docs/spec/graphics-import.md: `src/media/graphic_import.*`,
+  `src/model/matte_key_clip.*` as Title items with fill and matte precomputes, `matteKeyClipLayer` in the compositor,
+  `main_window_graphics.cpp` with `MainWindow::importMatteKeyClip`/`importPictFile`, the Image tab's Alpha Channel and
+  Dilate Fill; test `tst_graphics_import`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md
