@@ -43,6 +43,7 @@
 #include <string>
 
 class QAction;
+class QPrinter;
 class QTimer;
 class QMessageBox;
 class QToolButton;
@@ -132,6 +133,7 @@ class MediaToolDisplayDialog;
 class EffectPalette;
 class CommandPalette;
 class ConsoleWindow;
+class PrintDocument;
 class CommandRegistry;
 class Composer;
 class KeyboardMap;
@@ -1037,6 +1039,28 @@ public:
     // The caller owns the box.
     QMessageBox* createAboutBox();
     static constexpr int kAboutPictureSize = 240; // logical pixels
+    // Printing (9.1, main_window_print.cpp, docs/spec/printing.md; Editing Guide p.292, p.424, p.645). One printer for
+    // the session, set up by File > Page Setup ("The Page Setup dialog box opens, reflecting the specific options for
+    // your printer", p.292) and used by every print command.
+    QPrinter& printer();
+    void pageSetup();
+    // File > Print Bin (p.292): the active bin as its view shows it. While the Markers window or the Console is the
+    // window last used the command reads "Print" and prints that window instead (p.424): the Markers window's current
+    // view, the Console's log. The Media Tool prints its table as the Text view does (p.345).
+    bool printActive();
+    // File > Print Frame (p.292): "the frame currently displayed in the active monitor", with the clip's name and
+    // timecode under it. Beeps with nothing loaded.
+    bool printFrame();
+    // File > Print Timeline (p.645): "the current view of the Timeline", Heads and Heads Tails views too. Beeps with no
+    // sequence.
+    bool printTimeline();
+    // What printActive() prints: the bin, the Markers window, the Console or the Media Tool.
+    enum class PrintTarget { Bin, Markers, Console, MediaTool };
+    PrintTarget printTarget() const { return printTarget_; }
+    // Tests and scripted runs: replaces the Print dialog (`pageSetup` false) and the Page Setup dialog (true). The hook
+    // may change the printer (its output file, page layout) and says whether to go on.
+    using PrintDialogHook = std::function<bool(QPrinter& printer, bool pageSetup)>;
+    void setPrintDialogHook(PrintDialogHook hook) { printDialogHook_ = std::move(hook); }
     // Tools > Project's first size; the guide gives none.
     static constexpr int kProjectWidth = 300;
     static constexpr int kProjectHeight = 460;
@@ -1145,6 +1169,8 @@ private:
     void applyDynamicRelinkSetting();
     // The Timeline's MultiRez button wired to Dynamic Relink (main_window_relink.cpp).
     void connectMultiRez();
+    // File > Page Setup and the print commands (main_window_print.cpp).
+    void connectPrinting();
     QHash<QString, model::ClipFacts::Resolution> resolutionCache_;
     bool dynamicRelinkClip(const QString& binId, model::BinItem& clip, const media::DynamicRelinkSettings& settings,
                            bool crossRate = true);
@@ -1462,6 +1488,13 @@ private:
     QString linkedWorkspace_;
     // The Timeline view last applied, so applySettings() applies a view only when another is chosen.
     QString appliedTimelineView_;
+    // Printing (main_window_print.cpp).
+    std::unique_ptr<QPrinter> printer_;
+    PrintDialogHook printDialogHook_;
+    PrintTarget printTarget_ = PrintTarget::Bin;
+    // Follows the window last used (printTarget_) and names File > Print Bin after it.
+    void followPrintTarget(QWidget* focused);
+    bool printDocument(const PrintDocument& document);
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;

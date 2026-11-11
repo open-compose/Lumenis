@@ -28,7 +28,7 @@ option(LUMENIS_FUZZ "Build the libFuzzer targets in fuzz/" OFF)
 # Qt 6.4 is the oldest supported (Ubuntu 24.04 system Qt). Release builds use
 # the Qt 6.8 LTS series.
 set(LUMENIS_QT_MIN_VERSION 6.4)
-find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
 if(LUMENIS_BUILD_TESTS)
     find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 endif()

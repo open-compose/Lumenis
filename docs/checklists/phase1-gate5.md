@@ -83,10 +83,10 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Media > Refresh Media Directories |  | p.359 | works | ☐ | | |
 | Media > Unmount |  | p.344 | works | ☐ | | |
 | Interplay Transfer > Clear Status |  | p.1094 | *later* | ☐ | | |
-| Page Setup |  | p.292 | *later* | ☐ | | |
-| Print Bin | Ctrl+P | p.288 | *later* | ☐ | | |
-| Print Frame |  | p.292 | *later* | ☐ | | |
-| Print Timeline |  | p.645 | *later* | ☐ | | |
+| Page Setup |  | p.292 | works | ☐ | | |
+| Print Bin | Ctrl+P | p.288 | works | ☐ | | |
+| Print Frame |  | p.292 | works | ☐ | | |
+| Print Timeline |  | p.645 | works | ☐ | | |
 | Settings |  | p.1136 | works | ☐ | | |
 | Open Settings File |  | p.1141 | *later* | ☐ | | |
 | Exit | Ctrl+Q | p.59 | works | ☐ | | |
@@ -334,6 +334,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 230 menu commands, 197 of them working with a project open; the
+* 230 menu commands, 201 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

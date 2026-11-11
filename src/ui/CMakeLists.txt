@@ -13,6 +13,7 @@ add_library(lumenis_ui STATIC
     bin_dock.cpp
     brush_preview.cpp
     platform_check.cpp
+    printing.cpp
     bin_view.cpp
     clip_audio_dialogs.cpp
     group_clips_dialog.cpp
@@ -72,6 +73,7 @@ add_library(lumenis_ui STATIC
     main_window_services.cpp
     main_window_dmf.cpp
     main_window_relink.cpp
+    main_window_print.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp
     dynamic_media_folders_window.cpp
@@ -223,5 +225,5 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
 )
 
 target_include_directories(lumenis_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
+target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets Qt6::PrintSupport lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
 lumenis_set_warnings(lumenis_ui)

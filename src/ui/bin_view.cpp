@@ -949,7 +949,7 @@ BinFrameView::BinFrameView(BinDocument& document, QWidget* parent) : QListView(p
     }
 }
 
-QImage BinFrameView::picture(const QString& id, QSize size) const {
+QImage BinFrameView::picture(const QString& id, QSize size, bool now) const {
     const model::BinItem* item = document_.bin().item(id);
     if (item) {
         if (const QImage title = titleTemplatePicture(*item, size); !title.isNull()) return title;
@@ -960,7 +960,8 @@ QImage BinFrameView::picture(const QString& id, QSize size) const {
         }
     }
     MediaFrames* frames = MediaFrames::instance();
-    return item && frames ? frames->thumbnail(*item, representedFrame(id), size) : QImage();
+    if (!item || !frames) return {};
+    return now ? frames->frame(*item, representedFrame(id), size) : frames->thumbnail(*item, representedFrame(id), size);
 }
 
 // ---- the frame identifying a clip (8.7d3; p.251)

@@ -47,6 +47,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Printing (docs/spec/printing.md): the printouts' layout (tables, four frames
+  to a row, the captions under Print Frame and Print Timeline), Page Setup kept
+  only for the session, File > Print Bin reading "Print" while the Markers
+  window or the Console was used last.
 * Surround panning (docs/spec/surround.md): the pan law; the default pans;
   speaker snapping setting Center/Side to 100; the LFE slider as 0-100;
   no surround automation yet.
@@ -1633,7 +1637,7 @@ These are recorded now so they are not entered from memory later.
 * **Not yet built (later phases).**
   * The arrangement of docked and floating bins is not saved with the
     project or with workspaces yet.
-  * The drag count, Bin Left Lock, Bin Map, Print Bin, the Delete dialog
+  * The drag count, Bin Left Lock, Bin Map, the Delete dialog
     with media, keycode and ink number range sifts, Duplicate on columns,
     Set <column> for selected clips.
   * The Bin settings dialog (Favorite Bins placement, auto-save interval)
@@ -2129,7 +2133,7 @@ p.610–640, ch. 13 p.432–434).**
   display, Dual Image Play and Sync Rollers in U2e2,
   docs/spec/trim-settings.md), the other fifteen Add Marker buttons, deleting
   a marker selected in the Timeline, the Markers window's columns,
-  sorting, Quick Find, export, import and printing, Find, Copy Source
+  sorting, Quick Find, export, import, Find, Copy Source
   Markers.
 
 ## 12. Settings (ch. 33, p.1136–1224)

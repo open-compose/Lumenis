@@ -259,8 +259,9 @@ public:
     // Top-left of the item's cell, or (-1, -1) if it is not shown.
     QPoint framePosition(const QString& id) const;
     // A linked clip's head frame at `size` once decoded (p.250). A null image
-    // until MediaFrames has it (thumbnailReady then repaints).
-    QImage picture(const QString& id, QSize size) const;
+    // until MediaFrames has it (thumbnailReady then repaints). `now`: decoded at
+    // once if need be, for printing (9.1).
+    QImage picture(const QString& id, QSize size, bool now = false) const;
 
     // "To change the frame identifying the clip" (Editing Guide p.251; 8.7d3): "Press and hold the K key (Pause) on
     // the keyboard and press the L key (Play Forward) to roll the footage within the frame forward at slow speed. To

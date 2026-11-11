@@ -1013,7 +1013,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   is done. 8.7d3, the Frame view's represented frame (p.251: `BinFrameView::roll` for K+L/K+J, `representEnd` for
   Home/End, its own Mouse Jog/Shuttle, kept in `BinDisplay::representedFrames`; test `tst_bin_views
   frameIdentifyingTheClip`), is done, so 8.7d and 8.7 are, and so are Phase 8's steps. Phase 9 is planned in
-  eight steps (ROADMAP, 2026-11-11): 9.1 printing is next.
+  eight steps (ROADMAP, 2026-11-11). 9.1, printing (docs/spec/printing.md: `src/ui/printing.*` with `PrintDocument`,
+  `main_window_print.cpp` with Page Setup, Print Bin, Print Frame, Print Timeline, File > Print for the Markers window and
+  the Console, the Media Tool's table, `MainWindow::setPrintDialogHook`; Qt Print Support; test `tst_printing`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

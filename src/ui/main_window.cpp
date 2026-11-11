@@ -154,6 +154,7 @@
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QPointer>
+#include <QPrinter> // the session's printer, destroyed with the window (main_window_print.cpp)
 #include <QPushButton>
 #include <QKeySequence>
 #include <QShortcut>
@@ -1065,6 +1066,7 @@ void MainWindow::createPanels() {
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
     connectMultiRez(); // the MultiRez button through Dynamic Relink (8.6b)
+    connectPrinting(); // Page Setup, Print Bin, Print Frame, Print Timeline (9.1)
     // Closed captions on D1 (7.4b): the Timeline's D-track and Show Captions read the clips' caption data.
     timeline_->setCaptionClipData([this](const model::Segment& s) { return captionClipData(s); });
     composer_->setCaptionResolver([this](MonitorId m, std::int64_t f) { return captionOn(m, f); });

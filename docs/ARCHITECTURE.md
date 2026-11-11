@@ -46,7 +46,8 @@ headers in `include/lumenis/<library>/`.
   `bin_relations.*` (Bin > Select's Media Relatives, Sources and Unreferenced
   Clips, docs/spec/bin-select.md). UI (also `unmount_dialog.*`, File > Media >
   Unmount, docs/spec/media-unmount.md; `set_font_dialog.*` and
-  `shortcuts_window.*`, Set Font and Help > Shortcuts, docs/spec/set-font.md):
+  `shortcuts_window.*`, Set Font and Help > Shortcuts, docs/spec/set-font.md; `printing.*` and
+  `main_window_print.cpp`, Page Setup and the print commands, docs/spec/printing.md):
   `bin_view.*`
   (Text, Frame and Script views, `BinDocument`), `bin_container.*` (the
   Bin Container and its sidebar), `bin_dock.*` (docking bins),
