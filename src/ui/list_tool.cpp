@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontDatabase>
@@ -63,15 +64,16 @@ QFont fixedFont() {
 namespace {
 
 // The Output Format menu (p.945 picture, p.947 step 2): the EDL types, then the cut and change list
-// types, then OTIO ("choose OTIO", p.969). CMX_3600, File_129 and OTIO are written so far.
+// types, then OTIO ("choose OTIO", p.969). CMX_3600, File_129, the cut list types Columnar and TabbedLists (9.4a) and
+// OTIO are written so far.
 struct OutputFormat {
     const char* name;
     bool works;
 };
 constexpr OutputFormat kFormats[] = {
     {"CMX_3600", true},    {"CMX_DigitalCut", false}, {"CMX_Transfer", false}, {"Cuedos", false},
-    {"File_16", false},    {"File_32", false},        {"File_129", true},      {"Columnar", false},
-    {"TabbedLists", false}, {"WebLists", false},      {"XML", false},            {"OTIO", true},
+    {"File_16", false},    {"File_32", false},        {"File_129", true},      {"Columnar", true},
+    {"TabbedLists", true}, {"WebLists", false},      {"XML", false},            {"OTIO", true},
 };
 
 constexpr const char* kOtio = "OTIO";
@@ -202,6 +204,74 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
         bothLayout->addWidget(later(t, both));
     }
     optionsLayout->addWidget(both);
+    // Cut List: List Options (p.960-962), shown for the cut list types.
+    auto* cut = new QGroupBox(tr("Cut List"), options);
+    cut->setObjectName(QStringLiteral("listCutOptions"));
+    cutOptions_ = cut;
+    auto* cutLayout = new QFormLayout(cut);
+    auto spin = [cut](const QString& name, int value, int max) {
+        auto* box = new QSpinBox(cut);
+        box->setObjectName(name);
+        box->setRange(0, max);
+        box->setValue(value);
+        return box;
+    };
+    auto check = [cut](const QString& text, const QString& name, bool on) {
+        auto* box = new QCheckBox(text, cut);
+        box->setObjectName(name);
+        box->setChecked(on);
+        return box;
+    };
+    assemble_ = check(tr("Assemble"), QStringLiteral("listAssemble"), true);
+    cutLayout->addRow(assemble_);
+    shortCuts_ = check(tr("Mark Short Cuts"), QStringLiteral("listShortCuts"), false);
+    shortCutFrames_ = spin(QStringLiteral("listShortCutFrames"), 8, 999);
+    cutLayout->addRow(shortCuts_, shortCutFrames_);
+    jumpCuts_ = check(tr("Mark Jump Cuts"), QStringLiteral("listJumpCuts"), false);
+    jumpCutFrames_ = spin(QStringLiteral("listJumpCutFrames"), 8, 999);
+    cutLayout->addRow(jumpCuts_, jumpCutFrames_);
+    sceneAssemble_ = check(tr("Scene Assemble"), QStringLiteral("listSceneAssemble"), false);
+    cutLayout->addRow(sceneAssemble_);
+    optical_ = check(tr("Optical"), QStringLiteral("listOptical"), true);
+    cutLayout->addRow(optical_);
+    keyFrames_ = check(tr("Key Frames"), QStringLiteral("listKeyFrames"), true);
+    opticalFootage_ = check(tr("Optical Footage"), QStringLiteral("listOpticalFootage"), false);
+    cutLayout->addRow(keyFrames_, opticalFootage_);
+    dupe_ = check(tr("Dupe"), QStringLiteral("listDupe"), true);
+    cutLayout->addRow(dupe_);
+    assumeHandles_ = spin(QStringLiteral("listAssumeHandles"), 0, 999);
+    cutLayout->addRow(tr("Assume Handles"), assumeHandles_);
+    printHandles_ = spin(QStringLiteral("listPrintHandles"), 0, 999);
+    cutLayout->addRow(tr("Print w/Handles"), printHandles_);
+    pull_ = check(tr("Pull"), QStringLiteral("listPull"), false);
+    cutLayout->addRow(pull_);
+    auto sortMenu = [cut](const QString& name, int current) {
+        auto* box = new QComboBox(cut);
+        box->setObjectName(name);
+        for (const auto f : {interop::cutlist::SortField::None, interop::cutlist::SortField::Labroll, interop::cutlist::SortField::Camroll,
+                             interop::cutlist::SortField::Soundroll, interop::cutlist::SortField::SceneTake,
+                             interop::cutlist::SortField::Name, interop::cutlist::SortField::Reel}) {
+            box->addItem(interop::cutlist::sortFieldName(f), static_cast<int>(f));
+        }
+        box->setCurrentIndex(current);
+        return box;
+    };
+    firstSort_ = sortMenu(QStringLiteral("listFirstSort"), 2);
+    cutLayout->addRow(tr("First Sort by"), firstSort_);
+    secondSort_ = sortMenu(QStringLiteral("listSecondSort"), 0);
+    cutLayout->addRow(tr("Second Sort by"), secondSort_);
+    pullOrder_ = new QComboBox(cut);
+    pullOrder_->setObjectName(QStringLiteral("listPullOrder"));
+    pullOrder_->addItems({tr("Heads Out"), tr("Tails Out")});
+    cutLayout->addRow(tr("Order"), pullOrder_);
+    reelNames_ = check(tr("Reel Names"), QStringLiteral("listReelNames"), true);
+    clipComments_ = check(tr("Clip Comments"), QStringLiteral("listClipComments"), true);
+    cutLayout->addRow(reelNames_, clipComments_);
+    // Formatting's "Start at: Specify the footage to be used as a starting point in the master" (p.964), in frames.
+    startAt_ = spin(QStringLiteral("listStartAt"), 0, 9999999);
+    cutLayout->addRow(tr("Start at"), startAt_);
+    cut->setVisible(false);
+    optionsLayout->addWidget(cut);
     optionsLayout->addStretch();
     auto* optionsScroll = new QScrollArea(tabs);
     optionsScroll->setWidgetResizable(true);
@@ -303,8 +373,43 @@ bool ListTool::isOtio() const {
     return format_->currentText() == QLatin1String(kOtio);
 }
 
+bool ListTool::isCutList() const {
+    return interop::cutlist::formatFromName(format_->currentText()).has_value();
+}
+
+interop::cutlist::Options ListTool::cutListOptions() const {
+    interop::cutlist::Options o;
+    o.format = interop::cutlist::formatFromName(format_->currentText()).value_or(interop::cutlist::Format::Columnar);
+    o.title = title_->text().trimmed();
+    o.tracks = listedTracks();
+    o.framesPerFoot = interop::cutlist::framesPerFootOf(filmType_.isEmpty() ? QStringLiteral("35mm, 4 perf") : filmType_);
+    o.startAt = startAt_->value();
+    o.assemble = assemble_->isChecked();
+    o.sceneAssemble = sceneAssemble_->isChecked();
+    o.optical = optical_->isChecked();
+    o.keyFrames = keyFrames_->isChecked();
+    o.opticalFootage = opticalFootage_->isChecked();
+    o.dupe = dupe_->isChecked();
+    o.assumeHandles = assumeHandles_->value();
+    o.printHandles = printHandles_->value();
+    o.pull = pull_->isChecked();
+    o.firstSort = static_cast<interop::cutlist::SortField>(firstSort_->currentData().toInt());
+    o.secondSort = static_cast<interop::cutlist::SortField>(secondSort_->currentData().toInt());
+    o.headsOut = pullOrder_->currentIndex() == 0;
+    if (shortCuts_->isChecked()) o.shortCuts = shortCutFrames_->value();
+    if (jumpCuts_->isChecked()) o.jumpCuts = jumpCutFrames_->value();
+    o.clipNames = clipNames_->isChecked();
+    o.reelNames = reelNames_->isChecked();
+    o.clipComments = clipComments_->isChecked();
+    o.aspect = aspect_;
+    o.resolve = resolve_;
+    return o;
+}
+
 // A list made in one format is not saved as another: the next Preview or Save List makes it again.
 void ListTool::formatChanged() {
+    // "The options in the List Options and Formatting tabs change depending on which Output Format you select" (p.944).
+    cutOptions_->setVisible(isCutList());
     made_.clear();
     master_->clear();
     sources_->clear();
@@ -401,9 +506,17 @@ QString ListTool::preview() {
         }
         made_ = QString::fromUtf8(r.json);
         warnings = r.warnings;
+    } else if (isCutList()) {
+        const interop::cutlist::Result r = interop::cutlist::exportText(*sequence_, cutListOptions());
+        if (!r.ok) {
+            emit message(tr("List Tool: %1").arg(r.error));
+            return {};
+        }
+        made_ = r.text;
+        warnings = r.warnings;
     } else {
         if (!interop::edl::formatFromName(format_->currentText())) {
-            emit message(tr("List Tool: %1 lists are not made yet; CMX_3600, File_129 and OTIO are.").arg(format_->currentText()));
+            emit message(tr("List Tool: %1 lists are not made yet; CMX_3600, File_129, Columnar, TabbedLists and OTIO are.").arg(format_->currentText()));
             return {};
         }
         const interop::edl::ExportResult r = interop::edl::exportText(*sequence_, options());
@@ -449,6 +562,14 @@ bool ListTool::saveList(const QString& path, QString* error) {
         if (!r.ok && error) *error = r.error;
         return r.ok;
     }
+    if (isCutList()) {
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(made_.toUtf8()) < 0) {
+            if (error) *error = tr("%1 cannot be written.").arg(QDir::toNativeSeparators(path));
+            return false;
+        }
+        return true;
+    }
     const interop::edl::ExportResult r = interop::edl::exportFile(*sequence_, path, options());
     if (!r.ok) {
         if (error) *error = r.error;
@@ -462,8 +583,10 @@ void ListTool::saveClicked() {
     if (!sequence_) return;
     QString base = title_->text().trimmed().isEmpty() ? sequence_->name : title_->text().trimmed();
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
-    const QString suggested = base + (isOtio() ? QStringLiteral(".otio") : QStringLiteral(".edl"));
-    const QString filter = isOtio() ? tr("OpenTimelineIO files (*.otio)") : tr("Edit decision lists (*.edl)");
+    const QString suggested = base + (isOtio() ? QStringLiteral(".otio") : isCutList() ? QStringLiteral(".txt") : QStringLiteral(".edl"));
+    const QString filter = isOtio()      ? tr("OpenTimelineIO files (*.otio)")
+                           : isCutList() ? tr("Cut lists (*.txt)")
+                                         : tr("Edit decision lists (*.edl)");
     const QString path = savePath ? savePath(suggested) : QFileDialog::getSaveFileName(this, tr("Save List"), suggested, filter);
     if (path.isEmpty()) return;
     QString error;

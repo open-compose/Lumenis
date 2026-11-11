@@ -3072,7 +3072,14 @@ docs/spec/otio.md.
 * Output Format lists CMX_3600, CMX_DigitalCut, CMX_Transfer, Cuedos,
   File_16, File_32, File_129, then Columnar, TabbedLists, WebLists, XML
   (p.945 picture, p.947 step 2), then OTIO (p.969 step 2). CMX_3600,
-  File_129 and OTIO work; the rest are dimmed. **Our choice, unverified:**
+  File_129, Columnar, TabbedLists (9.4a, docs/spec/cut-lists.md) and OTIO
+  work; the rest are dimmed. For the cut list types the List Options tab
+  shows a Cut List box (Assemble with Mark Short/Jump Cuts, Scene Assemble,
+  Optical with Key Frames and Optical Footage, Dupe with Assume and Print
+  Handles, Pull with its sorts and order, Reel Names, Clip Comments, Start
+  at). **Our choices, unverified:** that box's layout and defaults
+  (Assemble, Optical, Dupe on; Pull off; First Sort by Camroll), Start at in
+  frames, Save List's `.txt`. **Our choice, unverified:**
   OTIO last (the p.945 picture predates it).
 * Default OpenTimelineIO and the OTIO format go together: choosing the
   setting chooses OTIO, choosing OTIO makes it the active setting

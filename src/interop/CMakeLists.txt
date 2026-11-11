@@ -14,6 +14,7 @@ add_library(lumenis_interop STATIC
     avb_writer.cpp
     avb_export.cpp
     edl.cpp
+    cut_list.cpp
     ale.cpp
     otio.cpp
     fcp_xml.cpp
@@ -29,6 +30,7 @@ add_library(lumenis_interop STATIC
     include/lumenis/interop/avb_writer.h
     include/lumenis/interop/avb_export.h
     include/lumenis/interop/edl.h
+    include/lumenis/interop/cut_list.h
     include/lumenis/interop/ale.h
     include/lumenis/interop/otio.h
     include/lumenis/interop/fcp_xml.h

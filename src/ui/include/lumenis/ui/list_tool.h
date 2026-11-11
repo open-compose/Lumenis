@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/interop/cut_list.h"
 #include "lumenis/interop/edl.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/model/bin.h"
@@ -28,9 +29,10 @@ namespace lumenis::ui {
 // then the Input tab (the sequence, with Load and Clear; a button for each track; the Title), the
 // List Options tab and the Formatting tab. Right: Preview, Save List and Clear List, and the Master
 // EDL and Sources tabs that show the list. The EDL Output Types written are CMX_3600 and File_129
-// (interop/edl.h); the other output formats (CMX_DigitalCut, CMX_Transfer, Cuedos, File_16, File_32,
-// and the cut and change lists: Columnar, TabbedLists, WebLists, XML) are listed dimmed, as are the
-// options not yet carried out (docs/spec/ui-inventory.md §19).
+// (interop/edl.h), the cut list types Columnar and TabbedLists (interop/cut_list.h, 9.4a, with the List
+// Options' Cut List box); the other output formats (CMX_DigitalCut, CMX_Transfer, Cuedos, File_16,
+// File_32, WebLists, XML) are listed dimmed, as are the options not yet carried out
+// (docs/spec/ui-inventory.md §19).
 class ListTool : public QWidget {
     Q_OBJECT
 
@@ -50,6 +52,12 @@ public:
     // The export options the tabs say: for an EDL, and for OTIO (the tracks and clips only).
     interop::edl::ExportOptions options() const;
     interop::otio::ExportOptions otioOptions() const;
+    interop::cutlist::Options cutListOptions() const;
+    // Whether the Output Format is a cut list type (Columnar, TabbedLists).
+    bool isCutList() const;
+    // The project's film type (ProjectSettings::filmType), for the cut lists' feet and frames; empty for video projects.
+    void setFilmType(const QString& filmType) { filmType_ = filmType; }
+    void setAspect(double aspect) { aspect_ = aspect; }
     // Whether the Output Format is OTIO (Save List then writes an .otio file).
     bool isOtio() const;
     // Preview (step 8): makes the list and shows it in Master EDL, its reels in Sources. Returns the
@@ -73,6 +81,7 @@ public:
     QPushButton* saveButton() const { return save_; }
     QCheckBox* optimizeBox() const { return optimize_; }
     QSpinBox* startEvent() const { return startEvent_; }
+    QWidget* cutListOptionsBox() const { return cutOptions_; }
     // The Tracks pane's button for a track, or null.
     QToolButton* trackButton(const QString& track) const;
 
@@ -92,6 +101,8 @@ private:
     std::optional<model::BinItem> sequence_;
     Resolver resolve_;
     QString made_; // the last list made, for Save List
+    QString filmType_;
+    double aspect_ = 16.0 / 9.0;
 
     QComboBox* setting_ = nullptr;
     QComboBox* format_ = nullptr;
@@ -109,6 +120,27 @@ private:
     QCheckBox* optimize_ = nullptr;
     QComboBox* s3dContributor_ = nullptr;
     QSpinBox* startEvent_ = nullptr;
+    // The Cut List options (p.960-962, p.964).
+    QWidget* cutOptions_ = nullptr;
+    QCheckBox* assemble_ = nullptr;
+    QCheckBox* sceneAssemble_ = nullptr;
+    QCheckBox* optical_ = nullptr;
+    QCheckBox* keyFrames_ = nullptr;
+    QCheckBox* opticalFootage_ = nullptr;
+    QCheckBox* dupe_ = nullptr;
+    QSpinBox* assumeHandles_ = nullptr;
+    QSpinBox* printHandles_ = nullptr;
+    QCheckBox* pull_ = nullptr;
+    QComboBox* firstSort_ = nullptr;
+    QComboBox* secondSort_ = nullptr;
+    QComboBox* pullOrder_ = nullptr;
+    QCheckBox* shortCuts_ = nullptr;
+    QSpinBox* shortCutFrames_ = nullptr;
+    QCheckBox* jumpCuts_ = nullptr;
+    QSpinBox* jumpCutFrames_ = nullptr;
+    QCheckBox* reelNames_ = nullptr;
+    QCheckBox* clipComments_ = nullptr;
+    QSpinBox* startAt_ = nullptr;
     QPushButton* preview_ = nullptr;
     QPushButton* save_ = nullptr;
     QPushButton* clearList_ = nullptr;

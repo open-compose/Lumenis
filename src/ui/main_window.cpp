@@ -6579,6 +6579,11 @@ void MainWindow::exportBin() {
 // populated by the selected sequence" (p.948 step 3); without one, the Record monitor's.
 void MainWindow::showListTool() {
     showTool(QStringLiteral("ListTool"));
+    // The cut lists count feet and frames by the project's film type (9.4a).
+    if (project_) {
+        listTool_->setFilmType(project_->settings.filmType);
+        listTool_->setAspect(project_->settings.aspect.toDouble());
+    }
     if (BinView* view = binContainer_->activeView()) {
         for (const model::BinItem& item : view->document().bin().items) {
             if (item.kind == model::BinItemKind::Sequence && view->selectedIds().contains(item.id)) {
