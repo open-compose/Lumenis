@@ -227,13 +227,15 @@ private slots:
         reportFailure(window_.get(), QStringLiteral("Wiring: second"));
         QList<QMessageBox*> boxes;
         for (QMessageBox* b : window_->findChildren<QMessageBox*>(QStringLiteral("failureMessage"))) {
-            if (b->windowTitle() == QLatin1String("Wiring")) boxes << b;
+            if (b->property("failureTitle").toString() == QLatin1String("Wiring")) boxes << b;
         }
         QCOMPARE(boxes.size(), 1);
         // Opened without blocking (QMessageBox::open): this test went on past both failures.
         QVERIFY(boxes.first()->isVisible());
         QVERIFY(boxes.first()->windowModality() != Qt::ApplicationModal);
-        QCOMPARE(boxes.first()->text(), QStringLiteral("first\nsecond"));
+        // The title is the main text too (macOS shows no window titles on message boxes), the failures below it.
+        QCOMPARE(boxes.first()->text(), QStringLiteral("Wiring"));
+        QCOMPARE(boxes.first()->informativeText(), QStringLiteral("first\nsecond"));
         boxes.first()->close();
     }
 

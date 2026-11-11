@@ -837,7 +837,9 @@ A Console line in `src/ui` is neither shown to the user nor marked as informatio
 9.7): a failure goes through `reportFailure(parent, "Title: text")` (`src/ui/tool_windows.h`), which writes the Console
 line and opens a warning that does not block; information (a count, where a file went) stays in the Console with a
 `// Console only: <why>` comment on its line or the line before. `scripts/check-failure-messages.py` lists each
-file:line it found.
+file:line it found. The warning's title is also its main text, and the failures are the informative text below it:
+macOS ignores message boxes' window titles, so a test that looked for the box by its title found none there (CI on the
+Mac runner, 2026-11-11); open warnings are found by their `failureTitle` property.
 
 ### The self-hosted Windows or Linux job waits or fails
 

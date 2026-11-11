@@ -89,8 +89,8 @@ private:
 
 // Error messages everywhere (9.7; the owner's request, 2026-11-08): whatever fails, is missing or cannot be done tells
 // the user in a message, not only in the Console. `line` is written to the Console as it is and shown in a warning that
-// does not block (QMessageBox::open: modal to its window only, the call returns at once), so tests and scripts go on: "Title: text" shows `text` under the title "Title" (the product name when
-// the line has no "Title: " part). While a warning with that title is still open, a new failure adds its text to it
+// does not block (QMessageBox::open: modal to its window only, the call returns at once), so tests and scripts go on: "Title: text" shows "Title" as the warning's title and main text (macOS
+// shows no window titles on message boxes) with `text` below it (the product name when the line has no "Title: " part). While a warning with that title is still open, a new failure adds its text to it
 // instead of opening another. On the UI thread only. `parent` (or the active window when null) owns the warning.
 // scripts/check-failure-messages.py (ctest failure_messages) fails for a Console line in src/ui written any other
 // way, unless it is marked "Console only" with the reason (information, not a failure).

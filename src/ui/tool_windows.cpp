@@ -237,17 +237,22 @@ void showFailure(QWidget* parent, const QString& title, const QString& text) {
         failureObserver()(title, text);
         return;
     }
+    // The title is the box's main text as well as its window title: macOS shows no window title on message boxes
+    // (Apple's guidelines), and the user must still see what failed. The details are the informative text. Open boxes
+    // are found by the "failureTitle" property, which is the same on every platform.
     QWidget* owner = parent ? parent->window() : QApplication::activeWindow();
     if (owner) {
         for (QMessageBox* open : owner->findChildren<QMessageBox*>(QStringLiteral("failureMessage"), Qt::FindDirectChildrenOnly)) {
-            if (open->isVisible() && open->windowTitle() == title) {
-                open->setText(open->text() + QLatin1Char('\n') + text);
+            if (open->isVisible() && open->property("failureTitle").toString() == title) {
+                open->setInformativeText(open->informativeText() + QLatin1Char('\n') + text);
                 return;
             }
         }
     }
-    auto* box = new QMessageBox(QMessageBox::Warning, title, text, QMessageBox::Ok, owner);
+    auto* box = new QMessageBox(QMessageBox::Warning, title, title, QMessageBox::Ok, owner);
     box->setObjectName(QStringLiteral("failureMessage"));
+    box->setProperty("failureTitle", title);
+    box->setInformativeText(text);
     box->setAttribute(Qt::WA_DeleteOnClose);
     box->open();
 }
