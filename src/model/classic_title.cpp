@@ -145,6 +145,7 @@ QJsonObject ClassicTitle::toJson() const {
         for (auto it = fontReplacements.constBegin(); it != fontReplacements.constEnd(); ++it) replaced.insert(it.key(), it.value());
         out.insert(QStringLiteral("fontReplacements"), replaced);
     }
+    if (!aspect.isEmpty()) out.insert(QStringLiteral("aspect"), aspect);
     return out;
 }
 
@@ -191,6 +192,7 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
     t.autoSize = o.value(QStringLiteral("autoSize")).toBool(true);
     const QJsonObject replaced = o.value(QStringLiteral("fontReplacements")).toObject();
     for (auto it = replaced.constBegin(); it != replaced.constEnd(); ++it) t.fontReplacements.insert(it.key(), it.value().toString());
+    t.aspect = o.value(QStringLiteral("aspect")).toString();
     return t;
 }
 

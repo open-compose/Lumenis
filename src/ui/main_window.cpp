@@ -9681,6 +9681,33 @@ TitleToolWindow* MainWindow::titleTool() const {
 
 QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId,
                                      QString* error) {
+    // "You can save titles in multiple aspect ratios" (Editing Guide p.989): the first aspect chosen is the title saved
+    // (or revised) under its name, each other one a Title Effect clip of its own named "<name> <aspect>" (ours).
+    if (request.aspects.size() > 1) {
+        TitleToolWindow::SaveRequest first = request;
+        first.aspects = {request.aspects.first()};
+        const QString id = saveClassicTitle(title, first, replaceId, error);
+        if (id.isEmpty()) return id;
+        for (qsizetype i = 1; i < request.aspects.size(); ++i) {
+            TitleToolWindow::SaveRequest other = request;
+            other.aspects = {request.aspects[i]};
+            other.name = request.name + QLatin1Char(' ') + request.aspects[i];
+            other.placeTrack.clear();
+            if (saveClassicTitle(title, other, {}, error).isEmpty()) return {};
+        }
+        // The first is the one the Title tool goes on with and the Source monitor shows.
+        if (BinDocument* doc = binContainer_->document(request.bin); doc && doc->bin().item(id)) {
+            composer_->load(MonitorId::Source, doc->nodeId(), *doc->bin().item(id));
+        }
+        return id;
+    }
+    if (request.aspects.size() == 1 && request.aspects.first() != title.aspect && !(title.aspect.isEmpty() && request.aspects.first() == QLatin1String("16:9"))) {
+        model::ClassicTitle shaped = title;
+        shaped.aspect = request.aspects.first() == QLatin1String("16:9") ? QString() : request.aspects.first();
+        TitleToolWindow::SaveRequest plain = request;
+        plain.aspects.clear();
+        return saveClassicTitle(shaped, plain, replaceId, error);
+    }
     auto fail = [error](const QString& text) {
         if (error) *error = text;
         return QString();
@@ -10040,6 +10067,8 @@ void MainWindow::openTitleTool(bool ask) {
             r.drive = c.videoDrive;
             r.resolution = c.resolution.id;
             if (BinDocument* doc = binContainer_->activeDocument()) r.bin = doc->nodeId();
+            // The project's aspect ratio to start with (p.989).
+            if (project_) r.aspects << (project_->settings.aspect.toDouble() > 1.5 ? QStringLiteral("16:9") : QStringLiteral("4:3"));
             return r;
         };
         saver.save = [this](const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId, QString* error) {

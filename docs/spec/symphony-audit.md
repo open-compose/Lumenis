@@ -14,7 +14,7 @@ through every mention in the 2025.12 Editing Guide (36 lines) and FX Guide (216)
 | Command\|8 and MCS-3000X with separate solo and mute buttons | p.699 | Control surfaces: a provider hook still to be added (EXTENSIONS.md). |
 | "All output options for PAL and NTSC are available to you" in the Digital Cut tool | p.933 | Ours: Media Composer's rule, the project's own family only (8.7c2b, watch list). |
 | Conversion between video formats, title resizing included, "handled automatically by your Avid input/output hardware" | p.933 | Hardware modules (7.3c). |
-| Preparing titles for the online session in more than one aspect ratio | p.989 | Phase 9: Save Title has no aspect ratio of its own; titles follow the project's. |
+| Preparing titles for the online session in more than one aspect ratio | p.989 | Done (9.5): the Save Title dialog's 16:9 and 4:3, a clip for each (docs/spec/title-tool.md). |
 | Conforming: secondary colour correction, SpectraMatte, Symphony's colour corrections opened on Media Composer | p.995-996 | Ours has one colour correction with all of Symphony's groups (6.10), so a sequence keeps every correction. |
 | Font replacement ("Redefining a Font Replacement") | p.993-994 | Built (8.7d1, docs/spec/title-tool.md "Font replacement"). |
 | Reinserting pulldown for NTSC on 23.976 projects | p.1287 | The Digital Cut's output formats (8.7c2b). |

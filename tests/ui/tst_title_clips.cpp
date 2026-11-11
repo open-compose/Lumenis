@@ -228,6 +228,89 @@ private slots:
     // Editing Title Effect clips into a sequence (6.8e1, FX Guide p.365-371): overwriting from the Source monitor with
     // marks, keyed over the video below; the Fade Effect button; Place in Timeline; a rolling title's start from its
     // source IN; a title dragged from a bin.
+    // Titles saved in more than one aspect ratio (9.5; Editing Guide p.989; FX Guide p.358): a Title Effect clip for
+    // each, the 4:3 one "centered, within the 4:3 center cut" of the 16:9 frame.
+    void aspectRatios() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Show"));
+        project.settings.name = QStringLiteral("Show");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        // A red box over the whole frame.
+        model::ClassicTitle title;
+        model::ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = model::ClassicKind::Box;
+        box.rect = QRectF(0, 0, 1920, 1080);
+        box.fill.color = QStringLiteral("#ff0000");
+        title.objects << box;
+        TitleToolWindow::SaveRequest request;
+        request.name = QStringLiteral("Credits");
+        request.bin = binId;
+        request.drive = drive;
+        request.resolution = QStringLiteral("dnx_hq");
+        request.aspects = {QStringLiteral("16:9"), QStringLiteral("4:3")};
+        QString error;
+        const QString id = window.saveClassicTitle(title, request, QString(), &error);
+        QVERIFY2(!id.isEmpty(), qPrintable(error));
+        const model::BinItem* wide = bin->bin().item(id);
+        QVERIFY(wide);
+        QCOMPARE(wide->name, QStringLiteral("Credits"));
+        const model::BinItem* narrow = nullptr;
+        for (const model::BinItem& i : bin->bin().items) {
+            if (i.kind == model::BinItemKind::Title && i.name == QLatin1String("Credits 4:3")) narrow = &i;
+        }
+        QVERIFY(narrow);
+        QVERIFY(model::classicTitleOf(*wide)->aspect.isEmpty());
+        QCOMPARE(model::classicTitleOf(*narrow)->aspect, QStringLiteral("4:3"));
+        // The 16:9 title covers the frame; the 4:3 one only its centre cut (240 of 320 pixels).
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *wide);
+        QImage shown = composer.pictureAt(MonitorId::Source, 5, QSize(320, 180));
+        QVERIFY2(shown.pixelColor(10, 90).red() > 200, qPrintable(shown.pixelColor(10, 90).name()));
+        const model::BinItem narrowClip = *narrow;
+        composer.loadDefault(binId, narrowClip);
+        shown = composer.pictureAt(MonitorId::Source, 5, QSize(320, 180));
+        QVERIFY2(shown.pixelColor(10, 90).red() < 40, qPrintable(shown.pixelColor(10, 90).name()));
+        QVERIFY2(shown.pixelColor(160, 90).red() > 200, qPrintable(shown.pixelColor(160, 90).name()));
+        QVERIFY2(shown.pixelColor(310, 90).red() < 40, qPrintable(shown.pixelColor(310, 90).name()));
+        // The Save Title dialog's suggestion is the project's aspect ratio.
+        TitleToolWindow* tool = window.titleTool();
+        if (!tool) {
+            window.openTitleTool(false);
+            tool = window.titleTool();
+        }
+        QVERIFY(tool);
+        std::optional<TitleToolWindow::SaveRequest> asked;
+        tool->setSaveDialog([&](const TitleToolWindow::SaveRequest& suggestion) -> std::optional<TitleToolWindow::SaveRequest> {
+            asked = suggestion;
+            return std::nullopt;
+        });
+        tool->saveTitleAs();
+        QVERIFY(asked);
+        QCOMPARE(asked->aspects, QStringList{QStringLiteral("16:9")});
+        media::setExtraMediaDrives({});
+    }
+
     void editingTitles() {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());

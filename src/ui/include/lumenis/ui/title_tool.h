@@ -162,6 +162,9 @@ public:
         // "Select the Place in Timeline (In -> Out) option. Select the track where you want to place the title" (p.359):
         // the record track, empty for none.
         QString placeTrack;
+        // "(Option) Select the title aspect ratios you want to save" (FX Guide p.358): "16:9", "4:3", each saved as a Title
+        // Effect clip of its own (model::ClassicTitle::aspect; Editing Guide p.989). Empty: the title as it is.
+        QStringList aspects;
     };
     // What saving needs from the application: the open bins (node id, name), the defaults (the Media Creation
     // setting's Titles tab, the active bin), and the save itself, which makes or (with `replaceId`) revises the Title

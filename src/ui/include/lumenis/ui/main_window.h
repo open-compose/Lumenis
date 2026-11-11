@@ -1070,7 +1070,8 @@ public:
     TitleToolWindow* titleTool() const;
     // Saving a classic title (6.8d4a; FX Guide p.357-360): its fill and matte precomputes (unless fast saved) and its
     // Title Effect clip in the request's bin, or with `replaceId` that clip revised; loaded into the Source monitor.
-    // The clip's id, or empty with the reason.
+    // Each aspect ratio the request names (9.5, p.989) is saved: the first under the request's name, the others as
+    // "<name> <aspect>". The (first) clip's id, or empty with the reason.
     QString saveClassicTitle(const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId,
                              QString* error = nullptr);
     // Revising a title in a bin (p.359): the Title Tool opens with Title Effect clip `itemId`; false for other items.

@@ -1615,7 +1615,9 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     List Tool's Cut List options; tests `tst_cut_list`, `tst_cut_list_ui`); 9.4b, the XML and WebLists templates (done:
     `interop::cutlist` `Format::Xml`/`WebLists`, `writeFiles`, the List Tool's Save List of web pages); 9.4c, change lists
     (done: `interop::cutlist::exportChangeList`, the List Tool's Change List mode with Old Sequence and its options).
-  * 9.5, titles saved in more than one aspect ratio for the online session.
+  * 9.5, titles saved in more than one aspect ratio for the online session (done: the Save Title dialog's aspect ratios,
+    `ClassicTitle::aspect` cut in `media::renderClassicTitleMedia`, `MainWindow::saveClassicTitle`; test
+    `tst_title_clips aspectRatios`).
   * 9.6, the check for unconnected items, with its test.
   * 9.7, error messages everywhere, with the Export Options button checked against the guide.
   * 9.8, last, the trademark check.

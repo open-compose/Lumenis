@@ -515,13 +515,24 @@ std::optional<std::pair<model::BinItem, model::BinItem>> renderClassicTitleMedia
     const QSize size = creation.raster.isEmpty() ? QSize(1920, 1080) : creation.raster;
     // HDTitleFilter (p.376), as it is when the media is made.
     const bool filter = hdTitleFilter() && size.height() >= 720;
+    // A title saved at 4:3 keeps its 4:3 center cut (model::ClassicTitle::aspect, p.989): the matte is cleared outside it.
+    const bool centerCut = title.aspect == QLatin1String("4:3") && size.width() * 3 > size.height() * 4;
+    const int cut = centerCut ? (size.width() - size.height() * 4 / 3) / 2 : 0;
+    auto cleared = [cut](QImage image) {
+        if (cut <= 0) return image;
+        image = image.convertToFormat(QImage::Format_RGB32);
+        QPainter p(&image);
+        p.fillRect(QRect(0, 0, cut, image.height()), Qt::black);
+        p.fillRect(QRect(image.width() - cut, 0, cut, image.height()), Qt::black);
+        return image;
+    };
     auto filtered = [filter](QImage image) { return filter ? hdTitleFiltered(image) : image; };
     auto fill = renderedVideoClip(name + QStringLiteral(" Fill"), rate, pages,
                                   [&](std::int64_t f) { return filtered(classicTitleFill(title, size, static_cast<int>(f) + 1)); }, creation,
                                   model::BinItemKind::RenderedEffect, error);
     if (!fill) return std::nullopt;
     auto matte = renderedVideoClip(name + QStringLiteral(" Matte"), rate, pages,
-                                   [&](std::int64_t f) { return filtered(classicTitleMatte(title, size, static_cast<int>(f) + 1)); }, creation,
+                                   [&](std::int64_t f) { return cleared(filtered(classicTitleMatte(title, size, static_cast<int>(f) + 1))); }, creation,
                                    model::BinItemKind::RenderedEffect, error);
     if (!matte) {
         // Not half a title: the fill's file goes too.

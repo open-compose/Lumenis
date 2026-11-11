@@ -140,6 +140,10 @@ struct ClassicTitle {
     // Font replacements made in this title (8.7d1, font_replacement.h): original family -> the family put in its place,
     // so Object > Font Replacement can redefine it (p.994).
     QMap<QString, QString> fontReplacements;
+    // The aspect ratio the title was saved at (9.5; Editing Guide p.989: "You can save titles in multiple aspect
+    // ratios"): "16:9" or empty, the whole 16:9 canvas ("titles ... that extend beyond the center cut"); "4:3", only its
+    // 4:3 center cut ("the titles appear centered, within the 4:3 center cut"; ours: what lies outside is left out).
+    QString aspect;
 
     bool operator==(const ClassicTitle&) const = default;
     QJsonObject toJson() const;

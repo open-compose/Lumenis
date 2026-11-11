@@ -1096,8 +1096,21 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     fast->setChecked(suggestion.fastSave && !sequenceReplace_);
     fast->setEnabled(!sequenceReplace_); // "You cannot select Fast Save when revising a title in a sequence" (p.373)
     form->addRow(fast);
-    // Place in Timeline (In -> Out) and its track (p.359). Ours: the title aspect ratios (multiformat 24p and 25p
-    // projects) are not offered.
+    // "(Option) Select the title aspect ratios you want to save" (p.358): 16:9 and 4:3 (Editing Guide p.989), at least
+    // one; a revision in a sequence keeps the one it has.
+    auto* aspects = new QHBoxLayout;
+    QList<QCheckBox*> aspectBoxes;
+    for (const QString& a : {QStringLiteral("16:9"), QStringLiteral("4:3")}) {
+        auto* b = new QCheckBox(a, &box);
+        b->setObjectName(QStringLiteral("title:aspect") + QString(a).remove(QLatin1Char(':')));
+        b->setChecked(suggestion.aspects.contains(a) || (suggestion.aspects.isEmpty() && a == QLatin1String("16:9")));
+        b->setEnabled(!sequenceReplace_);
+        aspects->addWidget(b);
+        aspectBoxes << b;
+    }
+    aspects->addStretch();
+    form->addRow(tr("Aspect Ratios:"), aspects);
+    // Place in Timeline (In -> Out) and its track (p.359).
     auto* place = new QCheckBox(tr("Place in Timeline (In -> Out)"), &box);
     place->setObjectName(QStringLiteral("title:placeInTimeline"));
     auto* placeTrack = new QComboBox(&box);
@@ -1122,6 +1135,10 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     r.resolution = resolution->currentData().toString();
     r.fastSave = fast->isChecked();
     if (place->isChecked()) r.placeTrack = placeTrack->currentText();
+    for (QCheckBox* b : aspectBoxes) {
+        if (b->isChecked()) r.aspects << b->text();
+    }
+    if (sequenceReplace_) r.aspects.clear();
     return r;
 }
 

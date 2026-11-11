@@ -182,6 +182,14 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   Select > Unrendered Titles (p.359).
 * Revising (p.359-360): Ctrl+double-click the Title Effect icon, or drag the clip into an open Title tool; Save Title
   replaces the clip; Save Title As keeping the name "creates a new clip with the same name plus a two-digit extension".
+* Title aspect ratios (9.5; FX Guide p.358-360 "(Option) Select the title aspect ratios you want to save"; Editing Guide
+  p.989): "You can save titles in multiple aspect ratios. If you are working with anamorphically downconverted media,
+  save the title as 16:9 ... If you are working with media downconverted to center cut or letterbox, save the title as
+  4:3. In this case the titles appear centered, within the 4:3 center cut." The Save Title dialog has 16:9 and 4:3
+  check boxes, the project's aspect ratio checked to start with; each one checked is saved: the first under the
+  name, the others as "<name> <aspect>" (ours: "Credits 4:3"). `ClassicTitle::aspect` keeps it, so Re-create Title
+  Media makes the same cut; ours: a 4:3 title's matte is cleared outside the frame's 4:3 centre cut, so what lies
+  beyond it is left out. A revision in a sequence keeps its aspect ratio.
 * "You cannot save a rolling or crawling title with a color background" (p.342). File > Export Title saves "a PICT
   graphics file" (p.364). "Rolling titles scroll from the bottom to the top of the screen" and crawling titles "from
   right to left" (p.488); Title effects key over the video below (p.488).
