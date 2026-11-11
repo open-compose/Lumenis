@@ -2249,6 +2249,15 @@ void MainWindow::createTools() {
         }
         listTool_->setSequence(loaded->item, clipResolver(loaded->item));
     });
+    // A change list's old version, loaded the same way (p.954).
+    connect(listTool_, &ListTool::loadOldRequested, this, [this] {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+        if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
+            ConsoleLog::instance().append(tr("List Tool: load the old sequence into the Record monitor first."));
+            return;
+        }
+        listTool_->setOldSequence(loaded->item);
+    });
     connect(listTool_, &ListTool::message, this, [](const QString& line) { ConsoleLog::instance().append(line); });
     // File > Input > Source Browser (p.312-318).
     sourceBrowser_ = new SourceBrowser;

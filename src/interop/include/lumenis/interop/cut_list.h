@@ -21,7 +21,7 @@
 // (Ink Number), else timecode (Start; ours, for clips logged without film numbers). Written in the Columnar layout (a
 // page of aligned columns), as TabbedLists (tab-separated, "that you can open in a separate application such as
 // Microsoft Excel", p.958), as XML (every column heading and every column of the clips, p.957) or as WebLists (HTML
-// pages linked between the lists, p.957-958; 9.4b). Change lists come later (ROADMAP 9.4c).
+// pages linked between the lists, p.957-958; 9.4b). Change lists compare versions of a sequence (exportChangeList, 9.4c).
 namespace lumenis::interop::cutlist {
 
 enum class Format { Columnar, TabbedLists, WebLists, Xml };
@@ -96,6 +96,32 @@ struct Result {
     // "Files/cutlist.css").
     QMap<QString, QByteArray> files;
 };
+// Change lists (9.4c; p.940, p.953-954, p.962-963): "A change list is generated to simplify the process of updating
+// conformed cuts to match and compare changes in versions of the sequence". Each new sequence is compared with its old
+// version and the list names the changes: "Insertions for new material to be added", "Deletions of old material no
+// longer needed", "Trims to be made to the heads, tails, or middles of the edits" (Insert Head, Delete Head, Insert
+// Tail, Delete Tail), "Moves that consist of a matched pair of deletions and insertions of an entire shot or shots",
+// and, without Show only changes, the sections that stay ("No change"). An old and a new event are the same shot when
+// they use frames of the same clip's track in common; those kept in their order are trimmed, the others moved.
+struct ChangeOptions {
+    // "Show only changes: Limits the entries in the change list to insertions, deletions, trims, and moves" (p.962).
+    bool showOnlyChanges = true;
+    // "Combine Deletions: Forces each group of adjacent deletions to be combined into a single event" (p.963).
+    bool combineDeletions = false;
+    // "Preview Code: Displays preview code numbering": ours, a Code column numbering the changes of each reel.
+    bool previewCode = false;
+    // The change pull list ("lists only new clips or effects that you need to insert into the updated cut", sorted as
+    // the pull list) and the change discard list ("each clip that has been removed from the updated sequence").
+    bool changePull = true;
+    bool changeDiscard = true;
+};
+
+// The change list of each new sequence against its old one. Several sequences are reels: "For each sequence, the old
+// version and the new version must have exactly the same reel number" (the sequences' Reel # column, p.953), else
+// they pair in their order; "You must have an equal number of old and new sequences". `o` gives the format, tracks,
+// counting, sorts and whether the new sequences' optical list goes with it.
+Result exportChangeList(const QList<model::BinItem>& oldSequences, const QList<model::BinItem>& newSequences, const Options& o,
+                        const ChangeOptions& c = {});
 // Writes a WebLists result's files into `folder`. False, with the reason, when one cannot be written.
 bool writeFiles(const Result& result, const QString& folder, QString* error = nullptr);
 

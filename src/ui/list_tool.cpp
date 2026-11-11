@@ -131,8 +131,11 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     auto* kind = new QHBoxLayout;
     auto* list = new QRadioButton(tr("List"), left);
     list->setChecked(true);
+    // List / Change List (p.952-954): a change list compares the Old and New sequences; only the cut list types make one.
     auto* change = new QRadioButton(tr("Change List"), left);
+    change->setObjectName(QStringLiteral("listChangeMode"));
     change->setEnabled(false);
+    changeMode_ = change;
     kind->addWidget(list);
     kind->addWidget(change);
     kind->addStretch();
@@ -155,6 +158,21 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     seqRow->addWidget(load_);
     seqRow->addWidget(clear_);
     inputLayout->addLayout(seqRow);
+    // The old version, for a change list ("Drag the selected sequences into the Old Sequences pane", p.954).
+    oldRow_ = new QWidget(input);
+    auto* oldLayout = new QHBoxLayout(oldRow_);
+    oldLayout->setContentsMargins(0, 0, 0, 0);
+    oldLayout->addWidget(new QLabel(tr("Old Sequence:"), oldRow_));
+    oldLabel_ = new QLabel(tr("Drop sequence or press load"), oldRow_);
+    oldLabel_->setObjectName(QStringLiteral("listOldSequence"));
+    oldLabel_->setFrameShape(QFrame::StyledPanel);
+    auto* loadOld = new QPushButton(tr("Load"), oldRow_);
+    loadOld->setObjectName(QStringLiteral("listLoadOld"));
+    oldLayout->addWidget(oldLabel_, 1);
+    oldLayout->addWidget(loadOld);
+    connect(loadOld, &QPushButton::clicked, this, &ListTool::loadOldRequested);
+    oldRow_->setVisible(false);
+    inputLayout->addWidget(oldRow_);
     inputLayout->addWidget(new QLabel(tr("Tracks:"), input));
     auto* scroll = new QScrollArea(input);
     scroll->setWidgetResizable(true);
@@ -274,6 +292,27 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     cutLayout->addRow(tr("Start at"), startAt_);
     cut->setVisible(false);
     optionsLayout->addWidget(cut);
+    // Change List: List Options (p.962-963).
+    auto* changes = new QGroupBox(tr("Change List"), options);
+    changes->setObjectName(QStringLiteral("listChangeOptions"));
+    changeOptions_ = changes;
+    auto* changeLayout = new QVBoxLayout(changes);
+    showOnlyChanges_ = new QCheckBox(tr("Show only changes"), changes);
+    showOnlyChanges_->setObjectName(QStringLiteral("listShowOnlyChanges"));
+    showOnlyChanges_->setChecked(true);
+    combineDeletions_ = new QCheckBox(tr("Combine Deletions"), changes);
+    combineDeletions_->setObjectName(QStringLiteral("listCombineDeletions"));
+    previewCode_ = new QCheckBox(tr("Preview Code"), changes);
+    previewCode_->setObjectName(QStringLiteral("listPreviewCode"));
+    changePull_ = new QCheckBox(tr("Change Pull"), changes);
+    changePull_->setObjectName(QStringLiteral("listChangePull"));
+    changePull_->setChecked(true);
+    changeDiscard_ = new QCheckBox(tr("Change Discard"), changes);
+    changeDiscard_->setObjectName(QStringLiteral("listChangeDiscard"));
+    changeDiscard_->setChecked(true);
+    for (QCheckBox* b : {showOnlyChanges_, combineDeletions_, previewCode_, changePull_, changeDiscard_}) changeLayout->addWidget(b);
+    changes->setVisible(false);
+    optionsLayout->addWidget(changes);
     optionsLayout->addStretch();
     auto* optionsScroll = new QScrollArea(tabs);
     optionsScroll->setWidgetResizable(true);
@@ -359,6 +398,7 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
         setting_->setCurrentIndex(isOtio() ? 1 : 0);
         formatChanged();
     });
+    connect(changeMode_, &QRadioButton::toggled, this, [this] { formatChanged(); });
     connect(load_, &QPushButton::clicked, this, &ListTool::loadRequested);
     connect(clear_, &QPushButton::clicked, this, &ListTool::clearSequence);
     connect(preview_, &QPushButton::clicked, this, [this] { preview(); });
@@ -377,6 +417,40 @@ bool ListTool::isOtio() const {
 
 bool ListTool::isCutList() const {
     return interop::cutlist::formatFromName(format_->currentText()).has_value();
+}
+
+bool ListTool::isChangeList() const {
+    return isCutList() && changeMode_->isChecked();
+}
+
+void ListTool::setOldSequence(const model::BinItem& sequence) {
+    oldSequences_ = {sequence};
+    oldLabel_->setText(sequence.name);
+    made_.clear();
+    madeFiles_.clear();
+}
+
+void ListTool::setChangeSequences(const QList<model::BinItem>& olds, const QList<model::BinItem>& news, Resolver resolve) {
+    if (news.isEmpty()) return;
+    setSequence(news.first(), std::move(resolve));
+    oldSequences_ = olds;
+    newSequences_ = news;
+    QStringList names;
+    for (const model::BinItem& s : olds) names << s.name;
+    oldLabel_->setText(names.join(QStringLiteral(", ")));
+    QStringList newNames;
+    for (const model::BinItem& s : news) newNames << s.name;
+    sequenceLabel_->setText(newNames.join(QStringLiteral(", ")));
+}
+
+interop::cutlist::ChangeOptions ListTool::changeListOptions() const {
+    interop::cutlist::ChangeOptions c;
+    c.showOnlyChanges = showOnlyChanges_->isChecked();
+    c.combineDeletions = combineDeletions_->isChecked();
+    c.previewCode = previewCode_->isChecked();
+    c.changePull = changePull_->isChecked();
+    c.changeDiscard = changeDiscard_->isChecked();
+    return c;
 }
 
 interop::cutlist::Options ListTool::cutListOptions() const {
@@ -413,6 +487,15 @@ void ListTool::formatChanged() {
     madeFiles_.clear();
     // "The options in the List Options and Formatting tabs change depending on which Output Format you select" (p.944).
     cutOptions_->setVisible(isCutList());
+    changeMode_->setEnabled(isCutList());
+    if (!isCutList() && changeMode_->isChecked()) {
+        for (QRadioButton* b : changeMode_->parentWidget()->findChildren<QRadioButton*>()) {
+            if (b != changeMode_ && b->text() == tr("List")) b->setChecked(true);
+        }
+    }
+    const bool changing = isChangeList();
+    changeOptions_->setVisible(changing);
+    oldRow_->setVisible(changing);
     made_.clear();
     master_->clear();
     sources_->clear();
@@ -441,6 +524,7 @@ QToolButton* ListTool::trackButton(const QString& track) const {
 
 void ListTool::setSequence(const model::BinItem& sequence, Resolver resolve) {
     sequence_ = sequence;
+    newSequences_.clear();
     resolve_ = std::move(resolve);
     sequenceLabel_->setText(sequence.name);
     // "The title of the List is automatically populated based on the sequence name" (p.948).
@@ -511,7 +595,11 @@ QString ListTool::preview() {
         madeFiles_.clear();
         warnings = r.warnings;
     } else if (isCutList()) {
-        const interop::cutlist::Result r = interop::cutlist::exportText(*sequence_, cutListOptions());
+        QList<model::BinItem> news = newSequences_;
+        if (news.isEmpty()) news << *sequence_;
+        const interop::cutlist::Result r = isChangeList()
+                                               ? interop::cutlist::exportChangeList(oldSequences_, news, cutListOptions(), changeListOptions())
+                                               : interop::cutlist::exportText(*sequence_, cutListOptions());
         if (!r.ok) {
             emit message(tr("List Tool: %1").arg(r.error));
             return {};

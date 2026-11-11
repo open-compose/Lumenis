@@ -18,6 +18,7 @@ class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
+class QRadioButton;
 class QSpinBox;
 class QTabWidget;
 class QToolButton;
@@ -52,8 +53,15 @@ public:
     interop::edl::ExportOptions options() const;
     interop::otio::ExportOptions otioOptions() const;
     interop::cutlist::Options cutListOptions() const;
-    // Whether the Output Format is a cut list type (Columnar, TabbedLists).
+    // Whether the Output Format is a cut list type (Columnar, TabbedLists, WebLists, XML), and whether Change List is
+    // chosen with it (p.952-954).
     bool isCutList() const;
+    bool isChangeList() const;
+    // A change list's old version (Load beside Old Sequence; MainWindow answers loadOldRequested with the Record
+    // monitor's sequence); the new version is the sequence (setSequence). setChangeSequences gives several reels.
+    void setOldSequence(const model::BinItem& sequence);
+    void setChangeSequences(const QList<model::BinItem>& olds, const QList<model::BinItem>& news, Resolver resolve);
+    interop::cutlist::ChangeOptions changeListOptions() const;
     // The project's film type (ProjectSettings::filmType), for the cut lists' feet and frames; empty for video projects.
     void setFilmType(const QString& filmType) { filmType_ = filmType; }
     void setAspect(double aspect) { aspect_ = aspect; }
@@ -83,12 +91,15 @@ public:
     QCheckBox* optimizeBox() const { return optimize_; }
     QSpinBox* startEvent() const { return startEvent_; }
     QWidget* cutListOptionsBox() const { return cutOptions_; }
+    QWidget* changeListOptionsBox() const { return changeOptions_; }
+    QRadioButton* changeListButton() const { return changeMode_; }
     // The Tracks pane's button for a track, or null.
     QToolButton* trackButton(const QString& track) const;
 
 signals:
     // Load (p.945): MainWindow answers with setSequence() for the Record monitor's sequence.
     void loadRequested();
+    void loadOldRequested();
     // A line for the Console: the list's warnings, a save.
     void message(const QString& line);
 
@@ -124,6 +135,17 @@ private:
     QSpinBox* startEvent_ = nullptr;
     // The Cut List options (p.960-962, p.964).
     QWidget* cutOptions_ = nullptr;
+    QRadioButton* changeMode_ = nullptr;
+    QWidget* oldRow_ = nullptr;
+    QLabel* oldLabel_ = nullptr;
+    QList<model::BinItem> oldSequences_;
+    QList<model::BinItem> newSequences_; // several reels; empty: the sequence alone
+    QWidget* changeOptions_ = nullptr;
+    QCheckBox* showOnlyChanges_ = nullptr;
+    QCheckBox* combineDeletions_ = nullptr;
+    QCheckBox* previewCode_ = nullptr;
+    QCheckBox* changePull_ = nullptr;
+    QCheckBox* changeDiscard_ = nullptr;
     QCheckBox* assemble_ = nullptr;
     QCheckBox* sceneAssemble_ = nullptr;
     QCheckBox* optical_ = nullptr;

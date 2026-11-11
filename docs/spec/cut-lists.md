@@ -61,10 +61,37 @@ options in the List Options and Formatting tabs change depending on which Output
   the Files folder there and opens CutAsm.htm in the system's browser ("When the HTML file is created, the Browser
   automatically launches"). Ours: no banner, logo or script; one style sheet.
 
+## 9.4c: change lists
+
+"A change list is generated to simplify the process of updating conformed cuts to match and compare changes in
+versions of the sequence" (p.962). `interop::cutlist::exportChangeList` compares each new sequence with its old one;
+the List Tool's Change List button (enabled for the cut list types) shows an Old Sequence row with its own Load (the
+Record monitor's sequence, as Load is) and the Change List options box.
+
+* **Changes** (p.940): "Insertions for new material to be added", "Deletions of old material no longer needed",
+  "Trims to be made to the heads, tails, or middles of the edits" (Insert Head, Delete Head, Insert Tail, Delete Tail,
+  the names of p.965's icons) and "Moves that consist of a matched pair of deletions and insertions of an entire shot
+  or shots". Ours: an old and a new event on one track are the same shot when they share frames of the same clip's
+  track (each old event matched once, to the new one sharing most); the matched shots in the longest run that keeps
+  their order are trimmed where their ends differ, the others moved; unmatched new events are insertions and
+  unmatched old ones deletions, placed after the new place of the last kept shot before them.
+* **Columns** (ours): #, Code (Preview Code), Change, Track, Footage (in the new sequence), Old Footage, Length, First
+  and Last Edge of the frames concerned, Clip Name.
+* **Options** (p.962-963): Show only changes (on; off adds "No change" lines for the shots left as they were), Combine
+  Deletions (a run of deletions next to each other in the old sequence as one event, the clip names joined), Preview
+  Code (ours: a Code column numbering the changes 001, 002 ...), Change Pull (the insertions, head and tail insertions
+  and moves, sorted as the pull list), Change Discard (the deletions and head and tail deletions). The new sequence's
+  optical list follows when Optical is on.
+* **Reels** (p.953-954): several sequences pair by the Reel # column when all have one ("For each sequence, the old
+  version and the new version must have exactly the same reel number"), else in their order; unequal counts are
+  refused ("You must have an equal number of old and new sequences"). Each reel's lists are named "(REEL n)".
+* **WebLists**: CutChg.htm, CutChgPull.htm and CutChgDisc.htm (ours), with the new and old assemble lists (CutAsm.htm,
+  CutAsmOld.htm) that the changes link to ("Change lists that are hyper linked to the old and new Assemble and Pull
+  Lists", p.958); later reels' pages end in the reel's number. XML lists name an old sequence's event `oldEvent`.
+
 ## Not yet
 
-* Show Icons (p.964).
-* 9.4c: change lists (p.940, p.953-954, p.962-963, p.965).
+* Show Icons (p.964); dragging several sequences into the Old and New Sequences panes (the model takes several reels).
 * LFOA, Scan, Show Dupe Refs, Include Leader/Opticals, Place Separators, Page Breaks Between Opticals; the Formatting
   tab's Running As Mode, Master TC Track, Display Handles, Separate List for Each Channel, Show Prefix, Matchback Info,
   Disable Perf Slip. Aux ink numbers.
@@ -72,5 +99,6 @@ options in the List Options and Formatting tabs change depending on which Output
 ## Tests
 
 `tst_cut_list` (film numbers, the assemble, optical, dupe, pull and scene assemble lists, short and jump cuts, key
-frames, TabbedLists, XML, WebLists and their links); `tst_cut_list_ui` (the List Tool's formats, the Cut List box,
+frames, TabbedLists, XML, WebLists and their links, change lists with trims, insertions, deletions, moves, Combine
+Deletions, reels and their web links); `tst_cut_list_ui` (the List Tool's formats, the Cut List box,
 Preview, Save List of text and web pages, the film type).

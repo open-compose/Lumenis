@@ -19,7 +19,9 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <memory>
 #include <tuple>
+#include <vector>
 
 namespace lumenis::interop::cutlist {
 
@@ -114,9 +116,13 @@ struct Event {
 // A list as rows of columns. `key` names it for the web pages and XML ("assemble", "scene", "optical", "dupe", "pull");
 // `events` gives, for each row, the assemble list's event number it is about (0 for none), for the links and the XML's
 // columns.
+// `group` sets one reel's pages apart in WebLists ("" for the first, "2", "Old" ...); a row's event below 0 is an event
+// of the old sequence, whose assemble list is in `oldGroup` (change lists).
 struct Table {
     QString key;
     QString name;
+    QString group;
+    QString oldGroup;
     QStringList head;
     QList<QStringList> rows;
     QList<int> events;
@@ -164,18 +170,21 @@ QString escaped(const QString& text) { return text.toHtmlEscaped(); }
 // The XML template (p.957): "a file that includes all the information about the list: it shows you every column
 // heading and every custom column". Ours: <CutList> with a <List> per list, each <Row> its cells named by heading and,
 // for a row about an event, the clip's bin columns as <Column> elements.
-QString xml(const QList<Table>& tables, const Options& o, const std::function<const model::BinItem*(int)>& clipOf) {
+QString xml(const QList<Table>& tables, const Options& o, const std::function<const model::BinItem*(const QString& group, int event)>& clipOf) {
     QStringList out;
     out << QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     out << QStringLiteral("<CutList title=\"%1\" framesPerFoot=\"%2\">").arg(escaped(o.title)).arg(o.framesPerFoot);
     for (const Table& t : tables) {
-        out << QStringLiteral("  <List type=\"%1\" name=\"%2\">").arg(t.key, escaped(t.name));
+        out << (t.group.isEmpty() ? QStringLiteral("  <List type=\"%1\" name=\"%2\">").arg(t.key, escaped(t.name))
+                                  : QStringLiteral("  <List type=\"%1\" name=\"%2\" group=\"%3\">").arg(t.key, escaped(t.name), escaped(t.group)));
         for (int r = 0; r < t.rows.size(); ++r) {
-            out << (t.events[r] ? QStringLiteral("    <Row event=\"%1\">").arg(t.events[r]) : QStringLiteral("    <Row>"));
+            out << (t.events[r] > 0   ? QStringLiteral("    <Row event=\"%1\">").arg(t.events[r])
+                    : t.events[r] < 0 ? QStringLiteral("    <Row oldEvent=\"%1\">").arg(-t.events[r])
+                                      : QStringLiteral("    <Row>"));
             for (int c = 0; c < t.rows[r].size() && c < t.head.size(); ++c) {
                 out << QStringLiteral("      <Cell heading=\"%1\">%2</Cell>").arg(escaped(t.head[c]), escaped(t.rows[r][c]));
             }
-            if (const model::BinItem* clip = t.events[r] ? clipOf(t.events[r]) : nullptr) {
+            if (const model::BinItem* clip = clipOf(t.group, t.events[r])) {
                 QStringList headings = clip->fields.keys();
                 std::sort(headings.begin(), headings.end());
                 for (const QString& h : headings) {
@@ -190,12 +199,16 @@ QString xml(const QList<Table>& tables, const Options& o, const std::function<co
     return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
 }
 
-QString pageOf(const QString& key) {
-    if (key == QLatin1String("assemble")) return QStringLiteral("CutAsm.htm");
-    if (key == QLatin1String("scene")) return QStringLiteral("CutScene.htm");
-    if (key == QLatin1String("optical")) return QStringLiteral("CutOpt.htm");
-    if (key == QLatin1String("dupe")) return QStringLiteral("CutDupe.htm");
-    return QStringLiteral("CutPull.htm");
+QString pageOf(const QString& key, const QString& group = {}) {
+    static const QHash<QString, QString> pages{{QStringLiteral("assemble"), QStringLiteral("CutAsm")},
+                                               {QStringLiteral("scene"), QStringLiteral("CutScene")},
+                                               {QStringLiteral("optical"), QStringLiteral("CutOpt")},
+                                               {QStringLiteral("dupe"), QStringLiteral("CutDupe")},
+                                               {QStringLiteral("pull"), QStringLiteral("CutPull")},
+                                               {QStringLiteral("change"), QStringLiteral("CutChg")},
+                                               {QStringLiteral("changepull"), QStringLiteral("CutChgPull")},
+                                               {QStringLiteral("changediscard"), QStringLiteral("CutChgDisc")}};
+    return pages.value(key, key) + group + QStringLiteral(".htm");
 }
 
 // WebLists (p.957-958): an HTML page per list, "hyper linked, which allows you to jump between lists": the assemble
@@ -206,12 +219,18 @@ QMap<QString, QByteArray> webLists(const QList<Table>& tables, const Options& o)
     QMap<QString, QByteArray> files;
     const QString title = escaped(o.title.isEmpty() ? QStringLiteral("Cut List") : o.title);
     QStringList nav;
-    for (const Table& t : tables) nav << QStringLiteral("<a href=\"%1\">%2</a>").arg(pageOf(t.key), escaped(t.name));
+    for (const Table& t : tables) {
+        const QString label = t.group.isEmpty() ? t.name : QStringLiteral("%1 (%2)").arg(t.name, t.group);
+        nav << QStringLiteral("<a href=\"%1\">%2</a>").arg(pageOf(t.key, t.group), escaped(label));
+    }
     static const QRegularExpression optical(QStringLiteral("Optical (\\d+)"));
     static const QRegularExpression dupe(QStringLiteral("Dupe (\\d+)"));
-    const bool hasOptical = std::any_of(tables.cbegin(), tables.cend(), [](const Table& t) { return t.key == QLatin1String("optical"); });
-    const bool hasDupe = std::any_of(tables.cbegin(), tables.cend(), [](const Table& t) { return t.key == QLatin1String("dupe"); });
+    auto has = [&](const char* key, const QString& group) {
+        return std::any_of(tables.cbegin(), tables.cend(), [&](const Table& t) { return t.key == QLatin1String(key) && t.group == group; });
+    };
     for (const Table& t : tables) {
+        const bool hasOptical = has("optical", t.group);
+        const bool hasDupe = has("dupe", t.group);
         QStringList h;
         h << QStringLiteral("<!DOCTYPE html>") << QStringLiteral("<html><head><meta charset=\"utf-8\">")
           << QStringLiteral("<title>%1 - %2</title>").arg(title, escaped(t.name))
@@ -238,17 +257,19 @@ QMap<QString, QByteArray> webLists(const QList<Table>& tables, const Options& o)
             for (int c = 0; c < row.size(); ++c) {
                 QString cell = escaped(row[c]);
                 if (t.key == QLatin1String("assemble") && c == row.size() - 1) {
-                    if (hasOptical) cell.replace(optical, QStringLiteral("<a href=\"CutOpt.htm#o\\1\">Optical \\1</a>"));
-                    if (hasDupe) cell.replace(dupe, QStringLiteral("<a href=\"CutDupe.htm#d\\1\">Dupe \\1</a>"));
-                } else if (t.key != QLatin1String("assemble") && c == 0 && event > 0) {
-                    cell = QStringLiteral("<a href=\"CutAsm.htm#e%1\">%2</a>").arg(event).arg(cell);
+                    if (hasOptical) cell.replace(optical, QStringLiteral("<a href=\"%1#o\\1\">Optical \\1</a>").arg(pageOf(QStringLiteral("optical"), t.group)));
+                    if (hasDupe) cell.replace(dupe, QStringLiteral("<a href=\"%1#d\\1\">Dupe \\1</a>").arg(pageOf(QStringLiteral("dupe"), t.group)));
+                } else if (t.key != QLatin1String("assemble") && c == 0 && event != 0) {
+                    // An event of the new sequence (or the cut list's), or with a negative number one of the old sequence.
+                    const QString page = pageOf(QStringLiteral("assemble"), event > 0 ? t.group : t.oldGroup);
+                    cell = QStringLiteral("<a href=\"%1#e%2\">%3</a>").arg(page).arg(std::abs(event)).arg(cell);
                 }
                 h << QStringLiteral("<td>%1</td>").arg(cell);
             }
             h << QStringLiteral("</tr>");
         }
         h << QStringLiteral("</table></body></html>");
-        files.insert(pageOf(t.key), h.join(QLatin1Char('\n')).toUtf8() + '\n');
+        files.insert(pageOf(t.key, t.group), h.join(QLatin1Char('\n')).toUtf8() + '\n');
     }
     files.insert(QStringLiteral("Files/cutlist.css"),
                  QByteArrayLiteral("body { font-family: sans-serif; margin: 1em; }\n"
@@ -312,16 +333,26 @@ QString sortKey(const Event& e, SortField f) {
 
 } // namespace
 
-Result exportText(const model::BinItem& sequence, const Options& o) {
-    Result r;
+namespace {
+
+// The lists of one sequence, as `o` chooses them (no list chosen: none), with the sequence and its events kept for
+// the events' segments. Not copied: the events point into `seq`.
+struct Built {
+    model::Sequence seq;
+    QList<Event> events;
+    QList<Table> tables;
+};
+
+bool build(Built& built, const model::BinItem& sequence, const Options& o, const QString& group, Result& r) {
     if (sequence.kind != model::BinItemKind::Sequence) {
         r.error = QStringLiteral("Load a sequence to make a cut list.");
-        return r;
+        return false;
     }
-    const model::Sequence seq = model::Sequence::fromItem(sequence);
+    built.seq = model::Sequence::fromItem(sequence);
+    const model::Sequence& seq = built.seq;
     const int fpf = o.framesPerFoot;
     // The events, track by track in the sequence's order.
-    QList<Event> events;
+    QList<Event>& events = built.events;
     QList<std::pair<QString, const model::Segment*>> previous; // per event, the segment before it on its track
     int opticals = 0;
     for (const model::Track& t : seq.tracks()) {
@@ -350,7 +381,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     }
     if (events.isEmpty()) {
         r.error = QStringLiteral("The listed tracks have no material.");
-        return r;
+        return false;
     }
     // Dupes: the Dupe Detection's sets, with the Assume Handles (p.962).
     const QList<model::Dupe> dupes = model::dupes(seq, {model::TrackKind::Video, model::TrackKind::Audio}, o.assumeHandles);
@@ -388,12 +419,12 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     if (o.reelNames) head << QStringLiteral("Cam Roll") << QStringLiteral("Sound Roll");
     if (o.clipNames) head << QStringLiteral("Clip Name");
     head << QStringLiteral("Comments");
-    QList<Table> tables;
+    QList<Table>& tables = built.tables;
     if (o.assemble) {
         // "The assemble list shows the order in which a sequence's clips, optical effects, or standard dissolves and
         // fades are assembled from start to finish in the edited sequence. The assemble list also flags duplicate
         // frames" (p.941).
-        Table t{QStringLiteral("assemble"), QStringLiteral("ASSEMBLE LIST"), head, {}, {}};
+        Table t{QStringLiteral("assemble"), QStringLiteral("ASSEMBLE LIST"), group, {}, head, {}, {}};
         int n = 0;
         for (const Event& e : events) {
             ++n;
@@ -406,7 +437,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         const bool filled = std::all_of(events.cbegin(), events.cend(), [](const Event& e) { return !e.field("Scene").isEmpty(); });
         if (!filled) {
             r.error = QStringLiteral("The Scene and Take columns must be filled in within the bin to generate a scene assemble list.");
-            return r;
+            return false;
         }
         // Ours: by scene and take, then reel, assembly order kept within them.
         QList<int> order;
@@ -417,7 +448,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         });
         QStringList sceneHead = head;
         sceneHead.insert(2, QStringLiteral("Scene/Take"));
-        Table t{QStringLiteral("scene"), QStringLiteral("SCENE ASSEMBLE LIST"), sceneHead, {}, {}};
+        Table t{QStringLiteral("scene"), QStringLiteral("SCENE ASSEMBLE LIST"), group, {}, sceneHead, {}, {}};
         for (int i : order) {
             QStringList c = cells(events[i], i + 1);
             c.insert(2, events[i].field("Scene") + QLatin1Char('/') + events[i].field("Take"));
@@ -428,7 +459,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     if (o.optical && opticals > 0) {
         // "The optical list presents each optical event in the order in which it appears in the sequence and includes
         // specifications based on either ink numbers, Aux ink numbers, or key numbers" (p.942).
-        Table t{QStringLiteral("optical"), QStringLiteral("OPTICAL LIST"),
+        Table t{QStringLiteral("optical"), QStringLiteral("OPTICAL LIST"), group, {},
                 {QStringLiteral("Optical"), QStringLiteral("Track"), QStringLiteral("Effect"), QStringLiteral("Footage In"),
                  QStringLiteral("Footage Out"), QStringLiteral("Duration"), QStringLiteral("Layer"), QStringLiteral("First Edge"),
                  QStringLiteral("Last Edge"), QStringLiteral("Clip Name"), QStringLiteral("Notes")},
@@ -504,7 +535,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     if (o.dupe && !dupes.isEmpty()) {
         // "Each dupe group set provides the IN and OUT points of two or more entries that are duplicates of each
         // other" (p.942); Print w/Handles widens the entries shown (p.962).
-        Table t{QStringLiteral("dupe"), QStringLiteral("DUPE LIST"),
+        Table t{QStringLiteral("dupe"), QStringLiteral("DUPE LIST"), group, {},
                 {QStringLiteral("Dupe Group"), QStringLiteral("Track"), QStringLiteral("Footage In"), QStringLiteral("Footage Out"),
                  QStringLiteral("First Edge"), QStringLiteral("Last Edge"), QStringLiteral("Clip Name")},
                 {},
@@ -541,7 +572,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
             };
             return o.headsOut ? edge(x) < edge(y) : edge(y) < edge(x);
         });
-        Table t{QStringLiteral("pull"), QStringLiteral("PULL LIST"),
+        Table t{QStringLiteral("pull"), QStringLiteral("PULL LIST"), group, {},
                 {QStringLiteral("#"), QStringLiteral("Track"), QStringLiteral("First Edge"), QStringLiteral("Last Edge"),
                  QStringLiteral("Duration"), QStringLiteral("Cam Roll"), QStringLiteral("Lab Roll"), QStringLiteral("Sound Roll"),
                  QStringLiteral("Clip Name"), QStringLiteral("Dupe")},
@@ -562,25 +593,329 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         }
         tables << t;
     }
-    if (tables.isEmpty()) {
-        r.error = QStringLiteral("Choose a list to make in the List Options.");
-        return r;
-    }
+    return true;
+}
+
+// The lists written in the chosen format into `r`.
+void render(const QList<Table>& tables, const QHash<QString, const QList<Event>*>& events, const Options& o, Result& r) {
     switch (o.format) {
     case Format::Columnar:
     case Format::TabbedLists: r.text = columnar(tables, o); break;
     case Format::Xml:
-        r.text = xml(tables, o, [&](int event) -> const model::BinItem* {
-            if (event < 1 || event > events.size() || !events[event - 1].clip) return nullptr;
-            return &*events[event - 1].clip;
+        r.text = xml(tables, o, [&](const QString& group, int event) -> const model::BinItem* {
+            const QList<Event>* list = events.value(group);
+            if (!list || event < 1 || event > list->size() || !(*list)[event - 1].clip) return nullptr;
+            return &*(*list)[event - 1].clip;
         });
         break;
     case Format::WebLists:
         r.files = webLists(tables, o);
-        r.text = QString::fromUtf8(r.files.value(pageOf(tables.first().key)));
+        r.text = QString::fromUtf8(r.files.value(pageOf(tables.first().key, tables.first().group)));
         break;
     }
     r.ok = true;
+}
+
+} // namespace
+
+Result exportText(const model::BinItem& sequence, const Options& o) {
+    Result r;
+    Built b;
+    if (!build(b, sequence, o, {}, r)) return r;
+    if (b.tables.isEmpty()) {
+        r.error = QStringLiteral("Choose a list to make in the List Options.");
+        return r;
+    }
+    render(b.tables, {{QString(), &b.events}}, o, r);
+    return r;
+}
+
+namespace {
+
+// One line of a change list. `source` is the event whose frames it names, from `first` (a source frame of it) for
+// `length` frames; `at` is where in the new sequence it applies, `oldAt` where it was in the old one (-1: nowhere).
+// `event` numbers the event in its assemble list, below 0 in the old sequence's.
+struct Change {
+    QString kind;
+    QString track;
+    std::int64_t at = 0;
+    std::int64_t oldAt = -1;
+    std::int64_t length = 0;
+    const Event* source = nullptr;
+    std::int64_t first = 0;
+    int event = 0;
+    QString name;
+};
+
+std::int64_t overlap(const Event& a, const Event& b) {
+    if (a.segment->clipId != b.segment->clipId || a.segment->sourceTrack != b.segment->sourceTrack) return 0;
+    return std::min(a.sourceIn + a.length, b.sourceIn + b.length) - std::max(a.sourceIn, b.sourceIn);
+}
+
+// The changes from `before` to `after` (p.940: insertions, deletions, trims, moves; and with `all` the unchanged).
+QList<Change> changesBetween(const Built& before, const Built& after, bool all) {
+    QList<Change> out;
+    QStringList tracks;
+    for (const Built* b : {&after, &before}) {
+        for (const Event& e : b->events) {
+            if (!tracks.contains(e.track)) tracks << e.track;
+        }
+    }
+    for (const QString& track : tracks) {
+        QList<int> olds, news;
+        for (int i = 0; i < before.events.size(); ++i) {
+            if (before.events[i].track == track) olds << i;
+        }
+        for (int i = 0; i < after.events.size(); ++i) {
+            if (after.events[i].track == track) news << i;
+        }
+        // The same shot: the old event sharing the most source frames, each old event matched once.
+        QHash<int, int> matchOf; // new index -> position in olds
+        QSet<int> taken;
+        for (int n : news) {
+            int best = -1;
+            std::int64_t most = 0;
+            for (int k = 0; k < olds.size(); ++k) {
+                if (taken.contains(k)) continue;
+                const std::int64_t shared = overlap(before.events[olds[k]], after.events[n]);
+                if (shared > most) {
+                    most = shared;
+                    best = k;
+                }
+            }
+            if (best >= 0) {
+                matchOf.insert(n, best);
+                taken.insert(best);
+            }
+        }
+        // Those kept in their order: the longest increasing run of old positions in the new order; the rest moved.
+        QList<int> matched; // new indices in order
+        for (int n : news) {
+            if (matchOf.contains(n)) matched << n;
+        }
+        QList<int> length(matched.size(), 1), back(matched.size(), -1);
+        int bestEnd = -1;
+        for (int a = 0; a < matched.size(); ++a) {
+            for (int b = 0; b < a; ++b) {
+                if (matchOf[matched[b]] < matchOf[matched[a]] && length[b] + 1 > length[a]) {
+                    length[a] = length[b] + 1;
+                    back[a] = b;
+                }
+            }
+            if (bestEnd < 0 || length[a] > length[bestEnd]) bestEnd = a;
+        }
+        QSet<int> kept;
+        for (int a = bestEnd; a >= 0; a = back[a]) kept.insert(matched[a]);
+        for (int n : news) {
+            const Event& now = after.events[n];
+            auto add = [&](const QString& kind, std::int64_t at, std::int64_t len, const Event& src, std::int64_t first, int event,
+                           std::int64_t oldAt = -1) {
+                out << Change{kind, track, at, oldAt, len, &src, first, event, src.name};
+            };
+            if (!matchOf.contains(n)) {
+                add(QStringLiteral("Insert"), now.record, now.length, now, now.sourceIn, n + 1);
+                continue;
+            }
+            const int o = olds[matchOf[n]];
+            const Event& was = before.events[o];
+            if (!kept.contains(n)) {
+                add(QStringLiteral("Move"), now.record, now.length, now, now.sourceIn, n + 1, was.record);
+                continue;
+            }
+            bool changed = false;
+            const std::int64_t head = now.sourceIn - was.sourceIn;
+            if (head < 0) add(QStringLiteral("Insert Head"), now.record, -head, now, now.sourceIn, n + 1, was.record);
+            if (head > 0) add(QStringLiteral("Delete Head"), now.record, head, was, was.sourceIn, -(o + 1), was.record);
+            const std::int64_t nowEnd = now.sourceIn + now.length, wasEnd = was.sourceIn + was.length;
+            if (nowEnd > wasEnd) add(QStringLiteral("Insert Tail"), now.record + now.length - (nowEnd - wasEnd), nowEnd - wasEnd, now, wasEnd, n + 1,
+                                     was.record + was.length);
+            if (nowEnd < wasEnd) add(QStringLiteral("Delete Tail"), now.record + now.length, wasEnd - nowEnd, was, nowEnd, -(o + 1),
+                                     was.record + was.length - (wasEnd - nowEnd));
+            changed = head != 0 || nowEnd != wasEnd;
+            if (!changed && all) add(QStringLiteral("No change"), now.record, now.length, now, now.sourceIn, n + 1, was.record);
+        }
+        // Deletions, where they were: after the new place of the last old shot before them that stayed in its order.
+        QHash<int, int> newOf; // position in olds -> new index, for those kept
+        for (int n : kept) newOf.insert(matchOf[n], n);
+        for (int k = 0; k < olds.size(); ++k) {
+            if (taken.contains(k)) continue;
+            const Event& was = before.events[olds[k]];
+            std::int64_t at = 0;
+            for (int j = k - 1; j >= 0; --j) {
+                if (newOf.contains(j)) {
+                    const Event& anchor = after.events[newOf[j]];
+                    at = anchor.record + anchor.length;
+                    break;
+                }
+            }
+            out << Change{QStringLiteral("Delete"), track, at, was.record, was.length, &was, was.sourceIn, -(olds[k] + 1), was.name};
+        }
+    }
+    // In the new sequence's order, track by track as the events are; deletions before what follows them.
+    std::stable_sort(out.begin(), out.end(), [&](const Change& a, const Change& b) {
+        const auto rank = [&](const Change& c) { return static_cast<int>(tracks.indexOf(c.track)); };
+        if (rank(a) != rank(b)) return rank(a) < rank(b);
+        if (a.at != b.at) return a.at < b.at;
+        const bool da = a.kind.startsWith(QLatin1String("Delete")), db = b.kind.startsWith(QLatin1String("Delete"));
+        return da && !db;
+    });
+    return out;
+}
+
+} // namespace
+
+Result exportChangeList(const QList<model::BinItem>& oldSequences, const QList<model::BinItem>& newSequences, const Options& o,
+                        const ChangeOptions& c) {
+    Result r;
+    if (oldSequences.isEmpty() || newSequences.isEmpty()) {
+        r.error = QStringLiteral("Load the old and the new sequences to make a change list.");
+        return r;
+    }
+    if (oldSequences.size() != newSequences.size()) {
+        r.error = QStringLiteral("You must have an equal number of old and new sequences.");
+        return r;
+    }
+    // The reels: by the sequences' Reel # when they all have one, else in their order.
+    const auto reelOf = [](const model::BinItem& s) { return s.fields.value(QStringLiteral("Reel #")).trimmed(); };
+    const bool byReel = std::all_of(oldSequences.cbegin(), oldSequences.cend(), [&](const model::BinItem& s) { return !reelOf(s).isEmpty(); }) &&
+                        std::all_of(newSequences.cbegin(), newSequences.cend(), [&](const model::BinItem& s) { return !reelOf(s).isEmpty(); });
+    QList<std::pair<model::BinItem, model::BinItem>> pairs;
+    for (int i = 0; i < newSequences.size(); ++i) {
+        if (!byReel) {
+            pairs.append({oldSequences[i], newSequences[i]});
+            continue;
+        }
+        const auto match = std::find_if(oldSequences.cbegin(), oldSequences.cend(),
+                                        [&](const model::BinItem& s) { return reelOf(s) == reelOf(newSequences[i]); });
+        if (match == oldSequences.cend()) {
+            r.error = QStringLiteral("No old sequence has the Reel # %1 of \"%2\": the old and new versions must have the same reel number.")
+                          .arg(reelOf(newSequences[i]), newSequences[i].name);
+            return r;
+        }
+        pairs.append({*match, newSequences[i]});
+    }
+    const int fpf = o.framesPerFoot;
+    const bool web = o.format == Format::WebLists;
+    QList<Table> tables;
+    QHash<QString, const QList<Event>*> eventsByGroup;
+    std::vector<std::unique_ptr<Built>> kept; // the events the tables' rows point into
+    for (int p = 0; p < pairs.size(); ++p) {
+        const QString group = p == 0 ? QString() : QString::number(p + 1);
+        const QString oldGroup = QStringLiteral("Old") + group;
+        const QString reel = pairs.size() == 1 ? QString()
+                             : byReel        ? QStringLiteral(" (REEL %1)").arg(reelOf(pairs[p].second))
+                                             : QStringLiteral(" (REEL %1)").arg(p + 1);
+        Options oldOptions = o;
+        oldOptions.assemble = true;
+        oldOptions.sceneAssemble = oldOptions.optical = oldOptions.dupe = oldOptions.pull = false;
+        Options newOptions = oldOptions;
+        newOptions.optical = o.optical;
+        auto before = std::make_unique<Built>();
+        auto after = std::make_unique<Built>();
+        if (!build(*before, pairs[p].first, oldOptions, oldGroup, r) || !build(*after, pairs[p].second, newOptions, group, r)) return r;
+        QList<Change> changes = changesBetween(*before, *after, !c.showOnlyChanges);
+        if (c.combineDeletions) {
+            // Each run of deletions next to each other in the old sequence, on one track, as one event.
+            QList<Change> combined;
+            for (const Change& ch : changes) {
+                if (!combined.isEmpty() && ch.kind == QLatin1String("Delete") && combined.last().kind == QLatin1String("Delete") &&
+                    combined.last().track == ch.track && combined.last().oldAt + combined.last().length == ch.oldAt) {
+                    combined.last().length += ch.length;
+                    combined.last().name += QStringLiteral(", ") + ch.name;
+                    continue;
+                }
+                combined << ch;
+            }
+            changes = combined;
+        }
+        QStringList head{QStringLiteral("#")};
+        if (c.previewCode) head << QStringLiteral("Code");
+        head << QStringLiteral("Change") << QStringLiteral("Track") << QStringLiteral("Footage") << QStringLiteral("Old Footage")
+             << QStringLiteral("Length") << QStringLiteral("First Edge") << QStringLiteral("Last Edge");
+        if (o.clipNames) head << QStringLiteral("Clip Name");
+        Table changeTable{QStringLiteral("change"), QStringLiteral("CHANGE LIST") + reel, group, oldGroup, head, {}, {}};
+        Table pullTable{QStringLiteral("changepull"),
+                        QStringLiteral("CHANGE PULL LIST") + reel,
+                        group,
+                        oldGroup,
+                        {QStringLiteral("#"), QStringLiteral("Change"), QStringLiteral("Track"), QStringLiteral("First Edge"),
+                         QStringLiteral("Last Edge"), QStringLiteral("Duration"), QStringLiteral("Cam Roll"), QStringLiteral("Lab Roll"),
+                         QStringLiteral("Sound Roll"), QStringLiteral("Clip Name")},
+                        {},
+                        {}};
+        Table discardTable{QStringLiteral("changediscard"),
+                           QStringLiteral("CHANGE DISCARD LIST") + reel,
+                           group,
+                           oldGroup,
+                           {QStringLiteral("#"), QStringLiteral("Change"), QStringLiteral("Track"), QStringLiteral("Old Footage"),
+                            QStringLiteral("First Edge"), QStringLiteral("Last Edge"), QStringLiteral("Duration"), QStringLiteral("Clip Name")},
+                           {},
+                           {}};
+        QList<int> pulled;
+        int number = 0;
+        for (int k = 0; k < changes.size(); ++k) {
+            const Change& ch = changes[k];
+            const Event& src = *ch.source;
+            QStringList row{QString::number(++number)};
+            if (c.previewCode) row << QString::number(number).rightJustified(3, QLatin1Char('0'));
+            row << ch.kind << ch.track << footage(o.startAt + ch.at, fpf)
+                << (ch.oldAt >= 0 ? footage(o.startAt + ch.oldAt, fpf) : QString()) << footage(ch.length, fpf)
+                << referenceAt(src, ch.first, o) << referenceAt(src, ch.first + ch.length - 1, o);
+            if (o.clipNames) row << ch.name;
+            changeTable.add(ch.event, row);
+            const bool removed = ch.kind.startsWith(QLatin1String("Delete"));
+            if (removed) {
+                discardTable.add(ch.event, {QString::number(discardTable.rows.size() + 1), ch.kind, ch.track,
+                                            footage(o.startAt + std::max<std::int64_t>(ch.oldAt, 0), fpf), referenceAt(src, ch.first, o),
+                                            referenceAt(src, ch.first + ch.length - 1, o), footage(ch.length, fpf), ch.name});
+            } else if (ch.kind != QLatin1String("No change")) {
+                pulled << k;
+            }
+        }
+        // The change pull list in the pull list's order: the sort fields, then the edges, Heads Out or Tails Out.
+        std::stable_sort(pulled.begin(), pulled.end(), [&](int a, int b) {
+            const Change& x = changes[a];
+            const Change& y = changes[b];
+            for (SortField f : {o.firstSort, o.secondSort}) {
+                const QString kx = sortKey(*x.source, f), ky = sortKey(*y.source, f);
+                if (kx != ky) return kx < ky;
+            }
+            const auto edge = [](const Change& ch) {
+                return std::pair{ch.source->reference ? ch.source->reference->prefix : QString(),
+                                 ch.source->reference ? ch.source->reference->frames + ch.first : 0};
+            };
+            return o.headsOut ? edge(x) < edge(y) : edge(y) < edge(x);
+        });
+        for (int k : pulled) {
+            const Change& ch = changes[k];
+            const Event& src = *ch.source;
+            pullTable.add(ch.event, {QString::number(pullTable.rows.size() + 1), ch.kind, ch.track, referenceAt(src, ch.first, o),
+                                     referenceAt(src, ch.first + ch.length - 1, o), footage(ch.length, fpf), src.field("Camroll"),
+                                     src.field("Labroll"), src.field("Soundroll"), ch.name});
+        }
+        tables << changeTable;
+        if (c.changePull) tables << pullTable;
+        if (c.changeDiscard) tables << discardTable;
+        for (Table& t : after->tables) {
+            // The new sequence's optical list; for WebLists also both assemble lists, which the changes link to ("Change
+            // lists that are hyper linked to the old and new Assemble and Pull Lists", p.958).
+            if (t.key == QLatin1String("optical") || (web && t.key == QLatin1String("assemble"))) {
+                if (t.key == QLatin1String("assemble")) t.name = QStringLiteral("NEW ASSEMBLE LIST") + reel;
+                tables << t;
+            }
+        }
+        if (web) {
+            for (Table& t : before->tables) {
+                t.name = QStringLiteral("OLD ASSEMBLE LIST") + reel;
+                tables << t;
+            }
+        }
+        eventsByGroup.insert(group, &after->events);
+        eventsByGroup.insert(oldGroup, &before->events);
+        kept.push_back(std::move(before));
+        kept.push_back(std::move(after));
+    }
+    render(tables, eventsByGroup, o, r);
     return r;
 }
 

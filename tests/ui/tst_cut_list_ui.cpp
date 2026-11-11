@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QStandardItemModel>
 #include <QTemporaryDir>
 #include <QTest>
@@ -106,9 +107,31 @@ private slots:
         tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("XML")));
         tool.previewButton()->click();
         QVERIFY(tool.masterList()->toPlainText().startsWith(QStringLiteral("<?xml")));
-        // Back to an EDL type: the Cut List options go.
+        // Change List (p.952-954): the old version beside the new one, the Change List options, and the list.
+        tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("Columnar")));
+        QVERIFY(tool.changeListButton()->isEnabled());
+        QVERIFY(tool.changeListOptionsBox()->isHidden());
+        tool.changeListButton()->setChecked(true);
+        QVERIFY(tool.isChangeList());
+        QVERIFY(!tool.changeListOptionsBox()->isHidden());
+        model::BinItem older = item;
+        older.id = QStringLiteral("old");
+        older.name = QStringLiteral("Reel 2 old");
+        model::Sequence oldSeq;
+        oldSeq.setTimecodeTrack(false);
+        model::Segment shorter = s;
+        shorter.length = 60;
+        oldSeq.ensureTrack(QStringLiteral("V1"))->segments = {shorter};
+        oldSeq.storeIn(older);
+        tool.setOldSequence(older);
+        tool.previewButton()->click();
+        list = tool.masterList()->toPlainText();
+        QVERIFY2(list.contains(QStringLiteral("CHANGE LIST")) && list.contains(QStringLiteral("Insert Tail")), qPrintable(list));
+        tool.changeListButton()->setChecked(false);
+        // Back to an EDL type: the Cut List options go, and Change List with them.
         tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("CMX_3600")));
         QVERIFY(tool.cutListOptionsBox()->isHidden());
+        QVERIFY(!tool.changeListButton()->isEnabled());
     }
 };
 

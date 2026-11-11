@@ -288,6 +288,121 @@ private slots:
         QVERIFY(QFile::exists(dir.filePath(QStringLiteral("Files/cutlist.css"))));
         QVERIFY(QFile::exists(dir.filePath(QStringLiteral("CutAsm.htm"))));
     }
+
+    // Change lists (9.4c; p.940, p.953-954, p.962-963).
+    void changeList() {
+        Fixture f = fixture();
+        for (const char* id : {"E"}) {
+            f.clips.insert(QLatin1String(id), clip(QLatin1String(id), {{QStringLiteral("KN Start"), QStringLiteral("KZ 77 0001 0200+00")},
+                                                                        {QStringLiteral("Camroll"), QStringLiteral("C3")}}));
+        }
+        auto sequenceOf = [](const QString& name, const QList<Segment>& segments, const QString& reel = {}) {
+            Sequence seq;
+            seq.setTimecodeTrack(false);
+            seq.ensureTrack(QStringLiteral("V1"))->segments = segments;
+            BinItem item;
+            item.id = name;
+            item.name = name;
+            item.kind = BinItemKind::Sequence;
+            item.editRate = Rational(24);
+            if (!reel.isEmpty()) item.fields.insert(QStringLiteral("Reel #"), reel);
+            seq.storeIn(item);
+            return item;
+        };
+        const BinItem before = sequenceOf(QStringLiteral("Cut 1"), {piece(QStringLiteral("A"), 0, 40), piece(QStringLiteral("B"), 0, 30),
+                                                                     piece(QStringLiteral("C"), 0, 20), piece(QStringLiteral("D"), 0, 10)});
+        // A trimmed at both ends, E inserted, D deleted.
+        const BinItem after = sequenceOf(QStringLiteral("Cut 2"), {piece(QStringLiteral("A"), 8, 40), piece(QStringLiteral("B"), 0, 30),
+                                                                    piece(QStringLiteral("E"), 0, 12), piece(QStringLiteral("C"), 0, 20)});
+        cutlist::Options o = f.options();
+        cutlist::ChangeOptions c;
+        cutlist::Result r = cutlist::exportChangeList({before}, {after}, o, c);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QStringList changes = rowsOf(r.text, QStringLiteral("CHANGE LIST"));
+        QCOMPARE(changes.size(), 4);
+        QVERIFY2(changes[0].contains(QStringLiteral("Delete Head")) && changes[0].contains(QStringLiteral("0+08")) &&
+                     changes[0].contains(QStringLiteral("KZ 12 3456 1000+00")),
+                 qPrintable(changes.join(QLatin1Char('\n'))));
+        // The tail: the new A runs 8 frames past the old one's end (source 40-47), at record frame 32 = 2+00.
+        QVERIFY2(changes[1].contains(QStringLiteral("Insert Tail")) && changes[1].contains(QStringLiteral("2+00")) &&
+                     changes[1].contains(QStringLiteral("KZ 12 3456 1002+08")),
+                 qPrintable(changes[1]));
+        QVERIFY2(changes[2].contains(QStringLiteral("Insert")) && changes[2].contains(QStringLiteral("KZ 77 0001 200+00")), qPrintable(changes[2]));
+        // D, after C's new end at 102 frames = 6+06.
+        QVERIFY2(changes[3].contains(QStringLiteral("Delete")) && changes[3].contains(QStringLiteral("6+06")) && changes[3].contains(QStringLiteral("D")),
+                 qPrintable(changes[3]));
+        // The change pull list holds what goes in, the discard list what comes out.
+        QCOMPARE(rowsOf(r.text, QStringLiteral("CHANGE PULL LIST")).size(), 2);
+        const QStringList discard = rowsOf(r.text, QStringLiteral("CHANGE DISCARD LIST"));
+        QCOMPARE(discard.size(), 2);
+        QVERIFY(discard[0].contains(QStringLiteral("Delete Head")) || discard[1].contains(QStringLiteral("Delete Head")));
+        // Without Show only changes, the unchanged shots too.
+        c.showOnlyChanges = false;
+        changes = rowsOf(cutlist::exportChangeList({before}, {after}, o, c).text, QStringLiteral("CHANGE LIST"));
+        QCOMPARE(changes.filter(QStringLiteral("No change")).size(), 2);
+
+        // A move: C goes first.
+        const BinItem moved = sequenceOf(QStringLiteral("Cut 3"), {piece(QStringLiteral("C"), 0, 20), piece(QStringLiteral("A"), 0, 40),
+                                                                    piece(QStringLiteral("B"), 0, 30), piece(QStringLiteral("D"), 0, 10)});
+        c = {};
+        changes = rowsOf(cutlist::exportChangeList({before}, {moved}, o, c).text, QStringLiteral("CHANGE LIST"));
+        QCOMPARE(changes.size(), 1);
+        QVERIFY2(changes[0].contains(QStringLiteral("Move")) && changes[0].contains(QStringLiteral("C")), qPrintable(changes[0]));
+        // Combine Deletions: B, C and D as one event.
+        const BinItem cut = sequenceOf(QStringLiteral("Cut 4"), {piece(QStringLiteral("A"), 0, 40)});
+        QCOMPARE(rowsOf(cutlist::exportChangeList({before}, {cut}, o, c).text, QStringLiteral("CHANGE LIST")).size(), 3);
+        c.combineDeletions = true;
+        changes = rowsOf(cutlist::exportChangeList({before}, {cut}, o, c).text, QStringLiteral("CHANGE LIST"));
+        QCOMPARE(changes.size(), 1);
+        QVERIFY2(changes[0].contains(QStringLiteral("B, C, D")) && changes[0].contains(QStringLiteral("3+12")), qPrintable(changes[0]));
+        // Preview Code numbers the changes.
+        c.previewCode = true;
+        QVERIFY(cutlist::exportChangeList({before}, {cut}, o, c).text.contains(QStringLiteral("Code")));
+    }
+
+    void changeListReels() {
+        const Fixture f = fixture();
+        auto sequenceOf = [](const QString& name, const QString& clipId, std::int64_t length, const QString& reel) {
+            Sequence seq;
+            seq.setTimecodeTrack(false);
+            seq.ensureTrack(QStringLiteral("V1"))->segments = {piece(clipId, 0, length)};
+            BinItem item;
+            item.id = name;
+            item.name = name;
+            item.kind = BinItemKind::Sequence;
+            item.editRate = Rational(24);
+            item.fields.insert(QStringLiteral("Reel #"), reel);
+            seq.storeIn(item);
+            return item;
+        };
+        const cutlist::Options o = f.options();
+        // "For each sequence, the old version and the new version must have exactly the same reel number" (p.953): paired
+        // by it, not by order.
+        const QList<BinItem> olds{sequenceOf(QStringLiteral("R1 old"), QStringLiteral("A"), 20, QStringLiteral("1")),
+                                  sequenceOf(QStringLiteral("R2 old"), QStringLiteral("B"), 20, QStringLiteral("2"))};
+        const QList<BinItem> news{sequenceOf(QStringLiteral("R2 new"), QStringLiteral("B"), 24, QStringLiteral("2")),
+                                  sequenceOf(QStringLiteral("R1 new"), QStringLiteral("A"), 20, QStringLiteral("1"))};
+        cutlist::Result r = cutlist::exportChangeList(olds, news, o);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QStringList reel2 = rowsOf(r.text, QStringLiteral("CHANGE LIST (REEL 2)"));
+        QCOMPARE(reel2.size(), 1);
+        QVERIFY(reel2[0].contains(QStringLiteral("Insert Tail")));
+        QVERIFY(rowsOf(r.text, QStringLiteral("CHANGE LIST (REEL 1)")).isEmpty());
+        // "You must have an equal number of old and new sequences."
+        QVERIFY(!cutlist::exportChangeList(olds, {news.first()}, o).ok);
+        QVERIFY(!cutlist::exportChangeList({olds.first()}, {news.first()}, o).ok);
+        // WebLists: the changes link to the new and old assemble lists.
+        cutlist::Options web = o;
+        web.format = cutlist::Format::WebLists;
+        const BinItem one = sequenceOf(QStringLiteral("Old"), QStringLiteral("A"), 20, QStringLiteral("1"));
+        const BinItem two = sequenceOf(QStringLiteral("New"), QStringLiteral("C"), 5, QStringLiteral("1"));
+        r = cutlist::exportChangeList({one}, {two}, web);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QVERIFY(r.files.contains(QStringLiteral("CutChg.htm")));
+        QVERIFY(r.files.contains(QStringLiteral("CutAsmOld.htm")));
+        const QString page = QString::fromUtf8(r.files.value(QStringLiteral("CutChg.htm")));
+        QVERIFY2(page.contains(QStringLiteral("href=\"CutAsm.htm#e1\"")) && page.contains(QStringLiteral("href=\"CutAsmOld.htm#e1\"")), qPrintable(page));
+    }
 };
 
 QTEST_MAIN(TestCutList)

@@ -3075,7 +3075,10 @@ docs/spec/otio.md.
   File_129, Columnar, TabbedLists, WebLists, XML (9.4a-b,
   docs/spec/cut-lists.md) and OTIO work; the rest are dimmed. WebLists'
   page names other than CutAsm.htm, its style sheet and our XML elements
-  are ours. For the cut list types the List Options tab
+  are ours. Change List (9.4c) is enabled for the cut list types and adds
+  an Old Sequence row with Load and a Change List options box; **ours:**
+  how shots are matched, the change list's columns, Preview Code as a
+  numbering column, Show only changes on by default. For the cut list types the List Options tab
   shows a Cut List box (Assemble with Mark Short/Jump Cuts, Scene Assemble,
   Optical with Key Frames and Optical Footage, Dupe with Assume and Print
   Handles, Pull with its sorts and order, Reel Names, Clip Comments, Start
