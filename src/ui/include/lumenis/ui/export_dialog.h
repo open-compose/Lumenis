@@ -29,6 +29,8 @@ public:
     // The Export setting chosen, by its place in the list.
     int setting() const;
     void setSetting(int index);
+    // The Export Setting menu again, with `active` chosen (after Options' Save As made a new setting, p.870).
+    void setSettings(const QStringList& settings, int active);
     // The file type Browse offers and keeps (p.869: the file name extension stays the format's):
     // its extension without the dot ("aaf", the default; "avb") and its name in the save dialog.
     void setFileType(const QString& suffix, const QString& filter);
@@ -38,8 +40,8 @@ public:
     QPushButton* optionsButton() const { return options_; }
 
 signals:
-    // Options (p.869): the chosen setting's dialog. `setting` is setting(); MainWindow opens that
-    // Export setting in the Settings window's User tab.
+    // Options (p.869-870): the chosen setting's Export Settings dialog box. `setting` is setting(); MainWindow opens
+    // that Export setting's dialog with Save and Save As (SettingsDialog::useSaveButtons).
     void optionsRequested(int setting);
 
 private:

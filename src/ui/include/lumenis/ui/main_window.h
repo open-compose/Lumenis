@@ -577,6 +577,9 @@ public:
     // raster, through the Export PICT As dialog (`path` given: no dialog). False when nothing was written.
     bool exportMattePict(const QString& path = QString());
     void setExportHook(std::function<bool(ExportAsDialog&)> hook) { exportHook_ = std::move(hook); }
+    // Tests: called with the Export Settings dialog box that Options opens (in place of exec()); true for Save (or Save
+    // As, after SettingsDialog::saveAs), false for Cancel.
+    void setExportOptionsHook(std::function<bool(SettingsDialog&)> hook) { exportOptionsHook_ = std::move(hook); }
     // File > Output > Send To (7.1c2; docs/spec/send-to.md, p.863-867). sendTo exports the active bin's selection with
     // a template (`proTools`: the built-in Pro Tools template and its options); makeNewSendTo makes a template. The hooks
     // stand in for the dialogs, the save dialog (it returns the path, empty to cancel) and Auto Launch (tests).
@@ -1519,6 +1522,7 @@ private:
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
+    std::function<bool(SettingsDialog&)> exportOptionsHook_;
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
     std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
     std::function<bool(ExportVolumeDialog&)> exportVolumeHook_;

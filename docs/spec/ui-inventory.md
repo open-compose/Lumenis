@@ -3013,6 +3013,11 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   File (p.868, steps 1-2). The Export As dialog opens with a file name
   from the first item (p.868 step 2), the Export Setting menu (step 3),
   Options (step 4; it opens the setting, p.869), and Save (step 7).
+* Options opens "The Export Settings dialog box" over the Export As dialog (p.869-870): "To save your settings in the
+  existing settings file, click Save. To create a new settings file, click Save As. The Save Export Setting dialog box
+  opens. Type a name in the Setting Name text box, and click OK. The new setting appears in the Settings list." Ours:
+  the Export setting's own dialog with Save, Save As... and Cancel (`SettingsDialog::useSaveButtons`); a new setting
+  from Save As is chosen in the Export Setting menu (9.7b; before, Options opened the Settings window's User tab).
 * The Export Setting menu lists the User settings of the Export kind
   (p.861: "Select from the Export Settings list in the Export As dialog
   box"); one not named shows as Untitled, the guide's default (p.868).

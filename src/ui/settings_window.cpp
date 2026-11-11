@@ -15,6 +15,7 @@
 #include <QContextMenuEvent>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QInputDialog>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFontDatabase>
@@ -286,10 +287,37 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
             if (auto* menu = qobject_cast<QComboBox*>(e)) connect(menu, &QComboBox::currentIndexChanged, graph, qOverload<>(&QWidget::update));
         }
     }
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttons);
+    buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons_, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons_);
+}
+
+void SettingsDialog::useSaveButtons() {
+    if (QPushButton* ok = buttons_->button(QDialogButtonBox::Ok)) {
+        buttons_->removeButton(ok);
+        delete ok;
+    }
+    QPushButton* save = buttons_->addButton(QDialogButtonBox::Save);
+    save->setObjectName(QStringLiteral("settingSave"));
+    QPushButton* saveAsButton = buttons_->addButton(tr("Save As..."), QDialogButtonBox::ActionRole);
+    saveAsButton->setObjectName(QStringLiteral("settingSaveAs"));
+    connect(save, &QPushButton::clicked, this, [this] {
+        saveAsName_.clear();
+        accept();
+    });
+    connect(saveAsButton, &QPushButton::clicked, this, [this] {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, tr("Save %1 Setting").arg(kind_.kind), tr("Setting Name:"), QLineEdit::Normal,
+                                                   QString(), &ok);
+        if (ok) this->saveAs(name);
+    });
+}
+
+void SettingsDialog::saveAs(const QString& name) {
+    if (name.trimmed().isEmpty()) return;
+    saveAsName_ = name.trimmed();
+    accept();
 }
 
 void SettingsDialog::setInfo(const QString& key, const QString& text) {

@@ -1142,7 +1142,12 @@ void MainWindow::createPanels() {
             w->list(model::SettingsScope::Project)->openEntry(i);
         }
     });
-    connect(timeline_, &Timeline::message, this, [](const QString& text) { QToolTip::showText(QCursor::pos(), text); });
+    // The Timeline's refusals (an edit that cannot be made) show at the pointer, where the user is working, and stay in
+    // the Console after the tooltip goes (9.7).
+    connect(timeline_, &Timeline::message, this, [](const QString& text) {
+        QToolTip::showText(QCursor::pos(), text);
+        ConsoleLog::instance().append(tr("Timeline: %1").arg(text)); // Console only: the tooltip above shows it.
+    });
     // The Timeline takes its own commands from the Composer; the rest are
     // menu commands.
     connect(composer_, &Composer::commandRequested, this, [this](const QString& id) {
@@ -5488,7 +5493,7 @@ void MainWindow::exportToFile() {
         file.ensure({QStringLiteral("Export")});
         settings_->commit(model::SettingsScope::User);
     }
-    const QList<int> versions = file.versions(QStringLiteral("Export"));
+    QList<int> versions = file.versions(QStringLiteral("Export"));
     QStringList names;
     int active = 0;
     for (int i = 0; i < versions.size(); ++i) {
@@ -5507,12 +5512,42 @@ void MainWindow::exportToFile() {
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
     ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1Char('.') + suffixOf(exportAs)), names, active, this);
     dialog.setFileType(suffixOf(exportAs), filterOf(exportAs));
-    connect(&dialog, &ExportAsDialog::optionsRequested, this, [this, versions](int i) {
-        if (i < 0 || i >= versions.size()) return;
-        if (SettingsWindow* w = showSettings()) {
-            w->showTab(SettingsWindow::Tab::User);
-            w->list(model::SettingsScope::User)->openEntry(versions.at(i));
+    // Options (p.869-870): "The Export Settings dialog box opens" over the Export As dialog. Save keeps the changes
+    // in the chosen setting; Save As makes a new Export setting with the Setting Name given, chosen in the menu.
+    connect(&dialog, &ExportAsDialog::optionsRequested, this, [&](int i) {
+        const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Export"));
+        if (!kind || i < 0 || i >= versions.size()) return;
+        const model::SettingEntry entry = file.entries.at(versions.at(i));
+        SettingsDialog options(*kind, entry, &dialog);
+        options.setObjectName(QStringLiteral("exportSettings"));
+        options.setWindowTitle(tr("Export Settings"));
+        options.useSaveButtons();
+        if (project_) options.setEditRate(project_->settings.format.editRate);
+        const bool kept = exportOptionsHook_ ? exportOptionsHook_(options) : options.exec() == QDialog::Accepted;
+        if (!kept) return;
+        int chosen = i;
+        if (options.saveAsName().isEmpty()) {
+            file.entries[versions.at(i)].values = options.values();
+        } else {
+            model::SettingEntry made = entry;
+            made.name = options.saveAsName();
+            made.active = false;
+            made.values = options.values();
+            const int at = file.add(made);
+            versions = file.versions(QStringLiteral("Export"));
+            names.clear();
+            for (int v = 0; v < versions.size(); ++v) {
+                const model::SettingEntry& e = file.entries.at(versions.at(v));
+                names << (e.name.isEmpty() ? tr("Untitled") : e.name);
+                if (e.active) active = v;
+                if (versions.at(v) == at) chosen = v;
+            }
+            dialog.setSettings(names, chosen);
         }
+        settings_->commit(model::SettingsScope::User);
+        // The file type follows the format chosen.
+        const QString as = options.values().value(QStringLiteral("exportAs")).toString(exportAs);
+        dialog.setFileType(suffixOf(as), filterOf(as));
     });
     const bool ok = exportHook_ ? exportHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok || dialog.path().isEmpty()) return;

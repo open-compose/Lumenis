@@ -11,6 +11,7 @@
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -330,6 +331,36 @@ private slots:
         const QByteArray one = readFile(selection);
         QVERIFY(one.contains("Take 2"));
         QVERIFY(!one.contains("Take 1"));
+
+        // Options (p.869-870): the Export Settings dialog box with Save and Save As; Save As makes a new Export setting
+        // with the Setting Name given, chosen in the Export Setting menu and in use for the export.
+        const QString viaOptions = dir.filePath(QStringLiteral("options.ale"));
+        QStringList menu;
+        bool hadButtons = false;
+        window.setExportOptionsHook([&](SettingsDialog& options) {
+            hadButtons = options.findChild<QPushButton*>(QStringLiteral("settingSave")) &&
+                         options.findChild<QPushButton*>(QStringLiteral("settingSaveAs"));
+            options.saveAs(QStringLiteral("Shot Logs"));
+            return true;
+        });
+        window.setExportHook([&](ExportAsDialog& dialog) {
+            dialog.optionsButton()->click();
+            auto* settingMenu = dialog.findChild<QComboBox*>();
+            for (int i = 0; settingMenu && i < settingMenu->count(); ++i) menu << settingMenu->itemText(i);
+            if (!settingMenu || settingMenu->currentText() != QLatin1String("Shot Logs")) return false;
+            dialog.setPath(viaOptions);
+            return true;
+        });
+        s.commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY(hadButtons);
+        QVERIFY2(menu.contains(QStringLiteral("Shot Logs")), qPrintable(menu.join(QStringLiteral(", "))));
+        QVERIFY(readFile(viaOptions).contains("Take 2"));
+        const model::SettingsFile& user = window.settings().file(model::SettingsScope::User);
+        const int now = user.activeIndex(QStringLiteral("Export"));
+        QVERIFY(now >= 0);
+        QCOMPARE(user.entries.at(now).name, QStringLiteral("Shot Logs"));
+        QCOMPARE(user.entries.at(now).values.value(QStringLiteral("exportAs")).toString(), QStringLiteral("ale"));
+        window.setExportOptionsHook({});
     }
 
     // OpenTimelineIO (p.969): Import Media and a drop into a bin import a sequence and offline master

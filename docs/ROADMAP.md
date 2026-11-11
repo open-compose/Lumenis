@@ -1629,7 +1629,9 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `src/ui` a message or marked "Console only", ctest `failure_messages` through `scripts/check-failure-messages.py`,
     Send To's failed export in a message; test `tst_command_wiring failedCommandsSayWhy`); 9.7b, the Export As
     dialog's Options button as the guide's Export Settings dialog box with Save and Save As (p.869-870), and failures
-    outside commands (drops, background jobs) checked.
+    outside commands (drops, background jobs) checked (done: `SettingsDialog::useSaveButtons`/`saveAs`,
+    `ExportAsDialog::setSettings`, `MainWindow::setExportOptionsHook`; the check covers every Console line whatever
+    starts it, and the Timeline's refusals keep their tooltip and now reach the Console; test `tst_interchange`).
   * 9.8, last, the trademark check.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline
@@ -1654,7 +1656,7 @@ The items:
   Windows FFmpeg (BtbN's LGPL build) had no H.264 or H.265 encoder and the reason went only to the Console. Fixed:
   a failed export says why in a message; `scripts/get-ffmpeg.ps1` fetches the GPL build with libx264 and libx265 and
   checks them; CI requires them (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`); BUILDING.md "Export
-  says there is no H.264 encoder". Left: check the Options button (it opens the Settings window) against the guide
+  says there is no H.264 encoder". Done in 9.7b: the Options button (it opened the Settings window) checked against the guide
   (p.865-869);
 * error messages everywhere (owner's request, 2026-11-08): whatever fails, is missing or cannot be done tells the
   user in a message, not only the Console. Go through every place that writes a failure to the Console (`ConsoleLog`)

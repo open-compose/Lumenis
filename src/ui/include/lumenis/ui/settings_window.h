@@ -16,6 +16,8 @@ class QLineEdit;
 class QMenu;
 class QTabWidget;
 
+class QDialogButtonBox;
+
 namespace lumenis::ui {
 
 class TargetSettingsDialog;
@@ -48,11 +50,23 @@ public:
     // The tabs, or nullptr when the setting has only one.
     QTabWidget* tabs() const { return tabs_; }
 
+    // The Export Settings dialog box opened from the Export As dialog's Options (p.869-870): "To save your settings in
+    // the existing settings file, click Save. To create a new settings file, click Save As. The Save Export Setting
+    // dialog box opens. Type a name in the Setting Name text box, and click OK." Replaces OK with Save and adds Save
+    // As, which asks for the name ("Save <kind> Setting", "Setting Name") and accepts the dialog with it.
+    void useSaveButtons();
+    // Save As with the name, as if typed (tests): accepts the dialog. An empty name does nothing.
+    void saveAs(const QString& name);
+    // The name given to Save As; empty when the dialog was closed with Save.
+    const QString& saveAsName() const { return saveAsName_; }
+
 signals:
     // A "button" option was clicked (its key: Transcript's manageSpeakers, p.445).
     void buttonClicked(const QString& key);
 
 private:
+    QDialogButtonBox* buttons_ = nullptr;
+    QString saveAsName_;
     const SettingKind& kind_;
     QJsonObject values_;
     QHash<QString, QWidget*> editors_;

@@ -1,6 +1,7 @@
 #include "lumenis/ui/export_dialog.h"
 
 #include <QComboBox>
+#include <QSignalBlocker>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -69,6 +70,13 @@ int ExportAsDialog::setting() const {
 
 void ExportAsDialog::setSetting(int index) {
     settings_->setCurrentIndex(index);
+}
+
+void ExportAsDialog::setSettings(const QStringList& settings, int active) {
+    const QSignalBlocker quiet(settings_);
+    settings_->clear();
+    settings_->addItems(settings);
+    settings_->setCurrentIndex(active);
 }
 
 void ExportAsDialog::setFileType(const QString& suffix, const QString& filter) {
