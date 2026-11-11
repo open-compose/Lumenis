@@ -35,7 +35,10 @@ headers in `include/lumenis/<library>/`.
   A command starts disabled until a handler is attached; after changing
   menus or commands run `scripts/make-checklist.py`. `tst_command_wiring`
   fails for a command, key or button with no handler unless it is listed
-  in `tests/data/dimmed_commands.json` with its reason (9.6).
+  in `tests/data/dimmed_commands.json` with its reason (9.6). A command
+  that fails says why through `reportFailure` (`src/ui/tool_windows.h`):
+  the Console line and a warning that does not block (9.7; ctest
+  `failure_messages`).
 * **A setting.** Options are declared in `src/ui/resources/settings.json`
   (kind, scope, tabs, options with type, default and guide page; `"later":
   true` shows one dimmed). The Settings window and its dialogs are built

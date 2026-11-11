@@ -169,7 +169,7 @@ int MainWindow::createProxies() {
     if (!view || !project_) return 0;
     const QList<MediaTarget> targets = mediaTargets();
     if (targets.isEmpty()) {
-        ConsoleLog::instance().append(tr("Create Proxies: there is no drive to write proxies to."));
+        reportFailure(this, tr("Create Proxies: there is no drive to write proxies to."));
         return 0;
     }
     CreateProxiesDialog dialog(targets, this);
@@ -207,7 +207,7 @@ int MainWindow::makeProxies(const QString& drive, bool background) {
                 },
                 BackgroundQueue::Priority::Normal,
                 [this, bin, id = clip.id, proxy](const media::ConsolidateResult& r) {
-                    if (!r.error.isEmpty()) ConsoleLog::instance().append(tr("Create Proxies: %1").arg(r.error));
+                    if (!r.error.isEmpty()) reportFailure(this, tr("Create Proxies: %1").arg(r.error));
                     if (!*proxy) return;
                     BinDocument* doc = binContainer_->document(bin);
                     const model::BinItem* item = doc ? doc->bin().item(id) : nullptr;
@@ -222,7 +222,7 @@ int MainWindow::makeProxies(const QString& drive, bool background) {
         QString why;
         const auto proxy = media::makeProxyMedia(clip, drive, raster, {}, &why);
         if (!proxy) {
-            ConsoleLog::instance().append(tr("Create Proxies: %1").arg(why));
+            reportFailure(this, tr("Create Proxies: %1").arg(why));
             continue;
         }
         model::BinItem changed = clip;
@@ -245,7 +245,7 @@ int MainWindow::submitDistributedProxies(const QString& workspaceId) {
         }
     }
     if (!storage) {
-        ConsoleLog::instance().append(tr("Create Proxies: the workspace takes no Distributed Processing jobs."));
+        reportFailure(this, tr("Create Proxies: the workspace takes no Distributed Processing jobs."));
         return 0;
     }
     QList<std::pair<QString, model::BinItem>> selected;
@@ -265,7 +265,7 @@ int MainWindow::submitDistributedProxies(const QString& workspaceId) {
         std::string id;
         std::string error;
         if (!storage->submitProxyJob(job, &id, &error)) {
-            ConsoleLog::instance().append(tr("Create Proxies: %1: %2").arg(clip.name, QString::fromStdString(error)));
+            reportFailure(this, tr("Create Proxies: %1: %2").arg(clip.name, QString::fromStdString(error)));
             continue;
         }
         distributedJobs_.append({storage, id, binId, clip.id, clip.name});
@@ -290,7 +290,7 @@ void MainWindow::pollDistributedJobs() {
         if (status.state == ext::ProxyJobStatus::State::Queued || status.state == ext::ProxyJobStatus::State::Running) continue;
         distributedJobs_.removeAt(i);
         if (status.state == ext::ProxyJobStatus::State::Failed) {
-            ConsoleLog::instance().append(tr("Create Proxies: %1: %2").arg(job.clipName, QString::fromStdString(status.error)));
+            reportFailure(this, tr("Create Proxies: %1: %2").arg(job.clipName, QString::fromStdString(status.error)));
             continue;
         }
         const auto proxy =
@@ -378,7 +378,7 @@ int MainWindow::copyMedia(const QStringList& nodeIds) {
     const media::CopyMediaRequest request = copyMediaRequest(nodeIds);
     if (request.binFiles.isEmpty() && request.managedFiles.isEmpty() && request.proxyFiles.isEmpty() &&
         request.renderFiles.isEmpty()) {
-        ConsoleLog::instance().append(tr("Copy Media: nothing is selected to copy."));
+        reportFailure(this, tr("Copy Media: nothing is selected to copy."));
         return 0;
     }
     CopyMediaDialog dialog(mediaTargets(), request, this);
@@ -389,21 +389,22 @@ int MainWindow::copyMedia(const QStringList& nodeIds) {
 int MainWindow::runCopyMedia(const media::CopyMediaRequest& request) {
     const media::CopyMediaPlan plan = media::planCopyMedia(request);
     if (plan.isEmpty()) {
-        ConsoleLog::instance().append(plan.existing > 0 ? tr("Copy Media: all selected files already exist at the target location.")
+        reportFailure(this, plan.existing > 0 ? tr("Copy Media: all selected files already exist at the target location.")
                                                         : tr("Copy Media: there is nothing to copy."));
         return 0;
     }
     // "If there is not enough space, copying will not be allowed" (p.513).
     if (!media::planFits(plan, request)) {
-        ConsoleLog::instance().append(tr("Copy Media: there is not enough space at the target location."));
+        reportFailure(this, tr("Copy Media: there is not enough space at the target location."));
         return 0;
     }
     QStringList warnings;
     const int copied = media::copyMedia(plan, {}, &warnings);
-    for (const QString& w : warnings) ConsoleLog::instance().append(tr("Copy Media: %1").arg(w));
+    for (const QString& w : warnings) reportFailure(this, tr("Copy Media: %1").arg(w));
     for (const QString& m : plan.missing) {
-        ConsoleLog::instance().append(tr("Copy Media: %1 is offline and was not copied.").arg(QDir::toNativeSeparators(m)));
+        reportFailure(this, tr("Copy Media: %1 is offline and was not copied.").arg(QDir::toNativeSeparators(m)));
     }
+    // Console only: how many files were copied.
     ConsoleLog::instance().append(tr("Copy Media: %n file(s) copied.", nullptr, copied));
     return copied;
 }

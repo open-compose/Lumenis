@@ -239,7 +239,7 @@ QStringList MainWindow::importPsdLayers(const QString& path, const media::PsdFil
             }
         }
         if (!made) {
-            ConsoleLog::instance().append(tr("Import: %1: %2: %3").arg(info.fileName(), clip.name, error));
+            reportFailure(this, tr("Import: %1: %2: %3").arg(info.fileName(), clip.name, error));
             if (creation.progress && !creation.progress(1.0)) break;
             continue;
         }
@@ -279,7 +279,7 @@ QHash<QString, QString> MainWindow::readCdTracks(const QStringList& cdaPaths, co
             }
         }
         if (!reader) {
-            ConsoleLog::instance().append(
+            reportFailure(this, 
                 tr("Import: %1: no reader of audio CDs on this system can read this track.").arg(QFileInfo(cda).fileName()));
             continue;
         }
@@ -295,7 +295,7 @@ QHash<QString, QString> MainWindow::readCdTracks(const QStringList& cdaPaths, co
             },
             &error);
         if (!ok) {
-            ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(cda).fileName(), QString::fromStdString(error)));
+            reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(cda).fileName(), QString::fromStdString(error)));
             if (progress.wasCanceled()) break;
             continue;
         }

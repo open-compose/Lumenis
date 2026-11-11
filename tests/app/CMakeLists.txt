@@ -30,6 +30,15 @@ if(Python3_Interpreter_FOUND)
         TIMEOUT 60)
 endif()
 
+# Error messages everywhere (ROADMAP 9.7): a Console line in src/ui is a failure shown in a message through
+# ui::reportFailure() or marked "Console only" (scripts/check-failure-messages.py).
+if(Python3_Interpreter_FOUND)
+    add_test(NAME failure_messages
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-failure-messages.py)
+    set_tests_properties(failure_messages PROPERTIES
+        PASS_REGULAR_EXPRESSION "failure messages: every Console line" TIMEOUT 60)
+endif()
+
 # The CI workflows are ones GitHub accepts (scripts/check-workflows.py); skipped without actionlint.
 if(Python3_Interpreter_FOUND)
     add_test(NAME workflows_lint

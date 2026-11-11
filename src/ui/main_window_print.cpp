@@ -89,7 +89,7 @@ bool MainWindow::printDocument(const PrintDocument& document) {
         if (dialog.exec() != QDialog::Accepted) return false;
     }
     if (!ui::printDocument(document, p)) {
-        ConsoleLog::instance().append(tr("Print: the printer \"%1\" could not start.").arg(p.printerName()));
+        reportFailure(this, tr("Print: the printer \"%1\" could not start.").arg(p.printerName()));
         QApplication::beep();
         return false;
     }

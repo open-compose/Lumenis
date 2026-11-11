@@ -867,6 +867,7 @@ void MainWindow::createPanels() {
         // Frames the picture could not keep up with (the real-time gate).
         const auto& stats = composer_->playStats();
         if (stats.dropped > 0) {
+            // Console only: how many frames playback dropped.
             ConsoleLog::instance().append(
                 tr("Playback: %1 frames shown, %2 dropped.").arg(stats.shown).arg(stats.dropped));
         }
@@ -1012,7 +1013,7 @@ void MainWindow::createPanels() {
     // Console, as it can come from any edit.
     // Export Volume bins (7.2d): what they refused, and their Properties and Commit buttons.
     connect(binContainer_, &BinContainer::volumeRefused, this, [](const QString&, const QStringList& names) {
-        ConsoleLog::instance().append(tr("Some assets that you selected could not be dragged to the Volume Bin: %1").arg(names.join(QStringLiteral(", "))));
+        reportFailure(nullptr, tr("Some assets that you selected could not be dragged to the Volume Bin: %1").arg(names.join(QStringLiteral(", "))));
     });
     connect(binContainer_, &BinContainer::exportVolumePropertiesRequested, this, [this](const QString& binId) { editExportVolume(binId); });
     connect(binContainer_, &BinContainer::exportVolumeCommitRequested, this, [this](const QString& binId) { commitExportVolume(binId); });
@@ -1174,7 +1175,7 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     {
         QStringList failures;
         media::registerLutFolders({media::projectLutFolder(project.folder), media::sharedLutFolder()}, &failures);
-        for (const QString& f : failures) ConsoleLog::instance().append(tr("LUT not installed: %1").arg(f));
+        for (const QString& f : failures) reportFailure(this, tr("LUT not installed: %1").arg(f));
     }
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
     binContainer_->setSequenceFormat(QString::fromStdString(project.settings.format.label()));
@@ -1468,7 +1469,7 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
         if (!loaded || (loaded->item.kind != model::BinItemKind::MasterClip && loaded->item.kind != model::BinItemKind::Subclip) ||
             model::isSyncedSubclip(loaded->item)) {
-            QMessageBox::information(this, tr("Make Subclip"), tr("Load a master clip or subclip into the Source monitor and mark it first."));
+            reportFailure(this, tr("Make Subclip: load a master clip or subclip into the Source monitor and mark it first."));
             return;
         }
         auto writable = [](const BinDocument* d) { return d && !d->isReadOnly(); };
@@ -1487,7 +1488,7 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         }
         if (!writable(target)) target = bins->document(loaded->binId);
         if (!writable(target)) {
-            QMessageBox::information(this, tr("Make Subclip"), tr("Open a bin for the subclip first."));
+            reportFailure(this, tr("Make Subclip: open a bin for the subclip first."));
             return;
         }
         const model::MonitorState& s = composer_->state(MonitorId::Source);
@@ -2269,6 +2270,7 @@ void MainWindow::createTools() {
         frames_->clear();
         const QStringList deleted = media::deleteMediaFiles(paths, &mediaDb_);
         if (project_) mediaTool_->setItems(projectItems(), mediaTool_->display(), mediaDb_.files());
+        // Console only: how many files were deleted.
         ConsoleLog::instance().append(tr("Delete Media: %n file(s) deleted.", "", static_cast<int>(deleted.size())));
         return deleted;
     };
@@ -2279,7 +2281,7 @@ void MainWindow::createTools() {
     connect(listTool_, &ListTool::loadRequested, this, [this] {
         const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
         if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
-            ConsoleLog::instance().append(tr("List Tool: load a sequence into the Record monitor first."));
+            reportFailure(this, tr("List Tool: load a sequence into the Record monitor first."));
             return;
         }
         listTool_->setSequence(loaded->item, clipResolver(loaded->item));
@@ -2288,12 +2290,18 @@ void MainWindow::createTools() {
     connect(listTool_, &ListTool::loadOldRequested, this, [this] {
         const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
         if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
-            ConsoleLog::instance().append(tr("List Tool: load the old sequence into the Record monitor first."));
+            reportFailure(this, tr("List Tool: load the old sequence into the Record monitor first."));
             return;
         }
         listTool_->setOldSequence(loaded->item);
     });
-    connect(listTool_, &ListTool::message, this, [](const QString& line) { ConsoleLog::instance().append(line); });
+    // The List Tool's errors and warnings are failures; "saved <file>" is information.
+    connect(listTool_, &ListTool::message, this, [this](const QString& line) {
+        if (line.startsWith(tr("List Tool: saved ")))
+            ConsoleLog::instance().append(line); // Console only: where the list was saved.
+        else
+            reportFailure(this, line);
+    });
     // File > Input > Source Browser (p.312-318).
     sourceBrowser_ = new SourceBrowser;
     auto* browserPanel = new Panel(QStringLiteral("SourceBrowser"), tr("Source Browser"), sourceBrowser_);
@@ -2625,13 +2633,14 @@ std::optional<QString> MainWindow::multiGroup() {
     QString error;
     const auto made = model::multiGroup(view->document().bin(), binId, clips, options, &error);
     if (!made) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("MultiGroup: %1").arg(error));
         if (!groupClipsHook_) QMessageBox::warning(this, tr("MultiGroup"), error);
         return std::nullopt;
     }
     for (const model::BinItem& g : made->groups) view->document().addItem(g);
     view->document().addItem(made->multigroup);
-    if (made->skipped > 0) ConsoleLog::instance().append(tr("MultiGroup: %n clip(s) with no other clip of the same take were left out.", "", made->skipped));
+    if (made->skipped > 0) reportFailure(this, tr("MultiGroup: %n clip(s) with no other clip of the same take were left out.", "", made->skipped));
     view->selectIds({made->multigroup.id});
     return made->multigroup.id;
 }
@@ -2861,6 +2870,7 @@ std::optional<QString> MainWindow::groupClips() {
     QString error;
     const auto group = model::groupClips(view->document().bin(), clips, options, &error);
     if (!group) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Group Clips: %1").arg(error));
         if (!groupClipsHook_) QMessageBox::warning(this, tr("Group Clips"), error);
         return std::nullopt;
@@ -2881,6 +2891,7 @@ QStringList MainWindow::syncClips() {
     // "Highlight two or more clips in the bin" (p.497).
     if (clips.size() < 2) {
         const QString why = tr("Select a video clip and an audio clip in a bin to sync them.");
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Sync Clips: %1").arg(why));
         if (!syncClipsHook_) QMessageBox::information(this, tr("Sync Clips"), why);
         return {};
@@ -2918,6 +2929,7 @@ QStringList MainWindow::syncClips() {
     };
     const model::SyncClipsResult result = model::syncClips(view->document().bin(), binId, clips, options);
     if (!result.ok()) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Sync Clips: %1").arg(result.error));
         if (!syncClipsHook_) QMessageBox::warning(this, tr("Sync Clips"), result.error);
         return {};
@@ -2977,7 +2989,7 @@ std::optional<QString> MainWindow::updateGroup() {
     BinDocument* doc = edited.size() == 2 ? binContainer_->document(edited[0]) : nullptr;
     const model::BinItem* group = doc ? doc->bin().item(edited[1]) : nullptr;
     if (!group || !model::isGroupClip(*group)) {
-        ConsoleLog::instance().append(tr("Update Group: the sequence in the Record monitor was not made by Edit Group."));
+        reportFailure(this, tr("Update Group: the sequence in the Record monitor was not made by Edit Group."));
         return std::nullopt;
     }
     int choice = 0;
@@ -2995,7 +3007,7 @@ std::optional<QString> MainWindow::updateGroup() {
     QString error;
     const auto made = model::groupFromSequence(seq, group->editRate, lookupOf(composer_), choice == 0 ? group->durationFrames : 0, &error);
     if (!made) {
-        ConsoleLog::instance().append(tr("Update Group: %1").arg(error));
+        reportFailure(this, tr("Update Group: %1").arg(error));
         return std::nullopt;
     }
     model::GroupClip angles = made->first;
@@ -3033,6 +3045,7 @@ std::optional<QString> MainWindow::createGroupFromSequence() {
     QString error;
     const auto made = model::groupFromSequence(model::Sequence::fromItem(rec->item), rec->item.editRate, lookupOf(composer_), 0, &error);
     if (!made) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Create Group: %1").arg(error));
         if (!updateGroupHook_) QMessageBox::warning(this, tr("Create Group"), error);
         return std::nullopt;
@@ -3355,7 +3368,7 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
                                                                                              : QStringLiteral("playBuffer"));
     options.pitchCorrect = settings_->flag(QStringLiteral("Audio"), QStringLiteral("pitchCorrection"));
     if (!audio_->start(mixOf(*loaded, std::move(pieces)), at, options)) {
-        ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
+        reportFailure(this, tr("Playback: no audio output could be opened; playing without sound."));
     }
 }
 
@@ -3476,7 +3489,7 @@ bool MainWindow::sourceSettingsFor(const QList<QPair<QString, QString>>& chosen)
             model::setColorEncoding(item, color);
             QString why;
             if (media::playsAtProjectRate(item) != atProjectRate && !media::setPlaybackAtProjectRate(item, atProjectRate, &why)) {
-                ConsoleLog::instance().append(tr("Source Settings: %1").arg(why));
+                reportFailure(this, tr("Source Settings: %1").arg(why));
             }
             item.modified = QDateTime::currentDateTimeUtc();
             storeClip(bin, item);
@@ -3513,6 +3526,7 @@ QStringList MainWindow::installLutFile(const QString& chosen) {
         if (!names.contains(name)) names << name;
     }
     if (!error.isEmpty()) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("LUT not installed: %1: %2").arg(QFileInfo(path).fileName(), error));
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Select LUT file"),
                                     tr("%1 could not be installed: %2").arg(QFileInfo(path).fileName(), error), QMessageBox::Ok, this);
@@ -3669,6 +3683,7 @@ bool MainWindow::saveProjectSettings(const model::ProjectSettings& changed, cons
     if (!project_) return false;
     QString error;
     if (!model::ProjectStore::write(project_->file, changed, &error)) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("%1 not changed: %2").arg(what, error));
         auto* box = new QMessageBox(QMessageBox::Warning, what, tr("The project's %1 could not be saved: %2").arg(what, error),
                                     QMessageBox::Ok, this);
@@ -3791,7 +3806,7 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
     }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     if (skipped > 0) {
-        ConsoleLog::instance().append(tr("Link: %n file(s) are not media that can be linked.", "", skipped));
+        reportFailure(this, tr("Link: %n file(s) are not media that can be linked.", "", skipped));
     }
     return ids;
 }
@@ -3839,10 +3854,10 @@ void MainWindow::relinkLinkedMedia() {
     LinkedMediaDialog dialog(clips, this);
     connect(&dialog, &LinkedMediaDialog::relinked, this,
             [this](const QString& binId, const model::BinItem& item) { storeClip(binId, item); });
-    connect(&dialog, &LinkedMediaDialog::notRelinked, this, [](const QString& name, const QString& reason) {
+    connect(&dialog, &LinkedMediaDialog::notRelinked, this, [&dialog](const QString& name, const QString& reason) {
         // "Open the Console window to see the name of the file or files
-        // that were not relinked" (p.320).
-        ConsoleLog::instance().append(tr("Relink: %1: %2").arg(name, reason));
+        // that were not relinked" (p.320); and a message over the Relink dialog (9.7).
+        reportFailure(&dialog, tr("Relink: %1: %2").arg(name, reason));
     });
     if (linkedMediaHook_) {
         linkedMediaHook_(dialog);
@@ -3901,7 +3916,7 @@ void MainWindow::relinkManagedMedia() {
         notRelinked += result.notRelinked;
     }
     frames_->clear();
-    for (const QString& name : notRelinked) ConsoleLog::instance().append(tr("Relink: %1: no matching media.").arg(name));
+    for (const QString& name : notRelinked) reportFailure(this, tr("Relink: %1: no matching media.").arg(name));
 }
 
 int MainWindow::unlinkSelection() {
@@ -3948,12 +3963,14 @@ int MainWindow::modifySelection() {
             }
         }
         for (const QString& e : errors) said << e;
+        // Console only: the message box below shows it.
         for (const QString& s : said) ConsoleLog::instance().append(tr("Set Format: %1").arg(s));
         if (!said.isEmpty() && !modifyHook_) QMessageBox::information(this, tr("Set Format"), said.join(QLatin1Char('\n')));
         return static_cast<int>(changes.size());
     }
     const QList<model::BinItem> changed = dialog.apply(clips, &errors);
     for (const model::BinItem& item : changed) storeClip(view->document().nodeId(), item);
+    // Console only: the message box below shows it.
     for (const QString& e : errors) ConsoleLog::instance().append(tr("Modify: %1").arg(e));
     if (!errors.isEmpty() && !modifyHook_) {
         QMessageBox::warning(this, tr("Modify"), errors.join(QLatin1Char('\n')));
@@ -4154,6 +4171,7 @@ int MainWindow::readAudioTimecode() {
     BinView* view = binContainer_->activeView();
     if (!view) return 0;
     auto tell = [this](const QString& text) {
+        // Console only: the tell below shows it in a message.
         ConsoleLog::instance().append(tr("Read Audio Timecode: %1").arg(text));
         if (clipAudioHooks_.message) {
             clipAudioHooks_.message(text);
@@ -4273,6 +4291,7 @@ int MainWindow::changeSampleRate() {
     if (choice->deleteOriginal && !old.isEmpty()) media::deleteMediaFiles(old, &mediaDb_);
     if (!failures.isEmpty()) {
         const QString text = failures.join(QLatin1Char('\n'));
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Change Sample Rate: %1").arg(text));
         if (clipAudioHooks_.message) {
             clipAudioHooks_.message(text);
@@ -4355,6 +4374,7 @@ void MainWindow::loadMediaDatabase() {
     if (found > 0) frames_->clear();
     resolutionCache_.clear(); // the MultiRez display and bin headings look at the media again (8.6b-c)
     coverageCache_.clear();
+    // Console only: how many media files the drives hold.
     ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
 }
 
@@ -4376,7 +4396,7 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
         options.when = QDateTime::currentDateTimeUtc();
         const auto imported = interop::aaf::importFile(path, options, &error);
         if (!imported) {
-            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            reportFailure(this, tr("Import: %1").arg(error));
             continue;
         }
         int online = 0;
@@ -4388,10 +4408,11 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
         for (const QString& column : imported->customColumns) {
             if (!display.customColumns.contains(column)) display.customColumns << column;
         }
+        // Console only: what was imported.
         ConsoleLog::instance().append(tr("Import: %1: %n item(s), %2 with media", "", static_cast<int>(imported->items.size()))
                                           .arg(QFileInfo(path).fileName())
                                           .arg(online));
-        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+        for (const QString& w : imported->warnings) reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
     }
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
@@ -4465,11 +4486,12 @@ QString MainWindow::openBinFile(const QString& path, QString* error) {
         doc->addItem(item);
     }
     QString saveError;
-    if (!bins->saveBin(doc, &saveError)) ConsoleLog::instance().append(tr("Open Bin: %1").arg(saveError));
+    if (!bins->saveBin(doc, &saveError)) reportFailure(this, tr("Open Bin: %1").arg(saveError));
+    // Console only: what was opened.
     ConsoleLog::instance().append(tr("Open Bin: %1: %n item(s), %2 with media", "", static_cast<int>(imported->items.size()))
                                       .arg(info.fileName())
                                       .arg(online));
-    for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Open Bin: %1: %2").arg(info.fileName(), w));
+    for (const QString& w : imported->warnings) reportFailure(this, tr("Open Bin: %1: %2").arg(info.fileName(), w));
     return id;
 }
 
@@ -4511,7 +4533,7 @@ QJsonValue MainWindow::exportSetting(const QString& key) const {
 std::optional<MainWindow::ExportSelection> MainWindow::exportSelection() {
     BinView* view = binContainer_->activeView();
     if (!view || view->selectedIds().isEmpty()) {
-        ConsoleLog::instance().append(tr("Export to File: select the clips or sequences to export in a bin."));
+        reportFailure(this, tr("Export to File: select the clips or sequences to export in a bin."));
         return std::nullopt;
     }
     const BinDocument& doc = view->document();
@@ -4595,7 +4617,7 @@ QString MainWindow::exportFilter(const QString& exportAs) {
 
 int MainWindow::exportToDevice(const QString& kind) {
     const QString title = kind == QLatin1String("p2") ? tr("Export to Device > P2") : tr("Export to Device > XDCAM");
-    auto say = [&](const QString& text) { ConsoleLog::instance().append(tr("%1: %2").arg(title, text)); };
+    auto say = [&](const QString& text) { reportFailure(this, tr("%1: %2").arg(title, text)); };
     // "If you have a sequence loaded in the Record monitor, the sequence exports when you select Export to Device. You
     // can also right-click the clip or sequence in a bin" (p.883): the Record monitor's sequence, else the selection.
     QList<QPair<model::BinItem, QString>> items; // item, its bin
@@ -4658,7 +4680,9 @@ int MainWindow::exportToDevice(const QString& kind) {
             continue;
         }
         ++delivered;
-        say(tr("%1 is %2 on %3").arg(items.at(i).first.name, QString::fromStdString(name), QString::fromStdString(target.name)));
+        // Console only: where each item went.
+        ConsoleLog::instance().append(tr("%1: %2").arg(title, tr("%1 is %2 on %3").arg(items.at(i).first.name, QString::fromStdString(name),
+                                                                                    QString::fromStdString(target.name))));
     }
     return delivered;
 }
@@ -4666,8 +4690,8 @@ int MainWindow::exportToDevice(const QString& kind) {
 // ---------------------------------------------------------------- SubCap (7.4a; docs/spec/subcap.md)
 
 bool MainWindow::subcapAction(const QString& action) {
-    auto say = [](const QString& text) {
-        ConsoleLog::instance().append(tr("SubCap: %1").arg(text));
+    auto say = [this](const QString& text) {
+        reportFailure(this, tr("SubCap: %1").arg(text));
         return false;
     };
     const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
@@ -4711,13 +4735,15 @@ bool MainWindow::subcapAction(const QString& action) {
         const auto range = *model::subcapSegmentRange(seq, effect->track, effect->frame);
         auto tc = [&](std::int64_t f) { return QString::fromStdString(Timecode(startFrame + f, format).toString()); };
         if (!captions->isEmpty())
+            // Console only: where the file's captions fall against the effect.
             ConsoleLog::instance().append(tr("SubCap: the file's captions run from %1 to %2, the effect from %3 to %4.")
                                               .arg(tc(captions->first().start), tc(captions->last().end), tc(range.first), tc(range.second)));
         const bool ok = timeline_->changeRecordSequence(tr("Import Caption Data"), [&](model::Sequence& s) {
             return model::importCaptions(s, effect->track, effect->frame, *captions, &why);
         });
         if (!ok) return say(why.isEmpty() ? tr("the captions could not be imported.") : why);
-        say(tr("%n caption(s) imported.", "", static_cast<int>(captions->size())));
+        // Console only: how many captions came in.
+        ConsoleLog::instance().append(tr("SubCap: %1").arg(tr("%n caption(s) imported.", "", static_cast<int>(captions->size()))));
         return true;
     }
     if (action == QLatin1String("export")) {
@@ -4905,6 +4931,7 @@ void MainWindow::updateDigitalCutDuration() {
 std::int64_t MainWindow::digitalCut(bool preview) {
     auto fail = [this](const QString& text) {
         digitalCut_->setStatus(text);
+        // Console only: the Digital Cut tool's status line shows it.
         ConsoleLog::instance().append(tr("Digital Cut: %1").arg(text));
         return std::int64_t{-1};
     };
@@ -5138,6 +5165,7 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     }
     if (!session->finish(&why)) return fail(QString::fromStdString(why));
     digitalCut_->setStatus(tr("Recorded %1.").arg(range));
+    // Console only: what was recorded.
     ConsoleLog::instance().append(tr("Digital Cut: %1 recorded %2").arg(item.name, range));
     return written;
 }
@@ -5146,7 +5174,7 @@ std::int64_t MainWindow::digitalCut(bool preview) {
 
 QString MainWindow::newVolumeForExport() {
     if (!project_) {
-        ConsoleLog::instance().append(tr("Volume for Export: open a project first."));
+        reportFailure(this, tr("Volume for Export: open a project first."));
         return {};
     }
     model::ExportVolume volume;
@@ -5157,7 +5185,7 @@ QString MainWindow::newVolumeForExport() {
     if (!ok) return {};
     volume = dialog.volume();
     if (volume.name.isEmpty() || volume.path.isEmpty()) {
-        ConsoleLog::instance().append(tr("Volume for Export: the volume needs a name and a path."));
+        reportFailure(this, tr("Volume for Export: the volume needs a name and a path."));
         return {};
     }
     // "The Export Volume bin opens" (p.903): a bin of the volume's name, with its bar.
@@ -5182,7 +5210,7 @@ bool MainWindow::editExportVolume(const QString& binId) {
 }
 
 int MainWindow::commitExportVolume(const QString& binId) {
-    auto say = [](const QString& text) { ConsoleLog::instance().append(tr("Commit: %1").arg(text)); };
+    auto say = [this](const QString& text) { reportFailure(this, tr("Commit: %1").arg(text)); };
     BinDocument* doc = binContainer_->document(binId);
     const auto volume = doc ? model::exportVolumeOf(doc->bin()) : std::nullopt;
     if (!volume) return 0;
@@ -5235,7 +5263,8 @@ int MainWindow::commitExportVolume(const QString& binId) {
         item.fields.insert(model::kMediaStatusHeading, model::kCommitted);
         doc->replaceItem(item);
         ++committed;
-        say(tr("%1 is in %2").arg(item.name, QDir::toNativeSeparators(bundle)));
+        // Console only: where each item went.
+        ConsoleLog::instance().append(tr("Commit: %1").arg(tr("%1 is in %2").arg(item.name, QDir::toNativeSeparators(bundle))));
     }
     doc->save();
     return committed;
@@ -5311,7 +5340,7 @@ bool MainWindow::saveSendToTemplateAs(const model::SendToTemplate& t) {
     if (path.isEmpty()) return false;
     QString error;
     if (!model::saveSendToTemplate(path, t, &error)) {
-        ConsoleLog::instance().append(tr("Send To: the template could not be saved: %1").arg(error));
+        reportFailure(this, tr("Send To: the template could not be saved: %1").arg(error));
         return false;
     }
     refreshSendToMenu();
@@ -5384,9 +5413,14 @@ bool MainWindow::sendTo(model::SendToTemplate t, bool proTools) {
     for (const QJsonObject& values : exportsOf(t)) {
         exportOverride_ = values;
         const QString path = QDir(t.folder).filePath(dialog.fileName() + QLatin1Char('.') + exportSuffix(exportValue(QStringLiteral("exportAs"))));
+        const qsizetype before = ConsoleLog::instance().lines().size();
         const bool written = writeExport(*picked, path);
         exportOverride_ = {};
         if (!written) {
+            // As Export to File: why, in a message (9.7).
+            QStringList why = ConsoleLog::instance().lines().mid(before);
+            if (why.isEmpty()) why << tr("Nothing was exported.");
+            showFailure(this, tr("Send To"), why.join(QLatin1Char('\n')));
             all = false;
             break;
         }
@@ -5517,6 +5551,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     const bool captionText = format == QLatin1String("scc") || format == QLatin1String("ttml");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("fcpxml") && !movie && !captionText) {
+        // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
                                          "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
         return false;
@@ -5527,10 +5562,12 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     }
     if (captionText && !firstSequence) {
         // "Select the sequence containing the Closed Caption text" (p.985).
+        // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
         ConsoleLog::instance().append(tr("Export to File: closed caption text comes from a sequence: select one."));
         return false;
     }
     if (format == QLatin1String("fcpxml") && !firstSequence) {
+        // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
         ConsoleLog::instance().append(tr("Export to File: Final Cut Pro 7 XML holds a sequence: select one."));
         return false;
     }
@@ -5573,8 +5610,10 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
             QString why;
             if (exportMovieFile(selected.at(i), doc.nodeId(), to, format, &why)) {
                 ++count;
+                // Console only: where the export was written.
                 ConsoleLog::instance().append(tr("Export to File: %1").arg(QDir::toNativeSeparators(to)));
             } else {
+                // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
                 ConsoleLog::instance().append(tr("Export to File: %1: %2").arg(selected.at(i).name, why));
             }
         }
@@ -5684,10 +5723,13 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     }
     QApplication::restoreOverrideCursor();
     if (!written) {
+        // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
         ConsoleLog::instance().append(tr("Export to File: %1").arg(error));
         return false;
     }
+    // Console only: what was exported.
     ConsoleLog::instance().append(tr("Export to File: %1: %n item(s)", "", static_cast<int>(count)).arg(QDir::toNativeSeparators(path)));
+    // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
     for (const QString& w : warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
     return true;
 }
@@ -5717,7 +5759,7 @@ QStringList MainWindow::importTimelines(const QString& binId, const QStringList&
         options.when = QDateTime::currentDateTimeUtc();
         auto imported = fcp ? interop::fcpxml::importFile(path, options, &error) : interop::otio::importFile(path, options, &error);
         if (!imported) {
-            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            reportFailure(this, tr("Import: %1").arg(error));
             continue;
         }
         interop::otio::reuseClips(*imported, doc->bin().items);
@@ -5727,10 +5769,11 @@ QStringList MainWindow::importTimelines(const QString& binId, const QStringList&
             doc->addItem(item);
             ids << item.id;
         }
+        // Console only: what was imported.
         ConsoleLog::instance().append(tr("Import: %1: %n sequence(s), %2 clip(s)", "", sequences)
                                           .arg(QFileInfo(path).fileName())
                                           .arg(imported->items.size() - sequences));
-        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+        for (const QString& w : imported->warnings) reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
     }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     return ids;
@@ -5750,7 +5793,7 @@ QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& 
         options.when = QDateTime::currentDateTimeUtc();
         const auto imported = interop::ale::importFile(path, options, &error);
         if (!imported) {
-            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            reportFailure(this, tr("Import: %1").arg(error));
             continue;
         }
         for (const model::BinItem& item : imported->items) {
@@ -5760,9 +5803,10 @@ QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& 
         for (const QString& column : imported->customColumns) {
             if (!display.customColumns.contains(column)) display.customColumns << column;
         }
+        // Console only: what was imported.
         ConsoleLog::instance().append(
             tr("Import: %1: %n clip(s) from the shot log", "", static_cast<int>(imported->items.size())).arg(QFileInfo(path).fileName()));
-        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+        for (const QString& w : imported->warnings) reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
     }
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
@@ -5779,7 +5823,7 @@ QStringList MainWindow::importScc(const QString& binId, const QStringList& paths
     const Rational rate = project_ ? project_->settings.format.editRate : Rational(30000, 1001);
     QStringList ids;
     for (const QString& path : paths) {
-        auto say = [&](const QString& text) { ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), text)); };
+        auto say = [&](const QString& text) { reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), text)); };
         QFile f(path);
         if (!f.open(QIODevice::ReadOnly)) {
             say(tr("cannot be read"));
@@ -5831,7 +5875,9 @@ QStringList MainWindow::importScc(const QString& binId, const QStringList& paths
         item.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(startAtRate, format).toString()));
         doc->addItem(item);
         ids << item.id;
-        say(tr("%n caption(s)", "", static_cast<int>(model::decodeCaptions(captionBytes).size())));
+        // Console only: how many captions came in.
+        ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(),
+                                                               tr("%n caption(s)", "", static_cast<int>(model::decodeCaptions(captionBytes).size()))));
     }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     return ids;
@@ -5867,7 +5913,7 @@ std::optional<model::CaptionScreen> MainWindow::captionOn(MonitorId monitor, std
 // (edl::reuseSources), so importing a list twice does not make two sources of one tape.
 QStringList MainWindow::importEdl() {
     if (!project_ || !binContainer_->bins()) {
-        ConsoleLog::instance().append(tr("Import EDL: open a project first."));
+        reportFailure(this, tr("Import EDL: open a project first."));
         return {};
     }
     QList<ImportEdlDialog::Bin> bins;
@@ -5894,7 +5940,7 @@ QStringList MainWindow::importEdl() {
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc) {
-        ConsoleLog::instance().append(tr("Import EDL: the bin cannot be opened."));
+        reportFailure(this, tr("Import EDL: the bin cannot be opened."));
         return {};
     }
     interop::edl::ImportOptions options;
@@ -5904,7 +5950,7 @@ QStringList MainWindow::importEdl() {
     QString error;
     auto imported = interop::edl::importFile(path, options, &error);
     if (!imported) {
-        ConsoleLog::instance().append(tr("Import EDL: %1").arg(error));
+        reportFailure(this, tr("Import EDL: %1").arg(error));
         return {};
     }
     interop::edl::reuseSources(*imported, doc->bin().items);
@@ -5916,11 +5962,12 @@ QStringList MainWindow::importEdl() {
         if (item.kind == model::BinItemKind::Sequence) sequenceId = item.id;
     }
     const QString name = QFileInfo(path).fileName();
+    // Console only: what was imported.
     ConsoleLog::instance().append(tr("Import EDL: %1: a sequence and %n new source(s)", "", static_cast<int>(ids.size()) - 1).arg(name));
     // "A message displays asking you to Decompose the sequence before trying to use it" (p.951):
     // its segments name the tapes' sources, which have no media until Decompose (later).
-    ConsoleLog::instance().append(tr("Import EDL: %1: the sequence uses its tapes' sources; Decompose it before using it.").arg(name));
-    for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import EDL: %1: %2").arg(name, w));
+    reportFailure(this, tr("Import EDL: %1: the sequence uses its tapes' sources; Decompose it before using it.").arg(name));
+    for (const QString& w : imported->warnings) reportFailure(this, tr("Import EDL: %1: %2").arg(name, w));
     if (BinView* view = binContainer_->viewFor(doc); view && !sequenceId.isEmpty()) view->selectIds({sequenceId});
     return ids;
 }
@@ -6591,7 +6638,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
 void MainWindow::exportBin() {
     BinView* view = binContainer_->activeView();
     if (!view) {
-        ConsoleLog::instance().append(tr("Export Bin: open the bin to export first."));
+        reportFailure(this, tr("Export Bin: open the bin to export first."));
         return;
     }
     const model::Bin& bin = view->document().bin();
@@ -6612,11 +6659,12 @@ void MainWindow::exportBin() {
     options.columns = bin.display.columns + bin.display.customColumns;
     const interop::ale::ExportResult result = interop::ale::exportFile(bin.items, path, options);
     if (!result.ok) {
-        ConsoleLog::instance().append(tr("Export Bin: %1").arg(result.error));
+        reportFailure(this, tr("Export Bin: %1").arg(result.error));
         return;
     }
+    // Console only: what was exported.
     ConsoleLog::instance().append(tr("Export Bin: %1: %n clip(s)", "", result.clips).arg(QDir::toNativeSeparators(path)));
-    for (const QString& w : result.warnings) ConsoleLog::instance().append(tr("Export Bin: %1").arg(w));
+    for (const QString& w : result.warnings) reportFailure(this, tr("Export Bin: %1").arg(w));
 }
 
 // "select a sequence in a bin, and when you open a new List Tool window, the old sequence will be
@@ -6826,7 +6874,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
         if (const auto made = importPictFile(path, importSettings, creation, *doc, &error)) {
             ids << made->id;
         } else {
-            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            reportFailure(this, tr("Import: %1").arg(error));
         }
     }
     for (const auto& [path, psd] : layered) {
@@ -6860,7 +6908,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
                 if (const auto key = importMatteKeyClip(clip, *source, importSettings, creation, *doc, &error)) {
                     ids << key->id;
                 } else {
-                    ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));
+                    reportFailure(this, tr("Import: %1: %2").arg(clip.name, error));
                     if (progress.wasCanceled()) break;
                 }
                 continue;
@@ -6868,7 +6916,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
         }
         const auto made = importClipMedia(clip, importSettings, creation, &error);
         if (!made) {
-            ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));
+            reportFailure(this, tr("Import: %1: %2").arg(clip.name, error));
             if (progress.wasCanceled()) break;
             continue;
         }
@@ -6878,7 +6926,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     progress.reset();
     ids = fromAaf + ids;
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
-    if (skipped > 0) ConsoleLog::instance().append(tr("Import: %n file(s) are not media that can be imported.", "", skipped));
+    if (skipped > 0) reportFailure(this, tr("Import: %n file(s) are not media that can be imported.", "", skipped));
     return ids;
 }
 
@@ -7112,6 +7160,7 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
         return any;
     });
     keepPrecomputes(rec->binId, renders, replaced);
+    // Console only: how many effects were rendered (or kept, when the user stopped it).
     ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
                                               : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
     renderFinished(!interrupted);
@@ -7143,7 +7192,7 @@ void MainWindow::renderFinished(bool completed) {
     // perform a render operation" (p.1208).
     if (settings_->flag(QStringLiteral("Media Creation"), QStringLiteral("saveAfterRender"))) {
         QString error;
-        if (!binContainer_->saveAll(&error)) ConsoleLog::instance().append(tr("Save after Render: %1").arg(error));
+        if (!binContainer_->saveAll(&error)) reportFailure(this, tr("Save after Render: %1").arg(error));
     }
     if (completed) playRenderCompletionSound();
 }
@@ -7253,9 +7302,10 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
     backgroundQueue_->add(tr("Render: %1").arg(name), binId, std::move(work), BackgroundQueue::Priority::Normal,
                           [this, binId, sequenceId, made](const media::ConsolidateResult& result) {
                               applyBackgroundRenders(binId, sequenceId, *made);
-                              if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Render Effect: %1").arg(result.error));
+                              if (!result.error.isEmpty()) reportFailure(this, tr("Render Effect: %1").arg(result.error));
                               renderFinished(result.error.isEmpty());
                           });
+    // Console only: how many effects were queued.
     ConsoleLog::instance().append(tr("Render Effect: %n effect(s) queued in the background.", "", static_cast<int>(targets.size())));
 }
 
@@ -7304,6 +7354,7 @@ void MainWindow::applyBackgroundRenders(const QString& binId, const QString& seq
     QList<model::EffectRender> all;
     for (const auto& [target, render] : made) all << render;
     keepPrecomputes(binId, all, replaced);
+    // Console only: how many effects were rendered.
     ConsoleLog::instance().append(tr("Render Effect: %n effect(s) rendered in the background.", "", static_cast<int>(linked.size())));
 }
 
@@ -7423,7 +7474,7 @@ BinDocument* MainWindow::binForNewClip(const QString& binId) {
 void MainWindow::placeMotionClip(const QString& sourceBin, const model::BinItem& item) {
     BinDocument* doc = binForNewClip(sourceBin);
     if (!doc) {
-        ConsoleLog::instance().append(tr("Motion Effect: open a bin for the new clip."));
+        reportFailure(this, tr("Motion Effect: open a bin for the new clip."));
         return;
     }
     doc->addItem(item);
@@ -7440,7 +7491,7 @@ void MainWindow::placeMotionClip(const QString& sourceBin, const model::BinItem&
 std::optional<model::BinItem> MainWindow::freezeFrame() {
     const model::LoadedClip* src = composer_->state(MonitorId::Source).current();
     if (!src || src->item.kind == model::BinItemKind::Sequence || !frameAt(MonitorId::Source, src->position)) {
-        ConsoleLog::instance().append(tr("Freeze Frame: load a clip with picture into the Source monitor."));
+        reportFailure(this, tr("Freeze Frame: load a clip with picture into the Source monitor."));
         return std::nullopt;
     }
     // Two seconds until changed (ours; the guide gives no default).
@@ -7478,7 +7529,7 @@ std::optional<model::BinItem> MainWindow::motionEffect() {
     }
     const model::LoadedClip* src = composer_->state(MonitorId::Source).current();
     if (!src || src->item.kind == model::BinItemKind::Sequence || !frameAt(MonitorId::Source, 0)) {
-        ConsoleLog::instance().append(tr("Motion Effect: load a clip with picture into the Source monitor."));
+        reportFailure(this, tr("Motion Effect: load a clip with picture into the Source monitor."));
         return std::nullopt;
     }
     const model::MonitorState& state = composer_->state(MonitorId::Source);
@@ -7538,7 +7589,7 @@ std::optional<model::BinItem> MainWindow::motionEffect() {
             creation, model::BinItemKind::MotionEffect, &error);
         progress.reset();
         if (!rendered) {
-            ConsoleLog::instance().append(tr("Motion Effect: %1").arg(error));
+            reportFailure(this, tr("Motion Effect: %1").arg(error));
             return std::nullopt;
         }
         item.link = rendered->link;
@@ -7949,7 +8000,7 @@ bool MainWindow::playCalibrationTone(bool device) {
     options.device = device;
     options.bufferFrames = settings_->number(QStringLiteral("Audio"), QStringLiteral("toolBuffer"));
     playingTone_ = audio_->start(std::make_shared<media::AudioMix>(std::vector<media::AudioPiece>{tone}), 0, options);
-    if (!playingTone_) ConsoleLog::instance().append(tr("Play Calibration Tone: no audio output could be opened."));
+    if (!playingTone_) reportFailure(this, tr("Play Calibration Tone: no audio output could be opened."));
     return playingTone_;
 }
 
@@ -7981,6 +8032,7 @@ void MainWindow::updateMeters() {
 // tone; the target bin is the active one and the drive the Media Creation setting's audio drive.
 std::optional<model::BinItem> MainWindow::createToneMedia() {
     auto fail = [this](const QString& text) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Create Tone Media: %1").arg(text));
         if (toneMediaHook_) return;
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Create Tone Media"), text, QMessageBox::Ok, this);
@@ -8030,6 +8082,7 @@ std::optional<model::BinItem> MainWindow::createToneMedia() {
 
 int MainWindow::multipleMixes(bool canMix) {
     auto fail = [this](const QString& text) {
+        // Console only: the message box below shows it.
         ConsoleLog::instance().append(tr("Multiple Mixes: %1").arg(text));
         if (multiMixHook_) return;
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Multiple Mixes"), text, QMessageBox::Ok, this);
@@ -8435,6 +8488,7 @@ void MainWindow::applyConsolidate(const QString& binId, const media::Consolidate
         loadMediaDatabase();
         const media::DynamicRelinkSettings relink = dynamicRelinkSettings();
         for (const model::BinItem& item : result.associated) {
+            // Console only: that the clip keeps its other resolution too.
             ConsoleLog::instance().append(tr("Consolidate/Transcode: %1 has media at one more resolution.").arg(item.name));
             if (const model::BinItem* now = doc->bin().item(item.id)) {
                 model::BinItem clip = *now;
@@ -8443,8 +8497,8 @@ void MainWindow::applyConsolidate(const QString& binId, const media::Consolidate
         }
     }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
-    for (const QString& why : result.skipped) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(why));
-    if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(result.error));
+    for (const QString& why : result.skipped) reportFailure(this, tr("Consolidate/Transcode: %1").arg(why));
+    if (!result.error.isEmpty()) reportFailure(this, tr("Consolidate/Transcode: %1").arg(result.error));
     frames_->clear();
 }
 
@@ -10178,7 +10232,7 @@ QString MainWindow::createStereoscopicClip() {
     BinView* view = binContainer_->activeView();
     if (!view || !project_) return {};
     if (project_->settings.format.family == FormatFamily::SD) {
-        ConsoleLog::instance().append(tr("Stereoscopic clips need an HD or high-resolution project."));
+        reportFailure(this, tr("Stereoscopic clips need an HD or high-resolution project."));
         return {};
     }
     BinDocument& doc = view->document();
@@ -10187,7 +10241,7 @@ QString MainWindow::createStereoscopicClip() {
         if (view->selectedIds().contains(item.id)) clips << item;
     }
     if (clips.size() != 2) {
-        ConsoleLog::instance().append(tr("Select the left and right eye master clips to make a stereoscopic clip."));
+        reportFailure(this, tr("Select the left and right eye master clips to make a stereoscopic clip."));
         return {};
     }
     static const QRegularExpression rightEye(QStringLiteral("(^|[ _.-])(r|right)$"), QRegularExpression::CaseInsensitiveOption);
@@ -10196,7 +10250,7 @@ QString MainWindow::createStereoscopicClip() {
     QString error;
     const auto stereo = model::makeStereoClip(clips.at(0), clips.at(1), &error);
     if (!stereo) {
-        ConsoleLog::instance().append(tr("Create Stereoscopic Clip: %1").arg(error));
+        reportFailure(this, tr("Create Stereoscopic Clip: %1").arg(error));
         return {};
     }
     doc.addItem(*stereo);

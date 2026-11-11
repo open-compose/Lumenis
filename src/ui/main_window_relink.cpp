@@ -102,6 +102,7 @@ int MainWindow::dynamicRelinkLoaded() {
     }
     if (changed > 0) {
         frames_->clear();
+        // Console only: how many clips relinked.
         ConsoleLog::instance().append(tr("Dynamic Relink: %n clip(s) relinked.", "", changed));
     }
     return changed;

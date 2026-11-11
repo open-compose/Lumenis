@@ -533,6 +533,7 @@ bool AudioEqTool::applyTemplate(const QString& name, const model::AudioEq& eq) {
         fail(timeline_.lastMessage());
         return false;
     }
+    // Console only: what the saved template holds.
     ConsoleLog::instance().append(tr("Audio EQ template %1: %2.").arg(name, model::describeEq(eq)));
     return true;
 }

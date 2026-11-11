@@ -664,7 +664,7 @@ int MainWindow::exportTranscripts() {
         }
         const model::ShownTranscript shown = shownTranscriptOf(item, tracks);
         if (shown.lines.isEmpty()) {
-            ConsoleLog::instance().append(tr("Export Transcript: \"%1\" has no transcript.").arg(item.name));
+            reportFailure(this, tr("Export Transcript: \"%1\" has no transcript.").arg(item.name));
             continue;
         }
         const QString text = model::exportedTranscriptText(shown, model::timecodeFormatOf(item), model::startFrameOf(item));
@@ -672,7 +672,7 @@ int MainWindow::exportTranscripts() {
         QSaveFile file(path);
         const QByteArray bytes = text.toUtf8();
         if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-            ConsoleLog::instance().append(tr("Export Transcript: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+            reportFailure(this, tr("Export Transcript: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
             continue;
         }
         ++written;
@@ -700,7 +700,7 @@ bool MainWindow::shareTranscripts() {
         if (auto t = store.load(mob)) shared.transcripts << *t;
     }
     if (shared.transcripts.isEmpty()) {
-        ConsoleLog::instance().append(tr("Share Transcripts: the selection has no transcripts."));
+        reportFailure(this, tr("Share Transcripts: the selection has no transcripts."));
         return false;
     }
     const QString suffix = QString::fromLatin1(model::kSharedTranscriptsSuffix);
@@ -710,7 +710,7 @@ bool MainWindow::shareTranscripts() {
     QSaveFile file(path);
     const QByteArray bytes = model::writeSharedTranscripts(shared);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-        ConsoleLog::instance().append(tr("Share Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        reportFailure(this, tr("Share Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
     return true;
@@ -765,7 +765,7 @@ bool MainWindow::exportSubCap() {
     if (dialog.useMarks() && record && record->in() && record->out()) options.range = std::pair{*record->in(), *record->out() + 1};
     QList<model::Caption> captions = model::transcriptCaptions(shownTranscriptOf(*item, dialog.tracks()), options);
     if (captions.isEmpty()) {
-        ConsoleLog::instance().append(tr("Export SubCap: \"%1\" has no transcribed dialogue on those tracks.").arg(item->name));
+        reportFailure(this, tr("Export SubCap: \"%1\" has no transcribed dialogue on those tracks.").arg(item->name));
         return false;
     }
     const QString path = transcriptPath(QStringLiteral("save"), fileNameOf(item->name) + QStringLiteral(".txt"),
@@ -796,7 +796,7 @@ bool MainWindow::exportSubCap() {
     }
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-        ConsoleLog::instance().append(tr("Export SubCap: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        reportFailure(this, tr("Export SubCap: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
     return true;
@@ -808,7 +808,7 @@ bool MainWindow::exportSubCap() {
 bool MainWindow::createSubCap() {
     const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) {
-        ConsoleLog::instance().append(tr("Create SubCap: load a sequence into the Record monitor."));
+        reportFailure(this, tr("Create SubCap: load a sequence into the Record monitor."));
         return false;
     }
     const model::BinItem item = rec->item;
@@ -827,7 +827,7 @@ bool MainWindow::createSubCap() {
     const bool ok = timeline_->changeRecordSequence(tr("Create SubCap"), [&](model::Sequence& s) {
         return model::createSubCapTrack(s, captions, &why).has_value();
     });
-    if (!ok) ConsoleLog::instance().append(tr("Create SubCap: %1").arg(why.isEmpty() ? tr("the captions could not be made.") : why));
+    if (!ok) reportFailure(this, tr("Create SubCap: %1").arg(why.isEmpty() ? tr("the captions could not be made.") : why));
     return ok;
 }
 
@@ -890,7 +890,7 @@ ManageTranscriptsDialog* MainWindow::manageTranscripts() {
         const QString path = transcriptPath(QStringLiteral("open"), QString(), tr("Shared transcripts (*.%1)").arg(suffix));
         if (path.isEmpty()) return;
         QString why;
-        if (importSharedTranscripts(path, &why) < 0) ConsoleLog::instance().append(tr("Import Transcripts: %1").arg(why));
+        if (importSharedTranscripts(path, &why) < 0) reportFailure(this, tr("Import Transcripts: %1").arg(why));
         refresh();
     });
     connect(dialog, &ManageTranscriptsDialog::exportRequested, this, [this, dialog] {
@@ -907,7 +907,7 @@ ManageTranscriptsDialog* MainWindow::manageTranscripts() {
         QSaveFile file(path);
         const QByteArray bytes = model::writeSharedTranscripts(shared);
         if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
-            ConsoleLog::instance().append(tr("Manage Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+            reportFailure(this, tr("Manage Transcripts: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
     });
     refresh();
     dialog->open();
@@ -962,7 +962,7 @@ int MainWindow::autoCut() {
         jobs << job;
     }
     if (jobs.isEmpty()) {
-        ConsoleLog::instance().append(tr("AutoCut: select a group clip segment with the Segment tool."));
+        reportFailure(this, tr("AutoCut: select a group clip segment with the Segment tool."));
         return 0;
     }
     int switches = 0;
@@ -970,7 +970,7 @@ int MainWindow::autoCut() {
         for (const Job& job : jobs) switches += model::autoCut(s, job.ref.track, job.ref.start, job.group, job.lines);
         return switches > 0;
     });
-    if (switches == 0) ConsoleLog::instance().append(tr("AutoCut: no speaker with a camera angle speaks in the selected segments."));
+    if (switches == 0) reportFailure(this, tr("AutoCut: no speaker with a camera angle speaks in the selected segments."));
     return switches;
 }
 

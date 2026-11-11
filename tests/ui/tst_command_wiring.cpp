@@ -19,6 +19,7 @@
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 
 #include <QAction>
 #include <QApplication>
@@ -27,6 +28,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMessageBox>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -198,6 +200,41 @@ private slots:
         QCOMPARE(sub->durationFrames, std::int64_t{20});
         QVERIFY(sub->name.startsWith(QStringLiteral("Take 1.Sub")));
         QCOMPARE(sub->fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00:10"));
+    }
+
+    // Error messages everywhere (9.7): a command that cannot be done says why in a message, not only in the Console.
+    // Each of these fails with nothing loaded or selected; each must reach the failure observer (the warning).
+    void failedCommandsSayWhy() {
+        window_->composer().state(MonitorId::Source).clearMonitor();
+        window_->composer().state(MonitorId::Record).clearMonitor();
+        // Nothing selected in the bins (makeSubclip left its subclip selected): Export to File has nothing to export.
+        for (BinDocument* d : window_->binContainer().openDocuments()) {
+            if (BinView* v = window_->binContainer().viewFor(d)) v->selectIds({});
+        }
+        QStringList said;
+        setFailureObserver([&](const QString& title, const QString& text) { said << title + QStringLiteral(": ") + text; });
+        const QStringList ids{QStringLiteral("edit.make_subclip"), QStringLiteral("timeline.create_subcap"),
+                              QStringLiteral("file.output.export_to_file")};
+        for (const QString& id : ids) {
+            QVERIFY2(commands_.hasHandler(id), qPrintable(id));
+            const qsizetype before = said.size();
+            commands_.action(id)->trigger();
+            QVERIFY2(said.size() > before, qPrintable(id + QStringLiteral(" failed without a message")));
+        }
+        setFailureObserver({});
+        // Without an observer the warning opens without blocking, and a second failure with its title joins it.
+        reportFailure(window_.get(), QStringLiteral("Wiring: first"));
+        reportFailure(window_.get(), QStringLiteral("Wiring: second"));
+        QList<QMessageBox*> boxes;
+        for (QMessageBox* b : window_->findChildren<QMessageBox*>(QStringLiteral("failureMessage"))) {
+            if (b->windowTitle() == QLatin1String("Wiring")) boxes << b;
+        }
+        QCOMPARE(boxes.size(), 1);
+        // Opened without blocking (QMessageBox::open): this test went on past both failures.
+        QVERIFY(boxes.first()->isVisible());
+        QVERIFY(boxes.first()->windowModality() != Qt::ApplicationModal);
+        QCOMPARE(boxes.first()->text(), QStringLiteral("first\nsecond"));
+        boxes.first()->close();
     }
 
     // Composer > MultiCamera Mode is a working menu item (it stayed dimmed before 9.6).

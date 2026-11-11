@@ -87,6 +87,21 @@ private:
     QStringList lines_;
 };
 
+// Error messages everywhere (9.7; the owner's request, 2026-11-08): whatever fails, is missing or cannot be done tells
+// the user in a message, not only in the Console. `line` is written to the Console as it is and shown in a warning that
+// does not block (QMessageBox::open: modal to its window only, the call returns at once), so tests and scripts go on: "Title: text" shows `text` under the title "Title" (the product name when
+// the line has no "Title: " part). While a warning with that title is still open, a new failure adds its text to it
+// instead of opening another. On the UI thread only. `parent` (or the active window when null) owns the warning.
+// scripts/check-failure-messages.py (ctest failure_messages) fails for a Console line in src/ui written any other
+// way, unless it is marked "Console only" with the reason (information, not a failure).
+void reportFailure(QWidget* parent, const QString& line);
+// The warning alone, for failures whose lines are already in the Console (an export's, gathered by its caller).
+void showFailure(QWidget* parent, const QString& title, const QString& text);
+// Tests: called with the title and text in place of the warning (the Console line is still written); empty to show
+// warnings again.
+using FailureObserver = std::function<void(const QString& title, const QString& text)>;
+void setFailureObserver(FailureObserver observer);
+
 // Tools > Console (p.101-102): the log, and a command line. It shows ConsoleLog's lines and
 // follows them as they are added or cleared.
 class ConsoleWindow : public QWidget {

@@ -42,6 +42,7 @@ void MainWindow::setUpBackgroundServices() {
         // remain until you generate an error report" (p.376).
         const QString report = backgroundQueue_->takeErrorReport();
         for (const QString& line : report.split(QLatin1Char('\n'), Qt::SkipEmptyParts))
+            // Console only: the error report the user asked for (p.376).
             ConsoleLog::instance().append(tr("Background error: %1").arg(line));
     });
     connect(indicator, &BackgroundIndicator::dynamicMediaFoldersRequested, this, [this] {

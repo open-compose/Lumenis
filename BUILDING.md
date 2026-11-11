@@ -831,6 +831,14 @@ python3 scripts/make-checklist.py --app build/ci/bin/cutthulhu
 Commit the updated `docs/checklists/phase1-gate5.md`. Do not edit it by
 hand.
 
+### `failure_messages` fails
+
+A Console line in `src/ui` is neither shown to the user nor marked as information. Error messages everywhere (ROADMAP
+9.7): a failure goes through `reportFailure(parent, "Title: text")` (`src/ui/tool_windows.h`), which writes the Console
+line and opens a warning that does not block; information (a count, where a file went) stays in the Console with a
+`// Console only: <why>` comment on its line or the line before. `scripts/check-failure-messages.py` lists each
+file:line it found.
+
 ### The self-hosted Windows or Linux job waits or fails
 
 * *Queued for a long time:* the PC is off or asleep, you are logged off
@@ -941,6 +949,18 @@ actionlint was first a package in `scripts/check-requirements.txt`
 runner took 20 minutes, so the install was stopped and every interchange
 check was skipped. The check environment holds only the readers now;
 tools come as pinned downloads.
+
+### CI: a run stays "queued" with no jobs, and the runners are idle
+
+Seen on 2026-11-11 (the owner's report): a push's run stayed queued for 50 minutes with no jobs, while the three
+self-hosted runners were online and idle; cancelling it gave "409 Cannot cancel a workflow run that has not been
+queued yet", and a run started by hand ended in `startup_failure` ("unknown error"). GitHub had an Actions outage
+(https://www.githubstatus.com showed it some minutes later). Nothing in the repository causes this: a workflow GitHub
+cannot use fails at once (above). When GitHub recovers, start a run by hand (`gh workflow run ci.yml --ref <branch> -f
+hosted_macos=false`, or Run workflow on the Actions page); the stuck run may stay queued and can be left, but if it is
+released later the concurrency group cancels the newer run, so check once more. A $0 Actions budget showing "Usage
+blocked" under Billing was a red herring here: hosted minutes were already used up (`HOSTED_CI` off) and the
+self-hosted jobs still ran.
 
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 

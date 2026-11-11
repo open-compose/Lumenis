@@ -86,7 +86,7 @@ void MainWindow::saveDynamicMediaFolders() {
     const QString file = dynamicMediaFoldersFile();
     QString error;
     if (!file.isEmpty() && !dmf_.save(file, &error)) {
-        ConsoleLog::instance().append(tr("Dynamic Media Folders could not be saved to %1: %2").arg(file, error));
+        reportFailure(this, tr("Dynamic Media Folders could not be saved to %1: %2").arg(file, error));
     }
 }
 
@@ -150,7 +150,7 @@ void MainWindow::queueDmfEntry(const QString& folder, const QString& entry, cons
                                                               [](const DmfAsset& a) { return a.ready && a.clips.isEmpty(); }),
                                                dmfAssets_.end());
                               for (const QString& line : result.skipped)
-                                  ConsoleLog::instance().append(tr("Dynamic Media Folder %1: %2").arg(entry, line));
+                                  reportFailure(this, tr("Dynamic Media Folder %1: %2").arg(entry, line));
                               if (media::DmfFolder* f = dmf_.folder(folder); f && !f->done.contains(entry)) {
                                   f->done << entry;
                                   saveDynamicMediaFolders();
@@ -210,7 +210,7 @@ bool MainWindow::editDmfProfile(const QString& folder, const QString& profileNam
 // clips replace when it is acquired again.
 QString MainWindow::acquireDmfAssets(const QString& folder) {
     if (!binContainer_->hasProject()) {
-        ConsoleLog::instance().append(tr("Dynamic Media Folders: open a project to acquire assets."));
+        reportFailure(this, tr("Dynamic Media Folders: open a project to acquire assets."));
         return {};
     }
     const QString clean = QDir::cleanPath(folder);

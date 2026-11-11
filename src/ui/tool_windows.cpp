@@ -19,6 +19,8 @@
 #include <QStorageInfo>
 #include <QTabWidget>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QApplication>
 #include <QPlainTextEdit>
 #include <QSysInfo>
 #include <QToolButton>
@@ -159,6 +161,7 @@ bool& handlerInstalled() {
 void consoleHandler(QtMsgType type, const QMessageLogContext& context, const QString& message) {
     if (type != QtDebugMsg && type != QtInfoMsg) {
         const char* kind = type == QtWarningMsg ? "Warning" : type == QtCriticalMsg ? "Error" : "Fatal";
+        // Console only: Qt's own warnings and errors, collected for the Console (p.101).
         ConsoleLog::instance().append(QStringLiteral("%1: %2").arg(QString::fromLatin1(kind), message));
     }
     if (previousHandler()) {
@@ -206,6 +209,47 @@ void ConsoleLog::append(const QString& line) {
         if (lines_.size() > 5000) lines_.remove(0, lines_.size() - 5000);
     }
     emit lineAdded(line);
+}
+
+namespace {
+FailureObserver& failureObserver() {
+    static FailureObserver observer;
+    return observer;
+}
+} // namespace
+
+void setFailureObserver(FailureObserver observer) {
+    failureObserver() = std::move(observer);
+}
+
+void reportFailure(QWidget* parent, const QString& line) {
+    ConsoleLog::instance().append(line); // Console only: the failure's own Console line, shown below as well
+    // "Title: text"; a title is short and has no sentence in it.
+    const qsizetype colon = line.indexOf(QLatin1String(": "));
+    const bool titled = colon > 0 && colon <= 60 && !line.left(colon).contains(QLatin1String(". "));
+    const QString title = titled ? line.left(colon) : QString::fromUtf8(branding::kProductName);
+    const QString text = titled ? line.mid(colon + 2) : line;
+    showFailure(parent, title, text);
+}
+
+void showFailure(QWidget* parent, const QString& title, const QString& text) {
+    if (failureObserver()) {
+        failureObserver()(title, text);
+        return;
+    }
+    QWidget* owner = parent ? parent->window() : QApplication::activeWindow();
+    if (owner) {
+        for (QMessageBox* open : owner->findChildren<QMessageBox*>(QStringLiteral("failureMessage"), Qt::FindDirectChildrenOnly)) {
+            if (open->isVisible() && open->windowTitle() == title) {
+                open->setText(open->text() + QLatin1Char('\n') + text);
+                return;
+            }
+        }
+    }
+    auto* box = new QMessageBox(QMessageBox::Warning, title, text, QMessageBox::Ok, owner);
+    box->setObjectName(QStringLiteral("failureMessage"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
 }
 
 QStringList ConsoleLog::lines() const {

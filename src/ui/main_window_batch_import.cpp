@@ -44,7 +44,7 @@ QList<BatchImportDialog::Entry> MainWindow::batchImportClips(bool offlineOnly) {
         seen.insert({binId, clip.id});
         // "... you cannot batch import material in formats other than the project format" (p.234).
         if (clip.editRate.num() != 0 && clip.editRate != projectRate) {
-            ConsoleLog::instance().append(
+            reportFailure(this, 
                 tr("Batch Import: %1 is not in the project's format and cannot be imported again.").arg(clip.name));
             return;
         }
@@ -90,8 +90,7 @@ QList<BatchImportDialog::Entry> MainWindow::batchImportClips(bool offlineOnly) {
         const QString text = tr("%1 has material at more than one rate and cannot be imported again. Decompose it and "
                                 "import the clips again in projects of their formats.")
                                  .arg(mixed.join(QStringLiteral(", ")));
-        ConsoleLog::instance().append(tr("Batch Import: %1").arg(text));
-        if (!batchImportChoiceHook_) QMessageBox::information(this, tr("Batch Import"), text);
+        reportFailure(this, tr("Batch Import: %1").arg(text));
     }
     return out;
 }
@@ -121,7 +120,7 @@ int MainWindow::batchImport() {
     if (choice == BatchImportChoice::Cancel) return 0;
     const QList<BatchImportDialog::Entry> entries = batchImportClips(choice == BatchImportChoice::OfflineOnly);
     if (entries.isEmpty()) {
-        ConsoleLog::instance().append(tr("Batch Import: none of the selected items has imported clips to import again."));
+        reportFailure(this, tr("Batch Import: none of the selected items has imported clips to import again."));
         QApplication::beep();
         return 0;
     }
@@ -173,7 +172,7 @@ int MainWindow::runBatchImport(const BatchImportDialog& dialog) {
         const auto info = media::probe(e.path);
         const auto linked = info ? media::linkClip(*info, linkOptions()) : std::nullopt;
         if (!linked) {
-            ConsoleLog::instance().append(tr("Batch Import: %1: %2 cannot be read.").arg(clip.name, e.path));
+            reportFailure(this, tr("Batch Import: %1: %2 cannot be read.").arg(clip.name, e.path));
             continue;
         }
         // "By default, Media Composer imports the file using the Import settings from the last time it imported the
@@ -185,7 +184,7 @@ int MainWindow::runBatchImport(const BatchImportDialog& dialog) {
         QString error;
         const auto made = importClipMedia(*linked, settings, creation, &error);
         if (!made) {
-            ConsoleLog::instance().append(tr("Batch Import: %1: %2").arg(clip.name, error));
+            reportFailure(this, tr("Batch Import: %1: %2").arg(clip.name, error));
             if (progress.wasCanceled()) break;
             continue;
         }
@@ -202,6 +201,7 @@ int MainWindow::runBatchImport(const BatchImportDialog& dialog) {
     progress.reset();
     // The new files are the clips' media from now on (the Media Tool, Dynamic Relink).
     if (done > 0) loadMediaDatabase();
+    // Console only: how many clips were imported again.
     ConsoleLog::instance().append(tr("Batch Import: %n clip(s) imported again.", "", done));
     return done;
 }

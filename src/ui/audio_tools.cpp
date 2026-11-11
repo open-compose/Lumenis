@@ -1243,7 +1243,7 @@ bool AudioMixer::renderEffect() {
     const QStringList tracks = selectedTracks();
     auto fail = [this](const QString& text) {
         message_ = text;
-        ConsoleLog::instance().append(tr("Audio Mixer: %1").arg(text));
+        reportFailure(this, tr("Audio Mixer: %1").arg(text));
         return false;
     };
     if (!renderer_) return fail(tr("Effects cannot be rendered here."));

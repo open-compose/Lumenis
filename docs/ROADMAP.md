@@ -1624,7 +1624,12 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     scenario `50-select-left-right.json`); 9.6b, the Edit tab's Audio Mark IN/OUT with Go to Audio Mark IN/OUT (p.411)
     and Go to Previous/Next Trim (done: docs/spec/audio-marks.md, `MonitorState::markAudioIn`..., split edits in
     `Timeline::edit` through `model::withAudioMarks`/`patchOfKind`; scenario `51-audio-marks.json`).
-  * 9.7, error messages everywhere, with the Export Options button checked against the guide.
+  * 9.7, error messages everywhere, with the Export Options button checked against the guide, in two parts: 9.7a,
+    failures in messages (done: `reportFailure`/`showFailure` in `src/ui/tool_windows.*`, every Console line in
+    `src/ui` a message or marked "Console only", ctest `failure_messages` through `scripts/check-failure-messages.py`,
+    Send To's failed export in a message; test `tst_command_wiring failedCommandsSayWhy`); 9.7b, the Export As
+    dialog's Options button as the guide's Export Settings dialog box with Save and Save As (p.869-870), and failures
+    outside commands (drops, background jobs) checked.
   * 9.8, last, the trademark check.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline

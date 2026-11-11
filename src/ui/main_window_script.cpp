@@ -92,10 +92,11 @@ void MainWindow::setUpScriptWindow() {
         // Ours: the Info window (p.572) is not built; its clip's details go to the Console.
         const model::BinItem* item = scriptTakeItem(take);
         if (!item) {
-            ConsoleLog::instance().append(tr("Script: the clip of take %1 is not in its bin.").arg(take.clipName));
+            reportFailure(this, tr("Script: the clip of take %1 is not in its bin.").arg(take.clipName));
             return;
         }
         const BinDocument* doc = binContainer_->document(take.binId);
+        // Console only: the take's details, ours in place of the Info window (p.572).
         ConsoleLog::instance().append(tr("Script take: %1, bin %2, take %3, lines %4-%5, %6 frames.")
                                           .arg(item->name, doc ? doc->name() : take.binId, take.take)
                                           .arg(take.first + 1)
@@ -115,7 +116,7 @@ const model::BinItem* MainWindow::scriptTakeItem(const model::ScriptTake& take) 
 bool MainWindow::loadScriptTake(const model::ScriptTake& take, int line, double fraction) {
     const model::BinItem* item = scriptTakeItem(take);
     if (!item) {
-        ConsoleLog::instance().append(tr("Script: the clip of take %1 is not in its bin.").arg(take.clipName));
+        reportFailure(this, tr("Script: the clip of take %1 is not in its bin.").arg(take.clipName));
         return false;
     }
     const model::BinItem clip = *item;
@@ -170,7 +171,7 @@ bool MainWindow::addScriptMark() {
     const model::ScriptTake* take = model::takeOf(scriptWindow_->script(), scriptWindow_->markTake());
     const model::LoadedClip* c = composer_->state(MonitorId::Source).current();
     if (!take || !c || c->item.id != take->clipId) {
-        ConsoleLog::instance().append(tr("Add Script Mark: load a take from the Script window first."));
+        reportFailure(this, tr("Add Script Mark: load a take from the Script window first."));
         return false;
     }
     return scriptWindow_->addScriptMark(c->position);
@@ -192,7 +193,7 @@ bool MainWindow::findScript() {
             }
         }
     }
-    ConsoleLog::instance().append(tr("Find Script: no script mark in the open script matches the clip's position."));
+    reportFailure(this, tr("Find Script: no script mark in the open script matches the clip's position."));
     return false;
 }
 
@@ -210,7 +211,7 @@ int MainWindow::findScriptBins(const QList<model::ScriptTake>& takes) {
         view->selectIds(it.value());
         found += static_cast<int>(it.value().size());
     }
-    if (found == 0) ConsoleLog::instance().append(tr("Find Bin: the takes' clips are not in their bins."));
+    if (found == 0) reportFailure(this, tr("Find Bin: the takes' clips are not in their bins."));
     return found;
 }
 
@@ -220,7 +221,7 @@ bool MainWindow::spliceScriptRange(const model::ScriptTake& take, int first, int
     const model::BinItem* item = scriptTakeItem(take);
     const auto frames = item ? model::markedFrames(take, first, last, item->durationFrames) : std::nullopt;
     if (!frames) {
-        ConsoleLog::instance().append(tr("Splice: the take has no script marks for those lines."));
+        reportFailure(this, tr("Splice: the take has no script marks for those lines."));
         return false;
     }
     composer_->load(MonitorId::Source, take.binId, *item);
@@ -309,7 +310,7 @@ static model::ScriptLayout importLayout(const Settings& settings) {
 bool MainWindow::newScript(const QString& path) {
     BinDocument* doc = binContainer_->activeDocument();
     if (!doc || doc->isReadOnly()) {
-        ConsoleLog::instance().append(tr("New Script: open the bin to import the script into."));
+        reportFailure(this, tr("New Script: open the bin to import the script into."));
         return false;
     }
     const QString file = !path.isEmpty() ? path
@@ -317,7 +318,7 @@ bool MainWindow::newScript(const QString& path) {
     if (file.isEmpty()) return false;
     QFile f(file);
     if (!f.open(QIODevice::ReadOnly)) {
-        ConsoleLog::instance().append(tr("New Script: %1 cannot be read.").arg(QDir::toNativeSeparators(file)));
+        reportFailure(this, tr("New Script: %1 cannot be read.").arg(QDir::toNativeSeparators(file)));
         return false;
     }
     const model::Script script = model::scriptFromText(QString::fromUtf8(f.readAll()), importLayout(*settings_));
@@ -360,7 +361,7 @@ bool MainWindow::saveScript() {
     BinDocument* doc = binContainer_->document(scriptWindow_->binId());
     const model::BinItem* found = doc ? doc->bin().item(scriptWindow_->itemId()) : nullptr;
     if (!found || doc->isReadOnly()) {
-        ConsoleLog::instance().append(tr("Save Script: the script's bin cannot be changed."));
+        reportFailure(this, tr("Save Script: the script's bin cannot be changed."));
         return false;
     }
     model::BinItem item = *found;
@@ -430,7 +431,7 @@ int MainWindow::scriptSyncAI() {
     if (!scriptWindow_->isOpen()) return -1;
     const QList<model::ScriptTake> takes = scriptWindow_->chosenTakes();
     if (takes.isEmpty()) {
-        ConsoleLog::instance().append(tr("ScriptSync AI: select the takes (or the lines) to mark up first."));
+        reportFailure(this, tr("ScriptSync AI: select the takes (or the lines) to mark up first."));
         return -1;
     }
     QStringList tracks;
@@ -464,9 +465,10 @@ int MainWindow::scriptSyncAI() {
     });
     if (!untranscribed.isEmpty()) {
         transcribeNow(untranscribed);
-        ConsoleLog::instance().append(tr("ScriptSync AI: %n clip(s) are being transcribed; run ScriptSync AI again when they are "
+        reportFailure(this, tr("ScriptSync AI: %n clip(s) are being transcribed; run ScriptSync AI again when they are "
                                          "done.", nullptr, static_cast<int>(untranscribed.size())));
     }
+    // Console only: how many marks were placed.
     ConsoleLog::instance().append(tr("ScriptSync AI: %n script mark(s) placed.", nullptr, placed));
     return placed;
 }
@@ -493,13 +495,13 @@ bool MainWindow::createScriptFromClips() {
     if (!untranscribed.isEmpty()) transcribeNow(untranscribed);
     const model::Script script = model::scriptFromTranscripts(clips, transcripts, importLayout(*settings_));
     if (script.lines.isEmpty()) {
-        ConsoleLog::instance().append(untranscribed.isEmpty()
+        reportFailure(this, untranscribed.isEmpty()
                                           ? tr("Create Script from Clip: select clips with dialog first.")
                                           : tr("Create Script from Clip: the clips are being transcribed; try again when they are done."));
         return false;
     }
     if (doc.isReadOnly()) {
-        ConsoleLog::instance().append(tr("Create Script from Clip: the bin cannot be changed."));
+        reportFailure(this, tr("Create Script from Clip: the bin cannot be changed."));
         return false;
     }
     const model::BinItem item = model::scriptItem(clips.first().name + tr(" Script"), script);
@@ -580,7 +582,7 @@ bool MainWindow::closeScript() {
                         if (!d->isReadOnly()) target = d;
                 }
                 if (!target) {
-                    ConsoleLog::instance().append(tr("Close Script: no open bin can take the new script."));
+                    reportFailure(this, tr("Close Script: no open bin can take the new script."));
                     return false;
                 }
                 bool ok = true;

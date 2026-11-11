@@ -1053,7 +1053,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   is done. Remove a command from dimmed_commands.json when it gets a handler. 9.6b, audio marks and split edits
   (docs/spec/audio-marks.md: `MonitorState::markAudioIn`/`markAudioOut`, Shift+Clear, green brackets, `Timeline::edit`
   splitting through `model::withAudioMarks`/`patchOfKind`; Go to Audio Mark IN/OUT and Go to Previous/Next Trim; scenario
-  `51-audio-marks.json`), is done, so 9.6 is.
+  `51-audio-marks.json`), is done, so 9.6 is. 9.7a, failures in messages (`reportFailure(parent, "Title: text")` in
+  `src/ui/tool_windows.*` writes the Console line and opens a warning that does not block; information is marked
+  `// Console only: <why>`; ctest `failure_messages` checks every Console line in src/ui; test `tst_command_wiring
+  failedCommandsSayWhy`), is done. Use `reportFailure` for any new failure.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

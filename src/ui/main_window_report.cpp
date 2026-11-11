@@ -91,7 +91,7 @@ bool MainWindow::applySequenceReportChanges(const ReportTarget& target, const QS
     const TimecodeFormat format = model::timecodeFormatOf(item);
     const auto start = Timecode::parse(startTimecode.trimmed().toStdString(), format);
     if (name.trimmed().isEmpty() || !start) {
-        ConsoleLog::instance().append(tr("Sequence Report: \"%1\" is not a timecode.").arg(startTimecode));
+        reportFailure(this, tr("Sequence Report: \"%1\" is not a timecode.").arg(startTimecode));
         QApplication::beep();
         return false;
     }
@@ -106,7 +106,7 @@ QString MainWindow::writeSequenceReport(const media::SequenceReportInput& input,
                                         const QString& path) {
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        ConsoleLog::instance().append(tr("Sequence Report: %1 cannot be written.").arg(path));
+        reportFailure(this, tr("Sequence Report: %1 cannot be written.").arg(path));
         return {};
     }
     file.write(media::sequenceReport(input, options).toUtf8());
