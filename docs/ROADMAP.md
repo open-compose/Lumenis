@@ -834,8 +834,8 @@ area is built):
   (docs/spec/audio-eq.md), is done; 5.7c3, the Audio, Audio Project and
   Import settings' audio options (docs/spec/audio-settings.md), is done but
   for Display Channel Order (with U1's waveforms), Remove Extra Filler
-  After Punchin (with Extended Audio Punch-In) and Apply attenuation/gain
-  effect on import (Phase 9, with CD import).
+  After Punchin (with Extended Audio Punch-In); Apply attenuation/gain
+  effect on import came in 9.2d, with CD import.
 
 ### The UI completion pass (after Phase 5, before Phase 6)
 The same audit found items of areas built in Phases 1-4 left dimmed with no
@@ -1601,7 +1601,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `main_window_graphics.cpp`; test `tst_graphics_import`); 9.2c the Popup Report on AAF Import (Generic Text and CSV), with the
     Sequence Report it opens (done: docs/spec/sequence-report.md, `src/media/sequence_report.*`,
     `sequence_report_dialog.*`, `main_window_report.cpp`; test `tst_sequence_report`);
-    9.2d audio CDs through the OS or a provider hook (licences decided then); 9.2e multilayer Photoshop files (Sequence
+    9.2d audio CDs through the OS or a provider hook (done: docs/spec/audio-cd.md, `ext::AudioCdProvider`,
+    `src/media/audio_cd.*` with Windows' CD-ROM driver, gain on import with CD only; test `tst_audio_cd`); 9.2e multilayer Photoshop files (Sequence
     of Layers, Flattened Image, Select Layers, p.218-221) through a reader of Photoshop's layers, and the Link setting's
     Alpha Channel for linked movies with alpha (p.318, p.1204).
   * 9.3, AutoSync, under our own name (see the trademark check below).

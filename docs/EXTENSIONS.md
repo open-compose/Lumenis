@@ -93,6 +93,7 @@ an official build.
 | Pro Tools Session export (.ptx, Editing Guide p.872-878) | AAF for Pro Tools (p.871-872) | — | Avid's unpublished .ptx format, through a provider |
 | Colour management | OpenColorIO (BSD), ACES; optional, for OFX plug-ins since 6.11c3 (docs/spec/ofx-host.md) | — | — |
 | Export to Device (XDCAM disks, P2 cards; p.883-884, p.901) | XDCAM disks seen as folders (`media::XdcamDiskProvider`, 7.2b) | A drive or deck the OS mounts | P2 cards and networked decks through `ext::ExportDeviceProvider` (lumenis/ext/export_device.h): the P2 clip metadata is Panasonic's, not published |
+| Audio CD tracks (p.215, p.1198) | — | macOS's AIFF tracks (cddafs), gvfs's WAV tracks on Linux, Windows' CD-ROM driver for ".cda" tracks (`media::audio_cd`, 9.2d) | Other drives or disc images through `ext::AudioCdProvider` (lumenis/ext/audio_cd.h) |
 | Record decks (Digital Cut, p.926-938) | Tapes kept in folders (`media::FolderTapeDeckProvider`, 7.3a) | — | RS-422 decks and decks behind AJA or Blackmagic hardware through `ext::DeckProvider` (lumenis/ext/deck.h) |
 | Video I/O hardware (the Video Output tool through `ext::VideoOutputProvider`, lumenis/ext/video_output.h) | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
 | Control surfaces (Avid Artist Color and Artist Mix, FX Guide ch.25; Command\|8 and MCS-3000X, Editing Guide p.699) | — | MIDI and HID through the OS | A provider hook still to be added (`ext::ControlSurfaceProvider`, planned; docs/spec/symphony-audit.md): the EUCON protocol is Avid's |

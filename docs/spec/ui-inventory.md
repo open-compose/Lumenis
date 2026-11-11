@@ -47,6 +47,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Audio CDs (docs/spec/audio-cd.md): which files count as on a CD for CD only,
+  the read tracks' clip names.
 * Sequence Report (docs/spec/sequence-report.md): the report's words and
   layout, what counts as non-renderable, Mob IDs only with UID, the tape ID as a
   number, other sequences' reports beside the first, the AAF popup's Reports

@@ -1,3 +1,4 @@
+#include "lumenis/media/audio_cd.h"
 #include "lumenis/media/media.h"
 
 #include "lumenis/ext/codec.h"
@@ -1942,6 +1943,8 @@ void registerProviders(ext::ProviderRegistry& registry) {
     registry.add(std::make_shared<FolderTapeDeckProvider>());
     // Speech to text for transcripts through whisper.cpp's whisper-cli (docs/spec/transcripts.md).
     registry.add(std::make_shared<WhisperProvider>());
+    // Audio CD tracks the OS shows only as ".cda" files (docs/spec/audio-cd.md).
+    registerAudioCdProviders(registry);
 }
 
 bool pixelFormatHasAlpha(const QString& pixelFormat) {

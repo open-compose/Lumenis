@@ -79,9 +79,8 @@ shown dimmed.
   cut 0.1% short.
 * **Convert source bit depth to project bit depth** (off by default). Off,
   16- and 24-bit sources keep their depth; others take the project's.
-* **Apply attenuation/gain effect on import** stays dimmed. The guide does
-  not say where gain made "prior to import" comes from, and its "CD only"
-  choice belongs with importing from CDs (Phase 9).
+* **Apply attenuation/gain effect on import**, its gain and CD only came in
+  9.2d with importing from CDs (docs/spec/audio-cd.md).
 * **Automatically center pan monophonic clips.** One-track imported clips get
   a centred pan of their own (`model::centerClipPan`, as Clip > Audio >
   Center Pan does).

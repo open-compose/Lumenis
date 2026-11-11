@@ -28,6 +28,7 @@ std::string_view toString(Category category) {
     case Category::SharedStorage: return "shared-storage";
     case Category::ExportDevice: return "export-device";
     case Category::Deck: return "deck";
+    case Category::AudioCd: return "audio-cd";
     }
     return "unknown";
 }

@@ -67,6 +67,7 @@ add_library(lumenis_media STATIC
     batch_import.cpp
     graphic_import.cpp
     sequence_report.cpp
+    audio_cd.cpp
     consolidate.cpp
     relink.cpp
     mixdown.cpp

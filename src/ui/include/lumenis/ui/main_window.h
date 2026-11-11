@@ -361,6 +361,10 @@ public:
     std::optional<model::BinItem> importMatteKeyClip(const model::BinItem& clip, const media::AlphaSource& source,
                                                      const QJsonObject& importSettings, media::MediaCreation creation,
                                                      BinDocument& doc, QString* error = nullptr);
+    // Audio CD tracks (9.2d, main_window_graphics.cpp, docs/spec/audio-cd.md): each ".cda" file read off its disc by
+    // an audio CD provider (ext::AudioCdProvider) into a WAV file in `folder`, named after the ".cda" file. Returns WAV
+    // path -> ".cda" path; tracks no provider reads are left out with a Console line.
+    QHash<QString, QString> readCdTracks(const QStringList& cdaPaths, const QString& folder);
     // A PICT file imported into `doc`: a Matte Key clip when it has alpha and the alpha is not ignored, else a master
     // clip lasting the Frame Import Duration.
     std::optional<model::BinItem> importPictFile(const QString& path, const QJsonObject& importSettings,

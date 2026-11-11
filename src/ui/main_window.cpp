@@ -35,6 +35,8 @@
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/ltc.h"
+#include "lumenis/media/audio_cd.h"
+#include "lumenis/media/batch_import.h"
 #include "lumenis/media/graphic_import.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
@@ -6551,7 +6553,7 @@ QJsonObject MainWindow::importSettingsSnapshot() const {
     // The Import setting's options that importClipMedia() reads (p.1196-1199).
     QJsonObject o;
     for (const char* key : {"frameImportDuration", "convertSampleRate", "skipPullRates", "convertBitDepth", "bwfAlignment",
-                            "centerPanMono", "alphaChannel", "dilateFill"}) {
+                            "centerPanMono", "alphaChannel", "dilateFill", "applyGain", "importGain", "cdOnly"}) {
         const QString k = QString::fromLatin1(key);
         o.insert(k, settings_->value(QStringLiteral("Import"), k));
     }
@@ -6600,6 +6602,12 @@ std::optional<model::BinItem> MainWindow::importClipMedia(model::BinItem clip, c
     if (!made) return std::nullopt;
     // "Automatically center pan monophonic clips" (p.1198).
     if (flag("centerPanMono") && made->fields.value(QStringLiteral("Tracks")) == QLatin1String("A1")) model::centerClipPan(*made);
+    // "Apply attenuation/gain effect on import" (p.215, p.1198): the clip's gain, as Clip > Audio > Apply Gain sets it
+    // ("If you later apply gain from the Clip menu ... the pre-import gain is ignored"); with CD only, for files on a disc.
+    if (flag("applyGain") && made->fields.value(QStringLiteral("Tracks")).contains(QLatin1Char('A')) &&
+        (!flag("cdOnly") || media::isOnDisc(media::lastImportPath(clip)))) {
+        model::applyClipGain(*made, importSettings.value(QStringLiteral("importGain")).toDouble());
+    }
     made->sourceSettings.insert(QStringLiteral("import"), importSettings);
     return made;
 }
@@ -6614,9 +6622,11 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     QStringList fcp;
     QStringList captions;
     QStringList picts;
+    QStringList cdTracks;
     for (const QString& p : allPaths) {
         (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive)   ? aaf
          : media::isPictFile(p)                                 ? picts
+         : media::isCdaFile(p)                                  ? cdTracks
          : p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
          : interop::ale::isShotLog(p)                           ? logs
          : interop::otio::isOtioFile(p)                         ? timelines
@@ -6628,7 +6638,12 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
                           importScc(binId, captions);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
-    if (!doc || (paths.isEmpty() && picts.isEmpty())) return fromAaf;
+    if (!doc || (paths.isEmpty() && picts.isEmpty() && cdTracks.isEmpty())) return fromAaf;
+    // Audio CD tracks Windows shows as ".cda" files (9.2d): read off the disc into WAV files, imported as sound files and
+    // named after their tracks.
+    QTemporaryDir ripped;
+    const QHash<QString, QString> fromCd = readCdTracks(cdTracks, ripped.path());
+    for (auto it = fromCd.cbegin(); it != fromCd.cend(); ++it) paths << it.key();
     const media::LinkOptions options = linkOptions();
     // Import settings (p.1196-1197): numbered stills as one clip, and how
     // long a single picture lasts.
@@ -6646,6 +6661,14 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
                 ++skipped;
             }
         }
+    }
+    // The tracks read off a CD are imported from the ".cda" file as far as the bin knows.
+    for (model::BinItem& clip : clips) {
+        const QString wav = QDir::cleanPath(media::lastImportPath(clip));
+        if (!fromCd.contains(wav)) continue;
+        const QFileInfo cda(fromCd.value(wav));
+        clip.fields.insert(QStringLiteral("Source File"), cda.fileName());
+        clip.fields.insert(QStringLiteral("Source Path"), cda.absolutePath());
     }
     const QString imp = QStringLiteral("Import");
     // "Autodetect Broadcast Wave Monophonic Groups" (p.1199): name_1.wav, name_2.wav ... as one clip.

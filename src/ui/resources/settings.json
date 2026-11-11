@@ -683,7 +683,9 @@
             {"key": "convertSampleRate", "type": "bool", "label": "Sample rate convert source sample rate to project sample rate", "default": true, "page": 1198},
             {"key": "skipPullRates", "type": "bool", "label": "Do not convert sources with pullup or pulldown rates", "default": true, "page": 1198},
             {"key": "convertBitDepth", "type": "bool", "label": "Convert source bit depth to project bit depth", "default": false, "page": 1198},
-            {"key": "applyGain", "type": "bool", "label": "Apply attenuation/gain effect on import", "default": false, "page": 1198, "later": true},
+            {"key": "applyGain", "type": "bool", "label": "Apply attenuation/gain effect on import", "default": false, "page": 1198},
+            {"key": "importGain", "type": "int", "label": "Gain", "suffix": "dB", "min": -96, "max": 12, "default": 0, "page": 1198},
+            {"key": "cdOnly", "type": "bool", "label": "CD only", "default": false, "page": 1198},
             {"key": "centerPanMono", "type": "bool", "label": "Automatically center pan monophonic clips", "default": false, "page": 1198},
             {"key": "autodetectBwfGroups", "type": "bool", "label": "Autodetect Broadcast Wave Monophonic Groups", "default": false, "page": 1199},
             {"key": "bwfAlignment", "type": "bool", "label": "Subframe Alignment to Broadcast WAV Start Time", "default": false, "page": 1199}
