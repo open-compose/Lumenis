@@ -1612,8 +1612,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `tst_sync_clips_ui`); left: the group clip for overlapping video and perf slipping.
   * 9.4, the List Tool's film cut lists and optical lists, in three parts: 9.4a, cut lists in Columnar and TabbedLists
     (assemble, scene assemble, optical, dupe and pull lists; done: docs/spec/cut-lists.md, `src/interop/cut_list.*`, the
-    List Tool's Cut List options; tests `tst_cut_list`, `tst_cut_list_ui`); 9.4b, the XML and WebLists templates; 9.4c,
-    change lists.
+    List Tool's Cut List options; tests `tst_cut_list`, `tst_cut_list_ui`); 9.4b, the XML and WebLists templates (done:
+    `interop::cutlist` `Format::Xml`/`WebLists`, `writeFiles`, the List Tool's Save List of web pages); 9.4c, change lists.
   * 9.5, titles saved in more than one aspect ratio for the online session.
   * 9.6, the check for unconnected items, with its test.
   * 9.7, error messages everywhere, with the Export Options button checked against the guide.

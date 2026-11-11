@@ -1040,7 +1040,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   is done. 9.4 is in three parts (ROADMAP). 9.4a, film cut lists in Columnar and TabbedLists (docs/spec/cut-lists.md:
   `interop::cutlist::exportText` in `src/interop/cut_list.*` with key and ink numbers, the assemble, scene assemble,
   optical, dupe and pull lists; the List Tool's Cut List options and `ListTool::setFilmType`; tests `tst_cut_list`,
-  `tst_cut_list_ui`), is done.
+  `tst_cut_list_ui`), is done. 9.4b, the XML and WebLists templates (`cutlist::Format::Xml`/`WebLists` with
+  `Result::files` and `writeFiles`, CutAsm.htm linked to CutOpt/CutDupe/CutPull.htm, `ListTool::openPage`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

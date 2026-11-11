@@ -5,6 +5,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -25,6 +26,7 @@
 #include <QSplitter>
 #include <QStandardItemModel>
 #include <QTabWidget>
+#include <QUrl>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -64,8 +66,8 @@ QFont fixedFont() {
 namespace {
 
 // The Output Format menu (p.945 picture, p.947 step 2): the EDL types, then the cut and change list
-// types, then OTIO ("choose OTIO", p.969). CMX_3600, File_129, the cut list types Columnar and TabbedLists (9.4a) and
-// OTIO are written so far.
+// types, then OTIO ("choose OTIO", p.969). CMX_3600, File_129, the cut list types (Columnar and TabbedLists, 9.4a;
+// WebLists and XML, 9.4b) and OTIO are written so far.
 struct OutputFormat {
     const char* name;
     bool works;
@@ -73,7 +75,7 @@ struct OutputFormat {
 constexpr OutputFormat kFormats[] = {
     {"CMX_3600", true},    {"CMX_DigitalCut", false}, {"CMX_Transfer", false}, {"Cuedos", false},
     {"File_16", false},    {"File_32", false},        {"File_129", true},      {"Columnar", true},
-    {"TabbedLists", true}, {"WebLists", false},      {"XML", false},            {"OTIO", true},
+    {"TabbedLists", true}, {"WebLists", true},       {"XML", true},            {"OTIO", true},
 };
 
 constexpr const char* kOtio = "OTIO";
@@ -408,6 +410,7 @@ interop::cutlist::Options ListTool::cutListOptions() const {
 
 // A list made in one format is not saved as another: the next Preview or Save List makes it again.
 void ListTool::formatChanged() {
+    madeFiles_.clear();
     // "The options in the List Options and Formatting tabs change depending on which Output Format you select" (p.944).
     cutOptions_->setVisible(isCutList());
     made_.clear();
@@ -505,6 +508,7 @@ QString ListTool::preview() {
             return {};
         }
         made_ = QString::fromUtf8(r.json);
+        madeFiles_.clear();
         warnings = r.warnings;
     } else if (isCutList()) {
         const interop::cutlist::Result r = interop::cutlist::exportText(*sequence_, cutListOptions());
@@ -513,6 +517,7 @@ QString ListTool::preview() {
             return {};
         }
         made_ = r.text;
+        madeFiles_ = r.files;
         warnings = r.warnings;
     } else {
         if (!interop::edl::formatFromName(format_->currentText())) {
@@ -562,6 +567,27 @@ bool ListTool::saveList(const QString& path, QString* error) {
         if (!r.ok && error) *error = r.error;
         return r.ok;
     }
+    if (isCutList() && !madeFiles_.isEmpty()) {
+        // WebLists: "Select a location to save the list and related files ... When the HTML file is created, the
+        // Browser automatically launches" (p.957-958): the pages and their Files folder in `path`'s folder, then the
+        // assemble list's page shown.
+        interop::cutlist::Result r;
+        r.files = madeFiles_;
+        const QFileInfo at(path);
+        QString why;
+        if (!interop::cutlist::writeFiles(r, at.absolutePath(), &why)) {
+            if (error) *error = why;
+            return false;
+        }
+        const QString shown = QDir(at.absolutePath()).filePath(QStringLiteral("CutAsm.htm"));
+        const QString page = QFileInfo::exists(shown) ? shown : QDir(at.absolutePath()).filePath(r.files.firstKey());
+        if (openPage) {
+            openPage(page);
+        } else {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(page));
+        }
+        return true;
+    }
     if (isCutList()) {
         QFile f(path);
         if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(made_.toUtf8()) < 0) {
@@ -583,8 +609,16 @@ void ListTool::saveClicked() {
     if (!sequence_) return;
     QString base = title_->text().trimmed().isEmpty() ? sequence_->name : title_->text().trimmed();
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
-    const QString suggested = base + (isOtio() ? QStringLiteral(".otio") : isCutList() ? QStringLiteral(".txt") : QStringLiteral(".edl"));
-    const QString filter = isOtio()      ? tr("OpenTimelineIO files (*.otio)")
+    const QString format = format_->currentText();
+    const bool web = format == QLatin1String("WebLists");
+    const bool xmlList = format == QLatin1String("XML");
+    // WebLists: the assemble list's page, CutAsm.htm (p.958), with the other pages beside it.
+    const QString suggested = web       ? base + QStringLiteral("/CutAsm.htm")
+                              : xmlList ? base + QStringLiteral(".xml")
+                                        : base + (isOtio() ? QStringLiteral(".otio") : isCutList() ? QStringLiteral(".txt") : QStringLiteral(".edl"));
+    const QString filter = isOtio()    ? tr("OpenTimelineIO files (*.otio)")
+                           : web       ? tr("Web pages (*.htm)")
+                           : xmlList   ? tr("XML lists (*.xml)")
                            : isCutList() ? tr("Cut lists (*.txt)")
                                          : tr("Edit decision lists (*.edl)");
     const QString path = savePath ? savePath(suggested) : QFileDialog::getSaveFileName(this, tr("Save List"), suggested, filter);

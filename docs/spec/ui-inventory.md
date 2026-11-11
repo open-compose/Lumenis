@@ -3072,8 +3072,10 @@ docs/spec/otio.md.
 * Output Format lists CMX_3600, CMX_DigitalCut, CMX_Transfer, Cuedos,
   File_16, File_32, File_129, then Columnar, TabbedLists, WebLists, XML
   (p.945 picture, p.947 step 2), then OTIO (p.969 step 2). CMX_3600,
-  File_129, Columnar, TabbedLists (9.4a, docs/spec/cut-lists.md) and OTIO
-  work; the rest are dimmed. For the cut list types the List Options tab
+  File_129, Columnar, TabbedLists, WebLists, XML (9.4a-b,
+  docs/spec/cut-lists.md) and OTIO work; the rest are dimmed. WebLists'
+  page names other than CutAsm.htm, its style sheet and our XML elements
+  are ours. For the cut list types the List Options tab
   shows a Cut List box (Assemble with Mark Short/Jump Cuts, Scene Assemble,
   Optical with Key Frames and Optical Footage, Dupe with Assume and Print
   Handles, Pull with its sorts and order, Reel Names, Clip Comments, Start

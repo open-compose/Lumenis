@@ -3,7 +3,9 @@
 #include "lumenis/core/mob_id.h"
 #include "lumenis/model/bin.h"
 
+#include <QByteArray>
 #include <QList>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 
@@ -17,12 +19,13 @@
 // the assemble list ("the heart of a cut list", p.941), the scene assemble list, the optical list, the dupe list and
 // the pull list. Each event names its source by its frame reference numbers: key numbers (KN Start), else ink numbers
 // (Ink Number), else timecode (Start; ours, for clips logged without film numbers). Written in the Columnar layout (a
-// page of aligned columns) or as TabbedLists (tab-separated, "that you can open in a separate application such as
-// Microsoft Excel", p.958). XML, WebLists and change lists come later (ROADMAP 9.4b, 9.4c).
+// page of aligned columns), as TabbedLists (tab-separated, "that you can open in a separate application such as
+// Microsoft Excel", p.958), as XML (every column heading and every column of the clips, p.957) or as WebLists (HTML
+// pages linked between the lists, p.957-958; 9.4b). Change lists come later (ROADMAP 9.4c).
 namespace lumenis::interop::cutlist {
 
-enum class Format { Columnar, TabbedLists };
-// "Columnar", "TabbedLists": the List Tool's names (p.947).
+enum class Format { Columnar, TabbedLists, WebLists, Xml };
+// "Columnar", "TabbedLists", "WebLists", "XML": the List Tool's names (p.947).
 QString formatName(Format format);
 std::optional<Format> formatFromName(const QString& name);
 
@@ -87,9 +90,14 @@ struct Options {
 struct Result {
     bool ok = false;
     QString error;
-    QString text;
+    QString text; // the list; for WebLists, the first list's page
     QStringList warnings;
+    // WebLists: every file by its path relative to the folder they are saved in ("CutAsm.htm", "CutOpt.htm", ...,
+    // "Files/cutlist.css").
+    QMap<QString, QByteArray> files;
 };
+// Writes a WebLists result's files into `folder`. False, with the reason, when one cannot be written.
+bool writeFiles(const Result& result, const QString& folder, QString* error = nullptr);
 
 // The cut list of `sequence` as `options` say.
 Result exportText(const model::BinItem& sequence, const Options& options);

@@ -53,11 +53,12 @@ private slots:
             if (id != a.id) return std::nullopt;
             return a;
         });
-        // Columnar and TabbedLists are written; WebLists and XML not yet.
+        // The cut list types are written.
         auto* formats = qobject_cast<QStandardItemModel*>(tool.outputFormat()->model());
         QVERIFY(formats->item(tool.outputFormat()->findText(QStringLiteral("Columnar")))->isEnabled());
         QVERIFY(formats->item(tool.outputFormat()->findText(QStringLiteral("TabbedLists")))->isEnabled());
-        QVERIFY(!formats->item(tool.outputFormat()->findText(QStringLiteral("XML")))->isEnabled());
+        QVERIFY(formats->item(tool.outputFormat()->findText(QStringLiteral("XML")))->isEnabled());
+        QVERIFY(formats->item(tool.outputFormat()->findText(QStringLiteral("WebLists")))->isEnabled());
         // "The options in the List Options and Formatting tabs change depending on which Output Format you select".
         QVERIFY(tool.cutListOptionsBox()->isHidden());
         tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("Columnar")));
@@ -87,6 +88,24 @@ private slots:
         QFile f(out);
         QVERIFY(f.open(QIODevice::ReadOnly));
         QCOMPARE(QString::fromUtf8(f.readAll()).trimmed(), list.trimmed());
+        // WebLists: the pages saved in the chosen folder and the assemble list shown (p.957-958).
+        tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("WebLists")));
+        QString opened;
+        tool.openPage = [&](const QString& page) { opened = page; };
+        const QString web = dir.filePath(QStringLiteral("web/CutAsm.htm"));
+        tool.savePath = [&](const QString& name) {
+            suggested = name;
+            return web;
+        };
+        tool.saveButton()->click();
+        QCOMPARE(suggested, QStringLiteral("Reel 2/CutAsm.htm"));
+        QCOMPARE(opened, web);
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("web/Files/cutlist.css"))));
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("web/CutPull.htm"))));
+        // XML previews as the XML text.
+        tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("XML")));
+        tool.previewButton()->click();
+        QVERIFY(tool.masterList()->toPlainText().startsWith(QStringLiteral("<?xml")));
         // Back to an EDL type: the Cut List options go.
         tool.outputFormat()->setCurrentIndex(tool.outputFormat()->findText(QStringLiteral("CMX_3600")));
         QVERIFY(tool.cutListOptionsBox()->isHidden());

@@ -29,10 +29,9 @@ namespace lumenis::ui {
 // then the Input tab (the sequence, with Load and Clear; a button for each track; the Title), the
 // List Options tab and the Formatting tab. Right: Preview, Save List and Clear List, and the Master
 // EDL and Sources tabs that show the list. The EDL Output Types written are CMX_3600 and File_129
-// (interop/edl.h), the cut list types Columnar and TabbedLists (interop/cut_list.h, 9.4a, with the List
-// Options' Cut List box); the other output formats (CMX_DigitalCut, CMX_Transfer, Cuedos, File_16,
-// File_32, WebLists, XML) are listed dimmed, as are the options not yet carried out
-// (docs/spec/ui-inventory.md §19).
+// (interop/edl.h), the cut list types Columnar, TabbedLists, WebLists and XML (interop/cut_list.h, 9.4a-b,
+// with the List Options' Cut List box); the other output formats (CMX_DigitalCut, CMX_Transfer, Cuedos,
+// File_16, File_32) are listed dimmed, as are the options not yet carried out (docs/spec/ui-inventory.md §19).
 class ListTool : public QWidget {
     Q_OBJECT
 
@@ -69,6 +68,8 @@ public:
     // Where Save List writes: asks with the system's save dialog unless set (tests set it). Empty:
     // not saved.
     std::function<QString(const QString& suggested)> savePath;
+    // Where a saved WebLists page is shown: the system's browser unless set (tests set it).
+    std::function<void(const QString& page)> openPage;
 
     // The widgets, for tests.
     QComboBox* outputFormat() const { return format_; }
@@ -101,6 +102,7 @@ private:
     std::optional<model::BinItem> sequence_;
     Resolver resolve_;
     QString made_; // the last list made, for Save List
+    QMap<QString, QByteArray> madeFiles_; // a WebLists list's files
     QString filmType_;
     double aspect_ = 16.0 / 9.0;
 

@@ -5,7 +5,9 @@
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
+#include <QFile>
 #include <QHash>
+#include <QTemporaryDir>
 #include <QTest>
 
 using namespace lumenis;
@@ -118,7 +120,8 @@ private slots:
         QCOMPARE(cutlist::framesPerFootOf(QStringLiteral("35mm, 4 perf")), 16);
         QCOMPARE(cutlist::framesPerFootOf(QStringLiteral("35mm, 3 perf")), 0);
         QCOMPARE(cutlist::formatFromName(QStringLiteral("TabbedLists")), std::optional(cutlist::Format::TabbedLists));
-        QVERIFY(!cutlist::formatFromName(QStringLiteral("XML")));
+        QCOMPARE(cutlist::formatFromName(QStringLiteral("XML")), std::optional(cutlist::Format::Xml));
+        QVERIFY(!cutlist::formatFromName(QStringLiteral("CMX_3600")));
     }
 
     void assembleAndOptical() {
@@ -237,6 +240,53 @@ private slots:
         // Nothing chosen: a message.
         o.assemble = o.sceneAssemble = o.optical = o.dupe = o.pull = false;
         QVERIFY(!cutlist::exportText(f.sequence, o).ok);
+    }
+
+    // XML (p.957): every column heading, and the clips' columns; Mark Short Cuts "Not included in XML output" (p.961).
+    void xmlTemplate() {
+        const Fixture f = fixture();
+        cutlist::Options o = f.options();
+        o.format = cutlist::Format::Xml;
+        o.shortCuts = 8;
+        const cutlist::Result r = cutlist::exportText(f.sequence, o);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QVERIFY(r.text.startsWith(QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CutList title=\"REEL 1\"")));
+        QVERIFY(r.text.contains(QStringLiteral("<List type=\"assemble\" name=\"ASSEMBLE LIST\">")));
+        QVERIFY(r.text.contains(QStringLiteral("<Cell heading=\"First Edge\">KZ 12 3456 1001+00</Cell>")));
+        QVERIFY(r.text.contains(QStringLiteral("<Column heading=\"Camroll\">C1</Column>")));
+        QVERIFY(r.text.contains(QStringLiteral("<List type=\"optical\"")));
+        QVERIFY(!r.text.contains(QStringLiteral("Short cut")));
+        QVERIFY(r.files.isEmpty());
+    }
+
+    // WebLists (p.957-958): a page per list, linked between the lists, and the Files folder.
+    void webLists() {
+        const Fixture f = fixture();
+        cutlist::Options o = f.options();
+        o.format = cutlist::Format::WebLists;
+        o.pull = true;
+        const cutlist::Result r = cutlist::exportText(f.sequence, o);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.files.keys(), (QStringList{QStringLiteral("CutAsm.htm"), QStringLiteral("CutDupe.htm"), QStringLiteral("CutOpt.htm"),
+                                              QStringLiteral("CutPull.htm"), QStringLiteral("Files/cutlist.css")}));
+        const QString assemble = QString::fromUtf8(r.files.value(QStringLiteral("CutAsm.htm")));
+        QCOMPARE(r.text, assemble);
+        // "Opticals in the Assemble List that are linked to their description in the Optical List"; dupes likewise.
+        QVERIFY(assemble.contains(QStringLiteral("<a href=\"CutOpt.htm#o1\">Optical 1</a>")));
+        QVERIFY(assemble.contains(QStringLiteral("<a href=\"CutDupe.htm#d1\">Dupe 1</a>")));
+        QVERIFY(assemble.contains(QStringLiteral("<tr id=\"e2\">")));
+        QVERIFY(assemble.contains(QStringLiteral("href=\"Files/cutlist.css\"")));
+        // "Items in the Optical List that are linked to the appropriate event in the Assemble List"; the pull list too.
+        const QString optical = QString::fromUtf8(r.files.value(QStringLiteral("CutOpt.htm")));
+        QVERIFY(optical.contains(QStringLiteral("<tr id=\"o1\">")));
+        QVERIFY(optical.contains(QStringLiteral("<a href=\"CutAsm.htm#e2\">1</a>")));
+        QVERIFY(QString::fromUtf8(r.files.value(QStringLiteral("CutPull.htm"))).contains(QStringLiteral("href=\"CutAsm.htm#e")));
+        QVERIFY(QString::fromUtf8(r.files.value(QStringLiteral("CutDupe.htm"))).contains(QStringLiteral("<tr id=\"d1\">")));
+        // Written into a folder.
+        QTemporaryDir dir;
+        QVERIFY(cutlist::writeFiles(r, dir.path()));
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("Files/cutlist.css"))));
+        QVERIFY(QFile::exists(dir.filePath(QStringLiteral("CutAsm.htm"))));
     }
 };
 

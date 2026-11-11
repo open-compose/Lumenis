@@ -7,23 +7,36 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/sync_dupes.h"
 
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QHash>
+#include <QMap>
 #include <QRegularExpression>
 #include <QSet>
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <map>
+#include <tuple>
 
 namespace lumenis::interop::cutlist {
 
 QString formatName(Format format) {
-    return format == Format::TabbedLists ? QStringLiteral("TabbedLists") : QStringLiteral("Columnar");
+    switch (format) {
+    case Format::Columnar: return QStringLiteral("Columnar");
+    case Format::TabbedLists: return QStringLiteral("TabbedLists");
+    case Format::WebLists: return QStringLiteral("WebLists");
+    case Format::Xml: return QStringLiteral("XML");
+    }
+    return {};
 }
 
 std::optional<Format> formatFromName(const QString& name) {
-    if (name == QLatin1String("Columnar")) return Format::Columnar;
-    if (name == QLatin1String("TabbedLists")) return Format::TabbedLists;
+    for (const Format f : {Format::Columnar, Format::TabbedLists, Format::WebLists, Format::Xml}) {
+        if (formatName(f) == name) return f;
+    }
     return std::nullopt;
 }
 
@@ -98,14 +111,22 @@ struct Event {
     QString field(const char* heading) const { return clip ? clip->fields.value(QLatin1String(heading)) : QString(); }
 };
 
-// A list as rows of columns, written Columnar or tabbed.
+// A list as rows of columns. `key` names it for the web pages and XML ("assemble", "scene", "optical", "dupe", "pull");
+// `events` gives, for each row, the assemble list's event number it is about (0 for none), for the links and the XML's
+// columns.
 struct Table {
+    QString key;
     QString name;
     QStringList head;
     QList<QStringList> rows;
+    QList<int> events;
+    void add(int event, const QStringList& cells) {
+        rows << cells;
+        events << event;
+    }
 };
 
-QString render(const QList<Table>& tables, const Options& o) {
+QString columnar(const QList<Table>& tables, const Options& o) {
     QStringList out;
     out << (o.title.isEmpty() ? QStringLiteral("CUT LIST") : o.title);
     for (const Table& t : tables) {
@@ -127,7 +148,7 @@ QString render(const QList<Table>& tables, const Options& o) {
         auto line = [&](const QStringList& cells) {
             QString s;
             for (int i = 0; i < cells.size(); ++i) s += (i ? QStringLiteral("  ") : QString()) + cells[i].leftJustified(widths[i]);
-            return s.trimmed().isEmpty() ? s : QString(s).remove(QRegularExpression(QStringLiteral("\\s+$")));
+            return s.remove(QRegularExpression(QStringLiteral("\\s+$")));
         };
         out << line(t.head);
         QString rule;
@@ -136,6 +157,107 @@ QString render(const QList<Table>& tables, const Options& o) {
         for (const QStringList& r : t.rows) out << line(r);
     }
     return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
+}
+
+QString escaped(const QString& text) { return text.toHtmlEscaped(); }
+
+// The XML template (p.957): "a file that includes all the information about the list: it shows you every column
+// heading and every custom column". Ours: <CutList> with a <List> per list, each <Row> its cells named by heading and,
+// for a row about an event, the clip's bin columns as <Column> elements.
+QString xml(const QList<Table>& tables, const Options& o, const std::function<const model::BinItem*(int)>& clipOf) {
+    QStringList out;
+    out << QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    out << QStringLiteral("<CutList title=\"%1\" framesPerFoot=\"%2\">").arg(escaped(o.title)).arg(o.framesPerFoot);
+    for (const Table& t : tables) {
+        out << QStringLiteral("  <List type=\"%1\" name=\"%2\">").arg(t.key, escaped(t.name));
+        for (int r = 0; r < t.rows.size(); ++r) {
+            out << (t.events[r] ? QStringLiteral("    <Row event=\"%1\">").arg(t.events[r]) : QStringLiteral("    <Row>"));
+            for (int c = 0; c < t.rows[r].size() && c < t.head.size(); ++c) {
+                out << QStringLiteral("      <Cell heading=\"%1\">%2</Cell>").arg(escaped(t.head[c]), escaped(t.rows[r][c]));
+            }
+            if (const model::BinItem* clip = t.events[r] ? clipOf(t.events[r]) : nullptr) {
+                QStringList headings = clip->fields.keys();
+                std::sort(headings.begin(), headings.end());
+                for (const QString& h : headings) {
+                    out << QStringLiteral("      <Column heading=\"%1\">%2</Column>").arg(escaped(h), escaped(clip->fields.value(h)));
+                }
+            }
+            out << QStringLiteral("    </Row>");
+        }
+        out << QStringLiteral("  </List>");
+    }
+    out << QStringLiteral("</CutList>");
+    return out.join(QLatin1Char('\n')) + QLatin1Char('\n');
+}
+
+QString pageOf(const QString& key) {
+    if (key == QLatin1String("assemble")) return QStringLiteral("CutAsm.htm");
+    if (key == QLatin1String("scene")) return QStringLiteral("CutScene.htm");
+    if (key == QLatin1String("optical")) return QStringLiteral("CutOpt.htm");
+    if (key == QLatin1String("dupe")) return QStringLiteral("CutDupe.htm");
+    return QStringLiteral("CutPull.htm");
+}
+
+// WebLists (p.957-958): an HTML page per list, "hyper linked, which allows you to jump between lists": the assemble
+// list's opticals and dupes link to the optical and dupe lists, whose entries, like the pull list's, link back to the
+// event in the assemble list. The style sheet goes in the Files sub folder ("control files are also copied to the Files
+// sub folder"). Ours: no banner or logo pictures and no script.
+QMap<QString, QByteArray> webLists(const QList<Table>& tables, const Options& o) {
+    QMap<QString, QByteArray> files;
+    const QString title = escaped(o.title.isEmpty() ? QStringLiteral("Cut List") : o.title);
+    QStringList nav;
+    for (const Table& t : tables) nav << QStringLiteral("<a href=\"%1\">%2</a>").arg(pageOf(t.key), escaped(t.name));
+    static const QRegularExpression optical(QStringLiteral("Optical (\\d+)"));
+    static const QRegularExpression dupe(QStringLiteral("Dupe (\\d+)"));
+    const bool hasOptical = std::any_of(tables.cbegin(), tables.cend(), [](const Table& t) { return t.key == QLatin1String("optical"); });
+    const bool hasDupe = std::any_of(tables.cbegin(), tables.cend(), [](const Table& t) { return t.key == QLatin1String("dupe"); });
+    for (const Table& t : tables) {
+        QStringList h;
+        h << QStringLiteral("<!DOCTYPE html>") << QStringLiteral("<html><head><meta charset=\"utf-8\">")
+          << QStringLiteral("<title>%1 - %2</title>").arg(title, escaped(t.name))
+          << QStringLiteral("<link rel=\"stylesheet\" href=\"Files/cutlist.css\"></head><body>")
+          << QStringLiteral("<h1>%1</h1>").arg(title) << QStringLiteral("<nav>%1</nav>").arg(nav.join(QStringLiteral(" | ")))
+          << QStringLiteral("<h2>%1</h2>").arg(escaped(t.name)) << QStringLiteral("<table>") << QStringLiteral("<tr>");
+        for (const QString& head : t.head) h << QStringLiteral("<th>%1</th>").arg(escaped(head));
+        h << QStringLiteral("</tr>");
+        QSet<QString> anchored;
+        for (int r = 0; r < t.rows.size(); ++r) {
+            const QStringList& row = t.rows[r];
+            const int event = t.events[r];
+            // Each row's anchor: the event in the assemble list, the optical or dupe group's first row elsewhere.
+            QString anchor;
+            if (t.key == QLatin1String("assemble")) anchor = QStringLiteral("e%1").arg(event);
+            if (t.key == QLatin1String("optical") || t.key == QLatin1String("dupe")) {
+                const QString a = (t.key == QLatin1String("optical") ? QStringLiteral("o") : QStringLiteral("d")) + row.value(0);
+                if (!anchored.contains(a)) {
+                    anchored.insert(a);
+                    anchor = a;
+                }
+            }
+            h << (anchor.isEmpty() ? QStringLiteral("<tr>") : QStringLiteral("<tr id=\"%1\">").arg(anchor));
+            for (int c = 0; c < row.size(); ++c) {
+                QString cell = escaped(row[c]);
+                if (t.key == QLatin1String("assemble") && c == row.size() - 1) {
+                    if (hasOptical) cell.replace(optical, QStringLiteral("<a href=\"CutOpt.htm#o\\1\">Optical \\1</a>"));
+                    if (hasDupe) cell.replace(dupe, QStringLiteral("<a href=\"CutDupe.htm#d\\1\">Dupe \\1</a>"));
+                } else if (t.key != QLatin1String("assemble") && c == 0 && event > 0) {
+                    cell = QStringLiteral("<a href=\"CutAsm.htm#e%1\">%2</a>").arg(event).arg(cell);
+                }
+                h << QStringLiteral("<td>%1</td>").arg(cell);
+            }
+            h << QStringLiteral("</tr>");
+        }
+        h << QStringLiteral("</table></body></html>");
+        files.insert(pageOf(t.key), h.join(QLatin1Char('\n')).toUtf8() + '\n');
+    }
+    files.insert(QStringLiteral("Files/cutlist.css"),
+                 QByteArrayLiteral("body { font-family: sans-serif; margin: 1em; }\n"
+                                   "table { border-collapse: collapse; }\n"
+                                   "th, td { border: 1px solid #999; padding: 2px 6px; text-align: left; white-space: nowrap; }\n"
+                                   "th { background: #ddd; }\n"
+                                   "tr:target { background: #ffeb99; }\n"
+                                   "nav { margin-bottom: 1em; }\n"));
+    return files;
 }
 
 // The frame reference of a clip's first frame: key numbers, else ink numbers, else its Start timecode.
@@ -240,8 +362,10 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     // Short cuts and jump cuts (p.961).
     for (int i = 0; i < events.size(); ++i) {
         Event& e = events[i];
-        if (o.shortCuts && e.length < *o.shortCuts) e.flags << QStringLiteral("Short cut");
-        if (o.jumpCuts && i > 0 && events[i - 1].track == e.track && events[i - 1].record + events[i - 1].length == e.record &&
+        // Mark Short Cuts and Mark Jump Cuts are "Not included in XML output" (p.961).
+        const bool marks = o.format != Format::Xml;
+        if (marks && o.shortCuts && e.length < *o.shortCuts) e.flags << QStringLiteral("Short cut");
+        if (marks && o.jumpCuts && i > 0 && events[i - 1].track == e.track && events[i - 1].record + events[i - 1].length == e.record &&
             events[i - 1].segment->clipId == e.segment->clipId && events[i - 1].segment->sourceTrack == e.segment->sourceTrack) {
             const std::int64_t missing = e.sourceIn - (events[i - 1].sourceIn + events[i - 1].length);
             if (missing > 0 && missing < *o.jumpCuts) e.flags << QStringLiteral("Jump cut (%1 missing)").arg(footage(missing, fpf));
@@ -269,9 +393,12 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         // "The assemble list shows the order in which a sequence's clips, optical effects, or standard dissolves and
         // fades are assembled from start to finish in the edited sequence. The assemble list also flags duplicate
         // frames" (p.941).
-        Table t{QStringLiteral("ASSEMBLE LIST"), head, {}};
+        Table t{QStringLiteral("assemble"), QStringLiteral("ASSEMBLE LIST"), head, {}, {}};
         int n = 0;
-        for (const Event& e : events) t.rows << cells(e, ++n);
+        for (const Event& e : events) {
+            ++n;
+            t.add(n, cells(e, n));
+        }
         tables << t;
     }
     if (o.sceneAssemble) {
@@ -290,21 +417,22 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         });
         QStringList sceneHead = head;
         sceneHead.insert(2, QStringLiteral("Scene/Take"));
-        Table t{QStringLiteral("SCENE ASSEMBLE LIST"), sceneHead, {}};
+        Table t{QStringLiteral("scene"), QStringLiteral("SCENE ASSEMBLE LIST"), sceneHead, {}, {}};
         for (int i : order) {
             QStringList c = cells(events[i], i + 1);
             c.insert(2, events[i].field("Scene") + QLatin1Char('/') + events[i].field("Take"));
-            t.rows << c;
+            t.add(i + 1, c);
         }
         tables << t;
     }
     if (o.optical && opticals > 0) {
         // "The optical list presents each optical event in the order in which it appears in the sequence and includes
         // specifications based on either ink numbers, Aux ink numbers, or key numbers" (p.942).
-        Table t{QStringLiteral("OPTICAL LIST"),
+        Table t{QStringLiteral("optical"), QStringLiteral("OPTICAL LIST"),
                 {QStringLiteral("Optical"), QStringLiteral("Track"), QStringLiteral("Effect"), QStringLiteral("Footage In"),
                  QStringLiteral("Footage Out"), QStringLiteral("Duration"), QStringLiteral("Layer"), QStringLiteral("First Edge"),
                  QStringLiteral("Last Edge"), QStringLiteral("Clip Name"), QStringLiteral("Notes")},
+                {},
                 {}};
         for (int i = 0; i < events.size(); ++i) {
             const Event& e = events[i];
@@ -313,7 +441,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
             const QString number = QString::number(e.optical);
             auto row = [&](const QString& effect, std::int64_t from, std::int64_t length, const QString& layer, const Event& src,
                            std::int64_t srcIn, const QString& notes) {
-                t.rows << QStringList{number,
+                t.add(i + 1, QStringList{number,
                                       e.track,
                                       effect,
                                       footage(o.startAt + from, fpf),
@@ -323,7 +451,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
                                       referenceAt(src, srcIn, o),
                                       referenceAt(src, srcIn + length - 1, o),
                                       src.name,
-                                      notes};
+                                      notes});
             };
             if (s.transition) {
                 // A transition: the outgoing shot's tail (A) and the incoming shot's head (B) over the effect.
@@ -352,22 +480,22 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
                             const auto frame = static_cast<std::int64_t>(std::llround(span.frameOf(model::keyframeTime(keys, k, span))));
                             at << footage((o.opticalFootage ? 0 : o.startAt + e.record) + frame, fpf);
                         }
-                        t.rows << QStringList{number, e.track, QString(), QString(), QString(), QString(), QString(), QString(), QString(),
-                                              QString(), QStringLiteral("Key frames %1: %2").arg(key, at.join(QStringLiteral(", ")))};
+                        t.add(i + 1, QStringList{number, e.track, QString(), QString(), QString(), QString(), QString(), QString(), QString(),
+                                              QString(), QStringLiteral("Key frames %1: %2").arg(key, at.join(QStringLiteral(", ")))});
                     }
                 }
                 // "When you create an optical list, each marker, along with its position in the segment on a
                 // keyframe-by-keyframe basis, appears as an optical event" (FX Guide p.412).
                 for (const model::PrevisualizationEvent& p : model::previsualizationEvents(fx, span, o.aspect)) {
                     const auto frame = static_cast<std::int64_t>(std::llround(span.frameOf(p.at)));
-                    t.rows << QStringList{number, e.track, QStringLiteral("Previsualization Marker"),
+                    t.add(i + 1, QStringList{number, e.track, QStringLiteral("Previsualization Marker"),
                                           footage((o.opticalFootage ? 0 : o.startAt + e.record) + frame, fpf), QString(), QString(), QString(),
                                           QString(), QString(), QString(),
                                           QStringLiteral("Marker %1 key frame %2: %3 (X %4, Y %5) %6")
                                               .arg(p.marker)
                                               .arg(p.keyframe)
                                               .arg(compass(p.position), QString::number(p.position.x(), 'f', 2),
-                                                   QString::number(p.position.y(), 'f', 2), p.color)};
+                                                   QString::number(p.position.y(), 'f', 2), p.color)});
                 }
             }
         }
@@ -376,20 +504,22 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
     if (o.dupe && !dupes.isEmpty()) {
         // "Each dupe group set provides the IN and OUT points of two or more entries that are duplicates of each
         // other" (p.942); Print w/Handles widens the entries shown (p.962).
-        Table t{QStringLiteral("DUPE LIST"),
+        Table t{QStringLiteral("dupe"), QStringLiteral("DUPE LIST"),
                 {QStringLiteral("Dupe Group"), QStringLiteral("Track"), QStringLiteral("Footage In"), QStringLiteral("Footage Out"),
                  QStringLiteral("First Edge"), QStringLiteral("Last Edge"), QStringLiteral("Clip Name")},
+                {},
                 {}};
         QList<model::Dupe> sorted = dupes;
         std::stable_sort(sorted.begin(), sorted.end(), [](const model::Dupe& a, const model::Dupe& b) { return a.set < b.set; });
         for (const model::Dupe& d : sorted) {
-            for (const Event& e : events) {
+            for (int i = 0; i < events.size(); ++i) {
+                const Event& e = events[i];
                 if (e.track != d.track || d.start >= e.record + e.length || d.start + d.length <= e.record) continue;
                 const std::int64_t first = d.start - e.record + e.sourceIn - o.printHandles;
                 const std::int64_t length = d.length + 2 * o.printHandles;
-                t.rows << QStringList{QString::number(d.set + 1), d.track, footage(o.startAt + d.start, fpf),
+                t.add(i + 1, QStringList{QString::number(d.set + 1), d.track, footage(o.startAt + d.start, fpf),
                                       footage(o.startAt + d.start + d.length - 1, fpf), referenceAt(e, first, o),
-                                      referenceAt(e, first + length - 1, o), e.name};
+                                      referenceAt(e, first + length - 1, o), e.name});
             }
         }
         tables << t;
@@ -411,14 +541,15 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
             };
             return o.headsOut ? edge(x) < edge(y) : edge(y) < edge(x);
         });
-        Table t{QStringLiteral("PULL LIST"),
+        Table t{QStringLiteral("pull"), QStringLiteral("PULL LIST"),
                 {QStringLiteral("#"), QStringLiteral("Track"), QStringLiteral("First Edge"), QStringLiteral("Last Edge"),
                  QStringLiteral("Duration"), QStringLiteral("Cam Roll"), QStringLiteral("Lab Roll"), QStringLiteral("Sound Roll"),
                  QStringLiteral("Clip Name"), QStringLiteral("Dupe")},
+                {},
                 {}};
         for (int i : order) {
             const Event& e = events[i];
-            t.rows << QStringList{QString::number(i + 1),
+            t.add(i + 1, QStringList{QString::number(i + 1),
                                   e.track,
                                   referenceAt(e, e.sourceIn, o),
                                   referenceAt(e, e.sourceIn + e.length - 1, o),
@@ -427,7 +558,7 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
                                   e.field("Labroll"),
                                   e.field("Soundroll"),
                                   e.name,
-                                  e.dupeSet >= 0 ? QString::number(e.dupeSet + 1) : QString()};
+                                  e.dupeSet >= 0 ? QString::number(e.dupeSet + 1) : QString()});
         }
         tables << t;
     }
@@ -435,9 +566,35 @@ Result exportText(const model::BinItem& sequence, const Options& o) {
         r.error = QStringLiteral("Choose a list to make in the List Options.");
         return r;
     }
-    r.text = render(tables, o);
+    switch (o.format) {
+    case Format::Columnar:
+    case Format::TabbedLists: r.text = columnar(tables, o); break;
+    case Format::Xml:
+        r.text = xml(tables, o, [&](int event) -> const model::BinItem* {
+            if (event < 1 || event > events.size() || !events[event - 1].clip) return nullptr;
+            return &*events[event - 1].clip;
+        });
+        break;
+    case Format::WebLists:
+        r.files = webLists(tables, o);
+        r.text = QString::fromUtf8(r.files.value(pageOf(tables.first().key)));
+        break;
+    }
     r.ok = true;
     return r;
+}
+
+bool writeFiles(const Result& result, const QString& folder, QString* error) {
+    for (auto it = result.files.cbegin(); it != result.files.cend(); ++it) {
+        const QString path = QDir(folder).filePath(it.key());
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate) || f.write(it.value()) != it.value().size()) {
+            if (error) *error = QStringLiteral("%1 cannot be written.").arg(QDir::toNativeSeparators(path));
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace lumenis::interop::cutlist

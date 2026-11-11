@@ -44,9 +44,26 @@ options in the List Options and Formatting tabs change depending on which Output
 * **Layout.** Columnar: the title, then each list's name, its column heads, a rule and the rows, columns as wide as
   their widest cell. TabbedLists: the same rows, tab-separated. Save List writes the list as a `.txt` file.
 
+## 9.4b: XML and WebLists
+
+* **XML** (p.957: "a file that includes all the information about the list: it shows you every column heading and
+  every custom column"): ours `<CutList title framesPerFoot>`, a `<List type name>` for each list, a `<Row event>` for
+  each row with a `<Cell heading>` for each column and, for a row about an event, a `<Column heading>` for each of the
+  clip's bin columns. Mark Short Cuts and Mark Jump Cuts are "Not included in XML output" (p.961). Save List writes
+  an `.xml` file.
+* **WebLists** (p.957-958): an HTML page for each list, CutAsm.htm for the assemble list ("the Assemble List is called
+  CutAsm.htm") and ours CutScene.htm, CutOpt.htm, CutDupe.htm and CutPull.htm, with a navigation line between them
+  and the style sheet in the Files sub folder (`Files/cutlist.css`). The links: the assemble list's Optical n and
+  Dupe n to the optical and dupe lists ("Opticals in the Assemble List that are linked to their description in the
+  Optical List", "Duplicates in the Assemble List that are linked to the entries in the Dupe List"), and the first
+  column of the optical, dupe, pull and scene assemble lists back to the event in the assemble list. Preview shows
+  CutAsm.htm's source; Save List asks where CutAsm.htm goes (suggesting "<title>/CutAsm.htm"), writes every page and
+  the Files folder there and opens CutAsm.htm in the system's browser ("When the HTML file is created, the Browser
+  automatically launches"). Ours: no banner, logo or script; one style sheet.
+
 ## Not yet
 
-* 9.4b: the XML and WebLists templates (p.957-958); Show Icons (p.964).
+* Show Icons (p.964).
 * 9.4c: change lists (p.940, p.953-954, p.962-963, p.965).
 * LFOA, Scan, Show Dupe Refs, Include Leader/Opticals, Place Separators, Page Breaks Between Opticals; the Formatting
   tab's Running As Mode, Master TC Track, Display Handles, Separate List for Each Channel, Show Prefix, Matchback Info,
@@ -55,4 +72,5 @@ options in the List Options and Formatting tabs change depending on which Output
 ## Tests
 
 `tst_cut_list` (film numbers, the assemble, optical, dupe, pull and scene assemble lists, short and jump cuts, key
-frames, TabbedLists); `tst_cut_list_ui` (the List Tool's formats, the Cut List box, Preview, Save List, the film type).
+frames, TabbedLists, XML, WebLists and their links); `tst_cut_list_ui` (the List Tool's formats, the Cut List box,
+Preview, Save List of text and web pages, the film type).
