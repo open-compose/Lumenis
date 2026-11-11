@@ -250,13 +250,13 @@ private slots:
             if (auto* c = qobject_cast<ConsoleWindow*>(w)) console = c;
         }
         QVERIFY(console);
-        QApplication::setActiveWindow(console->window());
+        console->window()->activateWindow();
         console->log()->setFocus();
         QCoreApplication::processEvents();
         QTRY_COMPARE(window.printTarget(), MainWindow::PrintTarget::Console);
         QCOMPARE(commands.action(QStringLiteral("file.print_bin"))->text(), QStringLiteral("Print"));
         view->setFocus();
-        QApplication::setActiveWindow(view->window());
+        view->window()->activateWindow();
         view->setFocus();
         QTRY_COMPARE(window.printTarget(), MainWindow::PrintTarget::Bin);
         QCOMPARE(commands.action(QStringLiteral("file.print_bin"))->text(), QStringLiteral("Print Bin"));
@@ -265,7 +265,7 @@ private slots:
         run("tools.markers");
         MarkersWindow* markers = window.findChild<MarkersWindow*>();
         QVERIFY(markers);
-        QApplication::setActiveWindow(markers);
+        markers->activateWindow();
         markers->table()->setFocus();
         QTRY_COMPARE(window.printTarget(), MainWindow::PrintTarget::Markers);
         int printed = 0;
@@ -283,7 +283,7 @@ private slots:
         window.setMediaToolDisplayHook([](MediaToolDisplayDialog&) { return true; });
         run("tools.media_tool");
         MediaTool& tool = window.mediaTool();
-        QApplication::setActiveWindow(tool.window());
+        tool.window()->activateWindow();
         tool.table()->setFocus();
         QTRY_COMPARE(window.printTarget(), MainWindow::PrintTarget::MediaTool);
         QCOMPARE(commands.action(QStringLiteral("file.print_bin"))->text(), QStringLiteral("Print Bin"));
