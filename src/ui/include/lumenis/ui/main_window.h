@@ -8,6 +8,7 @@
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/stereo_view.h"
 #include "lumenis/media/graphic_import.h"
+#include "lumenis/media/sequence_report.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
@@ -136,6 +137,7 @@ class EffectPalette;
 class CommandPalette;
 class ConsoleWindow;
 class PrintDocument;
+class SequenceReportDialog;
 class CommandRegistry;
 class Composer;
 class KeyboardMap;
@@ -363,6 +365,33 @@ public:
     // clip lasting the Frame Import Duration.
     std::optional<model::BinItem> importPictFile(const QString& path, const QJsonObject& importSettings,
                                                  media::MediaCreation creation, BinDocument& doc, QString* error = nullptr);
+    // The Sequence Report (9.2c, main_window_report.cpp, docs/spec/sequence-report.md; p.368-371): the bin's selected
+    // sequences, or with `fromMonitor` the sequence in the active monitor; the Sequence Report dialog; each report written
+    // to a text file (the first where the Save Summary Output File As dialog says, the others beside it) and opened.
+    // Returns how many were written.
+    int sequenceReport(bool fromMonitor = false);
+    struct ReportTarget {
+        QString binId;
+        model::BinItem sequence;
+        std::optional<MonitorId> monitor; // loaded there: its marks and, in the Record monitor, the selected tracks count
+    };
+    QList<ReportTarget> sequenceReportTargets(bool fromMonitor) const;
+    media::SequenceReportInput sequenceReportInput(const ReportTarget& target) const;
+    // Apply Changes: the sequence's name and Starting TC (its Start column), stored in its bin. False for a timecode
+    // that cannot be read or a bin that cannot be changed.
+    bool applySequenceReportChanges(const ReportTarget& target, const QString& name, const QString& startTimecode);
+    // "Popup Report on AAF Import" (p.237-238): with the Import setting's OMFI/AAF option on, a report of each imported
+    // sequence among `ids` with the options there, as text or CSV, written to the project's Reports folder (ours) and
+    // opened; with Add Markers at Effect Locations, a marker at each effect the report lists. Returns the reports.
+    int popupAafReports(const QString& binId, const QStringList& ids);
+    // Writes a report to `path` and opens it; the path, or empty when it cannot be written.
+    QString writeSequenceReport(const media::SequenceReportInput& input, const media::SequenceReportOptions& options,
+                                const QString& path);
+    // Tests: replace the dialog's exec() (true generates), the Save Summary Output File As dialog (the path, empty for
+    // Cancel) and opening the report.
+    void setSequenceReportHook(std::function<bool(SequenceReportDialog&)> hook) { sequenceReportHook_ = std::move(hook); }
+    void setReportFileHook(std::function<QString(const QString& suggested)> hook) { reportFileHook_ = std::move(hook); }
+    void setOpenReportHook(std::function<void(const QString& path)> hook) { openReportHook_ = std::move(hook); }
     // Clip > Batch Import and Batch Re-import (9.2a, main_window_batch_import.cpp, docs/spec/batch-import.md; p.233-237,
     // p.1097-1098): the message box (Offline only / All clips / Cancel), then the Batch Import dialog on the active
     // bin's selected imported master clips and the clips its selected sequences use, then runBatchImport(). Returns the
@@ -1530,6 +1559,9 @@ private:
     std::unique_ptr<QPrinter> printer_;
     PrintDialogHook printDialogHook_;
     std::function<BatchImportChoice()> batchImportChoiceHook_;
+    std::function<bool(SequenceReportDialog&)> sequenceReportHook_;
+    std::function<QString(const QString&)> reportFileHook_;
+    std::function<void(const QString&)> openReportHook_;
     std::function<bool(BatchImportDialog&)> batchImportHook_;
     PrintTarget printTarget_ = PrintTarget::Bin;
     // Follows the window last used (printTarget_) and names File > Print Bin after it.

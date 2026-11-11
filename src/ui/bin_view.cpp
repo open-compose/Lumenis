@@ -2546,6 +2546,18 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             promote->setEnabled(!document_.isReadOnly());
         }
     }
+    // "From a bin, right-click a sequence and select Sequence Report" (p.369; 9.2c).
+    {
+        bool sequences = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            sequences = sequences || (item && item->kind == model::BinItemKind::Sequence);
+        }
+        if (sequences) {
+            QAction* report = menu->addAction(tr("Sequence Report"), this, [this] { emit commandRequested(QStringLiteral("bin.sequence_report")); });
+            report->setObjectName(QStringLiteral("sequenceReport"));
+        }
+    }
     // "Select one or more clips in the bin, right-click and choose Source Settings" (p.529; 8.5b1).
     {
         bool clips = false;

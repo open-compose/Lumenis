@@ -657,7 +657,17 @@
           "name": "OMFI/AAF",
           "options": [
             {"key": "omfResolution", "type": "choice", "style": "radio", "label": "Resolution", "default": "source", "page": 1197, "later": true,
-             "choices": [{"value": "source", "label": "Use the source file's resolution."}, {"value": "current", "label": "Use the current import resolution."}, {"value": "ask", "label": "Ask me to set the resolution for each file that is different from the current import resolution setting."}]}
+             "choices": [{"value": "source", "label": "Use the source file's resolution."}, {"value": "current", "label": "Use the current import resolution."}, {"value": "ask", "label": "Ask me to set the resolution for each file that is different from the current import resolution setting."}]},
+            {"key": "popupReport", "type": "bool", "label": "Popup Report on AAF Import", "default": false, "page": 237},
+            {"key": "reportFormat", "type": "choice", "style": "radio", "label": "", "default": "text", "page": 238,
+             "choices": [{"value": "text", "label": "Report As Generic Text"}, {"value": "csv", "label": "Report As Comma Separated (CSV)"}]},
+            {"key": "reportEffectSummary", "type": "bool", "label": "Include Effect Summary", "default": true, "page": 238},
+            {"key": "reportEffectMarkers", "type": "bool", "label": "Add Markers at Effect Locations", "default": false, "page": 238},
+            {"key": "reportMissingOnly", "type": "bool", "label": "Show Missing Effects ONLY", "default": false, "page": 238},
+            {"key": "reportEffectLocation", "type": "bool", "label": "Include Effect Location", "default": true, "page": 238},
+            {"key": "reportClipSummary", "type": "bool", "label": "Include Clip Summary", "default": true, "page": 238},
+            {"key": "reportSourceSummary", "type": "bool", "label": "Include Source Summary", "default": true, "page": 238},
+            {"key": "reportOfflineSources", "type": "bool", "label": "Show Offline Sources ONLY", "default": false, "page": 238}
           ]
         },
         {

@@ -4279,6 +4279,8 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
     }
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    // "When you import an AAF, a sequence report will automatically open" when the Import setting says so (p.238).
+    popupAafReports(doc->nodeId(), ids);
     return ids;
 }
 
@@ -8993,6 +8995,9 @@ void MainWindow::installPanelHandlers() {
     });
     handle("bin.commit_multicam_edits", [this] { commitMulticamEdits(); });
     handle("bin.source_settings", [this] { sourceSettings(); });
+    // Sequence Report (p.369), from a bin or a monitor.
+    handle("bin.sequence_report", [this] { sequenceReport(false); });
+    handle("composer.sequence_report", [this] { sequenceReport(true); });
     // Stereoscopic clips (8.6d1; ours, p.213 leaves making them to the Help).
     handle("bin.create_stereoscopic_clip", [this] { createStereoscopicClip(); });
     // Proxy media (8.7a, p.508).

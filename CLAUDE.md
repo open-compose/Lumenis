@@ -1023,6 +1023,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/model/matte_key_clip.*` as Title items with fill and matte precomputes, `matteKeyClipLayer` in the compositor,
   `main_window_graphics.cpp` with `MainWindow::importMatteKeyClip`/`importPictFile`, the Image tab's Alpha Channel and
   Dilate Fill; test `tst_graphics_import`), is done.
+  9.2c, the Sequence Report and the Popup Report on AAF Import (docs/spec/sequence-report.md: `src/media/sequence_report.*`
+  with `media::reportedEffects`/`sequenceReport`, `SequenceReportDialog` in `src/ui/sequence_report_dialog.*`,
+  `main_window_report.cpp` with `MainWindow::sequenceReport`/`popupAafReports` from `bin.sequence_report` and
+  `composer.sequence_report`, the Import setting's OMFI/AAF report options; test `tst_sequence_report`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

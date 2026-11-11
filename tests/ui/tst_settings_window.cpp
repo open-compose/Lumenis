@@ -112,8 +112,11 @@ private slots:
                     const bool transcriptChapter = k.kind == QLatin1String("Transcript") && o.page >= 436 && o.page <= 453;
                     // Color Management's Installed LUTs are described with the Color Encoding tab (p.539).
                     const bool colorChapter = k.kind == QLatin1String("Color Management") && o.page >= 536 && o.page <= 544;
+                    // Import's OMFI/AAF report options are described with AAF import, "Sequence Report for AAF Imports"
+                    // (p.237-238; 9.2c).
+                    const bool aafReport = k.kind == QLatin1String("Import") && o.page >= 237 && o.page <= 238;
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
-                                 exportChapter || transcriptChapter || colorChapter,
+                                 exportChapter || transcriptChapter || colorChapter || aafReport,
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;

@@ -3106,6 +3106,15 @@ QMenu* Composer::contextMenu() {
 
 QMenu* Composer::contextMenu(MonitorId monitor) {
     QMenu* menu = contextMenu();
+    // "With a sequence loaded in a monitor, right-click the monitor and select Sequence Report" (p.369; 9.2c).
+    if (const model::LoadedClip* loaded = state(monitor).current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        QAction* report = menu->addAction(tr("Sequence Report"));
+        report->setObjectName(QStringLiteral("sequenceReport"));
+        connect(report, &QAction::triggered, this, [this, monitor] {
+            setActiveMonitor(monitor);
+            emit commandRequested(QStringLiteral("composer.sequence_report"));
+        });
+    }
     // Show Captions (p.983), a choice of each monitor's.
     QAction* captions = menu->addAction(tr("Show Captions"));
     captions->setObjectName(QStringLiteral("showCaptions"));

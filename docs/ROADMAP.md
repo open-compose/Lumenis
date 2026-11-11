@@ -1598,7 +1598,9 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
   * 9.2, importing: 9.2a Batch Import and Batch Re-import (done: docs/spec/batch-import.md,
     `src/media/batch_import.*`, `batch_import_dialog.*`, `main_window_batch_import.cpp`; test `tst_batch_import`); 9.2b graphics with the Alpha options and Matte Key clips,
     PICT files (done: docs/spec/graphics-import.md, `src/media/graphic_import.*`, `src/model/matte_key_clip.*`,
-    `main_window_graphics.cpp`; test `tst_graphics_import`); 9.2c the Popup Report on AAF Import (Generic Text and CSV);
+    `main_window_graphics.cpp`; test `tst_graphics_import`); 9.2c the Popup Report on AAF Import (Generic Text and CSV), with the
+    Sequence Report it opens (done: docs/spec/sequence-report.md, `src/media/sequence_report.*`,
+    `sequence_report_dialog.*`, `main_window_report.cpp`; test `tst_sequence_report`);
     9.2d audio CDs through the OS or a provider hook (licences decided then); 9.2e multilayer Photoshop files (Sequence
     of Layers, Flattened Image, Select Layers, p.218-221) through a reader of Photoshop's layers, and the Link setting's
     Alpha Channel for linked movies with alpha (p.318, p.1204).

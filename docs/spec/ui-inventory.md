@@ -47,6 +47,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Sequence Report (docs/spec/sequence-report.md): the report's words and
+  layout, what counts as non-renderable, Mob IDs only with UID, the tape ID as a
+  number, other sequences' reports beside the first, the AAF popup's Reports
+  folder and its markers.
 * Graphics import (docs/spec/graphics-import.md): Matte Key clips as Title
   items with "<name>.fill" and ".matte" precomputes, Dilate Fill's one-pixel
   bleed, Ignore as the Alpha Channel default.

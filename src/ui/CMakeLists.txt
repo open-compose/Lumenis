@@ -15,6 +15,7 @@ add_library(lumenis_ui STATIC
     platform_check.cpp
     printing.cpp
     batch_import_dialog.cpp
+    sequence_report_dialog.cpp
     bin_view.cpp
     clip_audio_dialogs.cpp
     group_clips_dialog.cpp
@@ -77,6 +78,7 @@ add_library(lumenis_ui STATIC
     main_window_print.cpp
     main_window_batch_import.cpp
     main_window_graphics.cpp
+    main_window_report.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp
     dynamic_media_folders_window.cpp
@@ -139,6 +141,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/surround_panner.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/batch_import_dialog.h
+    include/lumenis/ui/sequence_report_dialog.h
     include/lumenis/ui/consolidate_dialog.h
     include/lumenis/ui/mixdown_dialog.h
     include/lumenis/ui/multi_mix_dialog.h

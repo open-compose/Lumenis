@@ -290,6 +290,8 @@
     {"id": "composer.update_group", "text": "Update Group"},
     {"id": "bin.commit_multicam_edits", "text": "Commit Multicam Edits"},
     {"id": "bin.source_settings", "text": "Source Settings"},
+    {"id": "bin.sequence_report", "text": "Sequence Report"},
+    {"id": "composer.sequence_report", "text": "Sequence Report"},
     {"id": "bin.create_stereoscopic_clip", "text": "Create Stereoscopic Clip"},
     {"id": "bin.create_proxies", "text": "Create Proxies"},
     {"id": "bin.copy_media", "text": "Copy Media"},
