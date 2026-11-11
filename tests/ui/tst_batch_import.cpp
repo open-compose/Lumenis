@@ -14,6 +14,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
@@ -157,6 +158,9 @@ private slots:
 
         // Harbor's media deleted: it is offline.
         const QString harborMedia = media::linkOf(harborClip)->path;
+        // The decoders let go of the files first, as Delete Media does (Windows cannot delete an open file).
+        QVERIFY(MediaFrames::instance());
+        MediaFrames::instance()->clear();
         QVERIFY(QFile::remove(harborMedia));
         QVERIFY(!QFileInfo::exists(harborMedia));
 
@@ -216,6 +220,7 @@ private slots:
 
         // The sources moved: not found (red) until Set File Location finds the first, and the second beside it.
         const QString moved = dir.filePath(QStringLiteral("Moved"));
+        MediaFrames::instance()->clear();
         QVERIFY(QDir().rename(shoot, moved));
         view->selectIds({ids.at(0), ids.at(1)});
         listed = window.batchImportClips(false);
