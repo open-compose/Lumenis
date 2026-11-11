@@ -1397,6 +1397,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 2. Broadcast output frame-accuracy is confirmed on hardware **(M)**.
 
 ### Phase 8 — Advanced workflows
+Status (2026-11-11): every step, 8.1 to 8.7, is done; 7.3c's hardware modules and the gates waiting for the owner's
+seat are outside it. The hosted macOS jobs' end-of-phase run waits for Actions minutes (`HOSTED_CI` off); the owner's
+Mac runs the macOS job on every push.
 * Multicam (group/multigroup), ScriptSync/PhraseFind equivalents, Dynamic Media
   Folders/background services, FrameFlex, stereoscopic, Symphony-level colour,
   and multi-user bin locking.
@@ -1588,7 +1591,18 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 
 ### Phase 9 — Left over stuff
 Items that fit no other area or phase, done before hardening (owner's
-decision, 2026-10-27):
+decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were done):
+  * 9.1, printing: Page Setup, Print Bin, Print Frame and Print Timeline (Qt Print Support, part of qtbase).
+  * 9.2, importing: 9.2a Batch Import and Batch Re-import; 9.2b graphics with the Alpha options and Matte Key clips,
+    PICT files; 9.2c the Popup Report on AAF Import (Generic Text and CSV); 9.2d audio CDs through the OS or a
+    provider hook (licences decided then).
+  * 9.3, AutoSync, under our own name (see the trademark check below).
+  * 9.4, the List Tool's film cut lists and optical lists.
+  * 9.5, titles saved in more than one aspect ratio for the online session.
+  * 9.6, the check for unconnected items, with its test.
+  * 9.7, error messages everywhere, with the Export Options button checked against the guide.
+  * 9.8, last, the trademark check.
+The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline
   (p.288-292, p.645);
 * Batch Import and Batch Re-import (p.1098, p.230);

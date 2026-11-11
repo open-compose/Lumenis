@@ -1012,7 +1012,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `mouseControlMoved`/`shuttleFaster` with an application event filter; test `tst_composer_display mouseJogAndShuttle`),
   is done. 8.7d3, the Frame view's represented frame (p.251: `BinFrameView::roll` for K+L/K+J, `representEnd` for
   Home/End, its own Mouse Jog/Shuttle, kept in `BinDisplay::representedFrames`; test `tst_bin_views
-  frameIdentifyingTheClip`), is done, so 8.7d and 8.7 are.
+  frameIdentifyingTheClip`), is done, so 8.7d and 8.7 are, and so are Phase 8's steps. Phase 9 is planned in
+  eight steps (ROADMAP, 2026-11-11): 9.1 printing is next.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md
