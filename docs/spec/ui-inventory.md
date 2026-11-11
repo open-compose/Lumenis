@@ -55,7 +55,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   folder and its markers.
 * Graphics import (docs/spec/graphics-import.md): Matte Key clips as Title
   items with "<name>.fill" and ".matte" precomputes, Dilate Fill's one-pixel
-  bleed, Ignore as the Alpha Channel default.
+  bleed, Ignore as the Alpha Channel default. Photoshop layers: the message
+  box's Cancel, the Select Layers dialog top first with all selected,
+  Ignore taken as Invert for layers, the sequence's Source File.
 * Batch Import (docs/spec/batch-import.md): Batch Import and Batch Re-import
   doing the same, the mixed-rate message's words, clips at another rate left
   out with a Console line, the earlier media kept as another resolution.

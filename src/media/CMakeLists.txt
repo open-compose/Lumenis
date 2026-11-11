@@ -30,6 +30,7 @@ add_library(lumenis_media STATIC
     color_effects.cpp
     intraframe.cpp
     pict.cpp
+    psd.cpp
     plasma_wipe.cpp
     auto_correct.cpp
     color_correction.cpp
@@ -76,6 +77,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/media.h
     include/lumenis/media/compositor.h
     include/lumenis/media/pict.h
+    include/lumenis/media/psd.h
     include/lumenis/media/plasma_wipe.h
     include/lumenis/media/auto_correct.h
     include/lumenis/media/color_correction.h

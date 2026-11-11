@@ -1030,6 +1030,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   9.2d, audio CDs (docs/spec/audio-cd.md: `ext::AudioCdProvider` in `src/ext/include/lumenis/ext/audio_cd.h`, `src/media/audio_cd.*`
   with ".cda" files, `isOnDisc` and the Windows CD-ROM driver provider, `MainWindow::readCdTracks`; Apply attenuation/gain
   effect on import with CD only in `importClipMedia`; test `tst_audio_cd`), is done.
+  9.2e1, multilayer Photoshop files (docs/spec/graphics-import.md: our layer reader `src/media/psd.*` with fuzz target `psd`,
+  `MainWindow::importPsdLayers` with Sequence of Layers, Flattened Image and Select Layers through
+  `askPsdLayersChoice`/`askPsdLayers`; test `tst_psd_import`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

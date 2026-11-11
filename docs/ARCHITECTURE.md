@@ -90,7 +90,7 @@ headers in `include/lumenis/<library>/`.
   `src/model/proxy.*`, Create Proxies, playback and Copy Media in `src/ui/main_window_proxy.cpp`, the windows in
   `src/ui/proxy_dialogs.*`), `copy_media.*` (Copy Media's plan and copy), `audio_cd.*` (".cda" tracks and the audio CD providers behind `ext::AudioCdProvider`, docs/spec/audio-cd.md),
   `sequence_report.*` (the Sequence Report's effects, clips and sources as text or CSV; the dialog
-  `src/ui/sequence_report_dialog.*`, `src/ui/main_window_report.cpp`, docs/spec/sequence-report.md), `graphic_import.*` (alpha on import, Matte Key clips' fill and matte, PICT files; the clips in
+  `src/ui/sequence_report_dialog.*`, `src/ui/main_window_report.cpp`, docs/spec/sequence-report.md), `psd.*` (our reader of Photoshop's layers), `graphic_import.*` (alpha on import, Matte Key clips' fill and matte, PICT files; the clips in
   `src/model/matte_key_clip.*`, the import in `src/ui/main_window_graphics.cpp`, docs/spec/graphics-import.md),
   `batch_import.*` (Batch Import's clips and source files, the dialog
   `src/ui/batch_import_dialog.*` and `src/ui/main_window_batch_import.cpp`, docs/spec/batch-import.md), `consolidate.*`, `relink.*`,

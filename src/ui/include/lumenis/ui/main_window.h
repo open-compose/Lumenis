@@ -8,6 +8,7 @@
 #include "lumenis/model/stereo_clip.h"
 #include "lumenis/model/stereo_view.h"
 #include "lumenis/media/graphic_import.h"
+#include "lumenis/media/psd.h"
 #include "lumenis/media/sequence_report.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
@@ -360,7 +361,25 @@ public:
     // into `doc`, named and placed as `clip` says (its Source File and Path). Returns the Matte Key clip.
     std::optional<model::BinItem> importMatteKeyClip(const model::BinItem& clip, const media::AlphaSource& source,
                                                      const QJsonObject& importSettings, media::MediaCreation creation,
-                                                     BinDocument& doc, QString* error = nullptr);
+                                                     BinDocument& doc, QString* error = nullptr, double level = 100.0);
+    // Multilayer Photoshop files (9.2e, main_window_graphics.cpp, docs/spec/graphics-import.md; p.218-221). The message
+    // box's choice, asked once for all the files of an import ("This selection applies to all files you select for
+    // import", p.221), and the Select Layers dialog's layers (indexes into media::importableLayers; nothing for Cancel).
+    // Tests set hooks in place of the dialogs.
+    enum class PsdLayersChoice { SequenceOfLayers, FlattenedImage, SelectLayers, Cancel };
+    void setPsdLayersChoiceHook(std::function<PsdLayersChoice(const QStringList& files)> hook) { psdChoiceHook_ = std::move(hook); }
+    void setPsdSelectLayersHook(std::function<std::optional<QList<int>>(const QString& file, const QStringList& layers)> hook) {
+        psdSelectHook_ = std::move(hook);
+    }
+    PsdLayersChoice askPsdLayersChoice(const QStringList& files);
+    std::optional<QList<int>> askPsdLayers(const QString& file, const QStringList& layers);
+    // The `chosen` layers of a Photoshop file into `doc`, bottom to top: a master clip for a background layer (no
+    // transparency), a Matte Key clip with the layer's Opacity as its Foreground Level for the others, each named after
+    // its layer; then a sequence named after the file with a video track a layer, at most kMaxPsdTracks. Returns the
+    // items' ids, the sequence's last.
+    static constexpr int kMaxPsdTracks = 24;
+    QStringList importPsdLayers(const QString& path, const media::PsdFile& file, const QList<int>& chosen,
+                                const QJsonObject& importSettings, media::MediaCreation creation, BinDocument& doc);
     // Audio CD tracks (9.2d, main_window_graphics.cpp, docs/spec/audio-cd.md): each ".cda" file read off its disc by
     // an audio CD provider (ext::AudioCdProvider) into a WAV file in `folder`, named after the ".cda" file. Returns WAV
     // path -> ".cda" path; tracks no provider reads are left out with a Console line.
@@ -1563,6 +1582,8 @@ private:
     std::unique_ptr<QPrinter> printer_;
     PrintDialogHook printDialogHook_;
     std::function<BatchImportChoice()> batchImportChoiceHook_;
+    std::function<PsdLayersChoice(const QStringList&)> psdChoiceHook_;
+    std::function<std::optional<QList<int>>(const QString&, const QStringList&)> psdSelectHook_;
     std::function<bool(SequenceReportDialog&)> sequenceReportHook_;
     std::function<QString(const QString&)> reportFileHook_;
     std::function<void(const QString&)> openReportHook_;

@@ -1602,8 +1602,9 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     Sequence Report it opens (done: docs/spec/sequence-report.md, `src/media/sequence_report.*`,
     `sequence_report_dialog.*`, `main_window_report.cpp`; test `tst_sequence_report`);
     9.2d audio CDs through the OS or a provider hook (done: docs/spec/audio-cd.md, `ext::AudioCdProvider`,
-    `src/media/audio_cd.*` with Windows' CD-ROM driver, gain on import with CD only; test `tst_audio_cd`); 9.2e multilayer Photoshop files (Sequence
-    of Layers, Flattened Image, Select Layers, p.218-221) through a reader of Photoshop's layers, and the Link setting's
+    `src/media/audio_cd.*` with Windows' CD-ROM driver, gain on import with CD only; test `tst_audio_cd`); 9.2e1 multilayer Photoshop files (Sequence
+    of Layers, Flattened Image, Select Layers, p.218-221) through our reader of Photoshop's layers (done:
+    `src/media/psd.*`, `MainWindow::importPsdLayers`, fuzz target `psd`; test `tst_psd_import`); 9.2e2 the Link setting's
     Alpha Channel for linked movies with alpha (p.318, p.1204).
   * 9.3, AutoSync, under our own name (see the trademark check below).
   * 9.4, the List Tool's film cut lists and optical lists.

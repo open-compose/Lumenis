@@ -6636,9 +6636,29 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     }
     QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines) + importFcpXml(binId, fcp) +
                           importScc(binId, captions);
+    // Multilayer Photoshop files (9.2e, p.218-221): the message box once for all of them; flattened, a file imports as
+    // any graphic (FFmpeg reads its merged picture), as does a file of one layer.
+    QList<QPair<QString, media::PsdFile>> layered;
+    PsdLayersChoice psdChoice = PsdLayersChoice::FlattenedImage;
+    for (qsizetype i = paths.size() - 1; i >= 0; --i) {
+        if (!media::isPsdFile(paths.at(i))) continue;
+        const auto psd = media::readPsdFile(paths.at(i));
+        if (psd && media::importableLayers(*psd).size() > 1) layered.prepend({paths.takeAt(i), *psd});
+    }
+    if (!layered.isEmpty()) {
+        QStringList files;
+        for (const auto& l : layered) files << l.first;
+        psdChoice = askPsdLayersChoice(files);
+        if (psdChoice == PsdLayersChoice::FlattenedImage) {
+            for (const auto& l : layered) paths << l.first;
+            layered.clear();
+        } else if (psdChoice == PsdLayersChoice::Cancel) {
+            layered.clear();
+        }
+    }
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
-    if (!doc || (paths.isEmpty() && picts.isEmpty() && cdTracks.isEmpty())) return fromAaf;
+    if (!doc || (paths.isEmpty() && picts.isEmpty() && cdTracks.isEmpty() && layered.isEmpty())) return fromAaf;
     // Audio CD tracks Windows shows as ".cda" files (9.2d): read off the disc into WAV files, imported as sound files and
     // named after their tracks.
     QTemporaryDir ripped;
@@ -6689,6 +6709,23 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
         } else {
             ConsoleLog::instance().append(tr("Import: %1").arg(error));
         }
+    }
+    for (const auto& [path, psd] : layered) {
+        QList<int> chosen;
+        const QList<media::PsdLayer> layers = media::importableLayers(psd);
+        if (psdChoice == PsdLayersChoice::SelectLayers) {
+            QStringList names;
+            for (const media::PsdLayer& l : layers) names << l.name;
+            const auto picked = askPsdLayers(path, names);
+            if (!picked) continue;
+            chosen = *picked;
+        } else {
+            for (int n = 0; n < layers.size(); ++n) chosen << n;
+        }
+        progress.setLabelText(tr("Importing %1").arg(QFileInfo(path).fileName()));
+        creation.progress = progressOn(progress);
+        ids << importPsdLayers(path, psd, chosen, importSettings, creation, *doc);
+        if (progress.wasCanceled()) break;
     }
     const media::AlphaHandling alpha = importAlphaHandling(importSettings);
     for (int i = 0; i < clips.size(); ++i) {

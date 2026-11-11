@@ -20,8 +20,10 @@ add_library(lumenis_fuzz_targets STATIC
     target_pict.cpp
     target_scc.cpp
     target_lut.cpp
-    # The PICT and LUT readers are built in here rather than linked from lumenis_media, which would bring FFmpeg.
+    target_psd.cpp
+    # The PICT, Photoshop and LUT readers are built in here rather than linked from lumenis_media, which would bring FFmpeg.
     ${PROJECT_SOURCE_DIR}/src/media/pict.cpp
+    ${PROJECT_SOURCE_DIR}/src/media/psd.cpp
     ${PROJECT_SOURCE_DIR}/src/media/lut_file.cpp
     ${PROJECT_SOURCE_DIR}/src/media/color_transform.cpp
     ${PROJECT_SOURCE_DIR}/src/media/aces.cpp
@@ -42,7 +44,7 @@ if(LUMENIS_FUZZ)
         message(FATAL_ERROR "LUMENIS_FUZZ needs Clang (libFuzzer); use the fuzz preset")
     endif()
     # One executable per target; the function each calls is fuzz<Name> in fuzz_targets.h.
-    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio" "fcpxml:fuzzFcpXml" "pict:fuzzPict" "scc:fuzzScc" "lut:fuzzLut")
+    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio" "fcpxml:fuzzFcpXml" "pict:fuzzPict" "scc:fuzzScc" "lut:fuzzLut" "psd:fuzzPsd")
         string(REPLACE ":" ";" pair "${pair}")
         list(GET pair 0 name)
         list(GET pair 1 function)

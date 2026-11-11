@@ -5,6 +5,7 @@
 #include "fuzz_targets.h"
 
 #include "lumenis/media/pict.h"
+#include "lumenis/media/psd.h"
 
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/aaf_export.h"
@@ -208,6 +209,25 @@ std::vector<Seed> seeds(const QString& target) {
         }
         add(QStringLiteral("matte.pct"), media::pictData(matte));
         add(QStringLiteral("opaque.pct"), media::pictData(matte, false));
+    } else if (target == QLatin1String("psd")) {
+        // Two layers as the import reads them: an opaque background and a half-transparent hidden square over it.
+        media::PsdFile file;
+        file.size = QSize(8, 6);
+        media::PsdLayer background;
+        background.name = QStringLiteral("Background");
+        background.rect = QRect(0, 0, 8, 6);
+        background.image = QImage(8, 6, QImage::Format_RGBA8888);
+        background.image.fill(QColor(20, 40, 200));
+        media::PsdLayer square;
+        square.name = QStringLiteral("Square");
+        square.rect = QRect(2, 1, 3, 3);
+        square.transparency = true;
+        square.visible = false;
+        square.opacity = 128;
+        square.image = QImage(3, 3, QImage::Format_RGBA8888);
+        square.image.fill(QColor(255, 255, 0, 160));
+        file.layers = {background, square};
+        add(QStringLiteral("layers.psd"), media::psdData(file));
     } else if (target == QLatin1String("lut")) {
         // A 1D and a 3D .cube, a Kodak KDM grid and an Autodesk table, each the smallest of its kind.
         add(QStringLiteral("ramp.cube"), QByteArrayLiteral("TITLE \"Ramp\"\nLUT_1D_SIZE 2\n0 0 0\n1 1 1\n"));

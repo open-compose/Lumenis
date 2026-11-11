@@ -20,6 +20,7 @@ const std::vector<Target>& targets() {
         {"pict", fuzzPict},
         {"scc", fuzzScc},
         {"lut", fuzzLut},
+        {"psd", fuzzPsd},
     };
     return all;
 }

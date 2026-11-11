@@ -18,10 +18,11 @@ hung. BUILDING.md, "Fuzzing", has the procedure and the record of runs.
 | `target_scc.cpp` | `scc`: `model::parseScc` (Scenarist Closed Caption imports, ROADMAP 7.4b), then the caption data is decoded, written again with `model::writeScc` and must read back the same. |
 | `target_lut.cpp` | `lut`: `media::readLutData` (installed LUT files, ROADMAP 8.5d1) as a `.cube` and as a `.3dl`; a LUT that reads must map colours to finite values. |
 | `target_pict.cpp` | `pict`: `media::readPictData` (Export Matte PICT's files, ROADMAP 6.9c2), then a picture that reads is written again with `media::pictData` and must read back the same. |
+| `target_psd.cpp` | `psd`: `media::readPsdData` (multilayer Photoshop files on import, ROADMAP 9.2e), then a file whose layers read is written again with `media::psdData` and its layers must read back the same. |
 | `target_otio.cpp` | `otio`: `otio::importJson`, then every sequence exported with `otio::exportJson`, which must succeed, and the export imported again, which must read. |
 | `seeds.cpp` | Small seeds made by our own writers (compound files, an AAF export and bins of a tiny bin), so no download is needed to start. |
 | `common.cpp` | The table of targets, `fuzzCheck` (a failed check aborts, which counts as a crash) and the Qt message filter. |
-| `libfuzzer_main.cpp` | libFuzzer's entry point, compiled once per target (`fuzz_cfb`, `fuzz_aaf`, `fuzz_avb`, `fuzz_avb_rewrite`, `fuzz_otio`, `fuzz_fcpxml`, `fuzz_pict`, `fuzz_scc`, `fuzz_lut`). |
+| `libfuzzer_main.cpp` | libFuzzer's entry point, compiled once per target (`fuzz_cfb`, `fuzz_aaf`, `fuzz_avb`, `fuzz_avb_rewrite`, `fuzz_otio`, `fuzz_fcpxml`, `fuzz_pict`, `fuzz_scc`, `fuzz_lut`, `fuzz_psd`). |
 | `replay_main.cpp` | `lumenis_fuzz_replay`: runs files through the targets with any compiler; ctest `fuzz_replay`. |
 | `regressions/<target>/` | Minimised inputs that crashed or hung a target before a fix. Each is also a unit test in `tests/interop/` (named below). |
 

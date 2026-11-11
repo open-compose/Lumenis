@@ -43,8 +43,11 @@ int fuzzScc(const std::uint8_t* data, std::size_t size);
 // LUT files: media::readLutData reads the bytes as a .cube and as a .3dl, and a LUT that reads maps colours to finite
 // values (target_lut.cpp).
 int fuzzLut(const std::uint8_t* data, std::size_t size);
+// Photoshop files: media::readPsdData reads the bytes, and a file whose layers read is written with media::psdData and
+// its layers must read back the same (target_psd.cpp).
+int fuzzPsd(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict", "scc", "lut"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict", "scc", "lut", "psd"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;

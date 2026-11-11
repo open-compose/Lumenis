@@ -36,10 +36,35 @@ and Scaling, Position and Crop (`matteKeyClipLayer`). The Frame view shows the f
 FFmpeg does not read PICT, so `.pic`, `.pct` and `.pict` files go through our reader (`media::readPict`, 6.9c2): with
 alpha a Matte Key clip, otherwise a master clip of the picture lasting the Frame Import Duration.
 
+## Multilayer Photoshop files (p.218-221; 9.2e1)
+
+Our own reader of the layer and mask information section (`src/media/psd.*`, after Adobe's published "Adobe Photoshop
+File Formats Specification"): PSD and PSB, RGB 8 or 16 bits a channel, grayscale and duotone ("Graphics must be RGB 8 or
+16 bits, or grayscale", p.220); raw and PackBits channels (ZIP is refused); each layer's name (the Unicode "luni" one when
+there is one), rectangle, opacity, visibility and transparency channel. Group markers ("lsct") and layers without pixels
+(adjustment layers, "Adjustment Layer ... No") are left out; grouped layers are read as layers ("Import ignores layer
+grouping and instead imports all layers, including grouped layers, as individual layers"). Masks, styles and blending
+modes are not read (p.220: not supported).
+
+A `.psd` file of more than one such layer asks, once for every such file of the import ("This selection applies to all
+files you select for import", p.221), with the message box's Sequence of Layers, Flattened Image and Select Layers, and
+Cancel (ours). Flattened Image and files of one layer import as any graphic, from the merged picture FFmpeg reads.
+Select Layers opens the Select Layers dialog for each file: its layers top first, all selected (ours).
+
+The chosen layers, bottom to top: a layer without transparency (Photoshop's background) is a master clip ("the graphic
+uses a background image, so the system creates the background image as a master clip", p.219); the others, hidden ones
+too ("Hidden layers are imported as matte keys", p.220), are Matte Key clips of the layer placed on the canvas, with its
+Opacity as the Matte Key's Foreground Level ("Importing converts Opacity to Foreground level in the Matte Key effect").
+Each clip is named after its layer. Then a sequence named after the file "with each layer on a separate video track"
+(p.219), V1 the bottom layer, at most 24 tracks: "If you select more than 24 layers, Media Composer imports the
+additional layers but does not include them in the sequence" (p.221).
+
+Ours: a layer's transparency is always its matte; the Alpha Channel option's Invert and Do not invert apply to it, and
+Ignore is taken as Invert (Photoshop's transparency is white = opaque), since p.219 says each layer imports "as an
+individual matte key with alpha channel". The sequence carries the file's Source File and Source Path.
+
 ## Not yet
 
-* Multilayer Photoshop files (p.218-221: Sequence of Layers, Flattened Image, Select Layers): they need a reader of
-  Photoshop's layers; ROADMAP 9.2e. A layered file imports flattened, as FFmpeg reads it.
 * The Link setting's Alpha Channel (p.1204) for linked movies with alpha (p.318: "they appear in your bin as a Matte Key
   effect").
 * Batch Import of Matte Key clips (docs/spec/batch-import.md).
@@ -48,4 +73,5 @@ alpha a Matte Key clip, otherwise a master clip of the picture lasting the Frame
 
 `tst_graphics_import`: the fill and matte (Invert, Do not invert, Dilate Fill), which files have alpha, a PNG as a Matte
 Key clip keyed in the Source monitor and shown by the Frame view, Ignore as a master clip, PICT files with and without
-alpha, a movie's alpha frames.
+alpha, a movie's alpha frames. `tst_psd_import`: the Photoshop reader with raw and PackBits channels and the modes it
+refuses; Sequence of Layers, Select Layers, Cancel and Flattened Image; the 24-track limit. Fuzz target `psd`.
