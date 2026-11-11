@@ -64,7 +64,7 @@ headers in `include/lumenis/<library>/`.
   `automation.*` (volume and pan keyframes), `audio_eq.*` (Audio EQ's
   bands and filters), `clip_coloring.*` (which colour a segment is drawn in,
   docs/spec/timeline-colors.md), `sync_dupes.*` (sync breaks and duplicate
-  frames, docs/spec/sync-dupes.md) and `monitor.*` (marks, positions).
+  frames, docs/spec/sync-dupes.md) and `monitor.*` (marks and audio marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands;
   `timeline_automation.cpp` its keyframe graph and editing), `clip_notes.*` (the
   Timeline Clip Notes window, docs/spec/clip-notes.md),

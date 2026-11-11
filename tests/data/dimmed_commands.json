@@ -25,12 +25,6 @@
     {"id": "edit.reduce_headframes", "reason": "HeadFrames are not made yet."},
     {"id": "clip.modify.modify_pulldown_phase", "reason": "Pulldown phase is for clips captured from NTSC tape (7.3c)."},
     {"id": "clip.refresh_sequence.stereo_correction_effects", "reason": "Stereo correction effects are not made yet (8.6d3)."},
-    {"id": "timeline.mixdown.data", "reason": "Data tracks (ancillary data mixdown) are not made yet."},
-    {"id": "edit.audio_mark_in", "reason": "Audio marks, separate from the video marks (p.411), are not made yet: next step."},
-    {"id": "edit.audio_mark_out", "reason": "Audio marks (p.411) are not made yet: next step."},
-    {"id": "move.go_to_audio_mark_in", "reason": "Audio marks (p.411) are not made yet: next step."},
-    {"id": "move.go_to_audio_mark_out", "reason": "Audio marks (p.411) are not made yet: next step."},
-    {"id": "move.go_to_previous_trim", "reason": "Only in the Move tab's picture (p.96); the guide does not say what it does: next step."},
-    {"id": "move.go_to_next_trim", "reason": "Only in the Move tab's picture (p.96); the guide does not say what it does: next step."}
+    {"id": "timeline.mixdown.data", "reason": "Data tracks (ancillary data mixdown) are not made yet."}
   ]
 }

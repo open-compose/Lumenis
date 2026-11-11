@@ -948,6 +948,21 @@ EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double*
 
 // Lengths are inclusive of both marks (OUT - IN + 1). recordStartFor() backtimes from a record OUT
 // when there is no record IN.
+EditMarks withAudioMarks(EditMarks marks, std::optional<std::int64_t> audioIn, std::optional<std::int64_t> audioOut) {
+    if (audioIn) marks.in = audioIn;
+    if (audioOut) marks.out = audioOut;
+    return marks;
+}
+
+TrackPatch patchOfKind(const TrackPatch& patch, TrackKind kind) {
+    TrackPatch out = patch;
+    for (const QString& t : patch.sourceTracks()) {
+        const auto ref = parseTrackName(t);
+        if (!ref || ref->kind != kind) out.setSourceSelected(t, false);
+    }
+    return out;
+}
+
 EditPlan planEdit(const EditMarks& source, const EditMarks& record, bool singleMark) {
     EditPlan plan;
     if (source.duration <= 0) {

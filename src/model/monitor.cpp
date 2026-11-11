@@ -203,6 +203,50 @@ bool MonitorState::goToOut() {
     return true;
 }
 
+void MonitorState::markAudioIn() {
+    if (LoadedClip* c = currentMutable()) {
+        c->audioIn = c->position;
+        if (c->audioOut && *c->audioOut < *c->audioIn) c->audioOut.reset();
+    }
+}
+
+void MonitorState::markAudioOut() {
+    if (LoadedClip* c = currentMutable()) {
+        c->audioOut = c->position;
+        if (c->audioIn && *c->audioIn > *c->audioOut) c->audioIn.reset();
+    }
+}
+
+void MonitorState::clearAudioIn() {
+    if (LoadedClip* c = currentMutable()) c->audioIn.reset();
+}
+
+void MonitorState::clearAudioOut() {
+    if (LoadedClip* c = currentMutable()) c->audioOut.reset();
+}
+
+std::optional<std::int64_t> MonitorState::audioIn() const {
+    const LoadedClip* c = current();
+    return c ? c->audioIn : std::nullopt;
+}
+
+std::optional<std::int64_t> MonitorState::audioOut() const {
+    const LoadedClip* c = current();
+    return c ? c->audioOut : std::nullopt;
+}
+
+bool MonitorState::goToAudioIn() {
+    if (!audioIn()) return false;
+    setPosition(*audioIn());
+    return true;
+}
+
+bool MonitorState::goToAudioOut() {
+    if (!audioOut()) return false;
+    setPosition(*audioOut());
+    return true;
+}
+
 std::int64_t MonitorState::markedStart() const {
     return in().value_or(0);
 }

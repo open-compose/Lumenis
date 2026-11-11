@@ -613,6 +613,13 @@ struct EditPlan {
 // the clip's start and a source IN alone to the clip's end (ours).
 EditPlan planEdit(const EditMarks& source, const EditMarks& record, bool singleMark = true);
 
+// Split edits with audio marks (p.411, "mark audio and video separately for an edit ... useful for creating an overlap
+// edit"; how edits use them is ours, docs/spec/audio-marks.md): the marks an edit's audio tracks use, each audio mark
+// in place of the mark of its kind.
+EditMarks withAudioMarks(EditMarks marks, std::optional<std::int64_t> audioIn, std::optional<std::int64_t> audioOut);
+// The patch with only the source tracks of `kind` selected (the others deselected), for one half of a split edit.
+TrackPatch patchOfKind(const TrackPatch& patch, TrackKind kind);
+
 // Sync Point editing (p.495-496, Composer > Sync Point Overwrite): the source position is lined up
 // with the record position; the duration comes from two marks, IN and OUT in one monitor (the other
 // clear), or a source IN with a record OUT, or a record IN with a source OUT. Other marks are an

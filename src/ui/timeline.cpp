@@ -830,6 +830,20 @@ void TimelineView::paintEvent(QPaintEvent*) {
             p.drawLine(QPointF(x, 3), QPointF(x - 5, 3));
             p.drawLine(QPointF(x, kRulerHeight - 2), QPointF(x - 5, kRulerHeight - 2));
         }
+        // Audio marks (p.411: "The Audio Marks appear in the Timeline"), green brackets as in the position bar.
+        p.setPen(QPen(QColor(0xff3fc55a), 1.5));
+        if (state.audioIn()) {
+            const double x = xFor(*state.audioIn());
+            p.drawLine(QPointF(x, 3), QPointF(x, kRulerHeight - 2));
+            p.drawLine(QPointF(x, 3), QPointF(x + 5, 3));
+            p.drawLine(QPointF(x, kRulerHeight - 2), QPointF(x + 5, kRulerHeight - 2));
+        }
+        if (state.audioOut()) {
+            const double x = xFor(*state.audioOut() + 1);
+            p.drawLine(QPointF(x, 3), QPointF(x, kRulerHeight - 2));
+            p.drawLine(QPointF(x, 3), QPointF(x - 5, 3));
+            p.drawLine(QPointF(x, kRulerHeight - 2), QPointF(x - 5, kRulerHeight - 2));
+        }
     }
     p.restore();
 
@@ -3296,6 +3310,8 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("play.edit_review"),
         QStringLiteral("trim.select_nearest_transition"),
         QStringLiteral("trim.select_previous_transition"),
+        QStringLiteral("move.go_to_previous_trim"),
+        QStringLiteral("move.go_to_next_trim"),
         QStringLiteral("trim.select_next_transition"),
         QStringLiteral("trim.extend"),
         QStringLiteral("trim.slip_left"),
@@ -3596,9 +3612,11 @@ bool Timeline::perform(const QString& id) {
                                                  : model::TrimSide::Both);
     } else if (id == QLatin1String("trim.select_nearest_transition")) {
         enterTrimMode(0);
-    } else if (id == QLatin1String("trim.select_previous_transition")) {
+    } else if (id == QLatin1String("trim.select_previous_transition") || id == QLatin1String("move.go_to_previous_trim")) {
+        // Go to Previous/Next Trim are in only the Move tab's picture (p.96); ours, on the watch list
+        // (docs/spec/ui-inventory.md): the trim at the previous or next transition, as A and S (p.651).
         enterTrimMode(-1);
-    } else if (id == QLatin1String("trim.select_next_transition")) {
+    } else if (id == QLatin1String("trim.select_next_transition") || id == QLatin1String("move.go_to_next_trim")) {
         enterTrimMode(1);
     } else if (id == QLatin1String("trim.extend")) {
         extend();
@@ -3710,7 +3728,30 @@ bool Timeline::edit(model::EditKind kind, bool fitToFill) {
         fail(mismatch);
         return false;
     }
-    const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_, options_.autoCreateTracks);
+    // Audio marks in either monitor (p.411) make a split edit (ours, docs/spec/audio-marks.md): the video tracks are cut
+    // in by the marks, the audio tracks by the audio marks in place of the marks of their kind.
+    const bool split = !fitToFill && !syncPoint && (source.hasAudioMarks() || record.hasAudioMarks());
+    QStringList edited;
+    if (split) {
+        const model::EditPlan audioPlan =
+            model::planEdit(model::withAudioMarks(sourceMarks, source.audioIn(), source.audioOut()),
+                            model::withAudioMarks(recordMarks, record.audioIn(), record.audioOut()), options_.singleMarkEditing);
+        if (!audioPlan.ok()) {
+            fail(audioPlan.error);
+            return false;
+        }
+        // Splice-in pushes each track on by its own length: different lengths would put the tracks out of sync.
+        if (kind == model::EditKind::SpliceIn && audioPlan.length != plan.length) {
+            fail(tr("A split Splice-in needs as many frames of audio as of video. Mark the same duration, or Overwrite."));
+            return false;
+        }
+        edited = model::applyEdit(seq, kind, plan, src->binId, src->item, model::patchOfKind(patch_, model::TrackKind::Video),
+                                  options_.autoCreateTracks);
+        edited << model::applyEdit(seq, kind, audioPlan, src->binId, src->item, model::patchOfKind(patch_, model::TrackKind::Audio),
+                                   options_.autoCreateTracks);
+    } else {
+        edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_, options_.autoCreateTracks);
+    }
     if (edited.isEmpty()) {
         fail(tr("Select a source track and a record track to edit."));
         return false;
@@ -3752,8 +3793,10 @@ bool Timeline::edit(model::EditKind kind, bool fitToFill) {
                                                : tr("Overwrite"),
            before, after);
     // The Record monitor shows the end of the new edit (p.464); the
-    // sequence's marks are used up.
+    // sequence's marks, audio marks too, are used up.
     record.clearBoth();
+    record.clearAudioIn();
+    record.clearAudioOut();
     composer_.moveTo(MonitorId::Record, plan.recordStart + plan.length);
     if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
     return true;

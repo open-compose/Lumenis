@@ -73,6 +73,7 @@ constexpr QRgb kRecordBar = 0xff2b5576;
 constexpr QRgb kPlainBar = 0xff4a4a4a;
 constexpr QRgb kMarkedSpan = 0x60ffffff;
 constexpr QRgb kPhantomMark = 0xff3a7bd2; // phantom marks, blue (p.501)
+constexpr QRgb kAudioMark = 0xff3fc55a;   // audio marks, green (the picture on p.411)
 constexpr QRgb kSplice = 0xffe6c619;     // Splice-in (yellow) and Overwrite (red)
 constexpr QRgb kOverwrite = 0xffd23a32;
 constexpr QRgb kMarker = 0xffd23a32;     // red Add Marker
@@ -586,6 +587,19 @@ void PositionBar::paintEvent(QPaintEvent*) {
         } else {
             p.drawEllipse(QRectF(xFor(m.frame) - 4, 1, 8, 6));
         }
+    }
+    // Audio marks (p.411): green brackets, as the guide's picture of the position bar shows them.
+    if (const auto audioIn = s.audioIn()) {
+        const int x = xFor(*audioIn);
+        p.setPen(QPen(QColor(kAudioMark), 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolyline(QPolygon{QPoint(x + 4, 1), QPoint(x, 1), QPoint(x, height() - 2), QPoint(x + 4, height() - 2)});
+    }
+    if (const auto audioOut = s.audioOut()) {
+        const int x = xFor(*audioOut);
+        p.setPen(QPen(QColor(kAudioMark), 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolyline(QPolygon{QPoint(x - 4, 1), QPoint(x, 1), QPoint(x, height() - 2), QPoint(x - 4, height() - 2)});
     }
     // Phantom marks (p.501): "blue mark In or Out icons in the position bars", as brackets.
     const auto [phantomIn, phantomOut] = composer_.phantomMarks(monitor_);
@@ -2826,6 +2840,10 @@ bool Composer::handles(const QString& id) {
         QStringLiteral("edit.clear_both_marks"),
         QStringLiteral("edit.go_to_in_point"),
         QStringLiteral("edit.go_to_out_point"),
+        QStringLiteral("edit.audio_mark_in"),
+        QStringLiteral("edit.audio_mark_out"),
+        QStringLiteral("move.go_to_audio_mark_in"),
+        QStringLiteral("move.go_to_audio_mark_out"),
         QStringLiteral("other.gang"),
         QStringLiteral("composer.show_single_dual_monitor"),
         QStringLiteral("cc.dual_split"),
@@ -2975,12 +2993,27 @@ bool Composer::perform(const QString& id) {
                 s.markOut();
                 s.setPosition(at);
             }
+        } else if (id.startsWith(QLatin1String("edit.clear_")) && (QApplication::keyboardModifiers() & Qt::ShiftModifier)) {
+            // "To remove audio IN and OUT points: Shift+click the Clear IN Mark, Clear OUT Mark, or Clear Both Marks
+            // button" (p.411).
+            if (id != QLatin1String("edit.clear_out_mark")) s.clearAudioIn();
+            if (id != QLatin1String("edit.clear_in_mark")) s.clearAudioOut();
         } else if (id == QLatin1String("edit.clear_in_mark")) {
             s.clearIn();
         } else if (id == QLatin1String("edit.clear_out_mark")) {
             s.clearOut();
         } else if (id == QLatin1String("edit.clear_both_marks")) {
             s.clearBoth();
+        } else if (id == QLatin1String("edit.audio_mark_in")) {
+            // The Audio Mark buttons (p.411), from the Edit tab.
+            s.markAudioIn();
+        } else if (id == QLatin1String("edit.audio_mark_out")) {
+            s.markAudioOut();
+        } else if (id == QLatin1String("move.go_to_audio_mark_in")) {
+            // Go to Audio Mark IN/OUT (the Move tab's picture, p.96), as Go to IN and Go to OUT.
+            if (s.audioIn()) moveTo(m, *s.audioIn());
+        } else if (id == QLatin1String("move.go_to_audio_mark_out")) {
+            if (s.audioOut()) moveTo(m, *s.audioOut());
         } else if (id == QLatin1String("edit.go_to_in_point")) {
             if (s.in()) moveTo(m, *s.in());
         } else if (id == QLatin1String("edit.go_to_out_point")) {

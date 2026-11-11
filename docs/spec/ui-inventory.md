@@ -47,6 +47,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Audio marks (docs/spec/audio-marks.md): an edit with audio marks is a split edit, each audio mark taking the place
+  of its kind's mark for the audio tracks; a split Splice-in of different lengths refused; Go to Audio Mark IN/OUT
+  as Go to IN/OUT; Go to Previous/Next Trim (only pictured, p.96) as Select Previous/Next Transition (A and S, p.651).
 * Audio CDs (docs/spec/audio-cd.md): which files count as on a CD for CD only,
   the read tracks' clip names.
 * Sequence Report (docs/spec/sequence-report.md): the report's words and
@@ -3320,7 +3323,8 @@ Names the guides give one item (the command keeps the first; ours where none):
 | `clip.split_all_tracks`, `clip.audio.split_all_tracks`, `timeline.split_all_tracks` | "Split All Tracks" in three menus: one command. |
 | `clip.group_clips`, `clip.refresh_sequence.group_clips` | Clip > Group Clips makes groups; Clip > Refresh Sequence > Group Clips refreshes group edits: two items with one name. |
 | `bin.sequence_report`, `composer.sequence_report` | "Sequence Report" from the bin (its selected sequences) and the Record monitor (its sequence): one report. |
-| `move.go_to_previous_trim`, `move.go_to_next_trim`, `move.go_to_audio_mark_in`, `move.go_to_audio_mark_out` | Only in the Move tab's picture (p.96); dimmed (dimmed_commands.json). |
+| `move.go_to_previous_trim`, `move.go_to_next_trim` | Only in the Move tab's picture (p.96); ours, as `trim.select_previous_transition` and `trim.select_next_transition` (Select Previous/Next Transition, A and S, p.651). |
+| `move.go_to_audio_mark_in`, `move.go_to_audio_mark_out` | Only in the Move tab's picture (p.96): Go to Audio Mark IN/OUT, as Go to IN/OUT for the audio marks (9.6b). |
 
 ## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

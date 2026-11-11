@@ -37,6 +37,9 @@ struct LoadedClip {
     std::int64_t position = 0;
     std::optional<std::int64_t> in;
     std::optional<std::int64_t> out;
+    // Audio marks (p.411), "to mark audio and video separately for an edit": inclusive frames, nullopt when not set.
+    std::optional<std::int64_t> audioIn;
+    std::optional<std::int64_t> audioOut;
 };
 
 // The state of one monitor (Source, Record or pop-up): what is loaded, what
@@ -100,6 +103,18 @@ public:
     std::optional<std::int64_t> out() const;
     bool goToIn();
     bool goToOut();
+    // Audio marks (p.411; docs/spec/audio-marks.md): marked as the IN and OUT are, kept apart from them; Shift+Clear
+    // removes them. An edit with audio marks takes them for its audio tracks (lumenis/model/sequence.h,
+    // splitEditMarks).
+    void markAudioIn();
+    void markAudioOut();
+    void clearAudioIn();
+    void clearAudioOut();
+    std::optional<std::int64_t> audioIn() const;
+    std::optional<std::int64_t> audioOut() const;
+    bool hasAudioMarks() const { return audioIn() || audioOut(); }
+    bool goToAudioIn();
+    bool goToAudioOut();
     // Marked material, or the whole clip where a mark is missing.
     std::int64_t markedStart() const;
     std::int64_t markedEnd() const; // inclusive

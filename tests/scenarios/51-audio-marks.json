@@ -1,0 +1,61 @@
+[
+  {
+    "name": "a record audio mark IN before the IN makes a split edit: the audio comes in five frames before the picture",
+    "guide": "p.411, p.661",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]], "A1": [["A", 0, 60]], "A2": [["A", 0, 60]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29},
+      {"mark": "record", "in": 20},
+      {"activate": "record"},
+      {"position": "record", "frame": 15},
+      {"command": "edit.audio_mark_in"},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["C", 10, 20], ["A", 40, 20]],
+      "A1": [["A", 0, 15], ["C", 10, 20], ["A", 35, 25]],
+      "A2": [["A", 0, 15], ["C", 10, 20], ["A", 35, 25]]}
+  },
+  {
+    "name": "source audio marks pick other audio than the picture; Go to Audio Mark IN finds the mark",
+    "guide": "p.96, p.411",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]], "A1": [["A", 0, 60]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"source_tracks": ["V1", "A1"]},
+      {"mark": "source", "in": 10, "out": 29},
+      {"activate": "source"},
+      {"position": "source", "frame": 40},
+      {"command": "edit.audio_mark_in"},
+      {"position": "source", "frame": 59},
+      {"command": "edit.audio_mark_out"},
+      {"position": "source", "frame": 0},
+      {"command": "move.go_to_audio_mark_in"},
+      {"mark": "record", "in": 20},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["C", 10, 20], ["A", 40, 20]],
+      "A1": [["A", 0, 20], ["C", 40, 20], ["A", 40, 20]]}
+  },
+  {
+    "name": "a split Splice-in with more audio than picture is refused: the tracks would go out of sync",
+    "guide": "p.411",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]], "A1": [["A", 0, 60]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"source_tracks": ["V1", "A1"]},
+      {"mark": "source", "in": 10, "out": 29},
+      {"activate": "source"},
+      {"position": "source", "frame": 39},
+      {"command": "edit.audio_mark_out"},
+      {"mark": "record", "in": 20},
+      {"command": "edit.splice_in", "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 60]], "A1": [["A", 0, 60]]}
+  }
+]

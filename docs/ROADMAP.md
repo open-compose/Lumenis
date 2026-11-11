@@ -1618,11 +1618,12 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
   * 9.5, titles saved in more than one aspect ratio for the online session (done: the Save Title dialog's aspect ratios,
     `ClassicTitle::aspect` cut in `media::renderClassicTitleMedia`, `MainWindow::saveClassicTitle`; test
     `tst_title_clips aspectRatios`).
-  * 9.6, the check for unconnected items, with its test, in two parts: 9.6a, the check (done: docs/spec/ui-inventory.md
+  * 9.6, the check for unconnected items, with its test, in two parts (done): 9.6a, the check (done: docs/spec/ui-inventory.md
     "Unconnected items", test `tst_command_wiring` with `tests/data/dimmed_commands.json`; fixed MultiCamera Mode,
     Digital Audio Scrub, menu keys in the Timeline; made To the Left, To the Right, Select In/Out and Make Subclip,
     scenario `50-select-left-right.json`); 9.6b, the Edit tab's Audio Mark IN/OUT with Go to Audio Mark IN/OUT (p.411)
-    and Go to Previous/Next Trim, dimmed until then.
+    and Go to Previous/Next Trim (done: docs/spec/audio-marks.md, `MonitorState::markAudioIn`..., split edits in
+    `Timeline::edit` through `model::withAudioMarks`/`patchOfKind`; scenario `51-audio-marks.json`).
   * 9.7, error messages everywhere, with the Export Options button checked against the guide.
   * 9.8, last, the trademark check.
 The items:
