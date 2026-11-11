@@ -1461,6 +1461,41 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     });
     // Bin > Add Bin to Favorites (p.293).
     handle("bin.add_bin_to_favorites", [bins] { bins->addToFavorites(bins->activeDocument()); });
+    // The Make Subclip button (Edit tab, p.408): "Media Composer creates the subclip and places it in the active bin"
+    // from the clip marked in the Source monitor; with Alt "a dialog box ... lets you select the destination bin".
+    // Without an active bin, the clip's own bin (ours).
+    handle("edit.make_subclip", [this, bins] {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+        if (!loaded || (loaded->item.kind != model::BinItemKind::MasterClip && loaded->item.kind != model::BinItemKind::Subclip) ||
+            model::isSyncedSubclip(loaded->item)) {
+            QMessageBox::information(this, tr("Make Subclip"), tr("Load a master clip or subclip into the Source monitor and mark it first."));
+            return;
+        }
+        auto writable = [](const BinDocument* d) { return d && !d->isReadOnly(); };
+        QList<BinDocument*> targets;
+        for (BinDocument* d : bins->openDocuments()) {
+            if (writable(d)) targets << d;
+        }
+        BinDocument* target = bins->activeDocument();
+        if (QApplication::keyboardModifiers() & Qt::AltModifier) {
+            QStringList names;
+            for (BinDocument* d : targets) names << d->name();
+            bool ok = false;
+            const QString chosen = QInputDialog::getItem(this, tr("Make Subclip"), tr("Destination bin:"), names, 0, false, &ok);
+            if (!ok) return;
+            target = targets.value(static_cast<int>(names.indexOf(chosen)));
+        }
+        if (!writable(target)) target = bins->document(loaded->binId);
+        if (!writable(target)) {
+            QMessageBox::information(this, tr("Make Subclip"), tr("Open a bin for the subclip first."));
+            return;
+        }
+        const model::MonitorState& s = composer_->state(MonitorId::Source);
+        const auto sub = media::makeSubclip(target->bin(), loaded->item, s.markedStart(), s.markedEnd() + 1, QDateTime::currentDateTimeUtc());
+        if (!sub) return;
+        target->addItem(*sub);
+        if (BinView* shown = bins->viewFor(target)) shown->selectIds({sub->id});
+    });
     // Tools > Project (p.243).
     handle("tools.project", [this] {
         Panel* project = panels_->panel(QStringLiteral("Project"));
@@ -9075,6 +9110,8 @@ void MainWindow::installPanelHandlers() {
     // The Digital Audio Scrub button (Play tab, p.676) turns scrubbing on
     // and off.
     commands_.action(QStringLiteral("play.digital_audio_scrub"))->setCheckable(true);
+    // The check mark is the state; the handler is what enables the button (9.6: it stayed dimmed without one).
+    handle("play.digital_audio_scrub", [] {});
     // Composer > Render On-the-Fly (FX Guide p.56-57): on, a stationary frame shows its effects;
     // off, "as if no effects are applied to it". On until turned off (ours: the guide gives no
     // default). Playback is not affected (p.57).
@@ -9115,10 +9152,12 @@ void MainWindow::installPanelHandlers() {
     handle("mcam.quad_split", [this] { composer_->setGroupSplit(4); });
     handle("mcam.nine_split", [this] { composer_->setGroupSplit(9); });
     handle("mcam.swap_cam_bank", [this] { swapBank(); });
-    // Composer > MultiCamera Mode (p.1129), on and off.
+    // Composer > MultiCamera Mode (p.1129), on and off. The check mark follows the mode; the handler is what enables
+    // the menu item (9.6: without it the item stayed dimmed, though the mode worked).
     if (QAction* mode = commands_.action(QStringLiteral("composer.multicamera_mode"))) {
         mode->setCheckable(true);
         connect(mode, &QAction::toggled, this, [this](bool on) { composer_->setMultiCameraMode(on); });
+        handle("composer.multicamera_mode", [this, mode] { composer_->setMultiCameraMode(mode->isChecked()); });
     }
     composer_->setPictureClickHandler([this](MonitorId monitor, QPointF fraction, Qt::MouseButton button) {
         return splitClicked(monitor, fraction, button);

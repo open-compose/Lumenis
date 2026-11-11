@@ -105,6 +105,10 @@ lumenis_add_test(tst_sequence_report SOURCES tst_sequence_report.cpp LIBS ${ui_t
 lumenis_add_test(tst_audio_cd SOURCES tst_audio_cd.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_psd_import SOURCES tst_psd_import.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_sync_clips_ui SOURCES tst_sync_clips_ui.cpp LIBS ${ui_test_libs} lumenis::media)
+# 9.6: every command, key and button reaches something, but those dimmed on purpose.
+lumenis_add_test(tst_command_wiring SOURCES tst_command_wiring.cpp LIBS ${ui_test_libs})
+target_compile_definitions(tst_command_wiring PRIVATE
+    DIMMED_COMMANDS="${PROJECT_SOURCE_DIR}/tests/data/dimmed_commands.json")
 lumenis_add_test(tst_cut_list_ui SOURCES tst_cut_list_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_send_to SOURCES tst_send_to.cpp LIBS ${ui_test_libs} lumenis::media)
 # Render Effect and Clear Renders in the application (docs/spec/rendering.md).

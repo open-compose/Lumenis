@@ -1046,7 +1046,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   lists and reels by Reel #; the List Tool's Change List mode, `setOldSequence`/`setChangeSequences` and
   `loadOldRequested`), is done, so 9.4 is. 9.5, titles saved in more than one aspect ratio (the Save Title dialog's 16:9
   and 4:3 through `SaveRequest::aspects`, `ClassicTitle::aspect` cut to the 4:3 centre in `media::renderClassicTitleMedia`,
-  `MainWindow::saveClassicTitle` saving one clip per aspect; test `tst_title_clips aspectRatios`), is done.
+  `MainWindow::saveClassicTitle` saving one clip per aspect; test `tst_title_clips aspectRatios`), is done. 9.6a, the check for unconnected items (docs/spec/ui-inventory.md
+  "Unconnected items": test `tst_command_wiring` fails for a command, key or button that reaches nothing unless it is in
+  `tests/data/dimmed_commands.json` with its reason; fixed MultiCamera Mode, Digital Audio Scrub and menu keys in the
+  Timeline; To the Left/Right, Select In/Out in `Timeline::perform`, Make Subclip; scenario `50-select-left-right.json`),
+  is done. Remove a command from dimmed_commands.json when it gets a handler.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

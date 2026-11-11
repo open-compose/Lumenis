@@ -33,7 +33,9 @@ headers in `include/lumenis/<library>/`.
   `MainWindow` (`src/ui/main_window.cpp`, the `handle("id", ...)` blocks)
   or by the panel that owns the command (Timeline, Composer, bins).
   A command starts disabled until a handler is attached; after changing
-  menus or commands run `scripts/make-checklist.py`.
+  menus or commands run `scripts/make-checklist.py`. `tst_command_wiring`
+  fails for a command, key or button with no handler unless it is listed
+  in `tests/data/dimmed_commands.json` with its reason (9.6).
 * **A setting.** Options are declared in `src/ui/resources/settings.json`
   (kind, scope, tabs, options with type, default and guide page; `"later":
   true` shows one dimmed). The Settings window and its dialogs are built

@@ -1,0 +1,52 @@
+[
+  {
+    "name": "Select Left (To the Left) selects the segment under the position and all to its left on the enabled tracks, with Extract/Splice-in on: Delete extracts them",
+    "guide": "p.615-616",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 25},
+      {"command": "edit.to_the_left"},
+      {"command": "edit.delete"}
+    ],
+    "expect": {"V1": [["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}
+  },
+  {
+    "name": "Select Right (To the Right) selects the segment under the position and all to its right",
+    "guide": "p.615-616",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1", "A1"]},
+      {"position": "record", "frame": 25},
+      {"command": "edit.to_the_right"},
+      {"command": "edit.delete"}
+    ],
+    "expect": {"V1": [["A", 0, 20]], "A1": [["A", 0, 20]]}
+  },
+  {
+    "name": "Select In/Out selects the segments intersecting the In and Out marks",
+    "guide": "p.615-616",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"mark": "record", "in": 15, "out": 25},
+      {"command": "edit.select_in_out"},
+      {"command": "edit.delete"}
+    ],
+    "expect": {"V1": [["C", 0, 20]]}
+  },
+  {
+    "name": "Select In/Out without both marks selects the segments under the position",
+    "guide": "p.616",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"position": "record", "frame": 45},
+      {"command": "edit.select_in_out"},
+      {"command": "edit.delete"}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["B", 0, 20]]}
+  }
+]

@@ -3286,5 +3286,41 @@ Details: docs/spec/bin-locking.md.
 * Tools > Background Services (p.376-377) with its dialog, and the Timeline's progress indicator with its right-click
   menu (p.375-376), 8.4a. Tools > Dynamic Media Folders (p.372) with 8.4b-8.4c.
 
+## 20h. Unconnected items (9.6)
+
+The owner's request (2026-11-05): no command, button, menu item or key may reach nothing. Checked by
+`tst_command_wiring` once a project is open:
+
+* every command declared in `src/ui/resources/commands.json` has a handler, else it must be listed in
+  `tests/data/dimmed_commands.json` with the reason it is dimmed on purpose (hardware and capture, Avid's
+  shared-storage and asset management services, features not made yet); a listed command that has a handler, or is
+  not declared, fails too, so the list stays current;
+* every key of the Keyboard setting (`keyboard.json`) and every mapped button (the Composer's, the Timeline's, the Tool
+  palette's and the Command Palette's) names a declared command that reaches something;
+* a key mapped to a menu command works in the Timeline as in the Composer.
+
+menus.json's and command_palette.json's ids are checked against the declarations when they load (menu_builder.cpp,
+command_palette.cpp). Found and fixed by the check:
+
+* Composer > MultiCamera Mode (p.1129) and the Digital Audio Scrub button (p.676) were checkable actions whose
+  `toggled` did the work but had no handler, so they stayed dimmed;
+* in the Timeline, a key mapped to a command that is neither the Timeline's nor the Composer's did nothing;
+* the Edit tab's To the Left, To the Right and Select In/Out (p.615-616) and Make Subclip (p.408) had no handler.
+
+Names the guides give one item (the command keeps the first; ours where none):
+
+| Command | Names in the guides |
+| --- | --- |
+| `edit.toggle_source_record` (Esc) | "Toggle Source/Record button in the Timeline toolbar" (p.480); "Toggle Source/Record in Timeline button" (p.603, p.607, p.1119); "Toggle Source/Record button" (Capture tool, p.145, another button). Effect mode's Source/Record Mode button (`edit.source_record_mode`, FX Guide) is a different item. |
+| `edit.to_the_left`, `edit.to_the_right` | "To the Left", "To the Right" in the Edit tab's picture (p.100) and the Timeline's right-click Select menu (p.614); "Select Left", "Select Right" buttons in the text (p.616). The menu takes "the clips to the left of the current position indicator" (p.614); the buttons also take the segment under it, and filler unless Alt is held (p.616). |
+| `edit.select_in_out` | "Select In/Out" (p.100, p.616). |
+| `clip.autosync` | The guide's AutoSync (p.223, p.497), ours "Sync Clips" (ROADMAP 9.8; docs/spec/sync-clips.md). |
+| `file.input.source_browser`, `tools.source_browser` | "Source Browser" in File > Input and Tools: one window, two menu places. |
+| `bin.autosequence`, `clip.autosequence` | "AutoSequence" in the Bin and Clip menus: one command. |
+| `clip.split_all_tracks`, `clip.audio.split_all_tracks`, `timeline.split_all_tracks` | "Split All Tracks" in three menus: one command. |
+| `clip.group_clips`, `clip.refresh_sequence.group_clips` | Clip > Group Clips makes groups; Clip > Refresh Sequence > Group Clips refreshes group edits: two items with one name. |
+| `bin.sequence_report`, `composer.sequence_report` | "Sequence Report" from the bin (its selected sequences) and the Record monitor (its sequence): one report. |
+| `move.go_to_previous_trim`, `move.go_to_next_trim`, `move.go_to_audio_mark_in`, `move.go_to_audio_mark_out` | Only in the Move tab's picture (p.96); dimmed (dimmed_commands.json). |
+
 ## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

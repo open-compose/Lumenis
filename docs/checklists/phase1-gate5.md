@@ -229,7 +229,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 |---|---|---|---|---|---|---|
 | Full Screen Playback | Ctrl+Shift+F | p.391 | works | ☐ | | |
 | Load Filler |  | p.99 | works | ☐ | | |
-| MultiCamera Mode |  | p.1129 | *later* | ☐ | | |
+| MultiCamera Mode |  | p.1129 | works | ☐ | | |
 | Remote Play |  | p.204 | *later* | ☐ | | |
 | Show Single/Dual Monitor |  | p.381 | works | ☐ | | |
 | Sync Point Overwrite |  | p.496 | works | ☐ | | |
@@ -334,6 +334,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 230 menu commands, 204 of them working with a project open; the
+* 230 menu commands, 205 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

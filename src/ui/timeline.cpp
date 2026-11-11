@@ -3232,6 +3232,9 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("edit.redo"),
         QStringLiteral("edit.undo_redo_list"),
         QStringLiteral("edit.select_all_tracks"),
+        QStringLiteral("edit.to_the_left"),
+        QStringLiteral("edit.to_the_right"),
+        QStringLiteral("edit.select_in_out"),
         QStringLiteral("timeline.new.video_track"),
         QStringLiteral("timeline.new.audio_track.mono"),
         QStringLiteral("timeline.new.audio_track.stereo"),
@@ -3393,6 +3396,37 @@ bool Timeline::perform(const QString& id) {
         restore(step->binId, undo ? step->before : step->after);
     } else if (id == QLatin1String("edit.undo_redo_list")) {
         undoRedoMenu()->popup(QCursor::pos());
+    } else if (id == QLatin1String("edit.to_the_left") || id == QLatin1String("edit.to_the_right") ||
+               id == QLatin1String("edit.select_in_out")) {
+        // The Edit tab's multiple segment selection buttons, "Select Left", "Select Right" and "Select In/Out" in the
+        // text (p.615-616; "To the Left", "To the Right" in the picture, p.100): on the enabled tracks, the segment
+        // under the position and all to its left or right, or those intersecting the In and Out marks ("If the
+        // Timeline has only an In mark or an Out mark, or no In and Out marks, the Select In/Out button selects all
+        // segments under the position bar"). "Holding the Alt key ... will exclude filler"; Shift adds to the
+        // selection; "Media Composer activates the Segment Extract/Splice-in button if you have not selected one of
+        // the segment buttons".
+        const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+        if (!rec) return false;
+        const std::int64_t pos = composer_.state(MonitorId::Record).position();
+        const Qt::KeyboardModifiers mods = QApplication::keyboardModifiers();
+        const bool marks = rec->in && rec->out;
+        QList<model::SegmentRef> picked = (mods & Qt::ShiftModifier) ? selection_ : QList<model::SegmentRef>{};
+        for (const model::Track& t : shown_.tracks()) {
+            if (!patch_.isRecordSelected(t.name())) continue;
+            std::int64_t at = 0;
+            for (const model::Segment& seg : t.segments) {
+                const std::int64_t end = at + seg.length;
+                const bool take = id == QLatin1String("edit.to_the_left")    ? at <= pos
+                                  : id == QLatin1String("edit.to_the_right") ? end > pos
+                                  : marks                                     ? at <= *rec->out && end > *rec->in
+                                                                              : at <= pos && end > pos;
+                const model::SegmentRef ref{t.name(), at};
+                if (take && !(seg.isFiller() && (mods & Qt::AltModifier)) && !picked.contains(ref)) picked << ref;
+                at = end;
+            }
+        }
+        if (!liftTool_ && !spliceTool_) setSegmentTool(model::EditKind::SpliceIn, true);
+        setSelection(picked);
     } else if (id == QLatin1String("edit.select_all_tracks")) {
         // Every track on both sides (p.627).
         for (const QString& t : patch_.sourceTracks()) patch_.setSourceSelected(t, true);
@@ -6065,6 +6099,10 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
                 // Moving and marking act on the monitor the Timeline shows.
                 composer_.setActiveMonitor(shownMonitor());
                 composer_.perform(id);
+            } else {
+                // Any other command mapped to the key (a menu command, from the Keyboard setting) runs as from its
+                // menu, as in the Composer (9.6: these keys did nothing in the Timeline).
+                emit commandRequested(id);
             }
             return;
         }
