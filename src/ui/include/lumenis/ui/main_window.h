@@ -21,6 +21,7 @@
 #include "lumenis/model/transcript_view.h"
 #include "lumenis/model/script.h"
 #include "lumenis/model/script_sync.h"
+#include "lumenis/ui/batch_import_dialog.h"
 #include "lumenis/ui/background_services.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
@@ -342,6 +343,30 @@ public:
     // AAF files among the paths go to importAaf(), shot logs to importShotLogs(), OpenTimelineIO
     // files to importOtio(), FCP 7 XML files to importFcpXml(). Returns the new items' ids.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
+    // The Import setting's options that shape an import (p.1196-1199), as importFiles() keeps them with each clip
+    // (BinItem::sourceSettings "import") for Batch Import.
+    QJsonObject importSettingsSnapshot() const;
+    // A linked clip imported as new managed media with `importSettings` (a snapshot as above): still pictures' length,
+    // the Import setting's Audio tab, center pan. The result carries the snapshot. Nothing, with `error`, when it fails.
+    std::optional<model::BinItem> importClipMedia(model::BinItem clip, const QJsonObject& importSettings,
+                                                  media::MediaCreation creation, QString* error = nullptr);
+    // Clip > Batch Import and Batch Re-import (9.2a, main_window_batch_import.cpp, docs/spec/batch-import.md; p.233-237,
+    // p.1097-1098): the message box (Offline only / All clips / Cancel), then the Batch Import dialog on the active
+    // bin's selected imported master clips and the clips its selected sequences use, then runBatchImport(). Returns the
+    // clips imported again.
+    int batchImport();
+    // The clips the Batch Import dialog lists for the active bin's selection: only those missing their media with
+    // `offlineOnly`. Mixed-rate sequences are left out with a message, clips not at the project's rate with a Console
+    // line.
+    QList<BatchImportDialog::Entry> batchImportClips(bool offlineOnly);
+    // Imports the dialog's found clips again at its resolution and drives, with each clip's last Import settings or the
+    // current ones (Override clip settings with current settings). The new media take the clip's MobID; the clip
+    // links to them. Returns how many.
+    int runBatchImport(const BatchImportDialog& dialog);
+    enum class BatchImportChoice { OfflineOnly, AllClips, Cancel };
+    // Tests: replace the message box and the dialog's exec() (true imports).
+    void setBatchImportChoiceHook(std::function<BatchImportChoice()> hook) { batchImportChoiceHook_ = std::move(hook); }
+    void setBatchImportHook(std::function<bool(BatchImportDialog&)> hook) { batchImportHook_ = std::move(hook); }
     // AAF files imported into a bin (p.547): their clips and sequences,
     // master clips with media on the drives online by MobID.
     // Returns the new items' ids; failures and warnings go to the Console.
@@ -1491,6 +1516,8 @@ private:
     // Printing (main_window_print.cpp).
     std::unique_ptr<QPrinter> printer_;
     PrintDialogHook printDialogHook_;
+    std::function<BatchImportChoice()> batchImportChoiceHook_;
+    std::function<bool(BatchImportDialog&)> batchImportHook_;
     PrintTarget printTarget_ = PrintTarget::Bin;
     // Follows the window last used (printTarget_) and names File > Print Bin after it.
     void followPrintTarget(QWidget* focused);

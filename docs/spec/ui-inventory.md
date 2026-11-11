@@ -47,6 +47,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Batch Import (docs/spec/batch-import.md): Batch Import and Batch Re-import
+  doing the same, the mixed-rate message's words, clips at another rate left
+  out with a Console line, the earlier media kept as another resolution.
 * Printing (docs/spec/printing.md): the printouts' layout (tables, four frames
   to a row, the captions under Print Frame and Print Timeline), Page Setup kept
   only for the session, File > Print Bin reading "Print" while the Markers

@@ -1016,6 +1016,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   eight steps (ROADMAP, 2026-11-11). 9.1, printing (docs/spec/printing.md: `src/ui/printing.*` with `PrintDocument`,
   `main_window_print.cpp` with Page Setup, Print Bin, Print Frame, Print Timeline, File > Print for the Markers window and
   the Console, the Media Tool's table, `MainWindow::setPrintDialogHook`; Qt Print Support; test `tst_printing`), is done.
+  9.2a, Batch Import and Batch Re-import (docs/spec/batch-import.md: `src/media/batch_import.*`, `BatchImportDialog` in
+  `src/ui/batch_import_dialog.*`, `main_window_batch_import.cpp` with `MainWindow::batchImport`/`runBatchImport`, the
+  Import settings kept with each clip through `importSettingsSnapshot`/`importClipMedia`; test `tst_batch_import`), is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

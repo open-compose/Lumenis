@@ -1595,7 +1595,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
   * 9.1, printing: Page Setup, Print Bin, Print Frame and Print Timeline (Qt Print Support, part of qtbase). Done
     (docs/spec/printing.md: `src/ui/printing.*`, `main_window_print.cpp`; File > Print for the Markers window and the
     Console, p.424, and the Media Tool's table, p.345; test `tst_printing`).
-  * 9.2, importing: 9.2a Batch Import and Batch Re-import; 9.2b graphics with the Alpha options and Matte Key clips,
+  * 9.2, importing: 9.2a Batch Import and Batch Re-import (done: docs/spec/batch-import.md,
+    `src/media/batch_import.*`, `batch_import_dialog.*`, `main_window_batch_import.cpp`; test `tst_batch_import`); 9.2b graphics with the Alpha options and Matte Key clips,
     PICT files; 9.2c the Popup Report on AAF Import (Generic Text and CSV); 9.2d audio CDs through the OS or a
     provider hook (licences decided then).
   * 9.3, AutoSync, under our own name (see the trademark check below).

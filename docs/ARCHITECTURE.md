@@ -88,7 +88,8 @@ headers in `include/lumenis/<library>/`.
   `src/model/stereo_clip.*`, the views and S3D Settings in `src/model/stereo_view.*`, docs/spec/stereoscopic.md, applied by
   `MainWindow::adaptedFrame`), `proxy_media.*` (proxy media, docs/spec/proxy-media.md; a clip's proxies in
   `src/model/proxy.*`, Create Proxies, playback and Copy Media in `src/ui/main_window_proxy.cpp`, the windows in
-  `src/ui/proxy_dialogs.*`), `copy_media.*` (Copy Media's plan and copy), `consolidate.*`, `relink.*`,
+  `src/ui/proxy_dialogs.*`), `copy_media.*` (Copy Media's plan and copy), `batch_import.*` (Batch Import's clips and source files, the dialog
+  `src/ui/batch_import_dialog.*` and `src/ui/main_window_batch_import.cpp`, docs/spec/batch-import.md), `consolidate.*`, `relink.*`,
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,

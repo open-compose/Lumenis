@@ -161,8 +161,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | AutoSequence |  | p.499 | works | ☐ | | |
 | AutoSync |  | p.223 | *later* | ☐ | | |
 | Batch Capture |  | p.179 | *later* | ☐ | | |
-| Batch Import |  | p.1098 | *later* | ☐ | | |
-| Batch Re-import |  | p.230 | *later* | ☐ | | |
+| Batch Import |  | p.1098 | works | ☐ | | |
+| Batch Re-import |  | p.230 | works | ☐ | | |
 | Consolidate/Transcode |  | p.350 | works | ☐ | | |
 | Decompose |  | p.185 | *later* | ☐ | | |
 | Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
@@ -334,6 +334,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 230 menu commands, 201 of them working with a project open; the
+* 230 menu commands, 203 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

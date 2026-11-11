@@ -64,6 +64,7 @@ add_library(lumenis_media STATIC
     waveform_sync.cpp
     playback.cpp
     managed.cpp
+    batch_import.cpp
     consolidate.cpp
     relink.cpp
     mixdown.cpp

@@ -6544,6 +6544,63 @@ std::function<std::optional<model::BinItem>(const MobId&, const QString&)> MainW
 // Import transcodes each file into new managed media (media::transcodeClip) with a progress dialog.
 // A file that fails is named in the Console; once Cancel was clicked, the first failure ends the
 // import. Returns the new items' ids, the AAF ones first.
+QJsonObject MainWindow::importSettingsSnapshot() const {
+    // The Import setting's options that importClipMedia() reads (p.1196-1199).
+    QJsonObject o;
+    for (const char* key : {"frameImportDuration", "convertSampleRate", "skipPullRates", "convertBitDepth", "bwfAlignment",
+                            "centerPanMono"}) {
+        const QString k = QString::fromLatin1(key);
+        o.insert(k, settings_->value(QStringLiteral("Import"), k));
+    }
+    return o;
+}
+
+std::optional<model::BinItem> MainWindow::importClipMedia(model::BinItem clip, const QJsonObject& importSettings,
+                                                          media::MediaCreation creation, QString* error) {
+    auto flag = [&](const char* key) { return importSettings.value(QString::fromLatin1(key)).toBool(); };
+    const Rational editRate = linkOptions().editRate;
+    const auto link = media::linkOf(clip);
+    // A still picture lasts frameImportDuration seconds.
+    if (link && link->videoStream >= 0 && link->channels == 0 && link->frames == 1) {
+        const int seconds = std::max(importSettings.value(QStringLiteral("frameImportDuration")).toInt(), 1);
+        clip.durationFrames =
+            std::max<std::int64_t>(1, seconds * editRate.num() / std::max<std::int64_t>(editRate.den(), 1));
+    }
+    // The Audio tab (p.1198-1199), clip by clip.
+    creation.relabelPullRates = false;
+    creation.audioShift = 0;
+    if (link && link->channels > 0) {
+        const int sourceRate = clip.fields.value(QStringLiteral("Audio SR")).toInt();
+        if (flag("convertSampleRate")) {
+            // "Do not convert sources with pullup or pulldown rates".
+            creation.relabelPullRates = flag("skipPullRates");
+        } else if (media::isImportRate(sourceRate)) {
+            // "Media Composer imports audio media at the source sample rate. If Media Composer does
+            // not support the source sample rate, it autoconverts".
+            creation.sampleRate = sourceRate;
+        }
+        if (!flag("convertBitDepth")) {
+            const int bits = clip.fields.value(QStringLiteral("Audio Bit Depth")).section(QLatin1Char(' '), 0, 0).toInt();
+            if (bits == 16 || bits == 24) creation.bitDepth = bits;
+        }
+        // "Subframe Alignment to Broadcast WAV Start Time" (p.1199): on the nearest frame.
+        if (flag("bwfAlignment") && link->videoStream < 0 && sourceRate > 0) {
+            const auto info = media::probe(link->audioFile(0));
+            if (const auto tr = info ? media::bwfTimeReference(*info) : std::nullopt) {
+                const media::BwfAlignment a = media::alignToFrame(*tr, sourceRate, clip.editRate);
+                creation.audioShift = a.shift;
+                clip.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(a.startFrame, TimecodeFormat::forRate(clip.editRate, false)).toString()));
+            }
+        }
+    }
+    auto made = media::transcodeClip(clip, 0, -1, creation, error);
+    if (!made) return std::nullopt;
+    // "Automatically center pan monophonic clips" (p.1198).
+    if (flag("centerPanMono") && made->fields.value(QStringLiteral("Tracks")) == QLatin1String("A1")) model::centerClipPan(*made);
+    made->sourceSettings.insert(QStringLiteral("import"), importSettings);
+    return made;
+}
+
 QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
     // AAF files are compositions, not media (p.547); shot logs are clip information (p.131-132);
     // OpenTimelineIO files are timelines (p.969), and so are FCP 7 XML files (ours).
@@ -6588,67 +6645,28 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     const QString imp = QStringLiteral("Import");
     // "Autodetect Broadcast Wave Monophonic Groups" (p.1199): name_1.wav, name_2.wav ... as one clip.
     if (settings_->flag(imp, QStringLiteral("autodetectBwfGroups"))) clips = media::groupMonoWavs(clips);
-    const int seconds = std::max(settings_->number(QStringLiteral("Import"), QStringLiteral("frameImportDuration")), 1);
-    const media::MediaCreation projectCreation = mediaCreation(QStringLiteral("import"));
-    media::MediaCreation creation = projectCreation;
+    // The Import settings as they are now, kept with each clip for Batch Import (p.235: "By default, Media Composer
+    // imports the file using the Import settings from the last time it imported the file").
+    const QJsonObject importSettings = importSettingsSnapshot();
+    media::MediaCreation creation = mediaCreation(QStringLiteral("import"));
     if (const media::Resolution* r = media::findResolution(resolution)) creation.resolution = *r;
     QProgressDialog progress(tr("Importing..."), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("importProgress"));
     QStringList ids;
     for (int i = 0; i < clips.size(); ++i) {
-        model::BinItem clip = clips.at(i);
-        const auto link = media::linkOf(clip);
-        // A still picture lasts frameImportDuration seconds.
-        if (link && link->videoStream >= 0 && link->channels == 0 && link->frames == 1) {
-            clip.durationFrames = std::max<std::int64_t>(
-                1, seconds * options.editRate.num() / std::max<std::int64_t>(options.editRate.den(), 1));
-        }
-        // The Audio tab (p.1198-1199), clip by clip.
-        creation.sampleRate = projectCreation.sampleRate;
-        creation.bitDepth = projectCreation.bitDepth;
-        creation.relabelPullRates = false;
-        creation.audioShift = 0;
-        if (link && link->channels > 0) {
-            const int sourceRate = clip.fields.value(QStringLiteral("Audio SR")).toInt();
-            if (settings_->flag(imp, QStringLiteral("convertSampleRate"))) {
-                // "Do not convert sources with pullup or pulldown rates".
-                creation.relabelPullRates = settings_->flag(imp, QStringLiteral("skipPullRates"));
-            } else if (media::isImportRate(sourceRate)) {
-                // "Media Composer imports audio media at the source sample rate. If Media Composer does
-                // not support the source sample rate, it autoconverts".
-                creation.sampleRate = sourceRate;
-            }
-            if (!settings_->flag(imp, QStringLiteral("convertBitDepth"))) {
-                const int bits = clip.fields.value(QStringLiteral("Audio Bit Depth")).section(QLatin1Char(' '), 0, 0).toInt();
-                if (bits == 16 || bits == 24) creation.bitDepth = bits;
-            }
-            // "Subframe Alignment to Broadcast WAV Start Time" (p.1199): on the nearest frame.
-            if (settings_->flag(imp, QStringLiteral("bwfAlignment")) && link->videoStream < 0 && sourceRate > 0) {
-                const auto info = media::probe(link->audioFile(0));
-                if (const auto tr = info ? media::bwfTimeReference(*info) : std::nullopt) {
-                    const media::BwfAlignment a = media::alignToFrame(*tr, sourceRate, clip.editRate);
-                    creation.audioShift = a.shift;
-                    clip.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(a.startFrame, TimecodeFormat::forRate(clip.editRate, false)).toString()));
-                }
-            }
-        }
+        const model::BinItem& clip = clips.at(i);
         progress.setLabelText(tr("Importing %1 (%2 of %3)").arg(clip.name).arg(i + 1).arg(clips.size()));
         const std::function<bool(double)> step = progressOn(progress);
         creation.progress = [&](double done) { return step((i + done) / static_cast<double>(clips.size())); };
         QString error;
-        const auto made = media::transcodeClip(clip, 0, -1, creation, &error);
+        const auto made = importClipMedia(clip, importSettings, creation, &error);
         if (!made) {
             ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));
             if (progress.wasCanceled()) break;
             continue;
         }
-        model::BinItem item = *made;
-        // "Automatically center pan monophonic clips" (p.1198).
-        if (settings_->flag(imp, QStringLiteral("centerPanMono")) && item.fields.value(QStringLiteral("Tracks")) == QLatin1String("A1")) {
-            model::centerClipPan(item);
-        }
-        doc->addItem(item);
-        ids << item.id;
+        doc->addItem(*made);
+        ids << made->id;
     }
     progress.reset();
     ids = fromAaf + ids;
@@ -8844,6 +8862,9 @@ void MainWindow::installPanelHandlers() {
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
+    // Clip > Batch Import (p.1098) and Batch Re-import (p.230, p.234): the same reimport.
+    handle("clip.batch_import", [this] { batchImport(); });
+    handle("clip.batch_re_import", [this] { batchImport(); });
     handle("timeline.mixdown.audio.to_sequence", [this] { audioMixdown(); });
     handle("timeline.mixdown.video", [this] { videoMixdown(); });
     // Render (FX Guide p.58-61): Shift renders again what is rendered (p.61), Alt skips the dialog
