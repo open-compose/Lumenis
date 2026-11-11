@@ -39,6 +39,7 @@ BinItem matteKeyClip(const QString& name, const Rational& rate, std::int64_t len
     own.insert(QStringLiteral("Matte"), media.matte);
     own.insert(QStringLiteral("Bin"), media.binId);
     own.insert(QStringLiteral("Frames"), static_cast<qint64>(std::max<std::int64_t>(media.frames, 1)));
+    if (media.isLinked()) own.insert(QStringLiteral("Linked Alpha"), media.linkedAlpha);
     e.parameters.insert(kMatteKeyClipParameters, own);
     if (level < 100.0) {
         QJsonObject fg;
@@ -76,6 +77,7 @@ MatteKeyMedia matteKeyMediaOf(const Effect& effect) {
     m.matte = own.value(QStringLiteral("Matte")).toString();
     m.binId = own.value(QStringLiteral("Bin")).toString();
     m.frames = own.value(QStringLiteral("Frames")).toInteger(1);
+    m.linkedAlpha = own.value(QStringLiteral("Linked Alpha")).toString();
     return m;
 }
 

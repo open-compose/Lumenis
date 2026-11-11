@@ -889,8 +889,8 @@
           "name": "Link Options",
           "options": [
             {"key": "multichannelAudio", "type": "bool", "label": "Multichannel Audio", "default": false, "page": 1203, "later": true},
-            {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "invert", "page": 1204, "later": true,
-             "choices": [{"value": "invert", "label": "Invert on import (white = opaque)"}, {"value": "keep", "label": "Do not invert (black = opaque)"}, {"value": "ignore", "label": "Ignore"}]},
+            {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "invert", "page": 1204,
+             "choices": [{"value": "invert", "label": "Invert on import (white = opaque)"}, {"value": "noInvert", "label": "Do not invert (black = opaque)"}, {"value": "ignore", "label": "Ignore"}]},
             {"key": "liveLink", "type": "bool", "label": "Live Link", "default": false, "page": 1204, "later": true},
             {"key": "reformat", "type": "choice", "style": "menu", "label": "Reformatting option", "default": "keepSize", "page": 1204,
              "choices": [{"value": "stretch", "label": "Stretch"}, {"value": "letterbox", "label": "Pillarbox/Letterbox"}, {"value": "crop", "label": "Center Crop"}, {"value": "keepSize", "label": "Center Keep Size"}]},

@@ -63,10 +63,23 @@ Ours: a layer's transparency is always its matte; the Alpha Channel option's Inv
 Ignore is taken as Invert (Photoshop's transparency is white = opaque), since p.219 says each layer imports "as an
 individual matte key with alpha channel". The sequence carries the file's Source File and Source Path.
 
+## Linked files with alpha (p.318, p.1204; 9.2e2)
+
+"If any of the movies you linked to were QuickTime with Alpha channel files, they appear in your bin as a Matte Key
+effect" (p.318). Any linked file whose first video stream has alpha (a still or a movie, `media::alphaSourceOf`) is
+linked so, unless the Link setting's Alpha Channel is Ignore: "The imported graphic appears as a single master clip in
+the bin" (p.1204). Invert on import, the setting's default, and Do not invert read the alpha as for imports.
+
+No media is made, since the file stays linked. The linked clip is kept in the bin as "<name>.link" (ours), hidden like
+a precompute, and the Matte Key clip's "Linked Alpha" says how to read it: the compositor takes the fill and the matte
+from the clip's own frames as they play (`matteKeyClipLayer`). Linking into a monitor (loadFiles) links plain clips.
+
+Ours: p.318 says "The Alpha Channel options in the Import Settings Image tab apply to the QuickTime linked file", while
+the Link setting has its own Alpha Channel, which "Controls how Media Composer handles the alpha channel in linked
+images" (p.1204); we follow the Link setting.
+
 ## Not yet
 
-* The Link setting's Alpha Channel (p.1204) for linked movies with alpha (p.318: "they appear in your bin as a Matte Key
-  effect").
 * Batch Import of Matte Key clips (docs/spec/batch-import.md).
 
 ## Tests
@@ -74,4 +87,5 @@ individual matte key with alpha channel". The sequence carries the file's Source
 `tst_graphics_import`: the fill and matte (Invert, Do not invert, Dilate Fill), which files have alpha, a PNG as a Matte
 Key clip keyed in the Source monitor and shown by the Frame view, Ignore as a master clip, PICT files with and without
 alpha, a movie's alpha frames. `tst_psd_import`: the Photoshop reader with raw and PackBits channels and the modes it
-refuses; Sequence of Layers, Select Layers, Cancel and Flattened Image; the 24-track limit. Fuzz target `psd`.
+refuses; Sequence of Layers, Select Layers, Cancel and Flattened Image; the 24-track limit. Fuzz target `psd`. `tst_graphics_import linking`: a linked PNG as a Matte Key clip keyed from its link, Do not invert,
+Ignore.

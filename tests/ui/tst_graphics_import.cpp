@@ -4,6 +4,7 @@
 // files with and without alpha.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/graphic_import.h"
+#include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/pict.h"
@@ -202,6 +203,71 @@ private slots:
         QCOMPARE(source->frames, std::int64_t(6));
         QCOMPARE(qAlpha(source->frame(2).pixel(60, 4)), 0);
         QCOMPARE(qAlpha(source->frame(2).pixel(4, 4)), 255);
+    }
+
+    // The Link setting's Alpha Channel (9.2e2; p.318, p.1204): a linked file with alpha "appear[s] in your bin as a Matte
+    // Key effect" keyed from its own frames, with no media made; Ignore links a master clip.
+    void linking() {
+        QTemporaryDir dir;
+        const QString png = dir.filePath(QStringLiteral("Logo.png"));
+        QVERIFY(halfRed().save(png));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Graphics"));
+        project.settings.name = QStringLiteral("Graphics");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+
+        // Invert on import, the setting's default.
+        QCOMPARE(window.settings().text(QStringLiteral("Link"), QStringLiteral("alphaChannel")), QStringLiteral("invert"));
+        QStringList ids = window.linkFiles(binId, {png});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem key = *bin->bin().item(ids.first());
+        QVERIFY(model::isMatteKeyClip(key));
+        QCOMPARE(key.name, QStringLiteral("Logo"));
+        QCOMPARE(key.fields.value(QStringLiteral("Source File")), QStringLiteral("Logo.png"));
+        const model::MatteKeyMedia media = model::matteKeyMediaOf(*model::matteKeyClipSegment(key)->effect);
+        QVERIFY(media.isLinked());
+        QCOMPARE(media.fill, media.matte);
+        const model::BinItem* linked = bin->bin().item(media.fill);
+        QVERIFY(linked);
+        QCOMPARE(linked->name, QStringLiteral("Logo.link"));
+        QVERIFY(media::linkOf(*linked)); // still a link: no media was made
+        QVERIFY(QDir(drive).entryList(QDir::Files | QDir::NoDotAndDotDot).isEmpty());
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, key);
+        const QImage shown = composer.pictureAt(MonitorId::Source, 0, QSize(64, 36));
+        QVERIFY(!shown.isNull());
+        const QColor left(shown.pixel(8, 18)), right(shown.pixel(56, 18));
+        QVERIFY2(left.red() > 180 && left.green() < 60, qPrintable(left.name()));
+        QVERIFY2(right.red() < 40, qPrintable(right.name()));
+        // Do not invert: the file's alpha taken as black = opaque, so the halves change places.
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("alphaChannel"), QStringLiteral("noInvert"));
+        ids = window.linkFiles(binId, {png});
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        const QImage inverted = composer.pictureAt(MonitorId::Source, 0, QSize(64, 36));
+        QVERIFY2(QColor(inverted.pixel(8, 18)).red() < 40, qPrintable(QColor(inverted.pixel(8, 18)).name()));
+        // Ignore: "The imported graphic appears as a single master clip in the bin" (p.1204).
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("alphaChannel"), QStringLiteral("ignore"));
+        ids = window.linkFiles(binId, {png});
+        QCOMPARE(ids.size(), 1);
+        QVERIFY(!model::isMatteKeyClip(*bin->bin().item(ids.first())));
+        QVERIFY(media::linkOf(*bin->bin().item(ids.first())));
+        media::setExtraMediaDrives({});
     }
 };
 

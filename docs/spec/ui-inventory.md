@@ -57,7 +57,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   items with "<name>.fill" and ".matte" precomputes, Dilate Fill's one-pixel
   bleed, Ignore as the Alpha Channel default. Photoshop layers: the message
   box's Cancel, the Select Layers dialog top first with all selected,
-  Ignore taken as Invert for layers, the sequence's Source File.
+  Ignore taken as Invert for layers, the sequence's Source File. Linked files
+  with alpha: the Link setting's Alpha Channel rather than the Import
+  setting's (p.318 and p.1204 differ), the hidden "<name>.link" clip.
 * Batch Import (docs/spec/batch-import.md): Batch Import and Batch Re-import
   doing the same, the mixed-rate message's words, clips at another rate left
   out with a Console line, the earlier media kept as another resolution.

@@ -380,6 +380,10 @@ public:
     static constexpr int kMaxPsdTracks = 24;
     QStringList importPsdLayers(const QString& path, const media::PsdFile& file, const QList<int>& chosen,
                                 const QJsonObject& importSettings, media::MediaCreation creation, BinDocument& doc);
+    // A linked clip whose file has alpha (9.2e2, main_window_graphics.cpp; p.318, p.1204), when the Link setting's Alpha
+    // Channel is not Ignore: the linked clip kept in `doc` as "<name>.link", hidden like a precompute, and a Matte Key
+    // clip named after it that keys its frames as they play. Nothing (and nothing added) for other clips.
+    std::optional<model::BinItem> linkedMatteKeyClip(const model::BinItem& linked, BinDocument& doc);
     // Audio CD tracks (9.2d, main_window_graphics.cpp, docs/spec/audio-cd.md): each ".cda" file read off its disc by
     // an audio CD provider (ext::AudioCdProvider) into a WAV file in `folder`, named after the ".cda" file. Returns WAV
     // path -> ".cda" path; tracks no provider reads are left out with a Console line.

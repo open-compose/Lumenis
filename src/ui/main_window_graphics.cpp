@@ -158,6 +158,33 @@ std::optional<QList<int>> MainWindow::askPsdLayers(const QString& file, const QS
     return chosen;
 }
 
+std::optional<model::BinItem> MainWindow::linkedMatteKeyClip(const model::BinItem& linked, BinDocument& doc) {
+    const QString option = settings_ ? settings_->text(QStringLiteral("Link"), QStringLiteral("alphaChannel")) : QString();
+    const media::AlphaHandling handling = media::alphaHandlingOf(option);
+    if (handling == media::AlphaHandling::Ignore) return std::nullopt;
+    const auto link = media::linkOf(linked);
+    if (!link || link->videoStream < 0 || !media::alphaSourceOf(link->path)) return std::nullopt;
+    // The linked clip itself, which the Matte Key clip plays, kept beside it as precomputes are (hidden by the bin's
+    // default display, p.243; ours).
+    model::BinItem source = linked;
+    source.name = linked.name + QStringLiteral(".link");
+    source.kind = model::BinItemKind::RenderedEffect;
+    doc.addItem(source);
+    model::MatteKeyMedia media;
+    media.binId = doc.nodeId();
+    media.fill = source.id;
+    media.matte = source.id;
+    media.frames = std::max<std::int64_t>(linked.durationFrames, 1);
+    media.linkedAlpha = handling == media::AlphaHandling::Invert ? QStringLiteral("invert") : QStringLiteral("noInvert");
+    model::BinItem item = model::matteKeyClip(linked.name, linked.editRate, linked.durationFrames, media);
+    for (const char* heading : {"Source File", "Source Path", "Drive"}) {
+        const QString key = QString::fromLatin1(heading);
+        if (linked.fields.contains(key)) item.fields.insert(key, linked.fields.value(key));
+    }
+    doc.addItem(item);
+    return item;
+}
+
 QStringList MainWindow::importPsdLayers(const QString& path, const media::PsdFile& file, const QList<int>& chosen,
                                         const QJsonObject& importSettings, media::MediaCreation creation, BinDocument& doc) {
     const QList<media::PsdLayer> layers = media::importableLayers(file);

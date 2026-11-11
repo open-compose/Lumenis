@@ -3672,6 +3672,12 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
     QApplication::restoreOverrideCursor();
     QStringList ids;
     for (const model::BinItem& item : items) {
+        // A file with alpha appears "in your bin as a Matte Key effect" (p.318) unless the Alpha Channel option is
+        // Ignore (p.1204: "The imported graphic appears as a single master clip in the bin").
+        if (auto key = linkedMatteKeyClip(item, *doc)) {
+            ids << key->id;
+            continue;
+        }
         doc->addItem(item);
         ids << item.id;
     }

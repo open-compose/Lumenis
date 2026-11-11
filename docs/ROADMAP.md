@@ -1605,7 +1605,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `src/media/audio_cd.*` with Windows' CD-ROM driver, gain on import with CD only; test `tst_audio_cd`); 9.2e1 multilayer Photoshop files (Sequence
     of Layers, Flattened Image, Select Layers, p.218-221) through our reader of Photoshop's layers (done:
     `src/media/psd.*`, `MainWindow::importPsdLayers`, fuzz target `psd`; test `tst_psd_import`); 9.2e2 the Link setting's
-    Alpha Channel for linked movies with alpha (p.318, p.1204).
+    Alpha Channel for linked movies with alpha (p.318, p.1204; done: `MainWindow::linkedMatteKeyClip`,
+    `MatteKeyMedia::linkedAlpha`; test `tst_graphics_import linking`).
   * 9.3, AutoSync, under our own name (see the trademark check below).
   * 9.4, the List Tool's film cut lists and optical lists.
   * 9.5, titles saved in more than one aspect ratio for the online session.

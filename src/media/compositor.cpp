@@ -1,6 +1,7 @@
 #include "lumenis/media/compositor.h"
 
 #include "lumenis/model/subcap.h"
+#include "lumenis/media/graphic_import.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 #include "lumenis/media/color_correction.h"
@@ -548,7 +549,17 @@ Picture matteKeyClipLayer(const Composition& c, const model::Segment& segment, s
         s.length = frames;
         return c.source(s, frame, c.size);
     };
-    const std::optional<QImage> fill = pictureOf(media.fill), matte = pictureOf(media.matte);
+    std::optional<QImage> fill, matte;
+    if (media.isLinked()) {
+        // A linked file with alpha (p.318): the fill and the matte from its own frames, as they play.
+        const std::optional<QImage> linked = pictureOf(media.fill);
+        if (!linked || linked->isNull()) return offline();
+        fill = media::fillPicture(*linked, false);
+        matte = media::mattePicture(*linked, media::alphaHandlingOf(media.linkedAlpha));
+    } else {
+        fill = pictureOf(media.fill);
+        matte = pictureOf(media.matte);
+    }
     if (!fill || !matte || fill->isNull() || matte->isNull()) return offline();
     Picture fillPicture = Picture::fromImage(*fill, w, h, c.interpolation);
     Picture mattePicture = Picture::fromImage(*matte, w, h, c.interpolation);

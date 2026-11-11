@@ -24,7 +24,7 @@
 namespace lumenis::model {
 
 // The effect's own parameter category (ours): {"Fill": id, "Matte": id, "Bin": the precomputes' bin, "Frames": their
-// length}.
+// length, "Linked Alpha": for a linked file, how its alpha is read}.
 inline const QString kMatteKeyClipParameters = QStringLiteral("Matte Key Clip");
 
 struct MatteKeyMedia {
@@ -32,6 +32,10 @@ struct MatteKeyMedia {
     QString fill;
     QString matte;
     std::int64_t frames = 0; // the precomputes' frames: 1 for a still, which every frame of the clip shows
+    // A linked file with alpha (9.2e2; p.318, p.1204): fill and matte are one linked clip whose frames carry the alpha,
+    // keyed as it plays; its Alpha Channel option, "invert" or "noInvert" (media::alphaHandlingOf). Empty for precomputes.
+    QString linkedAlpha;
+    bool isLinked() const { return !linkedAlpha.isEmpty(); }
     bool isEmpty() const { return fill.isEmpty() || matte.isEmpty(); }
 };
 
