@@ -104,6 +104,7 @@ lumenis_add_test(tst_graphics_import SOURCES tst_graphics_import.cpp LIBS ${ui_t
 lumenis_add_test(tst_sequence_report SOURCES tst_sequence_report.cpp LIBS ${ui_test_libs} lumenis::media lumenis::interop)
 lumenis_add_test(tst_audio_cd SOURCES tst_audio_cd.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_psd_import SOURCES tst_psd_import.cpp LIBS ${ui_test_libs} lumenis::media)
+lumenis_add_test(tst_sync_clips_ui SOURCES tst_sync_clips_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_send_to SOURCES tst_send_to.cpp LIBS ${ui_test_libs} lumenis::media)
 # Render Effect and Clear Renders in the application (docs/spec/rendering.md).
 lumenis_add_test(tst_render_ui SOURCES tst_render_ui.cpp LIBS ${ui_test_libs} lumenis::media)

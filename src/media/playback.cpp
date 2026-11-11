@@ -7,6 +7,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/group_clip.h"
+#include "lumenis/model/sync_clips.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
@@ -186,6 +187,8 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
     auto side = [alternatingPan](int trackNumber) { return alternatingPan ? sidePan(trackNumber) : 0; };
     std::vector<AudioPiece> out;
     const Rational rate = item.editRate;
+    // A synced subclip plays its sequence (sync_clips.h).
+    if (const auto synced = model::syncedSequence(item)) return audioPieces(*synced, clips, monitored, alternatingPan);
     // A group clip plays its selected angle (group_clip.h).
     if (item.kind == model::BinItemKind::Group) {
         // A multigroup plays as its sequence of groups.

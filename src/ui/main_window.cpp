@@ -49,6 +49,7 @@
 #include "lumenis/model/export_volume.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/group_clip.h"
+#include "lumenis/model/sync_clips.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
@@ -96,6 +97,7 @@
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/group_clips_dialog.h"
+#include "lumenis/ui/sync_clips_dialog.h"
 #include "lumenis/ui/digital_cut_tool.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_volume_dialog.h"
@@ -749,10 +751,10 @@ void MainWindow::createPanels() {
         if (monitor == MonitorId::Source && composer_->multiCameraMode()) return multiCamPicture(size, offline);
         const model::MonitorState& state = composer_->state(monitor);
         // A sequence: its video tracks composited with their effects (Phase 6.1, media::composeImage).
-        // A Title Effect clip (6.8d4a) is composited as its one-segment sequence: the title over black.
-        if (const model::LoadedClip* loaded = state.current();
-            loaded && (loaded->item.kind == model::BinItemKind::Sequence || loaded->item.kind == model::BinItemKind::Title)) {
-            model::Sequence seq = model::Sequence::fromItem(loaded->item);
+        // A Title Effect clip (6.8d4a) is composited as its one-segment sequence: the title over black. A synced
+        // subclip (9.3, sync_clips.h) as its sequence.
+        if (const model::LoadedClip* loaded = state.current(); loaded && model::composedSequence(loaded->item)) {
+            model::Sequence seq = *model::composedSequence(loaded->item);
             // A title being made shows as it is, before its undo step (EffectEditor::pictureOverride, 6.8b).
             if (monitor == MonitorId::Record && effectEditor_) {
                 if (const auto o = effectEditor_->pictureOverride()) {
@@ -2356,8 +2358,9 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
     if (!loaded || position < 0) return std::nullopt;
     model::BinItem item = loaded->item;
     std::int64_t frame = position;
-    // A multigroup shows as its sequence of groups (p.1125).
+    // A multigroup shows as its sequence of groups (p.1125), a synced subclip as its sequence (sync_clips.h).
     if (const auto seq = model::multigroupSequence(item)) item = *seq;
+    if (const auto seq = model::syncedSequence(item)) item = *seq;
     if (item.kind == model::BinItemKind::Sequence) {
         const model::Sequence seq = model::Sequence::fromItem(item);
         QStringList video;
@@ -2821,6 +2824,67 @@ std::optional<QString> MainWindow::groupClips() {
     view->document().addItem(*group);
     view->selectIds({group->id});
     return group->id;
+}
+
+QStringList MainWindow::syncClips() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return {};
+    const QString binId = view->document().nodeId();
+    QList<model::BinItem> clips;
+    for (const model::BinItem& item : view->document().bin().items) {
+        if (view->selectedIds().contains(item.id)) clips << item;
+    }
+    // "Highlight two or more clips in the bin" (p.497).
+    if (clips.size() < 2) {
+        const QString why = tr("Select a video clip and an audio clip in a bin to sync them.");
+        ConsoleLog::instance().append(tr("Sync Clips: %1").arg(why));
+        if (!syncClipsHook_) QMessageBox::information(this, tr("Sync Clips"), why);
+        return {};
+    }
+    model::SyncClipsOptions options;
+    if (syncClipsHook_) {
+        const auto chosen = syncClipsHook_();
+        if (!chosen) return {};
+        options = *chosen;
+    } else {
+        const int fps = project_ ? TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps : 30;
+        SyncClipsDialog dialog(fps == 24 || fps == 25, this);
+        dialog.setOptions(lastSyncOptions_);
+        if (dialog.exec() != QDialog::Accepted) return {};
+        options = dialog.options();
+        lastSyncOptions_ = options;
+    }
+    // Waveform Analysis: each clip's frame that sounds with the first video clip's frame 0 (as Group Clips does).
+    model::BinItem reference = clips.first();
+    for (const model::BinItem& c : clips) {
+        if (model::sourceTracksOf(c).contains(QStringLiteral("V1"))) {
+            reference = c;
+            break;
+        }
+    }
+    options.sync.waveform = [reference](const model::BinItem& clip) -> std::optional<std::int64_t> {
+        if (clip.id == reference.id) return 0;
+        return media::waveformOffset(reference, clip);
+    };
+    // In and Out points: the Source monitor's marks on a clip loaded there, else the bin's Mark IN and Mark OUT.
+    options.sync.marks = [this](const model::BinItem& clip, bool in) -> std::optional<std::int64_t> {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Source).loaded(clip.id);
+        if (!loaded) return std::nullopt;
+        return in ? loaded->in : loaded->out;
+    };
+    const model::SyncClipsResult result = model::syncClips(view->document().bin(), binId, clips, options);
+    if (!result.ok()) {
+        ConsoleLog::instance().append(tr("Sync Clips: %1").arg(result.error));
+        if (!syncClipsHook_) QMessageBox::warning(this, tr("Sync Clips"), result.error);
+        return {};
+    }
+    QStringList ids;
+    for (const model::BinItem& subclip : result.subclips) {
+        view->document().addItem(subclip);
+        ids << subclip.id;
+    }
+    view->selectIds(ids);
+    return ids;
 }
 
 // Clip > Edit Group (p.1125): the selected group clip's clips as a sequence in the group's bin, named "<group>.Edit"
@@ -9018,6 +9082,7 @@ void MainWindow::installPanelHandlers() {
     handle("clip.auto_vo", [this] { autoVo(); });
     // MultiCamera (8.1a; p.1123-1131).
     handle("clip.group_clips", [this] { groupClips(); });
+    handle("clip.autosync", [this] { syncClips(); });
     handle("clip.multigroup", [this] { multiGroup(); });
     timeline_->setGroupArrowHook([this](int step) {
         const model::LoadedClip* source = composer_->state(MonitorId::Source).current();

@@ -83,6 +83,11 @@ struct GroupOptions {
     QDateTime when;
 };
 
+// A clip's sync point as `options` takes it, as a frame of the clip counted the same way for every clip: for marks the
+// mark itself, for timecode the negative of where its timecode starts (frame f of each clip lines up at f - point).
+// Nothing, with the reason in *why, when the clip lacks it. Shared with Sync Clips (sync_clips.h).
+std::optional<std::int64_t> groupSyncPoint(const BinItem& clip, const GroupOptions& options, QString* why = nullptr);
+
 // Whether a bin item can be an angle: a master clip, subclip or audio clip.
 bool canBeGroupAngle(const BinItem& item);
 

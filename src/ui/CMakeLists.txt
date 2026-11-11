@@ -19,6 +19,7 @@ add_library(lumenis_ui STATIC
     bin_view.cpp
     clip_audio_dialogs.cpp
     group_clips_dialog.cpp
+    sync_clips_dialog.cpp
     clip_color_dialog.cpp
     target_settings_dialog.cpp
     surround_panner.cpp
@@ -136,6 +137,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/clip_audio_dialogs.h
     include/lumenis/ui/group_clips_dialog.h
+    include/lumenis/ui/sync_clips_dialog.h
     include/lumenis/ui/clip_color_dialog.h
     include/lumenis/ui/target_settings_dialog.h
     include/lumenis/ui/surround_panner.h

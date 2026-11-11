@@ -1607,7 +1607,9 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `src/media/psd.*`, `MainWindow::importPsdLayers`, fuzz target `psd`; test `tst_psd_import`); 9.2e2 the Link setting's
     Alpha Channel for linked movies with alpha (p.318, p.1204; done: `MainWindow::linkedMatteKeyClip`,
     `MatteKeyMedia::linkedAlpha`; test `tst_graphics_import linking`).
-  * 9.3, AutoSync, under our own name (see the trademark check below).
+  * 9.3, AutoSync, under our own name (see the trademark check below): Clip > Sync Clips (done: docs/spec/sync-clips.md,
+    `src/model/sync_clips.*`, `sync_clips_dialog.*`, `MainWindow::syncClips`; tests `tst_sync_clips`,
+    `tst_sync_clips_ui`); left: the group clip for overlapping video and perf slipping.
   * 9.4, the List Tool's film cut lists and optical lists.
   * 9.5, titles saved in more than one aspect ratio for the online session.
   * 9.6, the check for unconnected items, with its test.

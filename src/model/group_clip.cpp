@@ -59,51 +59,6 @@ std::int64_t fileFrames(std::int64_t frames, const Rational& clipRate, const QJs
     return static_cast<std::int64_t>(std::llround(scaled));
 }
 
-// The clip's sync point as a frame of the clip counted the same way for every clip: for marks the mark
-// itself, for timecode the negative of where its timecode starts (so frame f is at f + start).
-std::optional<std::int64_t> syncPoint(const BinItem& clip, const GroupOptions& options, QString* why) {
-    switch (options.sync) {
-    case GroupSync::Inpoints:
-    case GroupSync::Outpoints: {
-        const bool in = options.sync == GroupSync::Inpoints;
-        if (options.marks) {
-            if (const auto mark = options.marks(clip, in)) return mark;
-        }
-        // The bin's Mark IN / Mark OUT columns, as timecode of the clip.
-        const QString text = clip.fields.value(in ? QStringLiteral("Mark IN") : QStringLiteral("Mark OUT"));
-        if (const auto tc = timecodeFrames(text, clip.editRate)) return *tc - startFrameOf(clip);
-        *why = in ? QStringLiteral("\"%1\" has no IN point.").arg(clip.name) : QStringLiteral("\"%1\" has no OUT point.").arg(clip.name);
-        return std::nullopt;
-    }
-    case GroupSync::SourceTimecode:
-        if (!timecodeFrames(clip.fields.value(QStringLiteral("Start")), clip.editRate)) {
-            *why = QStringLiteral("\"%1\" has no source timecode.").arg(clip.name);
-            return std::nullopt;
-        }
-        return -startFrameOf(clip);
-    case GroupSync::AuxTimecode: {
-        const QString heading = QStringLiteral("Auxiliary TC%1").arg(std::clamp(options.auxTc, 1, 5));
-        const auto tc = timecodeFrames(clip.fields.value(heading), clip.editRate);
-        if (!tc) {
-            *why = QStringLiteral("\"%1\" has no %2.").arg(clip.name, heading);
-            return std::nullopt;
-        }
-        return -*tc;
-    }
-    case GroupSync::Waveform:
-        if (options.waveform) {
-            if (const auto point = options.waveform(clip)) return *point;
-        }
-        *why = QStringLiteral("\"%1\" could not be synced by its sound.").arg(clip.name);
-        return std::nullopt;
-    case GroupSync::FilmTc:
-    case GroupSync::Ink:
-    case GroupSync::AuxInk: break;
-    }
-    *why = QStringLiteral("Grouping by this option is not available.");
-    return std::nullopt;
-}
-
 } // namespace
 
 std::optional<GroupClip> groupOf(const BinItem& item) {
@@ -215,7 +170,7 @@ std::optional<BinItem> groupClips(const Bin& bin, const QList<std::pair<QString,
     QList<std::int64_t> points;
     for (const auto& [binId, clip] : usable) {
         if (!(clip.editRate == rate)) return fail(QStringLiteral("\"%1\" is at another frame rate; grouped clips share one.").arg(clip.name));
-        const auto point = syncPoint(clip, options, &why);
+        const auto point = groupSyncPoint(clip, options, &why);
         if (!point) return fail(why);
         points << *point;
         earliest = std::min(earliest, -*point);
@@ -269,6 +224,54 @@ QString firstTrack(const BinItem& clip, TrackKind kind) {
 }
 
 } // namespace
+
+// The clip's sync point as a frame of the clip counted the same way for every clip: for marks the mark
+// itself, for timecode the negative of where its timecode starts (so frame f is at f + start).
+std::optional<std::int64_t> groupSyncPoint(const BinItem& clip, const GroupOptions& options, QString* why) {
+    QString ignored;
+    if (!why) why = &ignored;
+    switch (options.sync) {
+    case GroupSync::Inpoints:
+    case GroupSync::Outpoints: {
+        const bool in = options.sync == GroupSync::Inpoints;
+        if (options.marks) {
+            if (const auto mark = options.marks(clip, in)) return mark;
+        }
+        // The bin's Mark IN / Mark OUT columns, as timecode of the clip.
+        const QString text = clip.fields.value(in ? QStringLiteral("Mark IN") : QStringLiteral("Mark OUT"));
+        if (const auto tc = timecodeFrames(text, clip.editRate)) return *tc - startFrameOf(clip);
+        *why = in ? QStringLiteral("\"%1\" has no IN point.").arg(clip.name) : QStringLiteral("\"%1\" has no OUT point.").arg(clip.name);
+        return std::nullopt;
+    }
+    case GroupSync::SourceTimecode:
+        if (!timecodeFrames(clip.fields.value(QStringLiteral("Start")), clip.editRate)) {
+            *why = QStringLiteral("\"%1\" has no source timecode.").arg(clip.name);
+            return std::nullopt;
+        }
+        return -startFrameOf(clip);
+    case GroupSync::AuxTimecode: {
+        const QString heading = QStringLiteral("Auxiliary TC%1").arg(std::clamp(options.auxTc, 1, 5));
+        const auto tc = timecodeFrames(clip.fields.value(heading), clip.editRate);
+        if (!tc) {
+            *why = QStringLiteral("\"%1\" has no %2.").arg(clip.name, heading);
+            return std::nullopt;
+        }
+        return -*tc;
+    }
+    case GroupSync::Waveform:
+        if (options.waveform) {
+            if (const auto point = options.waveform(clip)) return *point;
+        }
+        *why = QStringLiteral("\"%1\" could not be synced by its sound.").arg(clip.name);
+        return std::nullopt;
+    case GroupSync::FilmTc:
+    case GroupSync::Ink:
+    case GroupSync::AuxInk: break;
+    }
+    *why = QStringLiteral("Grouping by this option is not available.");
+    return std::nullopt;
+}
+
 
 Sequence groupEditSequence(const QString& binId, const BinItem& group) {
     Sequence seq;
@@ -435,7 +438,7 @@ std::optional<MultiGroupResult> multiGroup(const Bin& bin, const QString& binId,
     QString why;
     for (const auto& c : clips) {
         if (!canBeGroupAngle(c.second)) continue;
-        const auto point = syncPoint(c.second, timecode, &why);
+        const auto point = groupSyncPoint(c.second, timecode, &why);
         if (!point) return fail(why);
         spans.append({-*point, c.second.durationFrames - *point, c});
     }

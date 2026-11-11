@@ -159,7 +159,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio > Split All Tracks |  | p.736 | works | ☐ | | |
 | Auto VO |  | p.754 | works | ☐ | | |
 | AutoSequence |  | p.499 | works | ☐ | | |
-| AutoSync |  | p.223 | *later* | ☐ | | |
+| Sync Clips |  | p.497 | works | ☐ | | |
 | Batch Capture |  | p.179 | *later* | ☐ | | |
 | Batch Import |  | p.1098 | works | ☐ | | |
 | Batch Re-import |  | p.230 | works | ☐ | | |
@@ -334,6 +334,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 230 menu commands, 203 of them working with a project open; the
+* 230 menu commands, 204 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

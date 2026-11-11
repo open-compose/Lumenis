@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/link.h"
+#include "lumenis/model/sync_clips.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/copy_media.h"
 #include "lumenis/media/dynamic_media_folders.h"
@@ -673,6 +674,11 @@ public:
     // dialog in tests: the option and Auxiliary TC chosen, or nothing for Cancel.
     std::optional<QString> groupClips();
     void setGroupClipsHook(std::function<std::optional<std::pair<model::GroupSync, int>>()> hook) { groupClipsHook_ = std::move(hook); }
+    // Clip > Sync Clips (9.3, the guide's AutoSync; p.496-498, docs/spec/sync-clips.md): the bin's selected clips synced
+    // as the Sync Selection dialog says into synced subclips, added to the bin and selected; their ids, empty when none
+    // was made (the reason in a message). The hook stands in for the dialog in tests: the options, or nothing for Cancel.
+    QStringList syncClips();
+    void setSyncClipsHook(std::function<std::optional<model::SyncClipsOptions>()> hook) { syncClipsHook_ = std::move(hook); }
     // Clip > Edit Group, Update Group, Create Group and Refresh Sequence > Group Clips (8.1a2; p.478, p.1125-1126): the
     // new sequence's or group's id, nothing when none was made; the segments refreshed. The hook stands in for Update
     // Group's question in tests: 0 to update the group, 1 to create a new one, -1 to cancel.
@@ -1506,6 +1512,8 @@ private:
     QList<QAction*> binLayoutActions_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     std::function<std::optional<std::pair<model::GroupSync, int>>()> groupClipsHook_;
+    std::function<std::optional<model::SyncClipsOptions>()> syncClipsHook_;
+    model::SyncClipsOptions lastSyncOptions_; // the Sync Selection dialog opens as it was last left
     std::function<int()> updateGroupHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;

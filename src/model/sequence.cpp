@@ -1,6 +1,7 @@
 #include "lumenis/model/sequence.h"
 
 #include "lumenis/model/group_clip.h"
+#include "lumenis/model/sync_clips.h"
 
 #include "lumenis/model/timewarp.h"
 
@@ -781,7 +782,8 @@ QList<Segment> Sequence::extract(const QString& name, std::int64_t start, std::i
 // Audio clips without a Tracks column offer A1 and A2.
 QStringList sourceTracksOf(const BinItem& item) {
     // A Title Effect clip is a one-track composition (title_clip.h): V1.
-    if (item.kind == BinItemKind::Sequence || item.kind == BinItemKind::Title) return Sequence::fromItem(item).trackNames();
+    // A synced subclip offers its sequence's tracks (sync_clips.h).
+    if (const auto composed = composedSequence(item)) return composed->trackNames();
     QStringList tracks = parseTrackList(item.fields.value(QStringLiteral("Tracks")));
     if (!tracks.isEmpty() && !trackFormatsOf(item).isEmpty()) {
         // The audio channels as grouped by the Track Formats.
@@ -1044,7 +1046,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     const auto multigroup = multigroupSequence(source);
     const std::optional<Sequence> nested =
         multigroup ? std::optional<Sequence>(Sequence::fromItem(*multigroup))
-        : source.kind == BinItemKind::Sequence || source.kind == BinItemKind::Title ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
+        : composedSequence(source); // a sequence, a Title Effect clip or a synced subclip (sync_clips.h)
     for (const auto& [from, to] : patch.editPairs(sequence)) {
         const AudioFormat format = sourceFormat(source, from);
         if (const Track* existing = sequence.track(to); existing && (existing->locked || (existing->kind == TrackKind::Audio && existing->format != format))) {

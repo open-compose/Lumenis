@@ -636,6 +636,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * Edit Group's sequence kept in the group's bin as "<group>.Edit", and the order of a group's angles
     made from a sequence;
   * segments keeping their angle offsets until Refresh Sequence > Group Clips.
+  * Sync Clips (docs/spec/sync-clips.md): the name for the guide's AutoSync; Include audio from audio-only clips off
+    keeping all their tracks; the dialog opening as last left; synced subclips as subclips holding a sequence.
   * MultiCamera mode entered from Full-Monitor display showing the Quad Split; the defaults of Split Mode Play
     (Quad or Nine Split) and Show Track in Split View When Playing (the monitored track, stopped too);
   * a choice in Quad or Nine Split Source view becoming the group's selected angle; stopped choices in

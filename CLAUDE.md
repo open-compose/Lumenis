@@ -1034,7 +1034,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::importPsdLayers` with Sequence of Layers, Flattened Image and Select Layers through
   `askPsdLayersChoice`/`askPsdLayers`; test `tst_psd_import`), is done. 9.2e2, linked files with alpha as Matte Key
   clips by the Link setting's Alpha Channel (`MainWindow::linkedMatteKeyClip`, `MatteKeyMedia::linkedAlpha` keyed in
-  `matteKeyClipLayer`; test `tst_graphics_import linking`), is done, so 9.2 is.
+  `matteKeyClipLayer`; test `tst_graphics_import linking`), is done, so 9.2 is. 9.3, Clip > Sync Clips, the guide's
+  AutoSync under our own name (docs/spec/sync-clips.md: `model::syncClips` and synced subclips holding a sequence,
+  `model::composedSequence`; `SyncClipsDialog`, `MainWindow::syncClips`; tests `tst_sync_clips`, `tst_sync_clips_ui`),
+  is done.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

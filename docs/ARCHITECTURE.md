@@ -186,7 +186,9 @@ headers in `include/lumenis/<library>/`.
   `src/media/audio_input.*`.
 * **Multicamera and transcripts.** Group clips and multigroups are `src/model/group_clip.*`
   with `group_clips_dialog.*` and MainWindow's MultiCamera handlers (docs/spec/multicamera.md);
-  syncing by sound is `src/media/waveform_sync.*`. Transcripts are `src/model/transcript.*` (the
+  syncing by sound is `src/media/waveform_sync.*`. Sync Clips (the guide's AutoSync, docs/spec/sync-clips.md) is
+  `src/model/sync_clips.*`: synced subclips holding a sequence, played and edited through `model::composedSequence`,
+  with `sync_clips_dialog.*`. Transcripts are `src/model/transcript.*` (the
   store and which bins are transcribed), made by `src/media/transcription.*` through an
   `ext::TranscriptionProvider` (whisper.cpp's `whisper-cli` built in) and queued by
   `main_window_transcripts.cpp`; Manage Speaker Names is `speaker_names_dialog.*`, the Transcribe window and Manage Transcripts `transcript_dialogs.*`; the Transcript Tool is `transcript_tool.*` showing `src/model/transcript_view.*`

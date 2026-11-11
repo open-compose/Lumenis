@@ -11,6 +11,7 @@ lumenis_add_test(tst_motion_effect SOURCES tst_motion_effect.cpp LIBS lumenis::m
 # Mixed rate clips and Motion Adapters (Editing Guide p.468-478).
 # Group clips for MultiCamera editing (Editing Guide p.1123-1131).
 lumenis_add_test(tst_group_clip SOURCES tst_group_clip.cpp LIBS lumenis::model)
+lumenis_add_test(tst_sync_clips SOURCES tst_sync_clips.cpp LIBS lumenis::model)
 lumenis_add_test(tst_motion_adapter SOURCES tst_motion_adapter.cpp LIBS lumenis::model)
 # Nested effects and Collapse (FX Guide p.219-227).
 lumenis_add_test(tst_nest SOURCES tst_nest.cpp LIBS lumenis::model)

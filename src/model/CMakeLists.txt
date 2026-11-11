@@ -15,6 +15,7 @@ add_library(lumenis_model STATIC
     font_replacement.cpp
     clip_audio.cpp
     group_clip.cpp
+    sync_clips.cpp
     automation.cpp
     auto_sequence.cpp
     send_to.cpp
@@ -81,6 +82,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/sequence.h
     include/lumenis/model/clip_audio.h
     include/lumenis/model/group_clip.h
+    include/lumenis/model/sync_clips.h
     include/lumenis/model/automation.h
     include/lumenis/model/auto_sequence.h
     include/lumenis/model/send_to.h

@@ -94,7 +94,7 @@
     {"id": "clip.audio.split_all_tracks", "text": "Split All Tracks"},
     {"id": "clip.auto_vo", "text": "Auto VO"},
     {"id": "clip.autosequence", "text": "AutoSequence"},
-    {"id": "clip.autosync", "text": "AutoSync"},
+    {"id": "clip.autosync", "text": "Sync Clips"},
     {"id": "clip.batch_capture", "text": "Batch Capture"},
     {"id": "clip.batch_import", "text": "Batch Import"},
     {"id": "clip.batch_re_import", "text": "Batch Re-import"},
