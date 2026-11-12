@@ -1,0 +1,353 @@
+{
+  "comment": "The trademark check (ROADMAP 9.8; docs/spec/trademarks.md). Avid's marks that may not name our menus, commands, windows, settings or effects: the names the guides mark with a trademark or registered sign (\"source\"), those the guides' trademark notice lists (Editing Guide p.2, FX Guide p.2-3: \"and all related product names and logos\"), and Avid's feature brand names. \"status\": renamed (ctest trademark_names fails when the name is in a user-visible string), planned (renamed in the step given; reported, not failed), absent (not in our UI; fails if it appears), nominative (kept: it names Avid's own product or format we interoperate with, and \"reason\" says where). \"ours\": our generic name.",
+  "marks": [
+    {
+      "name": "AutoSync",
+      "source": "Editing Guide p.1234 (TM)",
+      "ours": "Sync Clips",
+      "status": "renamed"
+    },
+    {
+      "name": "AudioSuite",
+      "source": "FX Guide p.157 (TM)",
+      "ours": "Audio Processing",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "SubCap",
+      "source": "FX Guide p.378 (TM)",
+      "ours": "Subtitles",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "FluidMotion",
+      "source": "FX Guide p.149 (TM)",
+      "ours": "Flow Motion",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "FluidBlur",
+      "source": "Avid feature name (the Fluid family)",
+      "ours": "Flow Blur",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "FluidColorMap",
+      "source": "Avid feature name (the Fluid family)",
+      "ours": "Flow Color Map",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "FluidMorph",
+      "source": "Avid feature name (the Fluid family)",
+      "ours": "Flow Morph",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "FluidFilm",
+      "source": "Avid feature name (the Fluid family)",
+      "ours": "Flow Film",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "AniMatte",
+      "source": "FX Guide p.79 (TM)",
+      "ours": "Animated Matte",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "SpectraMatte",
+      "source": "FX Guide p.206 (TM)",
+      "ours": "Spectral Key",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "SpectraGraph",
+      "source": "FX Guide p.207 (TM)",
+      "ours": "Key Graph",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "Intraframe",
+      "source": "FX Guide p.250 (TM)",
+      "ours": "Frame Paint",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "SteadyGlide",
+      "source": "FX Guide p.269 (TM)",
+      "ours": "Smooth Glide",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Magic Mask",
+      "source": "FX Guide p.392 (TM)",
+      "ours": "Color Mask",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "NaturalMatch",
+      "source": "FX Guide p.544, p.624 (TM)",
+      "ours": "Keep Luminance",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "ChromaCurve",
+      "source": "FX Guide p.604 (TM)",
+      "ours": "Chroma Curve",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "ChromaWheel",
+      "source": "FX Guide p.635 (TM)",
+      "ours": "Color Wheel",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "ScriptSync",
+      "source": "Avid feature name",
+      "ours": "Script Alignment",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "PhraseFind",
+      "source": "Avid feature name",
+      "ours": "Phrase Search",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "MultiRez",
+      "source": "Avid feature name",
+      "ours": "Multi-Resolution",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "FrameFlex",
+      "source": "Avid feature name",
+      "ours": "Framing",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Titler+",
+      "source": "Avid feature name",
+      "ours": "Title Designer",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "PlasmaWipe",
+      "source": "Avid feature name",
+      "ours": "Gradient Wipe",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "ExpertRender",
+      "source": "Avid feature name",
+      "ours": "Smart Render",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Illusion FX",
+      "source": "Avid feature name",
+      "ours": "Image FX",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "AutoCut",
+      "source": "Avid feature name",
+      "ours": "Speaker Cut",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "MultiGroup",
+      "source": "Avid feature name",
+      "ours": "Group of Groups",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Avid Pan & Zoom",
+      "source": "trademark notice (Avid)",
+      "ours": "Pan & Zoom",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "Avid Background Services",
+      "source": "trademark notice (Avid)",
+      "ours": "Background Services",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Avid Titler+",
+      "source": "trademark notice (Avid)",
+      "ours": "Title Designer",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Symphony",
+      "source": "trademark notice",
+      "ours": "(left out)",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "Interplay",
+      "source": "trademark notice",
+      "ours": "Asset Transfer",
+      "status": "planned",
+      "step": "9.8b"
+    },
+    {
+      "name": "Avid",
+      "source": "trademark notice",
+      "ours": "(left out: \"Avid High Qual\" is \"High Quality\", \"PlasmaWipe Avid Lava\" is \"Gradient Wipe Lava\")",
+      "status": "planned",
+      "step": "9.8c"
+    },
+    {
+      "name": "Frame Chase",
+      "source": "Editing Guide p.177 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "DigiTranslator",
+      "source": "Editing Guide p.990 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "AVX",
+      "source": "Editing Guide p.988, FX Guide p.35 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "EUCON",
+      "source": "Editing Guide p.781, FX Guide p.734 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "Media Browse",
+      "source": "Editing Guide p.203 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "Matador",
+      "source": "Editing Guide p.1232 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "D-Verb",
+      "source": "Editing Guide p.807 (TM)",
+      "status": "absent"
+    },
+    {
+      "name": "Mbox",
+      "source": "Editing Guide p.767 (R)",
+      "status": "absent"
+    },
+    {
+      "name": "AirSpeed",
+      "source": "Editing Guide p.177, p.1080 (R)",
+      "status": "absent"
+    },
+    {
+      "name": "MediaCentral",
+      "source": "trademark notice",
+      "status": "absent"
+    },
+    {
+      "name": "Nexis",
+      "source": "trademark notice",
+      "status": "absent"
+    },
+    {
+      "name": "NewsCutter",
+      "source": "trademark notice",
+      "status": "absent"
+    },
+    {
+      "name": "iNEWS",
+      "source": "trademark notice",
+      "status": "absent"
+    },
+    {
+      "name": "Sibelius",
+      "source": "trademark notice",
+      "status": "absent"
+    },
+    {
+      "name": "Media Composer",
+      "source": "trademark notice",
+      "status": "nominative",
+      "reason": "names Avid's bin format we read and write (Media Composer Bin, Media Composer bins (*.avb)) and the source of observed values"
+    },
+    {
+      "name": "Pro Tools",
+      "source": "Editing Guide p.790, p.863, p.865 (R)",
+      "status": "nominative",
+      "reason": "names Avid's application Send To exports for, and its channel order"
+    },
+    {
+      "name": "DNxHD",
+      "source": "trademark notice (Avid DNXHD)",
+      "status": "nominative",
+      "reason": "names Avid's codec we read and write"
+    },
+    {
+      "name": "DNxHR",
+      "source": "trademark notice (Avid DNXHR)",
+      "status": "nominative",
+      "reason": "names Avid's codec we read and write"
+    },
+    {
+      "name": "Avid DNx",
+      "source": "trademark notice",
+      "status": "nominative",
+      "reason": "names Avid's codec family we read and write"
+    },
+    {
+      "name": "Avid Log Exchange",
+      "source": "trademark notice (Avid)",
+      "status": "nominative",
+      "reason": "names Avid's ALE file format we read and write"
+    },
+    {
+      "name": "Avid DS",
+      "source": "trademark notice (Avid)",
+      "status": "nominative",
+      "reason": "names Avid's caption file format we read and write"
+    },
+    {
+      "name": "Avid OP-Atom",
+      "source": "trademark notice (Avid)",
+      "status": "nominative",
+      "reason": "names Avid's MXF media layout we read and write"
+    }
+  ]
+}

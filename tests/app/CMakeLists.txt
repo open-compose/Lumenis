@@ -39,6 +39,15 @@ if(Python3_Interpreter_FOUND)
         PASS_REGULAR_EXPRESSION "failure messages: every Console line" TIMEOUT 60)
 endif()
 
+# The trademark check (ROADMAP 9.8): no user-visible string names a feature with one of Avid's marks
+# (tests/data/trademarks.json, scripts/check-trademarks.py, docs/spec/trademarks.md).
+if(Python3_Interpreter_FOUND)
+    add_test(NAME trademark_names
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-trademarks.py)
+    set_tests_properties(trademark_names PROPERTIES
+        PASS_REGULAR_EXPRESSION "trademark names: no renamed or absent mark" TIMEOUT 60)
+endif()
+
 # The CI workflows are ones GitHub accepts (scripts/check-workflows.py); skipped without actionlint.
 if(Python3_Interpreter_FOUND)
     add_test(NAME workflows_lint
