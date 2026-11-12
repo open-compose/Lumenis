@@ -46,6 +46,7 @@ CalculatorWindow::CalculatorWindow(QWidget* parent) : QWidget(parent) {
 
     format_ = new QComboBox(this);
     format_->setObjectName(QStringLiteral("calculatorFormat"));
+    format_->setAccessibleName(tr("Format")); // screen readers (10.3)
     for (const model::CalculatorFormat& f : model::calculatorFormats()) format_->addItem(f.name);
     format_->setCurrentIndex(calc_.format());
     connect(format_, &QComboBox::currentIndexChanged, this, [this](int index) {

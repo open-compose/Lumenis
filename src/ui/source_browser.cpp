@@ -371,6 +371,7 @@ SourceBrowser::SourceBrowser(QWidget* parent) : QWidget(parent) {
     options->addWidget(new QLabel(tr("Double Click to:"), settingsBox_));
     doubleClick_ = new QComboBox(settingsBox_);
     doubleClick_->setObjectName(QStringLiteral("doubleClick"));
+    doubleClick_->setAccessibleName(tr("Double Click to")); // screen readers (10.3)
     doubleClick_->addItem(tr("Link or Import"));
     doubleClick_->addItem(tr("Load Clips in Source Monitor"));
     options->addWidget(doubleClick_);
@@ -589,6 +590,7 @@ QWidget* SourceBrowser::buildLowerPane() {
     row->addWidget(new QLabel(tr("Target Bin:"), box));
     bins_ = new QComboBox(box);
     bins_->setObjectName(QStringLiteral("targetBin"));
+    bins_->setAccessibleName(tr("Target Bin")); // screen readers (10.3)
     bins_->setMinimumWidth(160);
     row->addWidget(bins_);
     commit_ = new QPushButton(tr("Link"), box);

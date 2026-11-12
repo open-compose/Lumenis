@@ -1620,6 +1620,7 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     // Bin View menu, view buttons, quick filter and fast menu (p.249).
     viewMenu_ = new QComboBox(this);
     viewMenu_->setObjectName(QStringLiteral("binViewMenu"));
+    viewMenu_->setAccessibleName(tr("Bin View")); // screen readers (10.3): the menu's name, not its current view
     viewMenu_->setFixedWidth(110);
     connect(viewMenu_, &QComboBox::activated, this, [this](int index) {
         const QString name = viewMenu_->itemData(index).toString();

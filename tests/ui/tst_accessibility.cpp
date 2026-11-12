@@ -23,6 +23,8 @@
 #include "lumenis/ui/theme.h"
 
 #include <QAbstractButton>
+#include <QComboBox>
+#include <QLabel>
 #include <QAccessibleValueInterface>
 #include <QLineEdit>
 #include <QListWidget>
@@ -99,7 +101,15 @@ QStringList unnamedControls(int* checked) {
         QAccessibleInterface* a = QAccessible::queryAccessibleInterface(w);
         if (!a) continue;
         ++*checked;
-        if (a->text(QAccessible::Name).trimmed().isEmpty()) unnamed << describe(w);
+        bool named = !a->text(QAccessible::Name).trimmed().isEmpty();
+        // A drop-down list: Qt 6.4 names it by its current item, Qt 6.8 (Windows, macOS) does not; ours must name it
+        // whatever Qt does (its own name, a tooltip, or a form label that is its buddy).
+        if (const auto* combo = qobject_cast<const QComboBox*>(w); combo && combo->accessibleName().isEmpty()) {
+            bool labelled = false;
+            for (const QLabel* l : w->window()->findChildren<QLabel*>()) labelled = labelled || l->buddy() == w;
+            named = labelled;
+        }
+        if (!named) unnamed << describe(w);
     }
     unnamed.removeDuplicates();
     unnamed.sort();

@@ -129,6 +129,7 @@ AudioPunchInTool::AudioPunchInTool(Timeline& timeline, QWidget* parent)
         channels_[i] = ch;
         auto* track = new QComboBox(this);
         track->setObjectName(QStringLiteral("track%1").arg(i + 1));
+        track->setAccessibleName(tr("Track for input channel %1").arg(i + 1)); // screen readers (10.3)
         tracks_[i] = track;
         grid->addWidget(ch, i, 0);
         grid->addWidget(track, i, 1);

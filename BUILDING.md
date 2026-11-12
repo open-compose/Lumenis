@@ -831,6 +831,13 @@ python3 scripts/make-checklist.py --app build/ci/bin/cutthulhu
 Commit the updated `docs/checklists/phase1-gate5.md`. Do not edit it by
 hand.
 
+### `tst_accessibility`: "no accessible name: QComboBox ..." on Windows or macOS only
+
+Qt 6.4 (Ubuntu 24.04, the Linux development builds) names a drop-down list after its current item; Qt 6.8 (the Windows
+and macOS builds) does not, so a combo box with no name, tooltip or label was announced without one there (CI run 441).
+Give the combo box a name with `setAccessibleName`, a tooltip, or a form label whose buddy it is. The test now asks for
+one of those on every platform, so Linux catches it too (docs/spec/accessibility.md).
+
 ### `failure_messages` fails
 
 A Console line in `src/ui` is neither shown to the user nor marked as information. Error messages everywhere (ROADMAP
