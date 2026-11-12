@@ -18,7 +18,9 @@
 #include <QAccessible>
 #include <QApplication>
 #include <QEvent>
+#include <QFocusEvent>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPointer>
 #include <QTextDocumentFragment>
 
@@ -36,9 +38,41 @@ QString plain(const QString& text) {
     return out.simplified();
 }
 
+// Whether a widget is one we paint ourselves (it draws no focus of its own): the class names of the factory below.
+bool paintedClass(const QWidget* w);
+
+// The keyboard focus on a widget we paint (10.3c): a ring in the highlight colour over its edge, shown when the focus
+// came from the keyboard (Tab, Shift+Tab, a shortcut such as cycling the panels), not from a click, as a browser's
+// :focus-visible; it follows the widget's size and goes when the focus leaves.
+class FocusRing : public QWidget {
+public:
+    FocusRing() {
+        setObjectName(QStringLiteral("focusRing"));
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setAttribute(Qt::WA_NoSystemBackground);
+        setFocusPolicy(Qt::NoFocus);
+    }
+    void follow(QWidget* target) {
+        setParent(target);
+        setGeometry(target->rect());
+        raise();
+        show();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setPen(QPen(palette().color(QPalette::Highlight), 2));
+        p.drawRect(rect().adjusted(1, 1, -1, -1));
+    }
+};
+
 class AccessibleNames : public QObject {
 public:
     using QObject::QObject;
+    ~AccessibleNames() override {
+        if (ring_ && !ring_->parent()) delete ring_;
+    }
 
     bool eventFilter(QObject* watched, QEvent* event) override {
         switch (event->type()) {
@@ -47,6 +81,17 @@ public:
         case QEvent::ToolTipChange:
             if (watched->isWidgetType()) name(static_cast<QWidget*>(watched));
             break;
+        case QEvent::FocusIn:
+            if (watched->isWidgetType()) focusIn(static_cast<QWidget*>(watched), static_cast<QFocusEvent*>(event)->reason());
+            break;
+        case QEvent::FocusOut:
+            if (FocusRing* ring = ring_; ring && ring->parent() == watched) ring->hide();
+            break;
+        case QEvent::Resize:
+            if (FocusRing* ring = ring_; ring && ring->isVisible() && ring->parent() == watched) {
+                ring->setGeometry(static_cast<QWidget*>(watched)->rect());
+            }
+            break;
         default:
             break;
         }
@@ -54,6 +99,24 @@ public:
     }
 
 private:
+    void focusIn(QWidget* w, Qt::FocusReason reason) {
+        const bool keyboard = reason == Qt::TabFocusReason || reason == Qt::BacktabFocusReason || reason == Qt::ShortcutFocusReason;
+        FocusRing* ring = ring_;
+        if (!keyboard || !paintedClass(w)) {
+            if (ring) ring->hide();
+            return;
+        }
+        if (!ring) {
+            // The ring lives inside the widget it marks and goes with it: forget it then.
+            ring = new FocusRing;
+            QObject::connect(ring, &QObject::destroyed, this, [this] { ring_ = nullptr; });
+            ring_ = ring;
+        }
+        ring->follow(w);
+    }
+
+    FocusRing* ring_ = nullptr;
+
     static void name(QWidget* w) {
         const bool ours = w->property(kDerived).toBool();
         if (!w->accessibleName().isEmpty() && !ours) return; // set by the code: left alone
@@ -364,6 +427,7 @@ private:
 };
 
 QAccessibleInterface* paintedWidgets(const QString& className, QObject* object) {
+    // (paintedClass() below lists the same classes.)
     if (!object || !object->isWidgetType()) return nullptr;
     if (className == QLatin1String("lumenis::ui::TimelineView")) return new TimelineAccessible(static_cast<TimelineView*>(object));
     if (className == QLatin1String("lumenis::ui::PositionBar")) return new PositionBarAccessible(static_cast<PositionBar*>(object));
@@ -372,6 +436,21 @@ QAccessibleInterface* paintedWidgets(const QString& className, QObject* object) 
         if (className == QLatin1String(p.className)) return new PaintedAccessible(static_cast<QWidget*>(object), p.name);
     }
     return nullptr;
+}
+
+} // namespace
+
+namespace {
+
+bool paintedClass(const QWidget* w) {
+    const char* name = w->metaObject()->className();
+    if (qstrcmp(name, "lumenis::ui::TimelineView") == 0 || qstrcmp(name, "lumenis::ui::PositionBar") == 0 ||
+        qstrcmp(name, "lumenis::ui::MonitorPicture") == 0)
+        return true;
+    for (const Painted& p : kPainted) {
+        if (qstrcmp(name, p.className) == 0) return true;
+    }
+    return false;
 }
 
 } // namespace

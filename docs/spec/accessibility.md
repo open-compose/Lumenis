@@ -46,9 +46,26 @@ paint ourselves, which Qt would otherwise describe as a nameless "client":
 * `tst_accessibility` reads a sequence back through the Timeline's interfaces, the Record monitor's position bar
   (and moves it) and picture, and fails for a painted widget that is shown without a role or a name.
 
+## The keyboard (10.3c)
+
+Tab is the guide's Play key (keyboard.json), so in the Composer and the Timeline it plays rather than moving the
+focus; and 153 of the 409 commands are on buttons, palettes or right-click menus only, with no menu item or default
+key. Ours, so a keyboard user reaches everything:
+
+* **Between panels.** Cycle windows (Ctrl+Up / Ctrl+Down, p.78) and Next Tab (Ctrl+Tab) made a panel active without
+  moving the keyboard focus; `PanelManager::focusInto` now puts the focus on the panel's first control in Tab order
+  (else the panel), so the next key acts there.
+* **Every command by name.** Help > Find Command... (Ctrl+Shift+P; `src/ui/find_command.*`) lists every command that
+  can run now, with its place in the menus and its key; typing filters it (every word must appear), Up and Down
+  choose, Enter runs the chosen command where the focus was, Esc closes. It is in the menu inventory as an addition.
+* **Focus that can be seen.** The widgets we paint draw no focus of their own; when one of them gets the focus from the
+  keyboard (Tab, Shift+Tab or a shortcut such as cycling the panels) a ring in the Highlight colour is drawn over its
+  edge, and it goes with the focus. A click shows none (as a browser's :focus-visible), so mouse users and the
+  screenshots see nothing new.
+* `tst_accessibility` checks that cycling the windows leaves the focus in the active panel, that the ring follows
+  keyboard focus and not clicks, and that a command on no menu and no key runs from Find Command with Enter.
+
 ## Still to do
 
-* 10.3c: the keyboard: focus order in each window, every command reachable without the mouse (the Keyboard setting
-  covers commands; the panels and lists need Tab order), and focus that can be seen.
 * 10.3d: contrast and large fonts against the Interface settings, and the owner's checks with VoiceOver, Narrator or
   NVDA and Orca (a checklist in docs/checklists/).

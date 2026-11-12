@@ -94,6 +94,7 @@ add_library(lumenis_ui STATIC
     motion_effect_editor.cpp
     set_font_dialog.cpp
     shortcuts_window.cpp
+    find_command.cpp
     select_project_dialog.cpp
     correction_manage_dialog.cpp
     correction_monitors.cpp
@@ -196,6 +197,8 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/motion_effect_editor.h
     include/lumenis/ui/set_font_dialog.h
     include/lumenis/ui/shortcuts_window.h
+    include/lumenis/ui/find_command.h
+    include/lumenis/ui/accessibility.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/correction_manage_dialog.h
     include/lumenis/ui/correction_monitors.h

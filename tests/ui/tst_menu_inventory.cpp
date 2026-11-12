@@ -108,7 +108,10 @@ private slots:
             const QString title = menu.value(QStringLiteral("text")).toString();
             QJsonArray expectedItems = menu.value(QStringLiteral("items")).toArray();
             for (const QJsonValue& a : menu.value(QStringLiteral("additions")).toArray()) {
-                expectedItems.append(QJsonObject{{QStringLiteral("text"), a.toObject().value(QStringLiteral("text"))}});
+                // Our additions, with their shortcut when they have one.
+                QJsonObject added{{QStringLiteral("text"), a.toObject().value(QStringLiteral("text"))}};
+                if (a.toObject().contains(QStringLiteral("shortcut"))) added.insert(QStringLiteral("shortcut"), a.toObject().value(QStringLiteral("shortcut")));
+                expectedItems.append(added);
             }
             const QJsonArray actualItems = actualByTitle.value(title).value(QStringLiteral("items")).toArray();
 

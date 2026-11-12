@@ -443,6 +443,23 @@ void PanelManager::cycleWindows(int direction) {
     activate(g->current());
     g->window()->raise();
     g->window()->activateWindow();
+    focusInto(g->current());
+}
+
+// Keyboard users (10.3c; docs/spec/accessibility.md): cycling windows and tabs moves the keyboard focus too, to the
+// panel's first control that takes it from the keyboard, else to the panel itself, so the next key acts there.
+void PanelManager::focusInto(Panel* panel) {
+    if (!panel || !panel->isVisible()) return;
+    QWidget* content = panel->content() ? panel->content() : panel;
+    QWidget* target = nullptr;
+    if ((content->focusPolicy() & Qt::TabFocus) && content->isVisible()) target = content;
+    // The first in Tab order: Qt's focus chain from the content, as far as it stays inside it.
+    for (QWidget* w = content->nextInFocusChain(); !target && w && w != content; w = w->nextInFocusChain()) {
+        if (!content->isAncestorOf(w)) continue;
+        if ((w->focusPolicy() & Qt::TabFocus) && w->isVisibleTo(content) && w->isEnabled()) target = w;
+    }
+    if (!target) target = content;
+    target->setFocus(Qt::ShortcutFocusReason);
 }
 
 // Moves to the next tab of the active panel's group, wrapping round.
@@ -452,6 +469,7 @@ void PanelManager::cycleTabs() {
     if (g->count() < 2) return;
     const auto index = g->panels().indexOf(active_);
     activate(g->panels().at((index + 1) % g->count()));
+    focusInto(active_);
 }
 
 // The main host first, then the floating windows' hosts in creation order.

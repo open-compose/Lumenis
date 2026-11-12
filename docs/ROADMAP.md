@@ -1729,7 +1729,8 @@ The items:
     names in the code for the rest; `tst_accessibility` over the main window and the Tools menu's windows, 544
     controls); 10.3b, roles and contents for the widgets we paint (done: the Timeline as tracks of segments, position
     bars as sliders, monitor pictures with what is loaded, the graphs and wheels as named graphics, through an
-    accessibility factory in `src/ui/accessibility.cpp`); 10.3c, the keyboard and focus; 10.3d, contrast,
+    accessibility factory in `src/ui/accessibility.cpp`); 10.3c, the keyboard and focus (done: focus into the panel on
+    Cycle windows and Next Tab, Help > Find Command (`src/ui/find_command.*`), the focus ring on painted widgets); 10.3d, contrast,
     large fonts and the owner's checks with the screen readers.
   * 10.4, localisation. Use Qt Linguist (`lupdate`/`lrelease` from qttools, LGPL). Add `translations/` and a
     language choice in the Interface setting. Translate commands.json, menus.json, settings.json and the effect

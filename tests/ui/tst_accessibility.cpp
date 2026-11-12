@@ -14,6 +14,8 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/find_command.h"
+#include "lumenis/ui/panels.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
@@ -22,6 +24,9 @@
 
 #include <QAbstractButton>
 #include <QAccessibleValueInterface>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QSignalSpy>
 #include <QAction>
 #include <QFile>
 #include <QJsonArray>
@@ -254,6 +259,85 @@ private slots:
         QVERIFY(checked >= 3); // the Timeline, the position bars and the monitors at least
         wrong.removeDuplicates();
         QVERIFY2(wrong.isEmpty(), qPrintable(QStringLiteral("painted widgets without a role or name: ") + wrong.join(QStringLiteral(", "))));
+    }
+
+    // The keyboard (10.3c): cycling the windows (Ctrl+Up/Down, p.78) and the tabs (Ctrl+Tab) puts the focus in the
+    // panel that becomes active, so the next key acts there.
+    void cyclingPanelsMovesTheFocus() {
+        PanelManager& panels = window_->panels();
+        QAction* next = commands_.action(QStringLiteral("windows.next_window"));
+        QVERIFY(next);
+        QSet<Panel*> visited;
+        for (int i = 0; i < 8; ++i) {
+            next->trigger();
+            QCoreApplication::processEvents();
+            Panel* active = panels.activePanel();
+            QVERIFY(active);
+            QWidget* focus = QApplication::focusWidget();
+            QVERIFY2(focus && (focus == active || active->isAncestorOf(focus)),
+                     qPrintable(QStringLiteral("focus outside the active panel %1").arg(active->id())));
+            visited.insert(active);
+        }
+        QVERIFY(visited.size() >= 2);
+    }
+
+    // A widget we paint shows where the keyboard focus is when it came from the keyboard, not from a click.
+    void focusRingFollowsKeyboardFocus() {
+        auto* view = window_->findChild<TimelineView*>(QStringLiteral("timelineView"));
+        QVERIFY(view);
+        auto ring = [view] {
+            QWidget* r = view->findChild<QWidget*>(QStringLiteral("focusRing"));
+            return r && r->isVisible() ? r : nullptr;
+        };
+        window_->activateWindow();
+        view->setFocus(Qt::ShortcutFocusReason);
+        QCoreApplication::processEvents();
+        QVERIFY(view->hasFocus());
+        QWidget* shown = ring();
+        QVERIFY(shown);
+        QCOMPARE(shown->geometry(), view->rect());
+        // Away: the ring goes.
+        auto* other = window_->findChild<QLineEdit*>(QStringLiteral("binFilter"));
+        QVERIFY(other);
+        other->setFocus(Qt::TabFocusReason);
+        QCoreApplication::processEvents();
+        QVERIFY(!ring());
+        // A click: no ring.
+        view->setFocus(Qt::MouseFocusReason);
+        QCoreApplication::processEvents();
+        QVERIFY(!ring());
+    }
+
+    // Help > Find Command (ours): a command that is only on a button runs from the keyboard.
+    void findCommandRunsAnyCommand() {
+        const QString id = QStringLiteral("timeline.enlarge_waveform"); // on no menu and no default key
+        QAction* action = commands_.action(id);
+        QVERIFY(action && action->isEnabled() && commands_.hasHandler(id));
+        QSignalSpy ran(action, &QAction::triggered);
+        commands_.action(QStringLiteral("help.find_command"))->trigger();
+        QCoreApplication::processEvents();
+        FindCommandWindow* find = window_->findCommandWindow();
+        QVERIFY(find && find->isVisible());
+        // Every command that can run is listed, but Find Command itself.
+        const QStringList all = find->shownIds();
+        QVERIFY(all.contains(id));
+        QVERIFY(!all.contains(QStringLiteral("help.find_command")));
+        auto* search = find->findChild<QLineEdit*>(QStringLiteral("findCommandSearch"));
+        QVERIFY(search && search->hasFocus());
+        QTest::keyClicks(search, action->text().remove(QLatin1Char('&')));
+        QVERIFY(find->shownIds().contains(id));
+        QVERIFY(find->shownIds().size() < all.size());
+        // Down moves to it when more than one matches.
+        int guard = 0;
+        auto* list = find->findChild<QListWidget*>(QStringLiteral("findCommandList"));
+        QVERIFY(list);
+        while (list->currentItem() && list->currentItem()->toolTip() != id && guard++ < 50) QTest::keyClick(search, Qt::Key_Down);
+        QListWidgetItem* chosen = list->currentItem();
+        QVERIFY(chosen);
+        QCOMPARE(chosen->toolTip(), id);
+        QTest::keyClick(search, Qt::Key_Return);
+        QCOMPARE(ran.count(), 1);
+        QVERIFY(!find->isVisible());
     }
 
     // And in every window the Tools menu opens (dialogs that would wait for an answer are closed).

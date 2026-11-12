@@ -255,6 +255,10 @@ public:
     void dockGroup(PanelGroup* group, PanelGroup* target, DockSide side, double fraction = 0.5);
     FloatingWindow* floatGroup(PanelGroup* group, const QRect& geometry = {});
 
+    // Puts the keyboard focus in a shown panel: its first control that takes focus from the keyboard (Tab), else the
+    // panel itself (10.3c). Cycling windows and tabs does this.
+    void focusInto(Panel* panel);
+
     // Windows > Float All Panels / Float Active Panel (p.78-79).
     void floatAll();
     void floatActive();

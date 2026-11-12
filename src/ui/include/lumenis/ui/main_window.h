@@ -94,6 +94,7 @@ class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
+class FindCommandWindow;
 
 class AncDataImportDialog;
 class AudioMixdownDialog;
@@ -329,6 +330,7 @@ public:
     void setBinLayoutHook(BinLayoutAsk hook) { binLayoutHook_ = std::move(hook); }
     // Help > Shortcuts (p.97), once opened.
     ShortcutsWindow* shortcutsWindow() const { return shortcutsWindow_; }
+    FindCommandWindow* findCommandWindow() const { return findCommandWindow_; }
     void setFontHook(std::function<bool(SetFontDialog&)> hook) { fontHook_ = std::move(hook); }
     void setUnmountHook(std::function<bool(UnmountDialog&)> hook) { unmountHook_ = std::move(hook); }
     // Deleting managed clips from a bin (p.359): the clips, their media
@@ -1511,6 +1513,7 @@ private:
     std::function<bool(UnmountDialog&)> unmountHook_;
     std::function<bool(SetFontDialog&)> fontHook_;
     ShortcutsWindow* shortcutsWindow_ = nullptr;
+    FindCommandWindow* findCommandWindow_ = nullptr; // Help > Find Command (10.3c)
     BinLayoutAsk binLayoutHook_;
     QString currentBinLayout_;
     QList<QAction*> binLayoutActions_;

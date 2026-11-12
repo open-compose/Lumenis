@@ -9,6 +9,7 @@
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/accessibility.h"
+#include "lumenis/ui/find_command.h"
 
 #include "lumenis/model/script.h"
 #include "lumenis/ui/script_window.h"
@@ -9402,6 +9403,11 @@ void MainWindow::installPanelHandlers() {
             }
         });
     }
+    // Help > Find Command (ours, 10.3c; find_command.h): every command from the keyboard.
+    handle("help.find_command", [this] {
+        if (!findCommandWindow_) findCommandWindow_ = new FindCommandWindow(commands_, menuBar(), this);
+        findCommandWindow_->showFor(QApplication::focusWidget());
+    });
     handle("help.shortcuts", [this] {
         if (!shortcutsWindow_) shortcutsWindow_ = new ShortcutsWindow(commands_, *keyboard_, this);
         shortcutsWindow_->show();

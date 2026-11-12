@@ -212,6 +212,7 @@
     {"id": "script.color.purple", "text": "Purple"},
     {"id": "help.about", "text": "About %PRODUCT%", "role": "about"},
     {"id": "help.shortcuts", "text": "Shortcuts"},
+    {"id": "help.find_command", "text": "Find Command...", "shortcut": "Ctrl+Shift+P"},
     {"id": "help.about_qt", "text": "About Qt", "role": "aboutQt"},
     {"id": "edit.cut", "text": "Cut", "shortcut": "Ctrl+X"},
     {"id": "edit.deselect_all_keyframes", "text": "Deselect All Keyframes"},

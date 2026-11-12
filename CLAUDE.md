@@ -1074,6 +1074,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and
   segments, position bars as sliders, monitor pictures), is done: add a new painted widget to `kPainted` there.
+  10.3c, the keyboard (focus into the panel on Cycle windows/Next Tab through `PanelManager::focusInto`, Help > Find
+  Command in `src/ui/find_command.*`, the keyboard focus ring in `accessibility.cpp`), is done.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them

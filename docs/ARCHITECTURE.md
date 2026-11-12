@@ -263,7 +263,8 @@ the `fuzz` preset and run with `scripts/fuzz.py` (fuzz/README.md, BUILDING.md
 `fuzz_replay` runs the saved crash inputs (`fuzz/regressions/`) through
 them.
 
-`tst_accessibility` checks that every control a screen reader reaches has a
+Help > Find Command (`src/ui/find_command.*`) runs any command by name from
+the keyboard. `tst_accessibility` checks that every control a screen reader reaches has a
 name (`src/ui/accessibility.*` names controls from their text or tooltip;
 docs/spec/accessibility.md).
 

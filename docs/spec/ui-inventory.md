@@ -47,6 +47,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Keyboard access (docs/spec/accessibility.md, 10.3c): Cycle windows and tabs (p.78) also move the keyboard focus into
+  the panel; Help > Find Command... (Ctrl+Shift+P) runs any command by name; a focus ring on the widgets we paint when
+  the focus comes from the keyboard.
 * Audio marks (docs/spec/audio-marks.md): an edit with audio marks is a split edit, each audio mark taking the place
   of its kind's mark for the audio tracks; a split Splice-in of different lengths refused; Go to Audio Mark IN/OUT
   as Go to IN/OUT; Go to Previous/Next Trim (only pictured, p.96) as Select Previous/Next Transition (A and S, p.651).

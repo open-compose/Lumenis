@@ -430,6 +430,7 @@
       "items": [
         "help.about",
         "help.shortcuts",
+        "help.find_command",
         "help.about_qt"
       ]
     }

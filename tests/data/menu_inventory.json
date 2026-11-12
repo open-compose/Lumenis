@@ -1233,6 +1233,11 @@
         {
           "text": "About Qt",
           "reason": "Qt's LGPL licence notice; not in Media Composer."
+        },
+        {
+          "text": "Find Command...",
+          "shortcut": "Ctrl+Shift+P",
+          "reason": "Ours (ROADMAP 10.3c): every command by name from the keyboard, for those on buttons and palettes only."
         }
       ]
     }
