@@ -78,6 +78,8 @@ public:
     // The rows in display order, with `top` already offset by the vertical scroll (so it can be
     // negative or below the widget). Empty with nothing shown.
     QList<Row> rows() const;
+    // The Timeline this view draws (screen readers read the tracks and segments through it, accessibility.h).
+    Timeline& timeline() const { return timeline_; }
     // The ruler plus every row, in pixels, ignoring the scroll.
     int contentHeight() const;
     // The height of the timecode ruler at the top, in pixels.

@@ -22,10 +22,32 @@ it one, and a reader then says only "button".
   that would wait for an answer) and fails for a control a user operates (a button, or anything that takes focus)
   without a name. 544 controls are checked.
 
+## What the widgets we paint are (10.3b)
+
+`installAccessibleNames()` also installs an accessibility factory (`QAccessible::installFactory`) for the widgets we
+paint ourselves, which Qt would otherwise describe as a nameless "client":
+
+* **The Timeline** (`TimelineView`) is a pane whose children are its tracks, top to bottom as shown; each track is a
+  list ("Track V1, 3 segments", with its custom name if it has one) whose items are its segments: "Interview, starts
+  00:00:00:00, length 00:00:02:00", or "Filler, ...". The interfaces read the sequence as it is each time they are
+  asked (one per track and per segment index, kept and reused), so they never point at a segment that has gone.
+  The pane's description gives the number of tracks and the sequence's length. Rectangles are the segments' places,
+  so a reader's pointer and highlight follow them.
+* **A position bar** (`PositionBar`) is a slider ("Source monitor position", "Record monitor position") whose value
+  is the monitor's frame, from the first to the last frame it spans; a reader can set it, which moves the position.
+* **A monitor's picture** (`MonitorPicture`) is a graphic ("Source monitor") whose description is what is loaded and
+  where ("Cut 1, frame 11 of 150"), or "Empty".
+* **The graphs, wheels, meters and previews** (Color wheel, Chroma curve, Histogram, Luma ranges, Vector wheel, Safe
+  colors, EQ graph, Pan, Angle, Audio meters, Brush preview, Framing, Keyframes, Motion graph, Tracking data, Sequence
+  map) are graphics named by what they are, unless the code names them. EqGraph, KeyframeTrack and TrackerTimeline
+  have `Q_OBJECT` so their class names reach the factory; the Title Tool's canvas is named in the code.
+* Also named in 10.3b: each Effect Editor parameter's control after its row's label, the Audio Mixer's pan dial and
+  value, the Title Designer's Title Text and Dashboard, and an editable combo box's text field after the combo box.
+* `tst_accessibility` reads a sequence back through the Timeline's interfaces, the Record monitor's position bar
+  (and moves it) and picture, and fails for a painted widget that is shown without a role or a name.
+
 ## Still to do
 
-* 10.3b: roles and contents for the widgets we paint (the Timeline's tracks and segments, the monitors' pictures and
-  position bars, the graphs and wheels), so a reader can say what they are and what they show.
 * 10.3c: the keyboard: focus order in each window, every command reachable without the mouse (the Keyboard setting
   covers commands; the panels and lists need Tab order), and focus that can be seen.
 * 10.3d: contrast and large fonts against the Interface settings, and the owner's checks with VoiceOver, Narrator or

@@ -23,6 +23,8 @@ class Timeline;
 // (model::eqResponse), 20 Hz to 20 kHz on a log scale, +15 dB at the top and -20 dB at the bottom,
 // with the zero line and lines at 50 Hz, 100 Hz, 500 Hz, 3 kHz and 12 kHz.
 class EqGraph : public QWidget {
+    Q_OBJECT // its class name reaches the accessibility factory (accessibility.h)
+
 public:
     explicit EqGraph(QWidget* parent = nullptr);
     void setEq(const model::AudioEq& eq);

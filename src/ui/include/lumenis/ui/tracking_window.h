@@ -23,6 +23,8 @@ class EffectEditor;
 // frame, the two Display Markers and the position indicator. Clicking moves the position; the Display Markers are
 // dragged; right-clicking gives Add New Tracker Region, Delete Tracker Region and Set Reference Frame (p.266, p.269).
 class TrackerTimeline : public QWidget {
+    Q_OBJECT // its class name reaches the accessibility factory (accessibility.h)
+
 public:
     TrackerTimeline(EffectEditor& editor, int index, QWidget* parent);
     int index() const { return index_; }

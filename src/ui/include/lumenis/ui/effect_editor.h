@@ -814,6 +814,8 @@ private:
 // first frame to its last; a graph's height is its parameter's range. Made and owned by EffectEditor,
 // which it asks for everything it shows and changes.
 class KeyframeTrack : public QWidget {
+    Q_OBJECT // its class name reaches the accessibility factory (accessibility.h)
+
 public:
     enum class Kind { Effect, Group, Parameter, Graph };
     // `which` as EffectEditor::keyframeTrack() names it; empty for the track of a parameter that is not

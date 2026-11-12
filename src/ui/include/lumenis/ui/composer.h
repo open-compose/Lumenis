@@ -50,6 +50,11 @@ public:
     // clamps x to the bar; both return 0 while the monitor holds less than two frames.
     std::int64_t frameAt(int x) const;
     int xFor(std::int64_t frame) const;
+    // What the bar shows, for screen readers (accessibility.h): its monitor and the frames it spans (the clip, or in
+    // the Effect Preview monitor only the effect).
+    Composer& composer() const { return composer_; }
+    MonitorId monitor() const { return monitor_; }
+    std::pair<std::int64_t, std::int64_t> span() const;
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -59,8 +64,6 @@ protected:
 
 private:
     std::optional<model::Marker> markerAt(int x) const;
-    // The frames the bar spans: the clip, or in the Effect Preview monitor only the effect.
-    std::pair<std::int64_t, std::int64_t> span() const;
 
     Composer& composer_;
     MonitorId monitor_;
@@ -82,6 +85,9 @@ public:
     // The area of the widget the picture fills: the largest rectangle of the project's aspect ratio,
     // centred (letterboxed or pillarboxed), in widget coordinates.
     QRect pictureRect() const;
+    // The monitor shown, for screen readers (accessibility.h).
+    Composer& composer() const { return composer_; }
+    MonitorId monitor() const { return monitor_; }
 
 protected:
     void paintEvent(QPaintEvent* event) override;

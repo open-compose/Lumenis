@@ -8,13 +8,20 @@
 // must have a role that says what they are.
 #include "lumenis/core/project_format.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/sequence.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
 
 #include <QAbstractButton>
+#include <QAccessibleValueInterface>
 #include <QAction>
 #include <QFile>
 #include <QJsonArray>
@@ -136,6 +143,119 @@ private slots:
         QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("%1 of %2 controls have no accessible name").arg(unnamed.size()).arg(checked)));
     }
 
+    // The widgets we paint say what they are and show (10.3b): the Timeline as tracks of segments, the position bar as a
+    // slider at the monitor's position, the monitor's picture with what is loaded.
+    void paintedWidgetsDescribeThemselves() {
+        const QString binId = window_->binContainer().newBin();
+        BinDocument* doc = window_->binContainer().openBin(binId);
+        QVERIFY(doc);
+        auto seg = [](const QString& name, std::int64_t length) {
+            model::Segment s;
+            s.binId = QStringLiteral("bin");
+            s.clipId = name;
+            s.name = name;
+            s.sourceTrack = QStringLiteral("V1");
+            s.length = length;
+            return s;
+        };
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {seg(QStringLiteral("Interview"), 50), model::Segment::filler(25), seg(QStringLiteral("Harbour"), 75)});
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut 1");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = projectFormatPresets().front().editRate;
+        seq.storeIn(item);
+        doc->addItem(item);
+        window_->composer().load(MonitorId::Record, binId, item);
+        window_->composer().moveTo(MonitorId::Record, 60);
+        QCoreApplication::processEvents();
+
+        // The Timeline: a pane of tracks, V1 a list of its three segments.
+        auto* view = window_->findChild<TimelineView*>(QStringLiteral("timelineView"));
+        QVERIFY(view);
+        QAccessibleInterface* timeline = QAccessible::queryAccessibleInterface(view);
+        QVERIFY(timeline);
+        QCOMPARE(timeline->role(), QAccessible::Pane);
+        QCOMPARE(timeline->text(QAccessible::Name), QStringLiteral("Timeline"));
+        QVERIFY(timeline->childCount() >= 2);
+        QAccessibleInterface* v1 = nullptr;
+        for (int i = 0; i < timeline->childCount(); ++i) {
+            QAccessibleInterface* c = timeline->child(i);
+            QVERIFY(c && c->isValid());
+            QCOMPARE(timeline->indexOfChild(c), i);
+            if (c->text(QAccessible::Name).startsWith(QStringLiteral("Track V1"))) v1 = c;
+        }
+        QVERIFY(v1);
+        QCOMPARE(v1->role(), QAccessible::List);
+        QCOMPARE(v1->childCount(), 3);
+        QCOMPARE(v1->parent(), timeline);
+        QAccessibleInterface* first = v1->child(0);
+        QVERIFY(first->text(QAccessible::Name).startsWith(QStringLiteral("Interview, starts 00:00:00:00")));
+        QVERIFY(v1->child(1)->text(QAccessible::Name).startsWith(QStringLiteral("Filler")));
+        QVERIFY(v1->child(2)->text(QAccessible::Name).contains(QStringLiteral("Harbour")));
+        QCOMPARE(first->role(), QAccessible::ListItem);
+        QCOMPARE(first->parent(), v1);
+        QCOMPARE(v1->indexOfChild(v1->child(2)), 2);
+        // The same interface each time it is asked for.
+        QCOMPARE(v1->child(0), first);
+
+        // The Record monitor's position bar: a slider at frame 60 of 0 to 149.
+        PositionBar* bar = nullptr;
+        for (PositionBar* b : window_->findChildren<PositionBar*>()) {
+            if (b->monitor() == MonitorId::Record) bar = b;
+        }
+        QVERIFY(bar);
+        QAccessibleInterface* slider = QAccessible::queryAccessibleInterface(bar);
+        QCOMPARE(slider->role(), QAccessible::Slider);
+        QCOMPARE(slider->text(QAccessible::Name), QStringLiteral("Record monitor position"));
+        QAccessibleValueInterface* value = slider->valueInterface();
+        QVERIFY(value);
+        QCOMPARE(value->currentValue().toLongLong(), 60);
+        QCOMPARE(value->minimumValue().toLongLong(), 0);
+        QCOMPARE(value->maximumValue().toLongLong(), 149);
+        // A reader can move it.
+        value->setCurrentValue(10);
+        QCOMPARE(window_->composer().state(MonitorId::Record).position(), 10);
+
+        // The Record monitor's picture: what is loaded and where.
+        MonitorPicture* picture = nullptr;
+        for (MonitorPicture* m : window_->findChildren<MonitorPicture*>()) {
+            if (m->monitor() == MonitorId::Record) picture = m;
+        }
+        QVERIFY(picture);
+        QAccessibleInterface* shown = QAccessible::queryAccessibleInterface(picture);
+        QCOMPARE(shown->role(), QAccessible::Graphic);
+        QCOMPARE(shown->text(QAccessible::Name), QStringLiteral("Record monitor"));
+        QCOMPARE(shown->text(QAccessible::Description), QStringLiteral("Cut 1, frame 11 of 150"));
+    }
+
+    // Every widget we paint that is shown says what it is (a role other than the generic Client) and has a name.
+    void everyPaintedWidgetHasARole() {
+        static const QStringList painted{
+            QStringLiteral("lumenis::ui::TimelineView"),     QStringLiteral("lumenis::ui::PositionBar"),
+            QStringLiteral("lumenis::ui::MonitorPicture"),   QStringLiteral("lumenis::ui::AngleDial"),
+            QStringLiteral("lumenis::ui::AudioMeters"),      QStringLiteral("lumenis::ui::BrushPreview"),
+            QStringLiteral("lumenis::ui::ChromaCurveGraph"), QStringLiteral("lumenis::ui::ChromaWheel"),
+            QStringLiteral("lumenis::ui::EqGraph"),          QStringLiteral("lumenis::ui::FramingViewer"),
+            QStringLiteral("lumenis::ui::Histogram"),        QStringLiteral("lumenis::ui::KeyframeTrack"),
+            QStringLiteral("lumenis::ui::LumaRangesGraph"),  QStringLiteral("lumenis::ui::MotionGraph"),
+            QStringLiteral("lumenis::ui::PanGrid"),          QStringLiteral("lumenis::ui::SafeColorGraph"),
+            QStringLiteral("lumenis::ui::SequenceMap"),      QStringLiteral("lumenis::ui::TrackerTimeline"),
+            QStringLiteral("lumenis::ui::VectorWheel")};
+        QStringList wrong;
+        int checked = 0;
+        for (QWidget* w : shownWidgets()) {
+            if (!painted.contains(QString::fromLatin1(w->metaObject()->className()))) continue;
+            ++checked;
+            QAccessibleInterface* a = QAccessible::queryAccessibleInterface(w);
+            if (!a || a->role() == QAccessible::Client || a->text(QAccessible::Name).trimmed().isEmpty()) wrong << describe(w);
+        }
+        QVERIFY(checked >= 3); // the Timeline, the position bars and the monitors at least
+        wrong.removeDuplicates();
+        QVERIFY2(wrong.isEmpty(), qPrintable(QStringLiteral("painted widgets without a role or name: ") + wrong.join(QStringLiteral(", "))));
+    }
+
     // And in every window the Tools menu opens (dialogs that would wait for an answer are closed).
     void everyToolWindowHasNames() {
         const QStringList tools = toolsMenu();
@@ -157,6 +277,8 @@ private slots:
         QVERIFY(checked > 200);
         for (const QString& u : unnamed) qWarning("no accessible name: %s", qPrintable(u));
         QVERIFY2(unnamed.isEmpty(), qPrintable(QStringLiteral("%1 of %2 controls have no accessible name").arg(unnamed.size()).arg(checked)));
+        // The tool windows' graphs and wheels too.
+        everyPaintedWidgetHasARole();
     }
 };
 

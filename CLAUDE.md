@@ -1071,7 +1071,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1b, the slow paths,
   has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling").
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
-  `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`.
+  `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
+  roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and
+  segments, position bars as sliders, monitor pictures), is done: add a new painted widget to `kPainted` there.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them

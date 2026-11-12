@@ -272,6 +272,7 @@ TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidg
         text_ = new QPlainTextEdit(this);
         text_->setMaximumHeight(60);
         named(text_, QStringLiteral("text"));
+        text_->setAccessibleName(tr("Title Text")); // screen readers (10.3)
         outer->addWidget(text_);
         text_->installEventFilter(new FocusOut(this, [this] {
             const QString text = text_->toPlainText();
@@ -802,6 +803,7 @@ TitlerDashboard::TitlerDashboard(TitlerTool& tool, QWidget* parent) : QWidget(pa
     layout->setContentsMargins(0, 0, 0, 0);
     auto* scroll = new QScrollArea(this);
     scroll->setObjectName(QStringLiteral("titlerDashboardScroll"));
+    scroll->setAccessibleName(tr("Dashboard")); // screen readers (10.3)
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);

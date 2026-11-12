@@ -1727,7 +1727,9 @@ The items:
     plus a checklist for the owner's manual check. In parts (docs/spec/accessibility.md): 10.3a, names (done:
     `installAccessibleNames` in `src/ui/accessibility.*` naming controls from their text, tooltip or placeholder,
     names in the code for the rest; `tst_accessibility` over the main window and the Tools menu's windows, 544
-    controls); 10.3b, roles and contents for the widgets we paint; 10.3c, the keyboard and focus; 10.3d, contrast,
+    controls); 10.3b, roles and contents for the widgets we paint (done: the Timeline as tracks of segments, position
+    bars as sliders, monitor pictures with what is loaded, the graphs and wheels as named graphics, through an
+    accessibility factory in `src/ui/accessibility.cpp`); 10.3c, the keyboard and focus; 10.3d, contrast,
     large fonts and the owner's checks with the screen readers.
   * 10.4, localisation. Use Qt Linguist (`lupdate`/`lrelease` from qttools, LGPL). Add `translations/` and a
     language choice in the Interface setting. Translate commands.json, menus.json, settings.json and the effect

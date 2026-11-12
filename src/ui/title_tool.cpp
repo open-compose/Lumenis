@@ -268,6 +268,7 @@ class TitleCanvas : public QWidget {
 public:
     explicit TitleCanvas(TitleToolWindow& tool) : QWidget(&tool), tool_(tool) {
         setObjectName(QStringLiteral("title:canvas"));
+        setAccessibleName(QApplication::translate("Accessibility", "Title")); // screen readers (10.3)
         setFocusPolicy(Qt::StrongFocus);
         setMouseTracking(false);
         setMinimumSize(320, 180);

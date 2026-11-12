@@ -182,11 +182,13 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     gang_->setContextMenuPolicy(Qt::CustomContextMenu);
     pan_ = new QDial(this);
     pan_->setObjectName(QStringLiteral("pan"));
+    pan_->setAccessibleName(tr("Pan")); // screen readers (10.3)
     pan_->setRange(-model::kPanMax, model::kPanMax);
     pan_->setFixedSize(34, 34);
     pan_->setNotchesVisible(false);
     panBox_ = new QLineEdit(fader::panText(0), this);
     panBox_->setObjectName(QStringLiteral("panValue"));
+    panBox_->setAccessibleName(tr("Pan value"));
     panBox_->setAlignment(Qt::AlignCenter);
     panBox_->setFixedWidth(44);
     panBox_->installEventFilter(this);

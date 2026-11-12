@@ -1322,6 +1322,8 @@ void EffectEditor::rebuild(const model::Effect* effect) {
             if (QWidget* control = controls_.value(k)) {
                 control->setProperty("parameterKey", k);
                 control->setProperty("nameLabel", QVariant::fromValue(nameLabel));
+                // Screen readers (10.3): the control is named as its row's label is.
+                if (nameLabel && control->accessibleName().isEmpty()) control->setAccessibleName(nameLabel->text());
                 control->installEventFilter(this);
             }
             // The parameter's keyframe track; a slider's has an opener for its graph (p.96-97).
