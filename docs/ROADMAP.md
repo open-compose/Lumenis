@@ -1637,7 +1637,12 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     menu, window, setting and message texts renamed (done: `tr()` strings, commands.json, menus.json, settings.json and
     tests/data/menu_inventory.json; Titler+ and NaturalMatch, also effect and parameter names, wait for 9.8c); 9.8c, effect and parameter category names as display labels over
     their stored names (done: `model::shownName` in `src/model/shown_names.*` for the Effect Palette, Effect Editor,
-    Sequence Report and new templates; the check reads its table), so 9.8 and Phase 9's steps are done.
+    Sequence Report and new templates; the check reads its table); 9.8d, other companies' marks (the item below:
+    Adobe, Apple, Blackmagic Design, Autodesk, Boris FX, Grass Valley, MAGIX/VEGAS), with their published lists read,
+    dated in docs/spec/trademarks.md and added to `tests/data/trademarks.json`; our new names from 9.8b and 9.8c are
+    checked against them too (Title Designer, Smart Render, Gradient Wipe, Color Mask ...). Waiting: the companies'
+    trademark pages cannot be reached from the cloud sessions' network (2026-11-12); the owner allows those hosts or
+    saves the lists. Phase 9 is done when 9.8d is.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline
   (p.288-292, p.645);
@@ -1691,6 +1696,57 @@ The items:
 * Performance profiling, accessibility audit, localisation (the languages
   Media Composer ships in), crash reporting, auto-update, code signing, and
   long-run stability tests (72-hour playback soak).
+* **Step plan: proposed, waiting on the owner** (drafted 2026-11-12, at the end of Phase 9's steps). Nothing here
+  starts before the owner agrees; the decisions are listed after the steps. Today none of it exists: no
+  translations (strings go through `tr()`, but there are no `.ts` files and no language setting), no accessible
+  names on our custom-painted widgets, no crash handler, no update check. Signing exists only as
+  `packaging/macos/sign-and-notarize.sh`, run by hand.
+  * 10.1, performance profiling. Add a benchmark set run by `ctest -L perf` on the self-hosted runners: open a large
+    project and bins, a long sequence in the Timeline, a render, a Transcode, scrubbing, and `--measure-playback`
+    at each Video Quality setting. Record the times in `tests/data/perf_baseline.json` for each runner, and fail
+    when one gets slower than the recorded time by more than a set margin. Profile the slowest paths (perf on
+    Linux, Instruments on macOS, WPA on Windows), fix them, and write the methods up in BUILDING.md.
+  * 10.2, long-run stability. Add a `--soak <hours>` mode that loops playback of the sample project's sequences
+    with effects, renders and scrubbing, and logs memory, handles, threads and dropped frames every minute. A
+    script checks the log for growth. Run 72 hours once on each OS (the owner's machines). Also run AddressSanitizer
+    and UBSan soaks of a few hours, and add ThreadSanitizer (it isn't in the presets yet).
+  * 10.3, accessibility audit. Give every control a name and a role through `QAccessibleInterface` for the widgets
+    we paint ourselves: panels, Timeline, monitors, bins, buttons and palettes. Check focus order and that every
+    command is reachable by keyboard. Check contrast and large fonts against the Interface settings. Try it with
+    VoiceOver, Narrator/NVDA and Orca. Add `tst_accessibility` (every visible widget with a command has a name),
+    plus a checklist for the owner's manual check.
+  * 10.4, localisation. Use Qt Linguist (`lupdate`/`lrelease` from qttools, LGPL). Add `translations/` and a
+    language choice in the Interface setting. Translate commands.json, menus.json, settings.json and the effect
+    labels through `model::shownName`. Add a check that no user-visible string bypasses `tr()`, and pseudo-localised
+    screenshots (long strings, accents) for the screenshot comparison. The languages are the owner's choice (below).
+  * 10.5, crash reporting. Use Crashpad (Apache 2.0, compatible with GPLv3; THIRD-PARTY-NOTICES.md) to write
+    minidumps locally. After a crash, the next start says where the dump is. Add a symbol upload step in the
+    release builds. Sending dumps waits on the owner's collection decision; nothing leaves the machine without the
+    user's consent.
+  * 10.6, auto-update. Check a signed update feed at start-up, and from Help with a setting to turn it off. Install
+    with Sparkle on macOS and WinSparkle on Windows (both MIT); on Linux, use AppImageUpdate's zsync data (MIT) or
+    only tell the user. Waits on update hosting and signing.
+  * 10.7, code signing and the release pipeline. Release builds use Qt 6.8 LTS with `LUMENIS_PATENT_CODECS` off.
+    Sign and notarise on macOS (Developer ID, the existing script in CI). Use Authenticode on Windows (.msi and
+    .exe), and a GPG signature and checksums for the AppImage, .deb and .tar.gz. Keep the certificates as CI
+    secrets used only by a manual release workflow. Add an installer gate that checks the signatures (`spctl`,
+    `signtool verify`, `gpg --verify`). The hosted macOS jobs (Xcode 15 and 26), Ubuntu 24.04 and the .msi install
+    run here once minutes allow.
+  * 10.8, the release gate: 10.1-10.7 pass on all three platforms, the phases' deferred gates are listed with their
+    reasons, and a release candidate is installed and tried by the owner on each OS.
+* **Decisions for the owner** (before the step each one blocks):
+  * Certificates (10.7, 10.6): an Apple Developer ID (the Developer Program), and a Windows code-signing
+    certificate (OV, EV, or Azure Trusted Signing), held by whom and in which secret store. A GPG key for Linux.
+  * Update hosting (10.6): where the feed and packages live (GitHub Releases needs a public repository or one the
+    users can read; otherwise a web host), and who signs the feed.
+  * Crash-report collection (10.5): only local dumps that the user sends by hand, or a server (self-hosted
+    Crashpad/Breakpad collector, Sentry or similar). If a server: the privacy policy, opt-in wording and how long
+    dumps are kept.
+  * Languages (10.4): which ones, in what order, and who translates. Media Composer's shipped languages need a
+    public Avid source before we copy that list.
+  * Which machines run the 72-hour soaks (10.2): each one ties up a runner for three days.
+  * Whether hosted CI minutes come back for the end-of-phase hosted macOS run (CLAUDE.md), or the self-hosted Mac
+    is enough for Phase 9 and 10.
 
 ## 6. Immediate next steps
 
