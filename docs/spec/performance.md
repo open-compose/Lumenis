@@ -41,5 +41,15 @@ unless the operating system provides them (ROADMAP Phase 10, the owner's answers
 
 ## Profiling (10.1b)
 
+Found and fixed so far (times on the 4-thread Linux development machine):
+
+| Benchmark | Before | After | What it was |
+| --- | --- | --- | --- |
+| `compose_color_correction_1080p` | over 75 s | about 0.2 s | every control read by its path for every pixel; now `media::CorrectionPlan` |
+| `compose_dissolve_1080p` | 234 ms | about 100 ms | single-threaded passes and a library call to round every value; a copy of the picture per track for Matte Key |
+| `compose_3d_warp_1080p` | 481 ms | about 170 ms | the same passes |
+| `compose_blur_1080p` | 155 ms | 37 ms | the same passes |
+| `bin_show_10k` | 6.7 s | about 10 ms | the Script view built for every bin, a widget row per clip, with a linear look-up per row |
+
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).

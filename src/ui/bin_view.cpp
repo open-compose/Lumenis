@@ -1381,16 +1381,27 @@ BinScriptView::BinScriptView(BinDocument& document, QAbstractItemModel* rows, QI
     setObjectName(QStringLiteral("binScript"));
     setWidgetResizable(true);
     setFrameShape(QFrame::NoFrame);
-    // Any change to the rows rebuilds every row widget.
-    connect(rows_, &QAbstractItemModel::modelReset, this, &BinScriptView::rebuild);
-    connect(rows_, &QAbstractItemModel::layoutChanged, this, &BinScriptView::rebuild);
-    connect(rows_, &QAbstractItemModel::rowsInserted, this, &BinScriptView::rebuild);
-    connect(rows_, &QAbstractItemModel::rowsRemoved, this, &BinScriptView::rebuild);
+    // Any change to the rows rebuilds every row widget, now or when the view is next shown.
+    connect(rows_, &QAbstractItemModel::modelReset, this, &BinScriptView::rowsChanged);
+    connect(rows_, &QAbstractItemModel::layoutChanged, this, &BinScriptView::rowsChanged);
+    connect(rows_, &QAbstractItemModel::rowsInserted, this, &BinScriptView::rowsChanged);
+    connect(rows_, &QAbstractItemModel::rowsRemoved, this, &BinScriptView::rowsChanged);
     connect(selection_, &QItemSelectionModel::selectionChanged, this, &BinScriptView::updateSelection);
     if (MediaFrames* frames = MediaFrames::instance()) {
         connect(frames, &MediaFrames::thumbnailReady, this, &BinScriptView::updatePictures);
     }
-    rebuild();
+    // Built when first shown.
+}
+
+void BinScriptView::rowsChanged() {
+    stale_ = true;
+    if (isVisible()) rebuild();
+}
+
+void BinScriptView::showEvent(QShowEvent* event) {
+    QScrollArea::showEvent(event);
+    if (stale_) rebuild();
+    else applySelection();
 }
 
 // One QFrame per shown row: the frame on the left, the name and duration above
@@ -1398,6 +1409,11 @@ BinScriptView::BinScriptView(BinDocument& document, QAbstractItemModel* rows, QI
 // property, which the event filter, selection and pictures look up. The
 // content widget takes drops; rows take the clicks and drags.
 void BinScriptView::rebuild() {
+    stale_ = false;
+    // The items by id, once: looking each row's item up in the bin's list made this quadratic.
+    QHash<QString, const model::BinItem*> items;
+    items.reserve(static_cast<qsizetype>(document_.bin().items.size()));
+    for (const model::BinItem& i : document_.bin().items) items.insert(i.id, &i);
     content_ = new QWidget;
     content_->setObjectName(QStringLiteral("scriptRows"));
     content_->setAcceptDrops(true);
@@ -1409,7 +1425,7 @@ void BinScriptView::rebuild() {
     for (int r = 0; r < rows_->rowCount(); ++r) {
         const QModelIndex index = rows_->index(r, BinItemModel::kNameColumn);
         const QString id = index.data(BinItemModel::kIdRole).toString();
-        const model::BinItem* item = document_.bin().item(id);
+        const model::BinItem* item = items.value(id);
         if (!item) continue;
 
         auto* row = new QFrame(content_);
@@ -1450,7 +1466,7 @@ void BinScriptView::rebuild() {
     }
     layout->addStretch(1);
     setWidget(content_); // deletes the previous rows
-    updateSelection();
+    applySelection();
 }
 
 // The frame as a pixmap for the row's QLabel, drawn as the Frame view draws it.
@@ -1466,15 +1482,22 @@ QPixmap BinScriptView::scriptPicture(const model::BinItem& item, QSize size) con
 
 // When decoded head frames arrive, redraw the pictures without a rebuild.
 void BinScriptView::updatePictures() {
-    if (!content_) return;
+    if (!content_ || stale_) return;
+    if (!isVisible()) {
+        stale_ = true; // drawn again when next shown
+        return;
+    }
+    QHash<QString, const model::BinItem*> items;
+    for (const model::BinItem& i : document_.bin().items) items.insert(i.id, &i);
     for (QLabel* frame : content_->findChildren<QLabel*>(QStringLiteral("scriptFrame"))) {
-        if (const model::BinItem* item = document_.bin().item(frame->property("binItemId").toString())) {
+        if (const model::BinItem* item = items.value(frame->property("binItemId").toString())) {
             frame->setPixmap(scriptPicture(*item, frame->size()));
         }
     }
 }
 
 QWidget* BinScriptView::rowFor(const QString& id) const {
+    if (stale_) const_cast<BinScriptView*>(this)->rebuild(); // the rows as they are now, shown or not
     if (!content_) return nullptr;
     for (QFrame* row : content_->findChildren<QFrame*>(QStringLiteral("scriptRow"))) {
         if (row->property("binItemId").toString() == id) return row;
@@ -1488,7 +1511,12 @@ QString BinScriptView::idAt(QObject* rowWidget) const {
 
 // Selected rows get the highlight background, the others AlternateBase.
 void BinScriptView::updateSelection() {
-    if (!content_) return;
+    if (!isVisible()) return; // applied by showEvent or rebuild
+    applySelection();
+}
+
+void BinScriptView::applySelection() {
+    if (!content_ || stale_) return;
     QSet<QString> selected;
     for (const QModelIndex& i : selection_->selectedIndexes()) selected.insert(i.data(BinItemModel::kIdRole).toString());
     for (QFrame* row : content_->findChildren<QFrame*>(QStringLiteral("scriptRow"))) {

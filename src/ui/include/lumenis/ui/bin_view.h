@@ -320,8 +320,10 @@ private:
 
 // Script view (p.252-254): frames down the left, the clip's details above
 // a text box for each. A column of plain widgets, one per row of `rows`
-// (BinView's filter model), rebuilt whenever the rows change; the selection
-// is the Text view's. Typing in a text box goes straight to the document.
+// (BinView's filter model), rebuilt whenever the rows change while it is shown,
+// else when it is next shown (10.1b: building it for every bin, in whatever
+// view, made a bin of 10,000 clips take seconds to open); the selection is the
+// Text view's. Typing in a text box goes straight to the document.
 class BinScriptView : public QScrollArea {
     Q_OBJECT
 
@@ -329,9 +331,9 @@ public:
     BinScriptView(BinDocument& document, QAbstractItemModel* rows, QItemSelectionModel* selection,
                   QWidget* parent = nullptr);
 
-    // Recreates every row from the model.
+    // Recreates every row from the model now.
     void rebuild();
-    // The row widget for an item, or null if it is not shown.
+    // The row widget for an item, or null if it is not shown; brings the rows up to date first.
     QWidget* rowFor(const QString& id) const;
 
 signals:
@@ -341,9 +343,14 @@ signals:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
+    // The rows changed: rebuilt now when shown, else marked out of date.
+    void rowsChanged();
+    // The selection's highlight on the rows: when shown (updateSelection), or now (applySelection).
     void updateSelection();
+    void applySelection();
     void updatePictures();
     QPixmap scriptPicture(const model::BinItem& item, QSize size) const;
     QString idAt(QObject* rowWidget) const;
@@ -352,6 +359,7 @@ private:
     QAbstractItemModel* rows_;
     QItemSelectionModel* selection_;
     QWidget* content_ = nullptr;
+    bool stale_ = true; // the rows have changed since they were built
     QPoint pressPos_;
     QString pressId_;
 };
