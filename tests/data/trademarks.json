@@ -11,8 +11,7 @@
       "name": "AudioSuite",
       "source": "FX Guide p.157 (TM)",
       "ours": "Audio Processing",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "SubCap",
@@ -88,8 +87,7 @@
       "name": "SteadyGlide",
       "source": "FX Guide p.269 (TM)",
       "ours": "Smooth Glide",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Magic Mask",
@@ -103,56 +101,50 @@
       "source": "FX Guide p.544, p.624 (TM)",
       "ours": "Keep Luminance",
       "status": "planned",
-      "step": "9.8b"
+      "step": "9.8c"
     },
     {
       "name": "ChromaCurve",
       "source": "FX Guide p.604 (TM)",
       "ours": "Chroma Curve",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "ChromaWheel",
       "source": "FX Guide p.635 (TM)",
       "ours": "Color Wheel",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "ScriptSync",
       "source": "Avid feature name",
       "ours": "Script Alignment",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "PhraseFind",
       "source": "Avid feature name",
       "ours": "Phrase Search",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "MultiRez",
       "source": "Avid feature name",
       "ours": "Multi-Resolution",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "FrameFlex",
       "source": "Avid feature name",
       "ours": "Framing",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Titler+",
       "source": "Avid feature name",
       "ours": "Title Designer",
       "status": "planned",
-      "step": "9.8b"
+      "step": "9.8c"
     },
     {
       "name": "PlasmaWipe",
@@ -165,8 +157,7 @@
       "name": "ExpertRender",
       "source": "Avid feature name",
       "ours": "Smart Render",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Illusion FX",
@@ -179,15 +170,13 @@
       "name": "AutoCut",
       "source": "Avid feature name",
       "ours": "Speaker Cut",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "MultiGroup",
       "source": "Avid feature name",
       "ours": "Group of Groups",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Avid Pan & Zoom",
@@ -200,15 +189,13 @@
       "name": "Avid Background Services",
       "source": "trademark notice (Avid)",
       "ours": "Background Services",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Avid Titler+",
       "source": "trademark notice (Avid)",
       "ours": "Title Designer",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Symphony",
@@ -221,8 +208,7 @@
       "name": "Interplay",
       "source": "trademark notice",
       "ours": "Asset Transfer",
-      "status": "planned",
-      "step": "9.8b"
+      "status": "renamed"
     },
     {
       "name": "Avid",

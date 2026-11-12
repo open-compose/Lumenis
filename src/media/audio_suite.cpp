@@ -189,7 +189,7 @@ bool processAudioSuite(const QString& id, const QMap<QString, double>& params, s
                        QString* error) {
     const auto info = findAudioSuitePlugin(id);
     if (!info) {
-        if (error) *error = QObject::tr("The AudioSuite plug-in %1 is not installed.").arg(id);
+        if (error) *error = QObject::tr("The Audio Processing plug-in %1 is not installed.").arg(id);
         return false;
     }
     if (info->effect) {
@@ -198,7 +198,7 @@ bool processAudioSuite(const QString& id, const QMap<QString, double>& params, s
         for (auto& c : channels) {
             auto fx = makeAudioEffect(id);
             if (!fx) {
-                if (error) *error = QObject::tr("The AudioSuite plug-in %1 is not installed.").arg(info->name);
+                if (error) *error = QObject::tr("The Audio Processing plug-in %1 is not installed.").arg(info->name);
                 return false;
             }
             fx->setAll(params);
@@ -293,7 +293,7 @@ std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& s,
                                                         const Rational& sequenceRate, const MediaCreation& creation,
                                                         QString* error) {
     if (!s.audioSuite || s.isFiller()) {
-        if (error) *error = QObject::tr("The segment has no AudioSuite effect.");
+        if (error) *error = QObject::tr("The segment has no Audio Processing effect.");
         return std::nullopt;
     }
     std::vector<std::vector<float>> sound{segmentSource(s, clip, sequenceRate)};

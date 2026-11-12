@@ -440,7 +440,7 @@ bool AudioSuiteTool::choosePlugin(const QString& id) {
             return true;
         }
         const auto info = media::findAudioSuitePlugin(id);
-        if (!info) return fail(tr("The AudioSuite plug-in %1 is not installed.").arg(id));
+        if (!info) return fail(tr("The Audio Processing plug-in %1 is not installed.").arg(id));
         plugin_ = id;
         lastValues_ = info->defaults();
         refresh();
@@ -448,11 +448,11 @@ bool AudioSuiteTool::choosePlugin(const QString& id) {
     }
     if (tracks().isEmpty()) return fail(tr("Select an audio track."));
     if (id.isEmpty()) {
-        if (!timeline_.setAudioSuite(tracks(), std::nullopt, false, tr("Remove AudioSuite"))) return fail(timeline_.lastMessage());
+        if (!timeline_.setAudioSuite(tracks(), std::nullopt, false, tr("Remove Audio Processing"))) return fail(timeline_.lastMessage());
         return true;
     }
     const auto info = media::findAudioSuitePlugin(id);
-    if (!info) return fail(tr("The AudioSuite plug-in %1 is not installed.").arg(id));
+    if (!info) return fail(tr("The Audio Processing plug-in %1 is not installed.").arg(id));
     // "This plug-in applies only when you use the Create New Master Clips features" (p.839).
     if (info->masterClipOnly) return fail(tr("%1 works only on master clips (Toggle Master Clip Mode).").arg(info->name));
     model::AudioSuiteEffect e;
@@ -461,7 +461,7 @@ bool AudioSuiteTool::choosePlugin(const QString& id) {
     e.params = info->defaults();
     plugin_ = id;
     lastValues_ = e.params;
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("AudioSuite %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
     refresh();
     return true;
 }
@@ -482,7 +482,7 @@ bool AudioSuiteTool::setValues(const QMap<QString, double>& values) {
         refresh();
         return true;
     }
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("AudioSuite %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
     return true;
 }
 
@@ -507,7 +507,7 @@ AudioSuitePluginDialog* AudioSuiteTool::activate() {
 
 bool AudioSuiteTool::renderRange(bool scoped) {
     message_->clear();
-    if (!renderer_) return fail(tr("AudioSuite effects cannot be rendered here."));
+    if (!renderer_) return fail(tr("Audio Processing effects cannot be rendered here."));
     const QStringList list = tracks();
     if (list.isEmpty()) return fail(tr("Select an audio track."));
     const QString target = drive();
@@ -523,7 +523,7 @@ bool AudioSuiteTool::renderRange(bool scoped) {
         from = record.in().value_or(0);
         to = record.out() ? *record.out() + 1 : std::numeric_limits<std::int64_t>::max();
     }
-    if (timeline_.audioSuiteToRender(list, from, to) == 0) return fail(tr("There is no AudioSuite effect to render."));
+    if (timeline_.audioSuiteToRender(list, from, to) == 0) return fail(tr("There is no Audio Processing effect to render."));
     const auto done = timeline_.renderAudioSuite(list, from, to, render);
     if (!done) return fail(timeline_.lastMessage());
     message_->setText(tr("%n effect(s) rendered.", "", *done));
@@ -533,7 +533,7 @@ bool AudioSuiteTool::renderRange(bool scoped) {
 bool AudioSuiteTool::renderMasterClip() {
     message_->clear();
     if (!clipMaker_) return fail(tr("New master clips cannot be made here."));
-    if (active_ < 0) return fail(tr("Drag a master clip into the AudioSuite window."));
+    if (active_ < 0) return fail(tr("Drag a master clip into the Audio Processing window."));
     const auto info = media::findAudioSuitePlugin(plugin_);
     if (!info) return fail(tr("Choose a plug-in first."));
     if (inputs_.isEmpty()) return fail(tr("Select the input tracks."));
@@ -581,7 +581,7 @@ bool AudioSuiteTool::setInScope() {
     for (auto it = lastValues_.cbegin(); it != lastValues_.cend(); ++it) {
         if (info->param(it.key())) e.params.insert(it.key(), it.value());
     }
-    if (!timeline_.setAudioSuite(tracks(), e, true, tr("Set AudioSuite - %1").arg(scope()))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, true, tr("Set Audio Processing - %1").arg(scope()))) return fail(timeline_.lastMessage());
     return true;
 }
 
@@ -591,7 +591,7 @@ bool AudioSuiteTool::renderInScope() {
 
 bool AudioSuiteTool::removeInScope() {
     message_->clear();
-    if (!timeline_.setAudioSuite(tracks(), std::nullopt, true, tr("Remove AudioSuite - %1").arg(scope()))) {
+    if (!timeline_.setAudioSuite(tracks(), std::nullopt, true, tr("Remove Audio Processing - %1").arg(scope()))) {
         return fail(timeline_.lastMessage());
     }
     return true;
@@ -600,7 +600,7 @@ bool AudioSuiteTool::removeInScope() {
 bool AudioSuiteTool::applyTemplate(const model::AudioSuiteTemplate& t) {
     message_->clear();
     const auto info = media::findAudioSuitePlugin(t.effect.effect);
-    if (!info) return fail(tr("The AudioSuite plug-in %1 is not installed.").arg(t.effect.name));
+    if (!info) return fail(tr("The Audio Processing plug-in %1 is not installed.").arg(t.effect.name));
     if (masterMode_) {
         plugin_ = t.effect.effect;
         lastValues_ = info->defaults();
@@ -615,7 +615,7 @@ bool AudioSuiteTool::applyTemplate(const model::AudioSuiteTemplate& t) {
     plugin_ = e.effect;
     lastValues_ = e.params;
     // One undo step, as dropping a template is.
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("AudioSuite %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
     refresh();
     return true;
 }
@@ -670,7 +670,7 @@ int AudioSuiteTool::addItems(const QString& binId, const QList<model::BinItem>& 
         ++taken;
     }
     if (taken == 0) {
-        fail(tr("Only master clips and subclips with sound, and AudioSuite templates, can be dropped here."));
+        fail(tr("Only master clips and subclips with sound, and Audio Processing templates, can be dropped here."));
         return 0;
     }
     // "Media Composer automatically enters Master Clip Processing mode and expands the AudioSuite
@@ -809,14 +809,14 @@ QString AudioSuiteTool::targetBin() const {
 }
 
 bool AudioSuiteTool::loadInSourceMonitor() {
-    if (active_ < 0) return fail(tr("Drag a master clip into the AudioSuite window."));
+    if (active_ < 0) return fail(tr("Drag a master clip into the Audio Processing window."));
     emit sourceRequested(clips_.at(active_).binId, clips_.at(active_).item);
     return true;
 }
 
 bool AudioSuiteTool::findSourceFromEffect() {
     message_->clear();
-    if (!pendingTemplate_) return fail(tr("Drag an AudioSuite template into the AudioSuite window."));
+    if (!pendingTemplate_) return fail(tr("Drag an Audio Processing template into the Audio Processing window."));
     const model::AudioSuiteTemplate t = *pendingTemplate_;
     // "A template in the AudioSuite window must reference an existing master clip" (p.802).
     const std::optional<model::BinItem> clip = t.hasSource() && resolver_ ? resolver_(t.sourceBin, t.sourceClip) : std::nullopt;
@@ -919,9 +919,9 @@ QMenu* AudioSuiteTool::fastMenu() {
     // "The menu text differs, depending on whether you have In to Out points" (p.799).
     const QString s = scope();
     const bool any = !tracks().isEmpty() && !masterMode_;
-    menu->addAction(tr("Set AudioSuite - %1").arg(s), this, [this] { setInScope(); })->setEnabled(any && !plugin_.isEmpty());
-    menu->addAction(tr("Render AudioSuite - %1").arg(s), this, [this] { renderInScope(); })->setEnabled(any);
-    menu->addAction(tr("Remove AudioSuite - %1").arg(s), this, [this] { removeInScope(); })->setEnabled(any);
+    menu->addAction(tr("Set Audio Processing - %1").arg(s), this, [this] { setInScope(); })->setEnabled(any && !plugin_.isEmpty());
+    menu->addAction(tr("Render Audio Processing - %1").arg(s), this, [this] { renderInScope(); })->setEnabled(any);
+    menu->addAction(tr("Remove Audio Processing - %1").arg(s), this, [this] { removeInScope(); })->setEnabled(any);
     // "Apply an existing AudioSuite template" (p.799): ours lists those in the open bins.
     QMenu* list = menu->addMenu(tr("Templates"));
     list->setObjectName(QStringLiteral("templates"));
@@ -985,7 +985,7 @@ void AudioSuiteTool::refresh() {
     if (t.isEmpty()) {
         status_->setText(tr("No audio track selected"));
     } else if (!shown) {
-        status_->setText(tr("%1: no AudioSuite effect here").arg(t.first()));
+        status_->setText(tr("%1: no Audio Processing effect here").arg(t.first()));
     } else if (!info) {
         status_->setText(tr("%1: %2 is not installed").arg(t.first(), shown->name));
     } else {

@@ -350,7 +350,7 @@ private slots:
         t.out = 40;
         t.handleSeconds = 1.5;
         const QDateTime when = QDateTime::currentDateTimeUtc();
-        const model::BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - AudioSuite Plug-In Effect: Normalize"), when);
+        const model::BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - Audio Processing Effect: Normalize"), when);
         QCOMPARE(item.kind, model::BinItemKind::Effect);
         const auto back = model::audioSuiteTemplateOf(item);
         QVERIFY(back);
@@ -369,7 +369,7 @@ private slots:
                  QStringLiteral("Test Audio clip_Normalize"));
         QCOMPARE(model::audioSuiteClipName(QStringLiteral("QuietClip"), QStringLiteral("Normalize"), true), QStringLiteral("QuietClip.Normalize"));
         QCOMPARE(model::audioSuiteTemplateName(QStringLiteral("Test Audio clip"), QStringLiteral("Normalize"), false),
-                 QStringLiteral("Test Audio clip - AudioSuite Plug-In Effect: Normalize"));
+                 QStringLiteral("Test Audio clip - Audio Processing Effect: Normalize"));
         QCOMPARE(model::audioSuiteTemplateName(QStringLiteral("QuietClip"), QStringLiteral("Normalize"), true),
                  QStringLiteral("QuietClip.Normalize.effect"));
     }

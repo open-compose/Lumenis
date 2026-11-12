@@ -276,7 +276,7 @@ bool EffectEditor::setFramingBypassed(bool bypassed) {
         if (layout_) layout_->setChecked(!bypassed);
         return false;
     }
-    const bool done = changeShown(bypassed ? tr("Bypass FrameFlex") : tr("Enable FrameFlex"),
+    const bool done = changeShown(bypassed ? tr("Bypass Framing") : tr("Enable Framing"),
                                   [&](model::Effect& e) { model::setFramingBypassed(e, bypassed); });
     if (layout_ && current_) layout_->setChecked(!model::framingBypassed(*current_));
     return done;

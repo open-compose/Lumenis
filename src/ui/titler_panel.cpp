@@ -797,7 +797,7 @@ void TitlerPanel::refresh() {
 
 TitlerDashboard::TitlerDashboard(TitlerTool& tool, QWidget* parent) : QWidget(parent, Qt::Tool) {
     setObjectName(QStringLiteral("titlerDashboard"));
-    setWindowTitle(tr("Titler+"));
+    setWindowTitle(tr("Title Designer"));
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     auto* scroll = new QScrollArea(this);

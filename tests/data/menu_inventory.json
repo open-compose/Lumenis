@@ -199,7 +199,7 @@
           ]
         },
         {
-          "text": "Interplay Transfer",
+          "text": "Asset Transfer",
           "page": 1094,
           "items": [
             {
@@ -561,7 +561,7 @@
           "shortcutSource": "ks2009"
         },
         {
-          "text": "MultiGroup",
+          "text": "Group of Groups",
           "page": 1125
         },
         {
@@ -651,7 +651,7 @@
               "page": 478
             },
             {
-              "text": "All FrameFlex including creative framing",
+              "text": "All Framing, including creative framing",
               "page": 478
             }
           ]
@@ -784,7 +784,7 @@
           "page": 926,
           "items": [
             {
-              "text": "ExpertRender In/Out",
+              "text": "Smart Render In/Out",
               "page": 926
             },
             {
@@ -905,7 +905,7 @@
           "page": 791
         },
         {
-          "text": "AudioSuite",
+          "text": "Audio Processing",
           "page": 797
         },
         {
@@ -1010,7 +1010,7 @@
           "page": 910
         },
         {
-          "text": "Titler+",
+          "text": "Title Designer",
           "page": 303,
           "doc": "fx",
           "note": "Avid calls it 'Avid Titler+'; renamed because the Avid name is a trademark"
@@ -1190,7 +1190,7 @@
           "page": 454
         },
         {
-          "text": "ScriptSync AI",
+          "text": "Script Alignment",
           "page": 584
         },
         {

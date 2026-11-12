@@ -59,9 +59,10 @@ BinItem audioSuiteTemplateItem(const AudioSuiteTemplate& t, const QString& name,
 // The template a bin item holds; nothing for any other item.
 std::optional<AudioSuiteTemplate> audioSuiteTemplateOf(const BinItem& item);
 // The names Media Composer gives what it makes from a master clip (p.803-804): the new clip
-// "<clip>_<effect>" (Windows) or "<clip>.<effect>" (macOS), and the template "<clip> - AudioSuite
-// Plug-In Effect: <effect>" (Windows) or "<clip>.<effect>.effect" (macOS). Linux takes the Windows
-// form (ours). `mac` picks the macOS form.
+// "<clip>_<effect>" (Windows) or "<clip>.<effect>" (macOS), and the template "<clip> - Audio Processing
+// Effect: <effect>" (Windows; the guide's "<clip> - AudioSuite Plug-In Effect: <effect>" with our name for
+// the feature, docs/spec/trademarks.md) or "<clip>.<effect>.effect" (macOS). Linux takes the Windows form
+// (ours). `mac` picks the macOS form.
 QString audioSuiteClipName(const QString& clip, const QString& effect, bool mac);
 QString audioSuiteTemplateName(const QString& clip, const QString& effect, bool mac);
 

@@ -75,7 +75,7 @@
         },
         {
           "id": "file_interplay_transfer",
-          "title": "Interplay Transfer",
+          "title": "Asset Transfer",
           "items": [
             "file.interplay_transfer.clear_status"
           ]

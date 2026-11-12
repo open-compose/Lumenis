@@ -2230,7 +2230,7 @@ void MainWindow::createTools() {
     });
     // AudioSuite (p.796-800): effects on segments, rendered into managed media on the tool's drive.
     audioSuite_ = new AudioSuiteTool(*timeline_);
-    panels_->addPanel(new Panel(QStringLiteral("AudioSuite"), tr("AudioSuite"), audioSuite_));
+    panels_->addPanel(new Panel(QStringLiteral("AudioSuite"), tr("Audio Processing"), audioSuite_));
     audioSuite_->setRenderer([this](const model::Segment& s, const QString& drive, QString* error) {
         return renderAudioSuite(s, drive, error);
     });
@@ -2639,13 +2639,13 @@ std::optional<QString> MainWindow::multiGroup() {
     const auto made = model::multiGroup(view->document().bin(), binId, clips, options, &error);
     if (!made) {
         // Console only: the message box below shows it.
-        ConsoleLog::instance().append(tr("MultiGroup: %1").arg(error));
-        if (!groupClipsHook_) QMessageBox::warning(this, tr("MultiGroup"), error);
+        ConsoleLog::instance().append(tr("Group of Groups: %1").arg(error));
+        if (!groupClipsHook_) QMessageBox::warning(this, tr("Group of Groups"), error);
         return std::nullopt;
     }
     for (const model::BinItem& g : made->groups) view->document().addItem(g);
     view->document().addItem(made->multigroup);
-    if (made->skipped > 0) reportFailure(this, tr("MultiGroup: %n clip(s) with no other clip of the same take were left out.", "", made->skipped));
+    if (made->skipped > 0) reportFailure(this, tr("Group of Groups: %n clip(s) with no other clip of the same take were left out.", "", made->skipped));
     view->selectIds({made->multigroup.id});
     return made->multigroup.id;
 }
@@ -7650,7 +7650,7 @@ void MainWindow::expertRender() {
     const model::Sequence seq = model::Sequence::fromItem(rec->item);
     const model::MonitorState& state = composer_->state(MonitorId::Record);
     if (!state.in() && !state.out()) {
-        fail(tr("Mark IN and OUT points around the effects for ExpertRender to analyze."));
+        fail(tr("Mark IN and OUT points around the effects for Smart Render to analyze."));
         return;
     }
     const std::int64_t from = state.markedStart();
@@ -8364,7 +8364,7 @@ std::optional<model::AudioSuiteEffect> MainWindow::renderAudioSuite(const model:
                                                                     QString* error) {
     const auto clip = composer_->resolve(segment.binId, segment.clipId);
     if (!clip) {
-        if (error) *error = tr("The clip %1 of the AudioSuite effect is not found.").arg(segment.name);
+        if (error) *error = tr("The clip %1 of the Audio Processing effect is not found.").arg(segment.name);
         return std::nullopt;
     }
     const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
@@ -9796,7 +9796,7 @@ void MainWindow::checkTitleTemplate() {
     const model::BinItem* item = doc ? doc->bin().item(edit.templateId) : nullptr;
     const QString name = item ? item->name : QString();
     const bool save = askTemplateSave_ ? askTemplateSave_(name)
-                                       : QMessageBox::question(this, tr("Titler+"), tr("Save the changes to the template \"%1\"?").arg(name),
+                                       : QMessageBox::question(this, tr("Title Designer"), tr("Save the changes to the template \"%1\"?").arg(name),
                                                                QMessageBox::Save | QMessageBox::Discard) == QMessageBox::Save;
     if (save) storeTitleTemplate(edit, false);
 }

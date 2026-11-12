@@ -2336,7 +2336,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
             [this, quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q, floatingPoint_)); });
     // The MultiRez button "at the bottom of the Timeline" (p.1107, p.1111-1116; timeline_multirez.cpp): a click goes to
     // the next display, right-click opens its menu. Ours: placed after the Video Quality Menu button.
-    QToolButton* multiRez = tool("multiRez", Picture::VideoQuality, tr("MultiRez"), true);
+    QToolButton* multiRez = tool("multiRez", Picture::VideoQuality, tr("Multi-Resolution"), true);
     multiRez->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(multiRez, &QToolButton::clicked, this, [this] {
         setMultiRezDisplay(multiRez_ == MultiRezDisplay::Inactive     ? MultiRezDisplay::Mismatches
@@ -2463,7 +2463,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     command("other.match_frame", Picture::MatchFrame, tr("Match Frame"), false);
     top->addSpacing(8);
     // "Click the Avid Titler+ icon at the top of the Timeline" (FX Guide p.303).
-    command("tools.titler", Picture::Titler, tr("Titler+"), false);
+    command("tools.titler", Picture::Titler, tr("Title Designer"), false);
     top->addStretch(1);
 
     auto* upper = new QHBoxLayout;
@@ -4840,7 +4840,7 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     // Titler+" (FX Guide p.326).
     QMenu* promote = menu->addMenu(tr("Promote Titles"));
     promote->setObjectName(QStringLiteral("promoteTitles"));
-    QAction* titler = promote->addAction(tr("Avid Titler+"));
+    QAction* titler = promote->addAction(tr("Title Designer"));
     titler->setObjectName(QStringLiteral("promoteTitles:titler"));
     {
         const model::Sequence seq = recordSequenceOf(composer_);
@@ -4880,7 +4880,7 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
                 group = group || (s && s->groupAngle.has_value());
             }
         }
-        QAction* autoCut = run(menu, tr("AutoCut"), QStringLiteral("timeline.autocut"));
+        QAction* autoCut = run(menu, tr("Speaker Cut"), QStringLiteral("timeline.autocut"));
         autoCut->setObjectName(QStringLiteral("timeline:autoCut"));
         autoCut->setEnabled(group);
     }
@@ -6712,7 +6712,7 @@ bool Timeline::applyTitler() {
     if (model::applyTitler(seq, track, marks, marks ? QList<model::SegmentRef>{} : targets) == 0) {
         return fail(tr("Select a clip or an empty track segment first."));
     }
-    if (!commitSequence(tr("Titler+"), seq)) return false;
+    if (!commitSequence(tr("Title Designer"), seq)) return false;
     // The position on a new title, so that the Effect Editor shows it (ours).
     const std::int64_t first = marks ? marks->first
                                      : std::min_element(targets.begin(), targets.end(), [](const model::SegmentRef& a, const model::SegmentRef& b) {
@@ -7061,7 +7061,7 @@ bool Timeline::setAudioSuite(const QStringList& tracks, const std::optional<mode
             at += g.length;
         }
     }
-    if (changed == 0) return any ? true : fail(tr("There is no audio segment there for the AudioSuite plug-in."));
+    if (changed == 0) return any ? true : fail(tr("There is no audio segment there for the Audio Processing plug-in."));
     return commitSequence(description, seq);
 }
 
@@ -7120,14 +7120,14 @@ std::optional<int> Timeline::renderAudioSuite(const QStringList& tracks, std::in
             if (start + g.length <= from || start >= to || !model::needsRender(g)) continue;
             const auto made = render(g, &error);
             if (!made) {
-                if (error.isEmpty()) error = tr("The AudioSuite effect could not be rendered.");
+                if (error.isEmpty()) error = tr("The Audio Processing effect could not be rendered.");
                 break;
             }
             g.audioSuite = made;
             ++rendered;
         }
     }
-    if (rendered > 0) commitSequence(tr("Render AudioSuite"), seq);
+    if (rendered > 0) commitSequence(tr("Render Audio Processing"), seq);
     if (!error.isEmpty()) {
         fail(error);
         return std::nullopt;

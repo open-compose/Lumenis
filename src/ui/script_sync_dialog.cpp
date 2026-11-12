@@ -17,7 +17,7 @@ ScriptSyncDialog::ScriptSyncDialog(const QStringList& tracks, const model::Scrip
                                    std::function<std::optional<int>()> selectDialog, QWidget* parent)
     : QDialog(parent), selectDialog_(std::move(selectDialog)) {
     setObjectName(QStringLiteral("scriptSyncDialog"));
-    setWindowTitle(tr("ScriptSync AI"));
+    setWindowTitle(tr("Script Alignment"));
     auto* v = new QVBoxLayout(this);
     // "Tracks: Select the audio tracks you want as input to ScriptSync AI."
     v->addWidget(new QLabel(tr("Tracks"), this));

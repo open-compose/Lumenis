@@ -115,7 +115,7 @@ QString audioSuiteClipName(const QString& clip, const QString& effect, bool mac)
 }
 
 QString audioSuiteTemplateName(const QString& clip, const QString& effect, bool mac) {
-    return mac ? QStringLiteral("%1.%2.effect").arg(clip, effect) : QStringLiteral("%1 - AudioSuite Plug-In Effect: %2").arg(clip, effect);
+    return mac ? QStringLiteral("%1.%2.effect").arg(clip, effect) : QStringLiteral("%1 - Audio Processing Effect: %2").arg(clip, effect);
 }
 
 QJsonObject audioSuiteToJson(const AudioSuiteEffect& e) {

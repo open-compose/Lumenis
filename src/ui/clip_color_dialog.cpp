@@ -76,7 +76,7 @@ ClipColorDialog::ClipColorDialog(const model::ClipColorOptions& options, QWidget
     // on (setMultiRez). Its swatches: mismatched and not available in the target settings (p.596, p.1113).
     QCheckBox* resolution = add(QStringLiteral("resolution"), tr("Resolution Tracking"), options.resolution, false,
                                 QStringLiteral("mismatchColor"), options.mismatchColor);
-    resolution->setToolTip(tr("Only in a MultiRez environment"));
+    resolution->setToolTip(tr("Only in a Multi-Resolution environment"));
     grid->addWidget(makeSwatch(QStringLiteral("unavailableColor"), options.unavailableColor), row - 1, 2);
     add(QStringLiteral("offline"), tr("Offline"), options.offline, true, QStringLiteral("offlineColor"), options.offlineColor);
     add(QStringLiteral("proxy"), tr("Proxy"), options.proxy, false, {}, {})->setToolTip(tr("Comes with proxy media"));

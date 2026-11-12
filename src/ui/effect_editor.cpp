@@ -929,7 +929,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         layout_->setText(tr("Layout"));
         layout_->setCheckable(true);
         layout_->setChecked(!model::framingBypassed(*effect));
-        layout_->setToolTip(tr("Layout: click to bypass the FrameFlex effect; Alt+click resets the keyframe to the original framing"));
+        layout_->setToolTip(tr("Layout: click to bypass the Framing effect; Alt+click resets the keyframe to the original framing"));
         connect(layout_, &QToolButton::clicked, this, [this] {
             const bool alt = QGuiApplication::keyboardModifiers() & Qt::AltModifier;
             if (alt) {

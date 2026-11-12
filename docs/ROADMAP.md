@@ -1634,7 +1634,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     starts it, and the Timeline's refusals keep their tooltip and now reach the Console; test `tst_interchange`).
   * 9.8, last, the trademark check, in three parts: 9.8a, the audit and its check (done: docs/spec/trademarks.md,
     `tests/data/trademarks.json`, ctest `trademark_names` through `scripts/check-trademarks.py`); 9.8b, the command,
-    menu, window, setting and message texts renamed; 9.8c, effect and parameter category names as display labels over
+    menu, window, setting and message texts renamed (done: `tr()` strings, commands.json, menus.json, settings.json and
+    tests/data/menu_inventory.json; Titler+ and NaturalMatch, also effect and parameter names, wait for 9.8c); 9.8c, effect and parameter category names as display labels over
     their stored names.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline

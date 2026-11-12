@@ -126,8 +126,8 @@ BackgroundServicesDialog::BackgroundServicesDialog(BackgroundQueue& queue, const
     connect(pauseButton, &QPushButton::clicked, this, [this] { pause(minutes_->value()); });
     row->addStretch(1);
     v->addLayout(row);
-    startAtLaunch_ = new QCheckBox(tr("Always Start Avid Background Services at Launch"), this);
-    stopOnExit_ = new QCheckBox(tr("Always Stop Avid Background Services upon Exit"), this);
+    startAtLaunch_ = new QCheckBox(tr("Always Start Background Services at Launch"), this);
+    stopOnExit_ = new QCheckBox(tr("Always Stop Background Services upon Exit"), this);
     enablePausing_ = new QCheckBox(tr("Enable Pausing of Background Service"), this);
     startAtLaunch_->setObjectName(QStringLiteral("startAtLaunch"));
     stopOnExit_->setObjectName(QStringLiteral("stopOnExit"));

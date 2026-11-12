@@ -29,7 +29,12 @@ MultiRez, FrameFlex, Titler+, PlasmaWipe, ExpertRender, Illusion FX, AutoCut, Mu
   does not count as "Avid". Planned marks are listed with their step.
 * The specs keep the guides' names as the source (they cite the guide); only what the user sees changes.
 
-## Our names (proposed; the owner may change them before 9.8b and 9.8c)
+9.8b renamed the texts (commands, menus, windows, settings, messages and the Audio Processing templates' names in bins,
+"<clip> - Audio Processing Effect: <effect>"); the effect and parameter category names are 9.8c's, so Titler+ and
+NaturalMatch, which are also an effect and a parameter name, stay planned until then, and the FrameFlex effect's name
+in the Effect Editor goes with them.
+
+## Our names
 
 | Avid's | Ours |
 | --- | --- |

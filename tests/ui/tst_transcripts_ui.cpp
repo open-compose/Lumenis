@@ -505,15 +505,15 @@ private slots:
         find->setFilter(0, QStringLiteral("Transcription"), QStringLiteral("nothing like it"));
         QCOMPARE(find->phraseFind(), 0);
         find->setFilter(0, QString(), QString());
-        // Settings > Stop PhraseFind AI Indexing stops the background transcription.
+        // Settings > Stop Phrase Search Indexing stops the background transcription.
         std::unique_ptr<QMenu> menu(find->settingsMenu(nullptr));
         auto* toggle = menu->findChild<QAction*>(QStringLiteral("toggleIndexing"));
         QVERIFY(toggle);
-        QCOMPARE(toggle->text(), QStringLiteral("Stop PhraseFind AI Indexing"));
+        QCOMPARE(toggle->text(), QStringLiteral("Stop Phrase Search Indexing"));
         toggle->trigger();
         QVERIFY(!window.transcriptionIndexing());
         menu.reset(find->settingsMenu(nullptr));
-        QCOMPARE(menu->findChild<QAction*>(QStringLiteral("toggleIndexing"))->text(), QStringLiteral("Start PhraseFind AI Indexing"));
+        QCOMPARE(menu->findChild<QAction*>(QStringLiteral("toggleIndexing"))->text(), QStringLiteral("Start Phrase Search Indexing"));
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 

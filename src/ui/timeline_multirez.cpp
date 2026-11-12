@@ -118,9 +118,9 @@ void Timeline::showMultiRezColor() const {
     if (!b) return;
     b->setProperty("display", static_cast<int>(multiRez_));
     b->setIcon(multiRezIcon(multiRez_, multiRezColor_));
-    b->setToolTip(multiRez_ == MultiRezDisplay::Mismatches           ? tr("MultiRez: Show Mismatches")
-                  : multiRez_ == MultiRezDisplay::TargetAvailability ? tr("MultiRez: Show Target Availability")
-                                                                     : tr("MultiRez"));
+    b->setToolTip(multiRez_ == MultiRezDisplay::Mismatches           ? tr("Multi-Resolution: Show Mismatches")
+                  : multiRez_ == MultiRezDisplay::TargetAvailability ? tr("Multi-Resolution: Show Target Availability")
+                                                                     : tr("Multi-Resolution"));
 }
 
 // "In the Show Mismatches display, moves the blue position indicator to the next item that is not in the working or
@@ -130,7 +130,7 @@ void Timeline::showMultiRezColor() const {
 bool Timeline::findNextMismatched() {
     message_.clear();
     if (multiRez_ == MultiRezDisplay::Inactive) {
-        return fail(tr("Click the MultiRez button to show mismatches or target availability first."));
+        return fail(tr("Click the Multi-Resolution button to show mismatches or target availability first."));
     }
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;

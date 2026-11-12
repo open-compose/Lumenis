@@ -276,7 +276,7 @@ void TrackingWindow::rebuildRows() {
             editor_.changeTracking(tr("Offset Tracking"), [&](model::TrackingSetup& s) { s.trackers[i].offset = on; });
         });
         // "SteadyGlide and Smoothing are mutually exclusive" (p.270).
-        auto* steady = toggle(QStringLiteral("trackersteadyglide:%1").arg(i), tr("SG"), tr("SteadyGlide"), row);
+        auto* steady = toggle(QStringLiteral("trackersteadyglide:%1").arg(i), tr("SG"), tr("Smooth Glide"), row);
         auto* smooth = toggle(QStringLiteral("trackersmoothing:%1").arg(i), tr("Sm"), tr("Smoothing"), row);
         auto process = [this, i](model::TrackProcess which, bool on) {
             editor_.changeTracking(tr("Smoothing"), [&](model::TrackingSetup& s) { s.trackers[i].process = on ? which : model::TrackProcess::None; });

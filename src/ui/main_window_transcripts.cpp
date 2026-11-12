@@ -962,15 +962,15 @@ int MainWindow::autoCut() {
         jobs << job;
     }
     if (jobs.isEmpty()) {
-        reportFailure(this, tr("AutoCut: select a group clip segment with the Segment tool."));
+        reportFailure(this, tr("Speaker Cut: select a group clip segment with the Segment tool."));
         return 0;
     }
     int switches = 0;
-    timeline_->changeRecordSequence(tr("AutoCut"), [&](model::Sequence& s) {
+    timeline_->changeRecordSequence(tr("Speaker Cut"), [&](model::Sequence& s) {
         for (const Job& job : jobs) switches += model::autoCut(s, job.ref.track, job.ref.start, job.group, job.lines);
         return switches > 0;
     });
-    if (switches == 0) reportFailure(this, tr("AutoCut: no speaker with a camera angle speaks in the selected segments."));
+    if (switches == 0) reportFailure(this, tr("Speaker Cut: no speaker with a camera angle speaks in the selected segments."));
     return switches;
 }
 

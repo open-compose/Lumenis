@@ -14,7 +14,7 @@
 namespace lumenis::ui {
 
 GroupClipsDialog::GroupClipsDialog(bool filmProject, QWidget* parent, bool multigroup) : QDialog(parent) {
-    setWindowTitle(multigroup ? tr("MultiGroup") : tr("Group Clips"));
+    setWindowTitle(multigroup ? tr("Group of Groups") : tr("Group Clips"));
     setObjectName(QStringLiteral("groupClipsDialog"));
     auto* layout = new QVBoxLayout(this);
     options_ = new QButtonGroup(this);

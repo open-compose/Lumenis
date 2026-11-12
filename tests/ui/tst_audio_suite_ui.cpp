@@ -172,7 +172,7 @@ private slots:
         Rig rig;
         QCOMPARE(rig.tool.tracks(), QStringList{QStringLiteral("A1")});
         QCOMPARE(rig.tool.trackButton()->text(), QStringLiteral("A1"));
-        QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no AudioSuite effect")));
+        QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no Audio Processing effect")));
         QVERIFY(!rig.tool.activateButton()->isEnabled());
         // The picture's controls: the ones that come later are there, dimmed.
         for (const char* name : {"effectIcon", "nestedLevel"}) {
@@ -210,7 +210,7 @@ private slots:
         QCOMPARE(rig.tool.trackButton()->text(), QStringLiteral("A1 +"));
         rig.tool.chooseTrack(QStringLiteral("A2"), false);
         QCOMPARE(rig.tool.tracks(), QStringList{QStringLiteral("A2")});
-        QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no AudioSuite effect")));
+        QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no Audio Processing effect")));
     }
 
     void pluginOnSegments() {
@@ -332,29 +332,29 @@ private slots:
         rig.tool.setRenderer(fake.renderer());
         rig.tool.chooseTrack(QStringLiteral("A2"), true);
         rig.at(35);
-        QVERIFY(!rig.fastItem(QStringLiteral("Set AudioSuite - Global"))->isEnabled()); // no plug-in yet
+        QVERIFY(!rig.fastItem(QStringLiteral("Set Audio Processing - Global"))->isEnabled()); // no plug-in yet
         QVERIFY(rig.tool.choosePlugin(QStringLiteral("suite.dc")));
-        QVERIFY(rig.fastItem(QStringLiteral("Set AudioSuite - Global"))->isEnabled());
+        QVERIFY(rig.fastItem(QStringLiteral("Set Audio Processing - Global"))->isEnabled());
         rig.mark(40, std::nullopt);
-        QVERIFY(rig.fastItem(QStringLiteral("Render AudioSuite - From IN")));
+        QVERIFY(rig.fastItem(QStringLiteral("Render Audio Processing - From IN")));
         rig.mark(20, 65);
         QCOMPARE(rig.tool.scope(), QStringLiteral("IN/OUT"));
-        rig.fastItem(QStringLiteral("Set AudioSuite - IN/OUT"))->trigger();
+        rig.fastItem(QStringLiteral("Set Audio Processing - IN/OUT"))->trigger();
         for (const char* t : {"A1", "A2"}) {
             for (int i = 0; i < 3; ++i) QCOMPARE(rig.effect(t, i)->effect, QStringLiteral("suite.dc"));
         }
         const int before = rig.timeline.history().undoCount();
-        rig.fastItem(QStringLiteral("Render AudioSuite - IN/OUT"))->trigger();
+        rig.fastItem(QStringLiteral("Render Audio Processing - IN/OUT"))->trigger();
         QCOMPARE(fake.seen.size(), 6);
         QCOMPARE(rig.timeline.history().undoCount(), before + 1); // one step for both tracks
         rig.mark(70, std::nullopt);
         rig.tool.chooseTrack(QStringLiteral("A1"), false);
-        rig.fastItem(QStringLiteral("Remove AudioSuite - From IN"))->trigger();
+        rig.fastItem(QStringLiteral("Remove Audio Processing - From IN"))->trigger();
         QVERIFY(!rig.effect("A1", 2));
         QVERIFY(rig.effect("A1", 1));
         QVERIFY(rig.effect("A2", 2));
         rig.mark(std::nullopt, std::nullopt);
-        rig.fastItem(QStringLiteral("Remove AudioSuite - Global"))->trigger();
+        rig.fastItem(QStringLiteral("Remove Audio Processing - Global"))->trigger();
         for (int i = 0; i < 3; ++i) QVERIFY(!rig.effect("A1", i));
     }
 
@@ -481,7 +481,7 @@ private slots:
         t.handleSeconds = 2;
         t.in = 3;
         t.out = 9;
-        const BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - AudioSuite Plug-In Effect: Gain"), QDateTime::currentDateTimeUtc());
+        const BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - Audio Processing Effect: Gain"), QDateTime::currentDateTimeUtc());
         QVERIFY(!rig.tool.canFindSource());
         QVERIFY(!rig.tool.findSourceButton()->isEnabled());
         QCOMPARE(rig.tool.addItems(QStringLiteral("b1"), {item}), 1);

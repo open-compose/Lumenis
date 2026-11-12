@@ -1060,7 +1060,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   the guide's Export Settings dialog box with Save and Save As (`SettingsDialog::useSaveButtons`, p.869-870; test
   `tst_interchange`) and the Timeline's refusals in the Console, is done, so 9.7 is. 9.8a, the trademark audit (docs/spec/trademarks.md: each Avid mark in
   `tests/data/trademarks.json` with its source, our name and status; ctest `trademark_names` fails when a renamed or
-  absent mark names something the user sees), is done; 9.8b (texts) and 9.8c (effect labels) rename the planned ones.
+  absent mark names something the user sees), is done. 9.8b, the texts renamed (Script Alignment, Phrase Search, Multi-Resolution, Framing, Title Designer,
+  Speaker Cut, Group of Groups, Audio Processing, Smart Render, Asset Transfer ...; docs/spec/trademarks.md), is done;
+  9.8c gives effects and parameter categories display labels over their stored names. Name new features generically.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
   (`LUMENIS_REQUIRE_ENCODERS`, `tst_movie_export requiredEncoders`), a failed export says why in a message (BUILDING.md

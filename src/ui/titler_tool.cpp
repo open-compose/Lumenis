@@ -494,7 +494,7 @@ bool TitlerTool::applyPreset(const model::EffectTemplate& preset, model::TitlePr
     for (const QString& id : selected_) {
         if (TitleObject* o = t.object(id)) any = model::applyTitlePreset(*o, source, part) || any;
     }
-    return any && commit(tr("Titler+ Template"), t);
+    return any && commit(tr("Title Designer Template"), t);
 }
 
 std::optional<model::EffectTemplate> TitlerTool::droppedTemplate(const QMimeData* mime) const {

@@ -57,7 +57,7 @@ ColorMatchControl::ColorMatchControl(media::MatchGroup group, QWidget* parent) :
     if (media::hasNaturalMatch(group)) {
         // "Choose NaturalMatch to select or deselect the NaturalMatch feature" (p.627).
         menu->addSeparator();
-        QAction* natural = menu->addAction(tr("NaturalMatch"));
+        QAction* natural = menu->addAction(tr("Keep Luminance"));
         natural->setObjectName(QStringLiteral("naturalMatch"));
         natural->setCheckable(true);
         connect(natural, &QAction::triggered, this, [this](bool on) { setNaturalMatch(on); });

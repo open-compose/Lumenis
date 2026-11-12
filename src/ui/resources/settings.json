@@ -256,7 +256,7 @@
             {"key": "eyedropperAveraging", "type": "bool", "label": "Eyedropper 3 x 3 Averaging", "default": false, "page": 1166},
             {"key": "showEyedropperInfo", "type": "bool", "label": "Show Eyedropper Info", "default": true, "page": 1166},
             {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166},
-            {"key": "showBackgrounds", "type": "bool", "label": "Show ChromaWheel and ChromaCurve Graphs", "default": false, "page": 1166},
+            {"key": "showBackgrounds", "type": "bool", "label": "Show Color Wheel and Chroma Curve Graphs", "default": false, "page": 1166},
             {"key": "dualSplitDuringPlayback", "type": "bool", "label": "Dual-Split remains Active During Playback", "default": true, "page": 1166},
             {"key": "scopesRealTime", "type": "bool", "label": "Waveform/Vectorscope Updates in Real-Time", "default": true, "page": 1166, "later": true}
           ]
@@ -1146,7 +1146,7 @@
             {"key": "confidenceView", "type": "bool", "label": "Enable Confidence View", "default": false, "page": 1224, "later": true},
             {"key": "highQualityScaling", "type": "bool", "label": "High-Quality Scaling for Real-Time Decode", "default": true, "page": 1224},
             {"key": "enhancedPrecision", "type": "bool", "label": "Use Enhanced Precision in Viewer Calculations", "default": false, "page": 1224, "later": true},
-            {"key": "bypassFrameFlex", "type": "bool", "label": "Bypass FrameFlex & LUT FX in performance-critical modes", "default": true, "page": 1224, "later": true},
+            {"key": "bypassFrameFlex", "type": "bool", "label": "Bypass Framing & LUT FX in performance-critical modes", "default": true, "page": 1224, "later": true},
             {"key": "dualCopyEngine", "type": "bool", "label": "Dual Copy Engine", "default": false, "page": 1225, "later": true},
             {"key": "realTimeStreams", "type": "int", "label": "Maximum Real Time Streams", "min": 1, "max": 64, "default": 16, "page": 1225, "later": true},
             {"key": "ignoreStreamCounts", "type": "bool", "label": "Ignore Real Time Stream Counts", "default": false, "page": 1225, "later": true}

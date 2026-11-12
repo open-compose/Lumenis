@@ -82,7 +82,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Media > Load Media Database |  | p.104 | works | ☐ | | |
 | Media > Refresh Media Directories |  | p.359 | works | ☐ | | |
 | Media > Unmount |  | p.344 | works | ☐ | | |
-| Interplay Transfer > Clear Status |  | p.1094 | *later* | ☐ | | |
+| Asset Transfer > Clear Status |  | p.1094 | *later* | ☐ | | |
 | Page Setup |  | p.292 | works | ☐ | | |
 | Print Bin | Ctrl+P | p.288 | works | ☐ | | |
 | Print Frame |  | p.292 | works | ☐ | | |
@@ -167,7 +167,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Decompose |  | p.185 | *later* | ☐ | | |
 | Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
 | Group Clips | Ctrl+Shift+G | p.1124 | works | ☐ | | |
-| MultiGroup |  | p.1125 | works | ☐ | | |
+| Group of Groups |  | p.1125 | works | ☐ | | |
 | Edit Group |  | p.1125 | works | ☐ | | |
 | Lock Bin Selection |  | p.265 | works | ☐ | | |
 | Unlock Bin Selection |  | p.266 | works | ☐ | | |
@@ -187,7 +187,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Refresh Sequence > Remove Color Adapters |  | p.544 | works | ☐ | | |
 | Refresh Sequence > Stereo Correction Effects |  | p.478 | *later* | ☐ | | |
 | Refresh Sequence > Group Clips |  | p.478 | works | ☐ | | |
-| Refresh Sequence > All FrameFlex including creative framing |  | p.478 | works | ☐ | | |
+| Refresh Sequence > All Framing, including creative framing |  | p.478 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | works | ☐ | | |
@@ -213,7 +213,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Mixdown > Data |  | p.982 | *later* | ☐ | | |
 | Mixdown > Video |  | p.228 | works | ☐ | | |
 | Remove Match Frame Edits |  | p.495 | works | ☐ | | |
-| Render > ExpertRender In/Out |  | p.926 | works | ☐ | | |
+| Render > Smart Render In/Out |  | p.926 | works | ☐ | | |
 | Render > Render In/Out |  | p.59 | works | ☐ | | |
 | Render > Render at Position |  | p.58 | works | ☐ | | |
 | Render > Clear Renders In/Out |  | p.60 | works | ☐ | | |
@@ -245,7 +245,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio Punch-In |  | p.750 | works | ☐ | | |
 | Audio Tool | Ctrl+1 | p.703 | works | ☐ | | |
 | Audio Track Effect |  | p.791 | works | ☐ | | |
-| AudioSuite |  | p.797 | works | ☐ | | |
+| Audio Processing |  | p.797 | works | ☐ | | |
 | Background Queue Window |  | p.358 | works | ☐ | | |
 | Background Services |  | p.376 | works | ☐ | | |
 | Calculator | Ctrl+2 | p.100 | works | ☐ | | |
@@ -269,7 +269,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Transcript Tool |  | p.442 | works | ☐ | | |
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
 | Video Output Tool |  | p.910 | works | ☐ | | |
-| Titler+ |  | p.303 | works | ☐ | | |
+| Title Designer |  | p.303 | works | ☐ | | |
 | Color Info Tool |  | p.697 | works | ☐ | | |
 | Effect Editor |  | p.54 | works | ☐ | | |
 | Title Tool Application |  | p.343 | works | ☐ | | |
@@ -313,7 +313,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Hold Slates Onscreen |  | p.578 | works | ☐ | | |
 | Interpolate Position |  | p.577 | works | ☐ | | |
 | Manage Transcripts |  | p.454 | works | ☐ | | |
-| ScriptSync AI |  | p.584 | works | ☐ | | |
+| Script Alignment |  | p.584 | works | ☐ | | |
 | Show All Takes |  | p.578 | works | ☐ | | |
 | Show Frames |  | p.578 | works | ☐ | | |
 | Text Layout |  | p.571 | works | ☐ | | |

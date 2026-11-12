@@ -272,7 +272,7 @@ SourceSettingsDialog::SourceSettingsDialog(const QString& clipName, const QImage
         reformat_->addItem(model::reformatText(r), static_cast<int>(r));
     }
     form->addRow(tr("Reformat"), reformat_);
-    tabs->addTab(flexTab, tr("FrameFlex"));
+    tabs->addTab(flexTab, tr("Framing"));
     // Playback Rate (p.545): "Select the desired Playback Frame Rate".
     auto* rateTab = new QWidget;
     auto* rateForm = new QFormLayout(rateTab);

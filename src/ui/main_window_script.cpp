@@ -431,7 +431,7 @@ int MainWindow::scriptSyncAI() {
     if (!scriptWindow_->isOpen()) return -1;
     const QList<model::ScriptTake> takes = scriptWindow_->chosenTakes();
     if (takes.isEmpty()) {
-        reportFailure(this, tr("ScriptSync AI: select the takes (or the lines) to mark up first."));
+        reportFailure(this, tr("Script Alignment: select the takes (or the lines) to mark up first."));
         return -1;
     }
     QStringList tracks;
@@ -465,11 +465,11 @@ int MainWindow::scriptSyncAI() {
     });
     if (!untranscribed.isEmpty()) {
         transcribeNow(untranscribed);
-        reportFailure(this, tr("ScriptSync AI: %n clip(s) are being transcribed; run ScriptSync AI again when they are "
+        reportFailure(this, tr("Script Alignment: %n clip(s) are being transcribed; run Script Alignment again when they are "
                                          "done.", nullptr, static_cast<int>(untranscribed.size())));
     }
     // Console only: how many marks were placed.
-    ConsoleLog::instance().append(tr("ScriptSync AI: %n script mark(s) placed.", nullptr, placed));
+    ConsoleLog::instance().append(tr("Script Alignment: %n script mark(s) placed.", nullptr, placed));
     return placed;
 }
 

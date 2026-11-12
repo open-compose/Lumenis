@@ -80,7 +80,7 @@ FindWindow::FindWindow(BinContainer& bins, Composer& composer, Timeline& timelin
     auto* index = new QLabel(tr("Bin Index: ready"), this);
     index->setObjectName(QStringLiteral("binIndex"));
     status->addWidget(index);
-    status->addWidget(new QLabel(tr("PhraseFind AI Index"), this));
+    status->addWidget(new QLabel(tr("Phrase Search Index"), this));
     phraseIndex_ = new QProgressBar(this);
     phraseIndex_->setObjectName(QStringLiteral("phraseIndex"));
     phraseIndex_->setTextVisible(false);
@@ -156,7 +156,7 @@ QWidget* FindWindow::buildPage(int tab) {
     findRow->addWidget(p.findButton);
     if (tab == ClipsTab) {
         // "Click the PhraseFind AI button to begin the search" (p.437).
-        auto* phrase = new QPushButton(tr("PhraseFind AI"), w);
+        auto* phrase = new QPushButton(tr("Phrase Search"), w);
         phrase->setObjectName(QStringLiteral("phraseFindButton"));
         findRow->addWidget(phrase);
         connect(phrase, &QPushButton::clicked, this, [this] { phraseFind(); });
@@ -500,7 +500,7 @@ QMenu* FindWindow::settingsMenu(QWidget* parent) {
     auto* menu = new QMenu(parent);
     menu->setObjectName(QStringLiteral("searchSettingsMenu"));
     const bool running = !phrase_.indexing || phrase_.indexing();
-    QAction* toggle = menu->addAction(running ? tr("Stop PhraseFind AI Indexing") : tr("Start PhraseFind AI Indexing"));
+    QAction* toggle = menu->addAction(running ? tr("Stop Phrase Search Indexing") : tr("Start Phrase Search Indexing"));
     toggle->setObjectName(QStringLiteral("toggleIndexing"));
     toggle->setEnabled(static_cast<bool>(phrase_.setIndexing));
     connect(toggle, &QAction::triggered, this, [this, running] {
