@@ -556,7 +556,7 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   pixels from the top-left with points as pixels, Titler+'s text layout, the
   window's own Edit/Object/Alignment menus and undo, Pair Kerning always on,
   Loose/Tight as +/-10 percent and Alt+arrows by one percent, new text out to
-  the safe title edge, the grid sizes, the Safe Colors limits, Marquee dimmed.
+  the safe title edge, the grid sizes, the Safe Colors limits, Marquee left out (9.8d, Avid's registered mark).
 * Titler+ presets and EDL titles (docs/spec/titler.md, edl.md; 6.8c4b): the
   sections a preset drop picks, the whole style elsewhere without the
   Transform, the source object by kind, title events with reel BL, their

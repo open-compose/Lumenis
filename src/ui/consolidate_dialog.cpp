@@ -163,13 +163,14 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     auto* sourceRate = new QCheckBox(tr("Keep Source's Frame Rate"), transcodeBox_);
     later(sourceRate);
     tv->addWidget(sourceRate);
-    // Apply source transformations (p.544): Color encoding, and Frame Flex (ours: not yet, dimmed).
+    // Apply source transformations (p.544): Color encoding, and FrameFlex shown as
+    // Framing (9.8; ours: not yet, dimmed).
     auto* transformsRow = new QHBoxLayout;
     transformsRow->addWidget(new QLabel(tr("Apply source transformations:"), transcodeBox_));
     applyColorEncoding_ = new QCheckBox(tr("Color encoding"), transcodeBox_);
     applyColorEncoding_->setObjectName(QStringLiteral("applyColorEncoding"));
     transformsRow->addWidget(applyColorEncoding_);
-    auto* frameFlex = new QCheckBox(tr("Frame Flex"), transcodeBox_);
+    auto* frameFlex = new QCheckBox(tr("Framing"), transcodeBox_);
     later(frameFlex);
     transformsRow->addWidget(frameFlex);
     transformsRow->addStretch();

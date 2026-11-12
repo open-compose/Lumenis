@@ -59,20 +59,28 @@ def visible_strings():
 
 
 def pattern(name):
-    return re.compile(r"(?<![A-Za-z])" + re.escape(name) + r"(?![a-z])")
+    # A mark written as one word of capitalised parts (FrameFlex, ScriptSync) is found with a space or hyphen between
+    # its parts too ("Frame Flex", 9.8d).
+    parts = re.split(r"(?<=[a-z])(?=[A-Z])", name)
+    body = r"[ -]?".join(re.escape(p) for p in parts)
+    return re.compile(r"(?<![A-Za-z])" + body + r"(?![a-z])")
 
 
 def main():
     marks = json.loads((ROOT / "tests" / "data" / "trademarks.json").read_text(encoding="utf-8"))["marks"]
     nominative = sorted((m["name"] for m in marks if m["status"] == "nominative"), key=len, reverse=True)
-    checked = [(m, pattern(m["name"])) for m in marks if m["status"] != "nominative"]
+    # "descriptive" marks (ordinary words we use in their ordinary sense: Motion, Source, Lightning) are allowed and,
+    # unlike nominative ones, not taken out of the strings.
+    checked = [(m, pattern(m["name"])) for m in marks if m["status"] in ("renamed", "absent", "planned")]
     failures, planned = [], {}
     for path, s in visible_strings():
         rest = s
         for n in nominative:
             rest = pattern(n).sub(" ", rest)
         for m, p in checked:
-            if not p.search(rest):
+            # Our own name may be the mark split into words (ChromaCurve is ours "Chroma Curve"): not a finding.
+            ours = m.get("ours", "")
+            if not p.search(rest.replace(ours, " ") if ours and not ours.startswith("(") else rest):
                 continue
             where = f"{path.relative_to(ROOT)}: \"{s[:80]}\""
             if m["status"] == "planned":

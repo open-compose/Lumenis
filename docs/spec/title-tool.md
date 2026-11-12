@@ -53,7 +53,7 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
 * A new text object reaches from the click to the safe title area's right edge (at least 120 pixels). An empty text
   object goes when typing ends. The safe action and title areas are 90% and 80% of the frame; the visible grid is 16 by
   9 squares of 120 pixels, the snap grid 30 pixels. Safe Colors holds saturation and brightness to 75% and 90%.
-* The New Title dialog's Marquee button is dimmed: Marquee is Avid's own application. The Marquee Title setting's
+* The New Title dialog's Marquee button is left out (9.8d): Marquee is Avid's own application and its registered mark. The Marquee Title setting's
   Ask Me and Windows > Title Tool are not ours yet. The Font Replacement dialog is 8.7d1 (below).
 * Saving the title (File > Save Title ...) comes with 6.8d4; until then the window keeps the title while it is open.
 
@@ -244,7 +244,7 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   sheet. The Styles button's menu shows "Aa" in each style; the Save Style Parameter button ("+") lists them and Save
   As. Recalling a style applies it to the selected objects (any kind, ours), else to the defaults. F1-F12 without
   modifiers recall a style. `titleStyleSheet()`: the sample follows the check boxes (no Refresh button), Convert to
-  Marquee dimmed.
+  Marquee left out (9.8d).
 
 ## 6.8d4c: Promote Titles > Avid Titler+
 

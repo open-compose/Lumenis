@@ -1063,8 +1063,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   absent mark names something the user sees), is done. 9.8b, the texts renamed (Script Alignment, Phrase Search, Multi-Resolution, Framing, Title Designer,
   Speaker Cut, Group of Groups, Audio Processing, Smart Render, Asset Transfer ...; docs/spec/trademarks.md), is done;
   9.8c, effects and parameter categories shown under our names over their stored ones (`model::shownName` in
-  `src/model/shown_names.*`: show every effect or category name through it), is done. 9.8d, other companies' marks (Adobe, Apple, Blackmagic Design, Autodesk, Boris FX, Grass Valley, MAGIX;
-  ROADMAP 9.8), waits: their trademark pages are outside this environment's network, so Phase 9 is not done yet.
+  `src/model/shown_names.*`: show every effect or category name through it), is done. 9.8d, other companies' marks (Adobe, Apple, Blackmagic Design, Autodesk, Boris FX, Grass Valley, MAGIX and Avid's
+  own list, with their owners and USPTO serials in `tests/data/trademarks.json`; docs/spec/trademarks.md), is done,
+  so 9.8 and Phase 9's steps are.
   Phase 10's step plan (10.1-10.8) and the owner's decisions are in ROADMAP, proposed and waiting on the owner:
   start no Phase 10 step before the owner agrees.
   Name new features generically; ctest `trademark_names` checks.

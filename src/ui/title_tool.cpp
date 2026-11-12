@@ -2632,10 +2632,10 @@ std::optional<model::ClassicTitleStyle> titleStyleSheet(QWidget* parent, const m
     auto* all = new QPushButton(QObject::tr("Select All"), &box);
     auto* none = new QPushButton(QObject::tr("Select None"), &box);
     auto* revert = new QPushButton(QObject::tr("Revert"), &box);
-    auto* marquee = new QPushButton(QObject::tr("Convert to Marquee"), &box);
-    marquee->setEnabled(false); // ours: no Marquee
+    // Ours: the guide's Convert to Marquee button is left out. Marquee is Avid's own title application (and its
+    // registered mark, tests/data/trademarks.json), which Cutthulhu does not have.
     auto* row = new QHBoxLayout;
-    for (QPushButton* b : {all, none, revert, marquee}) row->addWidget(b);
+    for (QPushButton* b : {all, none, revert}) row->addWidget(b);
     layout->addLayout(row);
     auto* form = new QFormLayout;
     auto* key = new QSpinBox(&box);
@@ -2740,15 +2740,11 @@ bool askNewTitle(QWidget* parent, bool* persist) {
     auto* layout = new QVBoxLayout(&box);
     layout->addWidget(new QLabel(QObject::tr("Create a new title with:"), &box));
     auto* buttons = new QHBoxLayout;
-    auto* marquee = new QPushButton(QObject::tr("Marquee"), &box);
-    marquee->setObjectName(QStringLiteral("newTitle:marquee"));
-    // Ours: Marquee is Avid's own title application, which Cutthulhu does not have.
-    marquee->setEnabled(false);
-    marquee->setToolTip(QObject::tr("Marquee is not available"));
+    // Ours: the guide's Marquee button is left out. Marquee is Avid's own title application (and its registered mark,
+    // tests/data/trademarks.json), which Cutthulhu does not have.
     auto* tool = new QPushButton(QObject::tr("Title Tool"), &box);
     tool->setObjectName(QStringLiteral("newTitle:titleTool"));
     tool->setDefault(true);
-    buttons->addWidget(marquee);
     buttons->addWidget(tool);
     layout->addLayout(buttons);
     auto* keep = new QCheckBox(QObject::tr("Persist"), &box);

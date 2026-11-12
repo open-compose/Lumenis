@@ -1640,9 +1640,10 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     Sequence Report and new templates; the check reads its table); 9.8d, other companies' marks (the item below:
     Adobe, Apple, Blackmagic Design, Autodesk, Boris FX, Grass Valley, MAGIX/VEGAS), with their published lists read,
     dated in docs/spec/trademarks.md and added to `tests/data/trademarks.json`; our new names from 9.8b and 9.8c are
-    checked against them too (Title Designer, Smart Render, Gradient Wipe, Color Mask ...). Waiting: the companies'
-    trademark pages cannot be reached from the cloud sessions' network (2026-11-12); the owner allows those hosts or
-    saves the lists. Phase 9 is done when 9.8d is.
+    checked against them too (Title Designer, Smart Render, Gradient Wipe, Color Mask ...). Done (docs/spec/trademarks.md
+    "Other companies' marks": Apple's, Grass Valley's and Avid's lists and the USPTO register; Marquee left out of
+    the Title Tool, Transcode's Framing, "Expert Render" now "Smart Render", the check finding marks split in words;
+    EUIPO still to be checked by hand), so Phase 9's steps are done.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline
   (p.288-292, p.645);

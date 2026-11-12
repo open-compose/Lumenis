@@ -1,5 +1,5 @@
 {
-  "comment": "The trademark check (ROADMAP 9.8; docs/spec/trademarks.md). Avid's marks that may not name our menus, commands, windows, settings or effects: the names the guides mark with a trademark or registered sign (\"source\"), those the guides' trademark notice lists (Editing Guide p.2, FX Guide p.2-3: \"and all related product names and logos\"), and Avid's feature brand names. \"status\": renamed (ctest trademark_names fails when the name is in a user-visible string), planned (renamed in the step given; reported, not failed), absent (not in our UI; fails if it appears), nominative (kept: it names Avid's own product or format we interoperate with, and \"reason\" says where). \"ours\": our generic name.",
+  "comment": "The trademark check (ROADMAP 9.8; docs/spec/trademarks.md). Avid's marks that may not name our menus, commands, windows, settings or effects: the names the guides mark with a trademark or registered sign (\"source\"), those the guides' trademark notice lists (Editing Guide p.2, FX Guide p.2-3: \"and all related product names and logos\"), and Avid's feature brand names. \"status\": renamed (ctest trademark_names fails when the name is in a user-visible string), planned (renamed in the step given; reported, not failed), absent (not in our UI; fails if it appears), nominative (kept: it names Avid's own product or format we interoperate with, and \"reason\" says where). \"ours\": our generic name. Other companies' marks (9.8d) carry an \"owner\"; their sources are the companies' published lists and the USPTO register (live marks in classes 9 and 42, read 2026-11-12; serial numbers given). \"descriptive\": a word the register or a list holds as a mark that we use only in its ordinary sense (\"reason\" says where); allowed.",
   "marks": [
     {
       "name": "AutoSync",
@@ -51,19 +51,19 @@
     },
     {
       "name": "AniMatte",
-      "source": "FX Guide p.79 (TM)",
+      "source": "FX Guide p.79 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Animated Matte",
       "status": "renamed"
     },
     {
       "name": "SpectraMatte",
-      "source": "FX Guide p.206 (TM)",
+      "source": "FX Guide p.206 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Spectral Key",
       "status": "renamed"
     },
     {
       "name": "SpectraGraph",
-      "source": "FX Guide p.207 (TM)",
+      "source": "FX Guide p.207 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Key Graph",
       "status": "renamed"
     },
@@ -81,13 +81,13 @@
     },
     {
       "name": "Magic Mask",
-      "source": "FX Guide p.392 (TM)",
+      "source": "FX Guide p.392 (TM); also Blackmagic Design's DaVinci Resolve feature name (ROADMAP 9.8)",
       "ours": "Color Mask",
       "status": "renamed"
     },
     {
       "name": "NaturalMatch",
-      "source": "FX Guide p.544, p.624 (TM)",
+      "source": "FX Guide p.544, p.624 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Keep Luminance",
       "status": "renamed"
     },
@@ -105,13 +105,13 @@
     },
     {
       "name": "ScriptSync",
-      "source": "Avid feature name",
+      "source": "Avid feature name; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Script Alignment",
       "status": "renamed"
     },
     {
       "name": "PhraseFind",
-      "source": "Avid feature name",
+      "source": "Avid feature name; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Phrase Search",
       "status": "renamed"
     },
@@ -183,25 +183,25 @@
     },
     {
       "name": "Symphony",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "(left out)",
       "status": "renamed"
     },
     {
       "name": "Interplay",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "Asset Transfer",
       "status": "renamed"
     },
     {
       "name": "Avid",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "ours": "(left out: \"Avid High Qual\" is \"High Quality\", \"PlasmaWipe Avid Lava\" is \"Gradient Wipe Lava\")",
       "status": "renamed"
     },
     {
       "name": "Frame Chase",
-      "source": "Editing Guide p.177 (TM)",
+      "source": "Editing Guide p.177 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
@@ -211,12 +211,12 @@
     },
     {
       "name": "AVX",
-      "source": "Editing Guide p.988, FX Guide p.35 (TM)",
+      "source": "Editing Guide p.988, FX Guide p.35 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "EUCON",
-      "source": "Editing Guide p.781, FX Guide p.734 (TM)",
+      "source": "Editing Guide p.781, FX Guide p.734 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
@@ -231,22 +231,22 @@
     },
     {
       "name": "D-Verb",
-      "source": "Editing Guide p.807 (TM)",
+      "source": "Editing Guide p.807 (TM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "Mbox",
-      "source": "Editing Guide p.767 (R)",
+      "source": "Editing Guide p.767 (R); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "AirSpeed",
-      "source": "Editing Guide p.177, p.1080 (R)",
+      "source": "Editing Guide p.177, p.1080 (R); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "MediaCentral",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
@@ -256,28 +256,28 @@
     },
     {
       "name": "NewsCutter",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "iNEWS",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "Sibelius",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "absent"
     },
     {
       "name": "Media Composer",
-      "source": "trademark notice",
+      "source": "trademark notice; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "nominative",
       "reason": "names Avid's bin format we read and write (Media Composer Bin, Media Composer bins (*.avb)) and the source of observed values"
     },
     {
       "name": "Pro Tools",
-      "source": "Editing Guide p.790, p.863, p.865 (R)",
+      "source": "Editing Guide p.790, p.863, p.865 (R); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
       "status": "nominative",
       "reason": "names Avid's application Send To exports for, and its channel order"
     },
@@ -316,6 +316,1021 @@
       "source": "trademark notice (Avid)",
       "status": "nominative",
       "reason": "names Avid's MXF media layout we read and write"
+    },
+    {
+      "name": "Marquee",
+      "owner": "Avid",
+      "source": "USPTO register, 2026-11-12, serial 75467275; Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "IsoSync",
+      "owner": "Avid",
+      "source": "USPTO register, 2026-11-12, serial 78640064 (ISOSYNC); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "X-Form",
+      "owner": "Avid",
+      "source": "USPTO register, 2026-11-12 (X-FORM); Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Premiere Pro",
+      "owner": "Adobe",
+      "source": "ROADMAP 9.8; USPTO register, 2026-11-12 (ADOBE PREMIERE, PREMIERE RUSH); Adobe's list refuses automated readers",
+      "status": "absent"
+    },
+    {
+      "name": "Premiere Rush",
+      "owner": "Adobe",
+      "source": "USPTO register, 2026-11-12 (PREMIERE RUSH)",
+      "status": "absent"
+    },
+    {
+      "name": "After Effects",
+      "owner": "Adobe",
+      "source": "ROADMAP 9.8; USPTO register, 2026-11-12, serial 74491379",
+      "status": "absent"
+    },
+    {
+      "name": "Adobe Audition",
+      "owner": "Adobe",
+      "source": "USPTO register, 2026-11-12, serial 78251732",
+      "status": "absent"
+    },
+    {
+      "name": "Lightroom",
+      "owner": "Adobe",
+      "source": "USPTO register, 2026-11-12 (LIGHTROOM)",
+      "status": "absent"
+    },
+    {
+      "name": "Creative Cloud",
+      "owner": "Adobe",
+      "source": "USPTO register, 2026-11-12 (CREATIVE CLOUD)",
+      "status": "absent"
+    },
+    {
+      "name": "Warp Stabilizer",
+      "owner": "Adobe",
+      "source": "named in ROADMAP 9.8; not registered in the USPTO's classes 9 and 42 (2026-11-12); Adobe's feature name",
+      "status": "absent"
+    },
+    {
+      "name": "Morph Cut",
+      "owner": "Adobe",
+      "source": "named in ROADMAP 9.8; not registered in the USPTO's classes 9 and 42 (2026-11-12); Adobe's feature name",
+      "status": "absent"
+    },
+    {
+      "name": "Lumetri",
+      "owner": "Adobe",
+      "source": "named in ROADMAP 9.8; not registered in the USPTO's classes 9 and 42 (2026-11-12); Adobe's feature name",
+      "status": "absent"
+    },
+    {
+      "name": "Photoshop",
+      "owner": "Adobe",
+      "source": "USPTO register, 2026-11-12, serial 77448731",
+      "status": "nominative",
+      "reason": "names the Photoshop files we import (Import, p.218-221)"
+    },
+    {
+      "name": "Final Cut Pro",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12; USPTO register, 2026-11-12, serial 86711813",
+      "status": "nominative",
+      "reason": "names Final Cut Pro 7 XML, the format we read and write"
+    },
+    {
+      "name": "ProRes",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "nominative",
+      "reason": "names Apple's codec we read and write (Apple ProRes)"
+    },
+    {
+      "name": "QuickTime",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "nominative",
+      "reason": "names the QuickTime movie format we export"
+    },
+    {
+      "name": "Apple",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "nominative",
+      "reason": "only in the codec names Apple ProRes ..."
+    },
+    {
+      "name": "Magnetic Timeline",
+      "owner": "Apple",
+      "source": "USPTO register, 2026-11-12, serial 85492953",
+      "status": "absent"
+    },
+    {
+      "name": "Motion",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "descriptive",
+      "reason": "ordinary sense only: Motion Effect, Flow Motion, Field Motion"
+    },
+    {
+      "name": "Lightning",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "descriptive",
+      "reason": "the Lightning effect, which draws lightning (FX Guide's Illusion FX)"
+    },
+    {
+      "name": "Metal",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "descriptive",
+      "reason": "a Border (3D) type in the 3D Warp effect"
+    },
+    {
+      "name": "Aperture",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "descriptive",
+      "reason": "Full Aperture, the film format"
+    },
+    {
+      "name": "OpenGL",
+      "owner": "Apple",
+      "source": "Apple's trademark list (apple.com/legal/intellectual-property/trademark/appletmlist.html), 2026-11-12",
+      "status": "nominative",
+      "reason": "names the graphics interface (Software OpenGL)"
+    },
+    {
+      "name": "DaVinci Resolve",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12, serial 87732717",
+      "status": "absent"
+    },
+    {
+      "name": "DaVinci",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12 (DAVINCI)",
+      "status": "absent"
+    },
+    {
+      "name": "Fusion",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12, serial 78763465 (eyeon Software, now Blackmagic Design's); also Autodesk's FUSION",
+      "status": "absent"
+    },
+    {
+      "name": "Fairlight",
+      "owner": "Blackmagic Design",
+      "source": "ROADMAP 9.8; USPTO register, 2026-11-12, serial 74568091",
+      "status": "absent"
+    },
+    {
+      "name": "Speed Warp",
+      "owner": "Blackmagic Design",
+      "source": "named in ROADMAP 9.8; not registered in the USPTO's classes 9 and 42 (2026-11-12); Blackmagic Design's feature name",
+      "status": "absent"
+    },
+    {
+      "name": "Blackmagic RAW",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12 (BLACKMAGIC RAW)",
+      "status": "absent"
+    },
+    {
+      "name": "HyperDeck",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12 (HYPERDECK)",
+      "status": "absent"
+    },
+    {
+      "name": "UltraScope",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12 (ULTRASCOPE)",
+      "status": "absent"
+    },
+    {
+      "name": "Intensity",
+      "owner": "Blackmagic Design",
+      "source": "USPTO register, 2026-11-12 (INTENSITY)",
+      "status": "descriptive",
+      "reason": "ordinary sense only: an effect parameter's intensity"
+    },
+    {
+      "name": "Flame",
+      "owner": "Autodesk",
+      "source": "ROADMAP 9.8; USPTO register, 2026-11-12, serial 75244971",
+      "status": "absent"
+    },
+    {
+      "name": "Smoke",
+      "owner": "Autodesk",
+      "source": "ROADMAP 9.8; USPTO register, 2026-11-12, serial 75449114",
+      "status": "absent"
+    },
+    {
+      "name": "Maya",
+      "owner": "Autodesk",
+      "source": "USPTO register, 2026-11-12 (MAYA)",
+      "status": "absent"
+    },
+    {
+      "name": "MotionBuilder",
+      "owner": "Autodesk",
+      "source": "USPTO register, 2026-11-12 (MOTIONBUILDER)",
+      "status": "absent"
+    },
+    {
+      "name": "ShotGrid",
+      "owner": "Autodesk",
+      "source": "USPTO register, 2026-11-12 (SHOTGRID)",
+      "status": "absent"
+    },
+    {
+      "name": "Wiretap",
+      "owner": "Autodesk",
+      "source": "USPTO register, 2026-11-12 (WIRETAP)",
+      "status": "absent"
+    },
+    {
+      "name": "Sapphire",
+      "owner": "Boris FX",
+      "source": "ROADMAP 9.8 (Boris FX's product name; borisfx.com has no trademark page, 2026-11-12)",
+      "status": "absent"
+    },
+    {
+      "name": "Continuum",
+      "owner": "Boris FX",
+      "source": "ROADMAP 9.8 (Boris FX's product name; borisfx.com has no trademark page, 2026-11-12)",
+      "status": "absent"
+    },
+    {
+      "name": "Mocha",
+      "owner": "Boris FX",
+      "source": "USPTO register, 2026-11-12, serial 86140880 (Imagineer Systems, Boris FX's)",
+      "status": "absent"
+    },
+    {
+      "name": "EDIUS",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12; USPTO register, 2026-11-12, serial 78206836",
+      "status": "absent"
+    },
+    {
+      "name": "Chromatte",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "FrameMagic",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "FlexFrame",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "CleanCut",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "EQ",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "descriptive",
+      "reason": "the usual abbreviation for an equaliser: the guides' Audio EQ tool"
+    },
+    {
+      "name": "Profile",
+      "owner": "Grass Valley",
+      "source": "Grass Valley's trademark list (grassvalley.com/trademarks), 2026-11-12",
+      "status": "descriptive",
+      "reason": "ordinary sense only: User Profile, codec profiles"
+    },
+    {
+      "name": "Vegas Pro",
+      "owner": "MAGIX/VEGAS",
+      "source": "USPTO register, 2026-11-12 (VEGAS PRO, applications 99901646 and 99904403); magix.com's legal notice lists no marks",
+      "status": "absent"
+    },
+    {
+      "name": "Samplitude",
+      "owner": "MAGIX/VEGAS",
+      "source": "USPTO register, 2026-11-12 (SAMPLITUDE)",
+      "status": "absent"
+    },
+    {
+      "name": "Music Maker",
+      "owner": "MAGIX/VEGAS",
+      "source": "USPTO register, 2026-11-12 (MUSIC MAKER)",
+      "status": "absent"
+    },
+    {
+      "name": "#WeR4Music",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Alienbrain",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Artist",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Avid | Edit On Demand",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid | Stream IO",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Ada",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Ada Recap",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Ada Unscramble",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Advantage",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Align",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid ArtistCentral",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist | DNxID",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist | DNxIO",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist | DNxIQ",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist | DNxIP",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Artist | DNxIV",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Comply",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Control",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Avid Dialogue Search",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Dock",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Avid DNxHD",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "nominative",
+      "reason": "names Avid's codec we read and write"
+    },
+    {
+      "name": "Avid DNxHR",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid DNxIO",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Everywhere",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid HEAT",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Huddle",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Illuminate",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid LiveShare",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Link",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Avid NEXIS",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid QC",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid S1",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid S3",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid S4",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid S6",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Avid Spark",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Avid VENUE",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "AvidPlay",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Beat Detective",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "C|24",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "CaptureManager",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Cosmonaut Voice",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "d2",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "d3",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "D-Control",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "DAE",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "D-Fi",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Digidesign",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "DigiLink",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "DigiSnake",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "DigiTest",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "DINR",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Elastic Reality",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Eleven",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Euphonix",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "EveryPhase",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Fader Pack",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Fairchild",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "FastBreak",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "FastServe",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Fast Track",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "FilmScribe",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Impact",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "iNEWS Assign",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "ISIS",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Link & Sync",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "LKT-200",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Lo-Fi",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "MachineControl",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Maestro",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Maxim",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "MBOX Control",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "MBOX Studio",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "MediaCentral Transcription Engine",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Media Suite",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Mix Rack",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Nitris",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "OMF",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "nominative",
+      "reason": "names the OMF Interchange audio files we import (AIFF-C (OMF), WAVE (OMF))"
+    },
+    {
+      "name": "OMF Interchange",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Open Media Framework",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Orad",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Personal Q",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "PlayMaker",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "POWERING GREATER CREATORS",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "PRE",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "ProSet",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "QuickPunch",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "RealSet",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Recti-Fi",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Reel Tape",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Reprise",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Reverb One",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "ReVibe",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "RTAS",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Sci-Fi",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Scorch",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Slightly Rude Compressor",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Smack!",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "Soft-Clip Limiter",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "SoundReplacer",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "SPACE",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "SurroundScope",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Synchronic",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "descriptive",
+      "reason": "a common word or phrase, not used as one of our names; not checked so its ordinary sense stays free"
+    },
+    {
+      "name": "SYNC HD",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "TD Control",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Tel-Ray",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "TL Aggro",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "TL Drum Rehab",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "TL Everyphase",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Vari-Fi",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
+    },
+    {
+      "name": "Xmon",
+      "owner": "Avid",
+      "source": "Avid's trademark list (avid.com/legal/trademarks-and-other-notices), from the owner, 2026-11-12",
+      "status": "absent"
     }
   ]
 }

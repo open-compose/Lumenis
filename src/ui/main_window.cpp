@@ -7637,7 +7637,7 @@ std::optional<model::BinItem> MainWindow::motionEffect() {
 
 void MainWindow::expertRender() {
     auto fail = [this](const QString& text) {
-        auto* box = new QMessageBox(QMessageBox::Information, tr("Expert Render"), text, QMessageBox::Ok, this);
+        auto* box = new QMessageBox(QMessageBox::Information, tr("Smart Render"), text, QMessageBox::Ok, this);
         box->setObjectName(QStringLiteral("expertRenderMessage"));
         box->setAttribute(Qt::WA_DeleteOnClose);
         box->open();

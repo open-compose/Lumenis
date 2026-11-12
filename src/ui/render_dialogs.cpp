@@ -79,7 +79,7 @@ bool ClearRendersDialog::skipUnknownEffects() const {
 ExpertRenderDialog::ExpertRenderDialog(const std::function<int(model::ExpertMode)>& count, bool recommended,
                                        const QString& drive, QWidget* parent)
     : QDialog(parent), count_(count), hasRecommended_(recommended) {
-    setWindowTitle(tr("Expert Render"));
+    setWindowTitle(tr("Smart Render"));
     auto* layout = new QVBoxLayout(this);
     message_ = new QLabel(this);
     message_->setObjectName(QStringLiteral("message"));

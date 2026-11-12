@@ -1,8 +1,8 @@
 # The trademark check (9.8)
 
 The owner's request (2026-11-09): Avid marks some feature names as trademarks, so we must not use them as our menu,
-command, window or function names. Avid's full list is at https://www.avid.com/legal/trademarks-and-other-notices (not
-reachable from the build machines; checked against the guides instead). The guides' trademark notice (Editing Guide
+command, window or function names. Avid's full list is at https://www.avid.com/legal/trademarks-and-other-notices (it refuses automated readers;
+the owner copied it in on 2026-11-12, and every mark on it is in `tests/data/trademarks.json`). The guides' trademark notice (Editing Guide
 p.2, FX Guide p.2-3) lists "Avid, the Avid Logo, Avid Everywhere, Avid DNXHD, Avid DNXHR, Avid Nexis, AirSpeed,
 Eleven, EUCON, Interplay, iNEWS, ISIS, Mbox, MediaCentral, Media Composer, NewsCutter, Pro Tools, ProSet and RealSet,
 Maestro, PlayMaker, Sibelius, Symphony, and all related product names and logos". The guides mark others in the text
@@ -43,6 +43,57 @@ effect_parameters.json as shown, reading the table in shown_names.cpp. Every mar
 "<clip> - Audio Processing Effect: <effect>"); the effect and parameter category names are 9.8c's, so Titler+ and
 NaturalMatch, which are also an effect and a parameter name, stay planned until then, and the FrameFlex effect's name
 in the Effect Editor goes with them.
+
+## Other companies' marks (9.8d)
+
+The 9.8 item also asks that no name of ours be one another editing or finishing company owns. Read on 2026-11-12:
+
+* **Published lists.** Apple's (https://www.apple.com/legal/intellectual-property/trademark/appletmlist.html) and
+  Grass Valley's (https://www.grassvalley.com/trademarks/) were read. Adobe's
+  (https://www.adobe.com/legal/permissions/trademarks.html) and Autodesk's refuse automated readers (Akamai), and
+  Avid's shows a bot check; we did not get round those. Blackmagic Design, Boris FX and MAGIX/VEGAS publish no list
+  (their legal notices name none).
+* **The USPTO register** (tmsearch.uspto.gov's search, live marks in classes 9 and 42, software). We looked at every
+  live mark owned by Adobe, Apple, Avid, Autodesk, Blackmagic Design, Boris FX (and Imagineer), Grass Valley (and
+  GVBB, Canopus) and MAGIX, plus the feature names the item names (Warp Stabilizer, Morph Cut, Lumetri, Magnetic
+  Timeline, Speed Warp, Magic Mask ...), and each of our own new names from 9.8b and 9.8c.
+* **EUIPO/TMview** (www.tmdn.org) is reachable but its search has no public interface we can call; it is still to be
+  checked by hand (or when the owner's lawyer checks the names).
+
+What we found and did:
+
+* **Every mark against our strings.** Each mark from those lists and the register was searched for in every
+  user-visible string. Most of the words found were ordinary words in their ordinary sense: Source, Clips, One,
+  Pages, Music and Numbers (Apple's and Adobe's); Motion, Lightning, Metal and Aperture (Apple's); EQ and Profile
+  (Grass Valley's); Intensity (Blackmagic Design's). Some were names of formats and products we exchange files with:
+  Final Cut Pro 7 XML, Apple ProRes, QuickTime, Photoshop, OpenGL and OMF. These are in `trademarks.json` as
+  "descriptive" or "nominative", with the reason.
+* **Two real findings, fixed.** The Title Tool's New Title dialog had a dimmed Marquee button, and the Title Style
+  Sheet had Convert to Marquee. Marquee is Avid's registered mark (USPTO serial 75467275) for its own title
+  application; both buttons are now left out. Transcode's "Frame Flex" check box (FrameFlex with a space) is now
+  "Framing".
+* **The check now also finds a mark split in two.** `scripts/check-trademarks.py` matches a mark of capitalised
+  parts with a space or hyphen between them too, so FrameFlex is caught as "Frame Flex". That found "Expert Render"
+  (the Smart Render In/Out window title and its message), now "Smart Render". Our own name is skipped when it is the mark
+  split ("Chroma Curve"), and "descriptive" marks are not checked.
+* **Our new names in the register.**
+  * SMART RENDER is registered (serial 90280696), for web software that displays 3D models of physical assets.
+  * SPEED BUMP's registrations cover dosage dispensers, ice cream and vehicle parts.
+  * COMPOSER has many registrations, two of them for audio/video software (Symetrix's signal-processing design
+    tools, serial 90111614; Jamf's packaging software). Composer is the guides' name for the monitors' window, and
+    Grass Valley lists GV Composer and Channel Composer. Kept as our window's name, for the owner to confirm.
+
+  None of our other names (Title Designer, Flow Motion, Gradient Wipe, Phrase Search, Script Alignment, Speaker Cut,
+  Color Mask, Spectral Key, Frame Paint, Image FX, Framing, Asset Transfer, Sync Clips ...) is registered in these
+  classes, and neither is Cutthulhu.
+* **The other companies' product and feature names** are in `trademarks.json` as "absent" with their owners
+  (Premiere Pro, After Effects, Lightroom, Warp Stabilizer, Morph Cut, Lumetri, Magnetic Timeline, DaVinci Resolve,
+  Fusion, Fairlight, Speed Warp, Flame, Smoke, Maya, Sapphire, Continuum, Mocha, EDIUS, Vegas Pro ...). So are
+  Avid's coined marks from its list, except the common words on it (Artist, Impact, Eleven, Space ...), which are
+  "descriptive".
+
+A trademark search by a person, in the register itself, is still needed before a public release; this check only
+keeps known marks out of the strings.
 
 ## Our names
 
