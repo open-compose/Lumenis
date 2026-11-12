@@ -292,22 +292,31 @@ QList<Benchmark> benchmarks(const QString& dir, ui::MainWindow& window) {
     list << Benchmark{QStringLiteral("bin_read_10k"), QStringLiteral("reading a bin of 10,000 clips"), 5,
                       [bin, binPath] { return model::BinFile::write(binPath, *bin); },
                       [binPath] { return model::BinFile::read(binPath).has_value(); }};
-    auto document = std::make_shared<std::unique_ptr<ui::BinDocument>>();
-    auto view = std::make_shared<std::unique_ptr<ui::BinView>>();
-    list << Benchmark{QStringLiteral("bin_show_10k"), QStringLiteral("opening a bin of 10,000 clips in a Bin view"), 3, {}, [bin, binPath, document, view] {
-                          view->reset();
-                          document->reset();
-                          *document = std::make_unique<ui::BinDocument>(QStringLiteral("bench"), binPath, *bin);
-                          *view = std::make_unique<ui::BinView>(**document, nullptr);
-                          (*view)->resize(900, 700);
-                          (*view)->show();
+    // The bin's document and the view on it, shared by the two benchmarks below. The view refers to the document, so
+    // it always goes first (whichever benchmark's copy is destroyed last; ASan found the document freed under it).
+    struct BinUi {
+        std::unique_ptr<ui::BinDocument> document;
+        std::unique_ptr<ui::BinView> view;
+        void reset() {
+            view.reset();
+            document.reset();
+        }
+        ~BinUi() { reset(); }
+    };
+    auto shown = std::make_shared<BinUi>();
+    list << Benchmark{QStringLiteral("bin_show_10k"), QStringLiteral("opening a bin of 10,000 clips in a Bin view"), 3, {}, [bin, binPath, shown] {
+                          shown->reset();
+                          shown->document = std::make_unique<ui::BinDocument>(QStringLiteral("bench"), binPath, *bin);
+                          shown->view = std::make_unique<ui::BinView>(*shown->document, nullptr);
+                          shown->view->resize(900, 700);
+                          shown->view->show();
                           QCoreApplication::processEvents();
                           return true;
                       }};
     auto ascending = std::make_shared<bool>(true);
-    list << Benchmark{QStringLiteral("bin_sort_10k"), QStringLiteral("sorting a bin of 10,000 clips by Name"), 5, {}, [view, ascending] {
-                          if (!*view) return false;
-                          (*view)->sortOn(QStringLiteral("Name"), *ascending);
+    list << Benchmark{QStringLiteral("bin_sort_10k"), QStringLiteral("sorting a bin of 10,000 clips by Name"), 5, {}, [shown, ascending] {
+                          if (!shown->view) return false;
+                          shown->view->sortOn(QStringLiteral("Name"), *ascending);
                           *ascending = !*ascending;
                           QCoreApplication::processEvents();
                           return true;
