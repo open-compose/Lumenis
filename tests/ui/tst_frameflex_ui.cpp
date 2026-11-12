@@ -212,7 +212,7 @@ private slots:
         timeline.setEffectMode(true);
         settle();
         editor.refresh();
-        QCOMPARE(editor.effectName(), QStringLiteral("FrameFlex"));
+        QCOMPARE(editor.effectName(), QStringLiteral("Framing")); // shown for the stored FrameFlex (shown_names.h)
         QVERIFY(editor.categories().contains(QStringLiteral("FrameFlex")));
         QVERIFY(editor.layoutButton() && editor.layoutButton()->isChecked());
         // "The record viewer displays the frame and the framing box": the whole image, letterboxed, and the box's outline

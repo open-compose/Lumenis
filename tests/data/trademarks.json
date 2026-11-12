@@ -17,71 +17,61 @@
       "name": "SubCap",
       "source": "FX Guide p.378 (TM)",
       "ours": "Subtitles",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "FluidMotion",
       "source": "FX Guide p.149 (TM)",
       "ours": "Flow Motion",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "FluidBlur",
       "source": "Avid feature name (the Fluid family)",
       "ours": "Flow Blur",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "FluidColorMap",
       "source": "Avid feature name (the Fluid family)",
       "ours": "Flow Color Map",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "FluidMorph",
       "source": "Avid feature name (the Fluid family)",
       "ours": "Flow Morph",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "FluidFilm",
       "source": "Avid feature name (the Fluid family)",
       "ours": "Flow Film",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "AniMatte",
       "source": "FX Guide p.79 (TM)",
       "ours": "Animated Matte",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "SpectraMatte",
       "source": "FX Guide p.206 (TM)",
       "ours": "Spectral Key",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "SpectraGraph",
       "source": "FX Guide p.207 (TM)",
       "ours": "Key Graph",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "Intraframe",
       "source": "FX Guide p.250 (TM)",
       "ours": "Frame Paint",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "SteadyGlide",
@@ -93,15 +83,13 @@
       "name": "Magic Mask",
       "source": "FX Guide p.392 (TM)",
       "ours": "Color Mask",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "NaturalMatch",
       "source": "FX Guide p.544, p.624 (TM)",
       "ours": "Keep Luminance",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "ChromaCurve",
@@ -143,15 +131,13 @@
       "name": "Titler+",
       "source": "Avid feature name",
       "ours": "Title Designer",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "PlasmaWipe",
       "source": "Avid feature name",
       "ours": "Gradient Wipe",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "ExpertRender",
@@ -163,8 +149,7 @@
       "name": "Illusion FX",
       "source": "Avid feature name",
       "ours": "Image FX",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "AutoCut",
@@ -182,8 +167,7 @@
       "name": "Avid Pan & Zoom",
       "source": "trademark notice (Avid)",
       "ours": "Pan & Zoom",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "Avid Background Services",
@@ -201,8 +185,7 @@
       "name": "Symphony",
       "source": "trademark notice",
       "ours": "(left out)",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "Interplay",
@@ -214,8 +197,7 @@
       "name": "Avid",
       "source": "trademark notice",
       "ours": "(left out: \"Avid High Qual\" is \"High Quality\", \"PlasmaWipe Avid Lava\" is \"Gradient Wipe Lava\")",
-      "status": "planned",
-      "step": "9.8c"
+      "status": "renamed"
     },
     {
       "name": "Frame Chase",

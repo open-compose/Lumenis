@@ -765,7 +765,7 @@ bool MainWindow::exportSubCap() {
     if (dialog.useMarks() && record && record->in() && record->out()) options.range = std::pair{*record->in(), *record->out() + 1};
     QList<model::Caption> captions = model::transcriptCaptions(shownTranscriptOf(*item, dialog.tracks()), options);
     if (captions.isEmpty()) {
-        reportFailure(this, tr("Export SubCap: \"%1\" has no transcribed dialogue on those tracks.").arg(item->name));
+        reportFailure(this, tr("Export Subtitles: \"%1\" has no transcribed dialogue on those tracks.").arg(item->name));
         return false;
     }
     const QString path = transcriptPath(QStringLiteral("save"), fileNameOf(item->name) + QStringLiteral(".txt"),
@@ -796,7 +796,7 @@ bool MainWindow::exportSubCap() {
     }
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
-        reportFailure(this, tr("Export SubCap: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        reportFailure(this, tr("Export Subtitles: %1 cannot be written.").arg(QDir::toNativeSeparators(path)));
         return false;
     }
     return true;
@@ -808,7 +808,7 @@ bool MainWindow::exportSubCap() {
 bool MainWindow::createSubCap() {
     const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) {
-        reportFailure(this, tr("Create SubCap: load a sequence into the Record monitor."));
+        reportFailure(this, tr("Create Subtitles: load a sequence into the Record monitor."));
         return false;
     }
     const model::BinItem item = rec->item;
@@ -824,10 +824,10 @@ bool MainWindow::createSubCap() {
     }
     const QList<model::Caption> captions = model::transcriptCaptions(shownTranscriptOf(item, dialog.tracks()), options);
     QString why;
-    const bool ok = timeline_->changeRecordSequence(tr("Create SubCap"), [&](model::Sequence& s) {
+    const bool ok = timeline_->changeRecordSequence(tr("Create Subtitles"), [&](model::Sequence& s) {
         return model::createSubCapTrack(s, captions, &why).has_value();
     });
-    if (!ok) reportFailure(this, tr("Create SubCap: %1").arg(why.isEmpty() ? tr("the captions could not be made.") : why));
+    if (!ok) reportFailure(this, tr("Create Subtitles: %1").arg(why.isEmpty() ? tr("the captions could not be made.") : why));
     return ok;
 }
 

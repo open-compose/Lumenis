@@ -1636,7 +1636,8 @@ decision, 2026-10-27). In steps (planned 2026-11-11, after Phase 8's steps were 
     `tests/data/trademarks.json`, ctest `trademark_names` through `scripts/check-trademarks.py`); 9.8b, the command,
     menu, window, setting and message texts renamed (done: `tr()` strings, commands.json, menus.json, settings.json and
     tests/data/menu_inventory.json; Titler+ and NaturalMatch, also effect and parameter names, wait for 9.8c); 9.8c, effect and parameter category names as display labels over
-    their stored names.
+    their stored names (done: `model::shownName` in `src/model/shown_names.*` for the Effect Palette, Effect Editor,
+    Sequence Report and new templates; the check reads its table), so 9.8 and Phase 9's steps are done.
 The items:
 * printing: Page Setup, Print Bin, Print Frame and Print Timeline
   (p.288-292, p.645);

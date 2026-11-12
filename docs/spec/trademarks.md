@@ -29,6 +29,16 @@ MultiRez, FrameFlex, Titler+, PlasmaWipe, ExpertRender, Illusion FX, AutoCut, Mu
   does not count as "Avid". Planned marks are listed with their step.
 * The specs keep the guides' names as the source (they cite the guide); only what the user sees changes.
 
+9.8c showed the effects and parameter categories under our names: `model::shownName` (`src/model/shown_names.*`)
+turns a stored name into the one to show, through a table of stored words and ours ("PlasmaWipe Avid Lava" is shown as
+"Gradient Wipe Lava"). The Effect Palette (its items keep the stored name in their data; `EffectPalette::category`
+and `shownEffects` still give stored names), the Effect Editor's title, category headers, parameter labels and menu
+options (each option keeps its stored text as its value), the Sequence Report and new effect templates' names use it;
+saved sequences, templates and AAF keep the stored names. The remaining texts (Export/Create SubCap, the SubCap
+messages, FluidMotion in the Timewarp's Type menu, the AniMatte message, Send To's "Avid Video - Consolidate Audio",
+now "MXF Video - Consolidate Audio") were renamed as in 9.8b. `scripts/check-trademarks.py` checks effects.json and
+effect_parameters.json as shown, reading the table in shown_names.cpp. Every mark is now renamed, absent or nominative.
+
 9.8b renamed the texts (commands, menus, windows, settings, messages and the Audio Processing templates' names in bins,
 "<clip> - Audio Processing Effect: <effect>"); the effect and parameter category names are 9.8c's, so Titler+ and
 NaturalMatch, which are also an effect and a parameter name, stay planned until then, and the FrameFlex effect's name

@@ -2,6 +2,8 @@
 // item that holds it, and applying it to segments, transitions and one parameter group.
 #include "lumenis/model/effect_template.h"
 
+#include "lumenis/model/shown_names.h"
+
 #include "lumenis/model/effect_keyframes.h"
 
 #include <QJsonArray>
@@ -148,7 +150,7 @@ std::optional<EffectTemplate> effectTemplateOf(const BinItem& item) {
 }
 
 QString effectTemplateName(const EffectTemplate& t) {
-    return t.effect.name;
+    return shownName(t.effect.name);
 }
 
 Effect adaptedEffect(const EffectTemplate& t, const Rational& editRate) {

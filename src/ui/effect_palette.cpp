@@ -1,5 +1,7 @@
 #include "lumenis/ui/effect_palette.h"
 
+#include "lumenis/model/shown_names.h"
+
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 
@@ -43,6 +45,14 @@ constexpr QRgb kRealTime = 0xff3cc85a;
 // The effect list's item data for a bin's template: its bin and item ids.
 constexpr int kTemplateBinRole = Qt::UserRole + 2;
 constexpr int kTemplateItemRole = Qt::UserRole + 3;
+// An effect's or a category's stored name; the item shows model::shownName() of it (shown_names.h, 9.8c).
+constexpr int kNameRole = Qt::UserRole + 4;
+
+// The stored name of an effect or category item: its kNameRole, else its text (templates show their own names).
+QString storedName(const QListWidgetItem* item) {
+    const QVariant v = item->data(kNameRole);
+    return v.isValid() ? v.toString() : item->text();
+}
 
 } // namespace
 
@@ -161,7 +171,7 @@ QMimeData* effectMime(const EffectInfo& effect) {
     QJsonObject o{{QStringLiteral("category"), effect.category}, {QStringLiteral("name"), effect.name}};
     if (!effect.audioEffect.isEmpty()) o.insert(QStringLiteral("audioEffect"), effect.audioEffect);
     mime->setData(QString::fromLatin1(kEffectMimeType), QJsonDocument(o).toJson(QJsonDocument::Compact));
-    mime->setText(effect.name);
+    mime->setText(model::shownName(effect.name));
     return mime;
 }
 
@@ -239,7 +249,7 @@ void EffectList::startDrag(Qt::DropActions) {
         drag->exec(Qt::CopyAction);
         return;
     }
-    const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), item->text());
+    const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), storedName(item));
     if (!e) return;
     auto* drag = new QDrag(this);
     drag->setMimeData(effectMime(*e));
@@ -357,10 +367,15 @@ void EffectPalette::fillCategories() {
     for (const QString& c : names) {
         bool shown = tabs_->currentIndex() == 0; // Filters lists every category (p.37)
         for (const EffectInfo& e : effects) shown = shown || (e.category == c && tabShows(e));
-        if (shown) categories_->addItem(c);
+        if (!shown) continue;
+        auto* item = new QListWidgetItem(model::shownName(c), categories_);
+        item->setData(kNameRole, c);
     }
-    const auto found = categories_->findItems(was, Qt::MatchExactly);
-    categories_->setCurrentItem(found.isEmpty() ? categories_->item(0) : found.first());
+    QListWidgetItem* again = categories_->item(0);
+    for (int i = 0; i < categories_->count(); ++i) {
+        if (storedName(categories_->item(i)) == was) again = categories_->item(i);
+    }
+    categories_->setCurrentItem(again);
     categories_->blockSignals(false);
     fillEffects();
 }
@@ -390,14 +405,18 @@ void EffectPalette::fillEffects() {
     for (const EffectInfo& e : tabEffects()) {
         if (!tabShows(e)) continue;
         if (cat != kAll && e.category != cat) continue;
-        if (!text.isEmpty() && !e.name.contains(text, Qt::CaseInsensitive)) continue;
+        if (!text.isEmpty() && !e.name.contains(text, Qt::CaseInsensitive) &&
+            !model::shownName(e.name).contains(text, Qt::CaseInsensitive))
+            continue;
         list << e;
     }
     for (const EffectInfo& e : list) {
-        auto* item = new QListWidgetItem(effectIcon(e.transition && !e.segment, e.realTime, !e.ofxPlugin.isEmpty()), e.name, effects_);
+        const QString shown = model::shownName(e.name);
+        auto* item = new QListWidgetItem(effectIcon(e.transition && !e.segment, e.realTime, !e.ofxPlugin.isEmpty()), shown, effects_);
         item->setData(Qt::UserRole, e.category);
         item->setData(Qt::UserRole + 1, e.audioEffect);
-        item->setToolTip(cat == kAll ? e.category + QStringLiteral(": ") + e.name : e.name);
+        item->setData(kNameRole, e.name);
+        item->setToolTip(cat == kAll ? model::shownName(e.category) + QStringLiteral(": ") + shown : shown);
     }
 }
 
@@ -406,12 +425,16 @@ void EffectPalette::setTab(int index) {
 }
 
 void EffectPalette::setCategory(const QString& name) {
-    const auto found = categories_->findItems(name, Qt::MatchExactly);
-    if (!found.isEmpty()) categories_->setCurrentItem(found.first());
+    for (int i = 0; i < categories_->count(); ++i) {
+        if (storedName(categories_->item(i)) == name) {
+            categories_->setCurrentItem(categories_->item(i));
+            return;
+        }
+    }
 }
 
 QString EffectPalette::category() const {
-    return categories_->currentItem() ? categories_->currentItem()->text() : kAll;
+    return categories_->currentItem() ? storedName(categories_->currentItem()) : kAll;
 }
 
 void EffectPalette::setQuickFind(const QString& text) {
@@ -420,7 +443,7 @@ void EffectPalette::setQuickFind(const QString& text) {
 
 QStringList EffectPalette::shownEffects() const {
     QStringList out;
-    for (int i = 0; i < effects_->count(); ++i) out << effects_->item(i)->text();
+    for (int i = 0; i < effects_->count(); ++i) out << storedName(effects_->item(i));
     return out;
 }
 
@@ -473,7 +496,7 @@ std::optional<EffectInfo> EffectPalette::effectAt(int row) const {
     for (const EffectInfo& a : audioTrackEffects()) {
         if (a.audioEffect == item->data(Qt::UserRole + 1).toString() && !a.audioEffect.isEmpty()) return a;
     }
-    const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), item->text());
+    const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), storedName(item));
     if (!e) return std::nullopt;
     return *e;
 }

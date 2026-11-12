@@ -296,7 +296,7 @@ std::optional<std::pair<std::int64_t, std::int64_t>> subcapSegmentRange(const Se
 bool importCaptions(Sequence& sequence, const QString& track, std::int64_t frame, const QList<Caption>& captions, QString* error) {
     const auto range = subcapSegmentRange(sequence, track, frame);
     if (!range) {
-        if (error) *error = QObject::tr("There is no SubCap effect at the position on %1.").arg(track);
+        if (error) *error = QObject::tr("There is no Subtitles effect at the position on %1.").arg(track);
         return false;
     }
     const auto [from, to] = *range;

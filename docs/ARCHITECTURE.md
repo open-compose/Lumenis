@@ -38,7 +38,9 @@ headers in `include/lumenis/<library>/`.
   in `tests/data/dimmed_commands.json` with its reason (9.6). A command
   that fails says why through `reportFailure` (`src/ui/tool_windows.h`):
   the Console line and a warning that does not block (9.7; ctest
-  `failure_messages`).
+  `failure_messages`). Effects and parameter categories are stored under
+  the guides' names and shown through `model::shownName`
+  (`src/model/shown_names.*`, 9.8c; ctest `trademark_names`).
 * **A setting.** Options are declared in `src/ui/resources/settings.json`
   (kind, scope, tabs, options with type, default and guide page; `"later":
   true` shows one dimmed). The Settings window and its dialogs are built

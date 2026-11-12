@@ -76,7 +76,7 @@ bool saveSendToTemplate(const QString& path, const SendToTemplate& t, QString* e
 const QList<ProToolsOption>& proToolsOptions() {
     // The labels are the guide's (p.863-864).
     static const QList<ProToolsOption> all{
-        {QStringLiteral("avidVideoConsolidateAudio"), QObject::tr("Avid Video - Consolidate Audio")},
+        {QStringLiteral("avidVideoConsolidateAudio"), QObject::tr("MXF Video - Consolidate Audio")},
         {QStringLiteral("quicktimeEmbedAudio"), QObject::tr("QuickTime - Embed Audio"), false},
         {QStringLiteral("quicktimeConsolidateAudio"), QObject::tr("QuickTime - Consolidate Audio")},
         {QStringLiteral("linkVideoAudio"), QObject::tr("Link to Video and Audio")},

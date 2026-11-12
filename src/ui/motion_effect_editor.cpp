@@ -283,7 +283,7 @@ MotionEffectEditor::MotionEffectEditor(Timeline& timeline, QWidget* parent) : QW
                                          model::TimewarpType::BlendedInterpolated, model::TimewarpType::BlendedVtr,
                                          model::TimewarpType::FluidMotionDraft,  model::TimewarpType::FluidMotion};
     const QStringList typeNames{tr("Duplicated Field"), tr("Both Fields"), tr("Interpolated Field"), tr("VTR-Style"),
-                                tr("Blended Interpolated"), tr("Blended VTR"), tr("FluidMotion Draft"), tr("FluidMotion")};
+                                tr("Blended Interpolated"), tr("Blended VTR"), tr("Flow Motion Draft"), tr("Flow Motion")};
     for (int i = 0; i < typeNames.size(); ++i) type_->addItem(typeNames.at(i), model::timewarpTypeName(types[i]));
     form->addRow(tr("Type:"), type_);
     ignore_ = new QCheckBox(tr("Ignore Render Setting"), body_);

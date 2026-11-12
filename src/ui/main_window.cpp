@@ -4506,7 +4506,7 @@ bool MainWindow::exportMattePict(const QString& path) {
         // "You must click the Effect Editor before you select File > Export Matte PICT" (p.418). Ours: a message when the
         // Effect Editor shows no AniMatte effect.
         QMessageBox::information(this, tr("Export Matte PICT"),
-                                 tr("Show an AniMatte effect in the Effect Editor, in Effect mode, to export its matte."));
+                                 tr("Show an Animated Matte effect in the Effect Editor, in Effect mode, to export its matte."));
         return false;
     }
     QString file = path;
@@ -4696,7 +4696,7 @@ int MainWindow::exportToDevice(const QString& kind) {
 
 bool MainWindow::subcapAction(const QString& action) {
     auto say = [this](const QString& text) {
-        reportFailure(this, tr("SubCap: %1").arg(text));
+        reportFailure(this, tr("Subtitles: %1").arg(text));
         return false;
     };
     const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
@@ -4711,7 +4711,7 @@ bool MainWindow::subcapAction(const QString& action) {
         return tc ? tc->frameCount() : frames;
     };
     if (action == QLatin1String("import")) {
-        if (!effect || !model::subcapSegmentRange(seq, effect->track, effect->frame)) return say(tr("put the position on a SubCap effect first."));
+        if (!effect || !model::subcapSegmentRange(seq, effect->track, effect->frame)) return say(tr("put the position on a Subtitles effect first."));
         const QString path = subcapFileHook_ ? subcapFileHook_(false)
                                              : QFileDialog::getOpenFileName(this, tr("Select a file that contains caption data"), QString(),
                                                                             tr("Caption files (*.stl *.txt);;EBU N19 (*.stl);;Avid DS (*.txt)"));
@@ -4741,14 +4741,14 @@ bool MainWindow::subcapAction(const QString& action) {
         auto tc = [&](std::int64_t f) { return QString::fromStdString(Timecode(startFrame + f, format).toString()); };
         if (!captions->isEmpty())
             // Console only: where the file's captions fall against the effect.
-            ConsoleLog::instance().append(tr("SubCap: the file's captions run from %1 to %2, the effect from %3 to %4.")
+            ConsoleLog::instance().append(tr("Subtitles: the file's captions run from %1 to %2, the effect from %3 to %4.")
                                               .arg(tc(captions->first().start), tc(captions->last().end), tc(range.first), tc(range.second)));
         const bool ok = timeline_->changeRecordSequence(tr("Import Caption Data"), [&](model::Sequence& s) {
             return model::importCaptions(s, effect->track, effect->frame, *captions, &why);
         });
         if (!ok) return say(why.isEmpty() ? tr("the captions could not be imported.") : why);
         // Console only: how many captions came in.
-        ConsoleLog::instance().append(tr("SubCap: %1").arg(tr("%n caption(s) imported.", "", static_cast<int>(captions->size()))));
+        ConsoleLog::instance().append(tr("Subtitles: %1").arg(tr("%n caption(s) imported.", "", static_cast<int>(captions->size()))));
         return true;
     }
     if (action == QLatin1String("export")) {
@@ -4758,7 +4758,7 @@ bool MainWindow::subcapAction(const QString& action) {
             if (std::any_of(t.segments.begin(), t.segments.end(), [](const model::Segment& g) { return g.effect && model::isSubCap(*g.effect); }))
                 tracks << t.name();
         }
-        if (tracks.isEmpty()) return say(tr("the sequence has no SubCap effects."));
+        if (tracks.isEmpty()) return say(tr("the sequence has no Subtitles effects."));
         ExportCaptionsDialog choose(tracks, this);
         if (!(exportCaptionsHook_ ? exportCaptionsHook_(choose) : choose.exec() == QDialog::Accepted)) return false;
         const QString path = subcapFileHook_ ? subcapFileHook_(true)

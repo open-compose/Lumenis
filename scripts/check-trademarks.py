@@ -3,7 +3,8 @@
 settings or effects.
 
 Reads tests/data/trademarks.json and looks through every user-visible string: the values in src/ui/resources/*.json
-(but "comment", "source", "page" and similar notes) and the tr() strings in src/. A mark whose status is "renamed" or
+(but "comment", "source", "page" and similar notes; effects' and categories' names as model::shownName shows them) and
+the tr() strings in src/. A mark whose status is "renamed" or
 "absent" fails the check when it is found; a "planned" one is listed with the step that renames it; a "nominative" one
 is allowed, and its name is taken out of a string before the other marks are looked for (so "Avid DNx HQ" does not
 count as "Avid"). Exit status 1 on a failure. ctest trademark_names runs it.
@@ -32,10 +33,25 @@ def json_strings(value, key=None):
 TR = re.compile(r'\btr\(\s*"((?:[^"\\]|\\.)*)"')
 
 
+# Effects and parameter categories are stored under the guides' names (effects.json, effect_parameters.json) and shown
+# under ours, through model::shownName (src/model/shown_names.cpp, 9.8c): their strings are checked as shown.
+STORED_NAMES = {"effects.json", "effect_parameters.json"}
+SHOWN = re.compile(r'\{"((?:[^"\\]|\\.)*)", "((?:[^"\\]|\\.)*)"\}')
+
+
+def shown_table():
+    text = (ROOT / "src" / "model" / "shown_names.cpp").read_text(encoding="utf-8")
+    return SHOWN.findall(text)
+
+
 def visible_strings():
+    table = shown_table()
     for path in sorted((ROOT / "src" / "ui" / "resources").glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
         for s in json_strings(data):
+            if path.name in STORED_NAMES:
+                for stored, ours in table:
+                    s = s.replace(stored, ours)
             yield path, s
     for path in sorted((ROOT / "src").rglob("*.cpp")) + sorted((ROOT / "src").rglob("*.h")):
         for s in TR.findall(path.read_text(encoding="utf-8", errors="replace")):

@@ -1,6 +1,8 @@
 // The Sequence Report (sequence_report.h; Editing Guide p.368-371, p.237-238).
 #include "lumenis/media/sequence_report.h"
 
+#include "lumenis/model/shown_names.h"
+
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/model/color_correction.h"
@@ -263,7 +265,10 @@ QString sequenceReport(const SequenceReportInput& input, const SequenceReportOpt
     for (const ReportedEffect& e : w.effects) {
         if (keep(e, options)) effects << e;
     }
-    auto effectName = [](const ReportedEffect& e) { return e.missing ? QStringLiteral("Unavailable Effect (%1)").arg(e.name) : e.name; };
+    // Names as the user sees them (model::shownName, shown_names.h).
+    auto effectName = [](const ReportedEffect& e) {
+        return e.missing ? QStringLiteral("Unavailable Effect (%1)").arg(model::shownName(e.name)) : model::shownName(e.name);
+    };
     if (options.effectSummary) {
         // "The types of effects and how many were found in your sequence, the breakdown by effect type, and an effect
         // plug-in summary" (p.370).

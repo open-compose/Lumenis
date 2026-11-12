@@ -57,7 +57,7 @@ std::optional<Segment> templateSource(const EffectTemplate& t);
 BinItem effectTemplateItem(const EffectTemplate& t, const QString& name, const QDateTime& when);
 // The template an Effect item holds; nothing for other items.
 std::optional<EffectTemplate> effectTemplateOf(const BinItem& item);
-// The default name: the effect's.
+// The default name: the effect's, as shown (model::shownName: the item is the user's, so it carries our name).
 QString effectTemplateName(const EffectTemplate& t);
 
 // The template's effect for a sequence at `editRate`: Fixed keyframes scaled from the template's rate

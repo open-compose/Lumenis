@@ -152,7 +152,7 @@ public:
     const std::optional<model::EffectRef>& shown() const { return shown_; }
     // Neither an effect nor Transition parameters are shown.
     bool isBlank() const;
-    // The shown effect's name; empty if none.
+    // The shown effect's name, as shown (model::shownName of its stored name); empty if none.
     QString effectName() const;
     // The Safe Color Limiter shown, with its Source Monitor Analysis menu at Highlight Out of Range Colors: its limiting at
     // the position, for the Source monitor's analysis display (FX Guide p.729-730; 6.10e4c2). Nothing otherwise.

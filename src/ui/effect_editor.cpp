@@ -1,5 +1,7 @@
 #include "lumenis/ui/angle_dial.h"
 #include "lumenis/ui/effect_editor.h"
+
+#include "lumenis/model/shown_names.h"
 #include "lumenis/ui/theme.h"
 
 #include "lumenis/model/subcap.h"
@@ -902,7 +904,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     openGraphs_.clear();
     selection_.clear();
     activeParameter_.clear();
-    title_->setText(effect ? effect->name : QString());
+    title_->setText(effect ? model::shownName(effect->name) : QString());
     title_->setVisible(effect != nullptr);
     titleIcon_->setVisible(effect != nullptr);
     if (effect) {
@@ -1021,7 +1023,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         opener->setObjectName(QStringLiteral("opener:") + category);
         opener->setArrowType(Qt::DownArrow);
         opener->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        opener->setText(category);
+        opener->setText(model::shownName(category));
         opener->setAutoRaise(true);
         opener->setCheckable(true);
         opener->setChecked(true);
@@ -1054,7 +1056,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 row->addWidget(c);
                 controls_.insert(k, c);
             } else {
-                auto* label = new QLabel(p.text, box);
+                auto* label = new QLabel(model::shownName(p.text), box);
                 label->setObjectName(QStringLiteral("paramLabel:") + k);
                 label->setMinimumWidth(64);
                 row->addWidget(label);
@@ -1132,7 +1134,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     // An OFX plug-in's push button (p.161): the plug-in is told, and keeps what it sets (ofxPushButton).
                     auto* press = new QToolButton(box);
                     press->setObjectName(QStringLiteral("param:") + k);
-                    press->setText(p.text);
+                    press->setText(model::shownName(p.text));
                     connect(press, &QToolButton::clicked, this, [this, name = p.name] { pressPluginButton(name); });
                     row->addWidget(press);
                     row->addStretch(1);
@@ -1174,9 +1176,10 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 } else if (p.kind == QLatin1String("menu") && !p.options.isEmpty()) {
                     auto* m = new QComboBox(box);
                     m->setObjectName(QStringLiteral("param:") + k);
-                    m->addItems(p.options);
-                    connect(m, &QComboBox::currentTextChanged, this,
-                            [this, category, name = p.name](const QString& t) { setValue(category, name, t); });
+                    // Each option shows its shown name and keeps its stored text, the value (shown_names.h).
+                    for (const QString& opt : p.options) m->addItem(model::shownName(opt), opt);
+                    connect(m, &QComboBox::currentIndexChanged, this,
+                            [this, m, category, name = p.name](int) { setValue(category, name, m->currentData().toString()); });
                     if (category == QLatin1String(model::kPanScanCategory) && p.name == QLatin1String("Target")) {
                         // Choosing the Target already chosen also resets the wire frame (p.235).
                         connect(m, &QComboBox::textActivated, this, [this, m](const QString& t) {
@@ -1190,7 +1193,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     // stamp buffer" (p.585). Ours: each press is kept at the position's time in the effect.
                     auto* press = new QToolButton(box);
                     press->setObjectName(QStringLiteral("param:") + k);
-                    press->setText(p.text);
+                    press->setText(model::shownName(p.text));
                     const bool stamp = p.name == QLatin1String("Stamp Image");
                     connect(press, &QToolButton::clicked, this, [this, stamp] { stamp ? stampImage() : clearStamps(); });
                     row->addWidget(press);
@@ -1213,7 +1216,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     // Establish Origin, Subdivide Effect and Reset to Origin (p.564).
                     auto* press = new QToolButton(box);
                     press->setObjectName(QStringLiteral("param:") + k);
-                    press->setText(p.text);
+                    press->setText(model::shownName(p.text));
                     const QString action = p.name;
                     connect(press, &QToolButton::clicked, this, [this, action] {
                         if (action == QLatin1String("Establish Origin")) establishOrigin();
@@ -1268,7 +1271,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     if (p.kind == QLatin1String("button")) {
                         auto* press = new QToolButton(box);
                         press->setObjectName(QStringLiteral("param:") + k);
-                        press->setText(p.text);
+                        press->setText(model::shownName(p.text));
                         const QString action = p.name == QLatin1String("Import Caption Data")      ? QStringLiteral("import")
                                                : p.name == QLatin1String("Export Caption Data")    ? QStringLiteral("export")
                                                : p.name == QLatin1String("Edit Master Caption List") ? QStringLiteral("masterList")
@@ -1506,7 +1509,8 @@ void EffectEditor::syncBurnIn(const model::Effect& effect) {
         if (auto* c = qobject_cast<QCheckBox*>(w)) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
-            m->setCurrentText(v.toString());
+            if (const int at = m->findData(v.toString()); at >= 0) m->setCurrentIndex(at);
+            else m->setCurrentText(v.toString());
         } else if (auto* n = qobject_cast<QSpinBox*>(w)) {
             n->setValue(static_cast<int>(std::lround(v.toDouble() / n->property("scale").toDouble())));
         } else if (auto* l = qobject_cast<QLineEdit*>(w)) {
@@ -1558,7 +1562,8 @@ void EffectEditor::syncValues(const model::Effect& effect) {
         } else if (auto* c = qobject_cast<QCheckBox*>(w)) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
-            m->setCurrentText(v.toString());
+            if (const int at = m->findData(v.toString()); at >= 0) m->setCurrentIndex(at);
+            else m->setCurrentText(v.toString());
         } else if (auto* number = qobject_cast<QSpinBox*>(w)) {
             number->setValue(v.toInt());
         } else if (auto* edit = qobject_cast<QLineEdit*>(w)) {

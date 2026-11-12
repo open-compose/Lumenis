@@ -138,13 +138,14 @@ public:
 
     // The tab by its place in EffectCatalog::tabs().
     void setTab(int index);
-    // "All" lists every category's effects. A category the tab does not list is ignored.
+    // "All" lists every category's effects. A category the tab does not list is ignored. Categories and effects are
+    // named here by their stored names; the lists show model::shownName() of them (shown_names.h).
     void setCategory(const QString& name);
-    // The selected category; "All" when none is selected.
+    // The selected category's stored name; "All" when none is selected.
     QString category() const;
     // Quick Find (p.37): searches all categories, or the selected one.
     void setQuickFind(const QString& text);
-    // The effects shown, by name.
+    // The effects shown, by their stored names (templates by their own).
     QStringList shownEffects() const;
     // The effect in row `row` of the effect list; nothing if out of range or a template.
     std::optional<EffectInfo> effectAt(int row) const;

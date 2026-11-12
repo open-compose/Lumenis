@@ -4887,7 +4887,7 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     // "Right-click inside a sequence and choose Transcript > Create SubCap" (p.452).
     QMenu* transcript = menu->addMenu(tr("Transcript"));
     transcript->setObjectName(QStringLiteral("timeline:transcript"));
-    run(transcript, tr("Create SubCap"), QStringLiteral("timeline.create_subcap"))->setEnabled(!showSource_);
+    run(transcript, tr("Create Subtitles"), QStringLiteral("timeline.create_subcap"))->setEnabled(!showSource_);
     return menu;
 }
 
