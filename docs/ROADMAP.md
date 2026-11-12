@@ -1735,19 +1735,32 @@ The items:
     run here once minutes allow.
   * 10.8, the release gate: 10.1-10.7 pass on all three platforms, the phases' deferred gates are listed with their
     reasons, and a release candidate is installed and tried by the owner on each OS.
-* **Decisions for the owner** (before the step each one blocks):
-  * Certificates (10.7, 10.6): an Apple Developer ID (the Developer Program), and a Windows code-signing
-    certificate (OV, EV, or Azure Trusted Signing), held by whom and in which secret store. A GPG key for Linux.
-  * Update hosting (10.6): where the feed and packages live (GitHub Releases needs a public repository or one the
-    users can read; otherwise a web host), and who signs the feed.
-  * Crash-report collection (10.5): only local dumps that the user sends by hand, or a server (self-hosted
-    Crashpad/Breakpad collector, Sentry or similar). If a server: the privacy policy, opt-in wording and how long
-    dumps are kept.
-  * Languages (10.4): which ones, in what order, and who translates. Media Composer's shipped languages need a
-    public Avid source before we copy that list.
-  * Which machines run the 72-hour soaks (10.2): each one ties up a runner for three days.
-  * Whether hosted CI minutes come back for the end-of-phase hosted macOS run (CLAUDE.md), or the self-hosted Mac
-    is enough for Phase 9 and 10.
+* **The owner's answers (2026-11-12)**, being gone through before the plan is final. The repository goes public
+  after Phase 10.
+  * Certificates: none (each costs money and Cutthulhu is free). Releases are unsigned binaries for those who do not
+    build from source, with install instructions for each OS saying how to let them run (macOS: ad-hoc signed, then
+    Privacy & Security's Open Anyway or removing the quarantine attribute; Windows: SmartScreen's More info > Run
+    anyway; Linux: making the AppImage executable). 10.7 becomes the release pipeline without signing.
+  * Patent codecs: releases follow US rules by default, so H.264, HEVC and the other codecs under `LUMENIS_PATENT_CODECS`
+    are left out of the binaries we ship. INSTALL.md says how to turn them on where the law allows (building with
+    `LUMENIS_PATENT_CODECS=ON` and an FFmpeg with those codecs). Proposed: use the operating system's licensed H.264 and
+    HEVC (VideoToolbox on macOS, Media Foundation on Windows) in the releases, as the licensed-technology rule allows
+    (CLAUDE.md), waiting on the owner's yes.
+  * Update hosting: GitHub. Releases are GitHub Releases. The update check reads the latest release and its feed
+    (Sparkle and WinSparkle verify an EdDSA signature, a free key kept as a GitHub secret, not a certificate).
+  * Crash reports: GitHub. Minidumps stay on the user's machine; after a crash the next start offers to open a new
+    GitHub issue from a crash template, filled in with the version, OS and stack, and the user decides whether to
+    attach the dump. Symbols are kept with each release.
+  * Languages: English (default), German, French, Italian and Irish. Adding a language must stay easy for us and for
+    users (a `.ts` file and a line in a list; the steps in a contributor guide).
+  * Soak machines: on GitHub's hosted runners once the repository is public (see 10.2 for the limits).
+  * CI: the self-hosted runners are removed before the repository goes public (security), with a step-by-step guide
+    for the owner; afterwards all CI runs on GitHub's hosted runners or Claude's machines.
+  * Names: Smart Render and Composer stay for now (docs/spec/trademarks.md).
+* **10.0, going public** (new, last before release): remove the self-hosted runners and their jobs, variables and
+  scripts; move every job to hosted runners; check the history and branches for anything that must not be public
+  (secrets, `ci-screenshots/*` branches, the owner's personal details); and add the community files (README for
+  users, CONTRIBUTING with adding a language, SECURITY, issue templates for bugs and crashes) after §2.2 is decided.
 
 ## 6. Immediate next steps
 
