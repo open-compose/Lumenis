@@ -154,6 +154,11 @@
       },
       "environment": {
         "QT_QPA_PLATFORM": "offscreen"
+      },
+      "filter": {
+        "exclude": {
+          "label": "perf"
+        }
       }
     },
     {
@@ -197,6 +202,24 @@
       },
       "execution": {
         "timeout": 900
+      }
+    },
+    {
+      "name": "perf",
+      "configurePreset": "ci",
+      "filter": {
+        "include": {
+          "label": "perf"
+        }
+      },
+      "execution": {
+        "timeout": 1800
+      },
+      "output": {
+        "outputOnFailure": true
+      },
+      "environment": {
+        "QT_QPA_PLATFORM": "offscreen"
       }
     }
   ]

@@ -1066,8 +1066,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/model/shown_names.*`: show every effect or category name through it), is done. 9.8d, other companies' marks (Adobe, Apple, Blackmagic Design, Autodesk, Boris FX, Grass Valley, MAGIX and Avid's
   own list, with their owners and USPTO serials in `tests/data/trademarks.json`; docs/spec/trademarks.md), is done,
   so 9.8 and Phase 9's steps are.
-  Phase 10's step plan (10.1-10.8) and the owner's decisions are in ROADMAP, proposed and waiting on the owner:
-  start no Phase 10 step before the owner agrees.
+  Phase 10's step plan (10.0-10.8) and the owner's answers are in ROADMAP; the repository goes public after Phase 10.
+  10.1a, the benchmarks (docs/spec/performance.md: `tests/perf/bench.cpp` as `lumenis_bench`, `scripts/perf.py` with
+  `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1b, the slow paths,
+  has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling").
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them

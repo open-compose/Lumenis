@@ -110,6 +110,14 @@ QStringList levelsPoints(const QString& tab);  // "inBlack", "inGray", "inWhite"
 // points, "steeper near the black point and somewhat shallower near the white point" when the gray point is raised
 // (p.656). Ours: a power curve between the black and white points through the gray point.
 double levelsValue(const ColorCorrection& c, const QString& tab, double value);
+// A Levels tab's points, read once (levelsPointsOf), and the same mapping on them: for code that maps many values with
+// one correction (media::CorrectionPlan, a whole picture), where reading the points by path for each would be slow.
+struct LevelsPoints {
+    double inBlack = 0, inWhite = 0, outBlack = 0, outWhite = 0, inGray = 0, outGray = 0;
+    bool gray = false; // the tab has gray points (not Luma or Composite)
+};
+LevelsPoints levelsPointsOf(const ColorCorrection& c, const QString& tab);
+double levelsValue(const LevelsPoints& points, double value);
 
 // The Curves group (p.659-667): the ChromaCurve graphs' points, [in 0-255, out 0-255], "up to sixteen control points"
 // and "at least two" (p.662); by default the 45 degree line from (0, 0) to (255, 255).
@@ -132,6 +140,10 @@ QList<QPointF> lumaRangeCurve(const ColorCorrection& c, LumaRange range);
 QList<QPointF> defaultLumaRangeCurve(LumaRange range);
 // How much of each range a brightness (0-255) is: the curves' values made to add up to one (ours).
 std::array<double, 3> lumaRangeWeights(const ColorCorrection& c, double brightness);
+// The three ranges' curves (Shadows, Midtones, Highlights), and the weights from them: lumaRangeWeights() in two halves,
+// for many pixels with one correction.
+std::array<QList<QPointF>, 3> lumaRangeCurves(const ColorCorrection& c);
+std::array<double, 3> lumaRangeWeights(const std::array<QList<QPointF>, 3>& curves, double brightness);
 QString lumaRangeKey(LumaRange range); // "shadows", "midtones", "highlights"
 
 // The Secondary group (p.668-683): twelve vectors, "The first six are standard vectors that represent the following

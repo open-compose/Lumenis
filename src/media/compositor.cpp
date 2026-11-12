@@ -22,11 +22,14 @@
 #include "lumenis/model/title_clip.h"
 
 #include "effect_drawing.h"
+#include "parallel.h"
 
 #include <QFont>
 #include <QPainter>
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cmath>
 
 // The compositor (compositor.h). Tracks are walked from the top down to find what hides the rest,
@@ -80,33 +83,61 @@ Picture Picture::fromImage(const QImage& image, int width, int height, ImageInte
     fitted = fitted.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
     const int ox = (width - fitted.width()) / 2;
     const int oy = (height - fitted.height()) / 2;
-    for (int y = 0; y < fitted.height(); ++y) {
-        const uchar* line = fitted.constScanLine(y);
-        for (int x = 0; x < fitted.width(); ++x) {
-            float* out = p.pixel(ox + x, oy + y);
-            for (int c = 0; c < 4; ++c) out[c] = static_cast<float>(line[x * 4 + c]) / 255.0f;
+    // Each byte's value as a float, worked out once (the same values as dividing each one, 10.1b).
+    static const std::array<float, 256> kByte = [] {
+        std::array<float, 256> table{};
+        for (int i = 0; i < 256; ++i) table[static_cast<std::size_t>(i)] = static_cast<float>(i) / 255.0f;
+        return table;
+    }();
+    const QImage& source = fitted;
+    detail::parallelRange(static_cast<std::size_t>(source.height()), [&](std::size_t from, std::size_t to) {
+        for (std::size_t y = from; y < to; ++y) {
+            const uchar* line = source.constScanLine(static_cast<int>(y));
+            float* out = p.pixel(ox, oy + static_cast<int>(y));
+            const std::size_t values = static_cast<std::size_t>(source.width()) * 4;
+            for (std::size_t i = 0; i < values; ++i) out[i] = kByte[line[i]];
         }
-    }
+    }, 64);
     return p;
 }
+
+namespace {
+
+// std::round for 0 <= x <= 65535, without the library call (10.1b): the whole part by conversion, up when the rest is a
+// half or more. The same result: both the whole part and the rest are exact floats here.
+inline float roundUnsigned(float x) {
+    const float whole = static_cast<float>(static_cast<std::int32_t>(x));
+    return x - whole >= 0.5f ? whole + 1.0f : whole;
+}
+
+} // namespace
 
 void Picture::quantize(EffectPrecision precision) {
     if (precision == EffectPrecision::Bits32) return;
     const float steps = precision == EffectPrecision::Bits8 ? 255.0f : 65535.0f;
-    for (float& v : data_) v = std::round(std::clamp(v, 0.0f, 1.0f) * steps) / steps;
+    float* data = data_.data();
+    detail::parallelRange(data_.size(), [data, steps](std::size_t from, std::size_t to) {
+        for (std::size_t i = from; i < to; ++i) data[i] = roundUnsigned(std::clamp(data[i], 0.0f, 1.0f) * steps) / steps;
+    });
 }
 
 QImage Picture::toImage() const {
     QImage out(width_, height_, QImage::Format_RGB32);
-    for (int y = 0; y < height_; ++y) {
-        auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
-        for (int x = 0; x < width_; ++x) {
-            const float* p = pixel(x, y);
-            // Premultiplied over black: the colour channels as they are.
-            auto channel = [](float v) { return static_cast<int>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
-            line[x] = qRgb(channel(p[0]), channel(p[1]), channel(p[2]));
+    if (out.isNull()) return out;
+    // Lines written by several threads: each takes its scan line pointers from bits(), which does not detach.
+    uchar* bits = out.bits();
+    const qsizetype stride = out.bytesPerLine();
+    detail::parallelRange(static_cast<std::size_t>(height_), [&](std::size_t from, std::size_t to) {
+        for (std::size_t y = from; y < to; ++y) {
+            auto* line = reinterpret_cast<QRgb*>(bits + static_cast<qsizetype>(y) * stride);
+            for (int x = 0; x < width_; ++x) {
+                const float* p = pixel(x, static_cast<int>(y));
+                // Premultiplied over black: the colour channels as they are.
+                auto channel = [](float v) { return static_cast<int>(roundUnsigned(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+                line[x] = qRgb(channel(p[0]), channel(p[1]), channel(p[2]));
+            }
         }
-    }
+    }, 64);
     return out;
 }
 
@@ -117,8 +148,10 @@ Picture mix(const Picture& a, const Picture& b, double t) {
     const float f = static_cast<float>(std::clamp(t, 0.0, 1.0));
     const auto& x = a.data();
     const auto& y = b.data();
-    auto& o = out.data();
-    for (std::size_t i = 0; i < o.size(); ++i) o[i] = x[i] + (y[i] - x[i]) * f;
+    float* o = out.data().data();
+    detail::parallelRange(out.data().size(), [&](std::size_t from, std::size_t to) {
+        for (std::size_t i = from; i < to; ++i) o[i] = x[i] + (y[i] - x[i]) * f;
+    });
     return out;
 }
 
@@ -126,11 +159,13 @@ Picture over(const Picture& top, const Picture& bottom) {
     Picture out(top.width(), top.height());
     const auto& t = top.data();
     const auto& b = bottom.data();
-    auto& o = out.data();
-    for (std::size_t i = 0; i < o.size(); i += 4) {
-        const float keep = 1.0f - t[i + 3];
-        for (std::size_t c = 0; c < 4; ++c) o[i + c] = t[i + c] + b[i + c] * keep;
-    }
+    float* o = out.data().data();
+    detail::parallelRange(out.data().size() / 4, [&](std::size_t from, std::size_t to) {
+        for (std::size_t i = from * 4; i < to * 4; i += 4) {
+            const float keep = 1.0f - t[i + 3];
+            for (std::size_t c = 0; c < 4; ++c) o[i + c] = t[i + c] + b[i + c] * keep;
+        }
+    });
     return out;
 }
 
@@ -641,9 +676,21 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     const int h = c.size.height();
     Picture result(w, h);
     if (!c.sequence || w <= 0 || h <= 0) return result;
-    // What lay below the track under the one being added, for Matte Key's three layers.
-    Picture beneath(w, h);
-    Picture lastStart(w, h);
+    // What lay below the track under the one being added, for Matte Key's three layers; kept only when a track has a
+    // Matte Key at this frame (a copy of the whole picture for each track otherwise, 10.1b).
+    bool matteKeys = false;
+    if (c.effects) {
+        for (const QString& name : c.tracks) {
+            const auto tf = trackFrame(*c.sequence, name, frame);
+            const model::Segment* s = tf ? tf->segment : nullptr;
+            if (s && s->effect && s->effect->category == QLatin1String("Key") && s->effect->name == QLatin1String("Matte Key")) {
+                matteKeys = true;
+                break;
+            }
+        }
+    }
+    Picture beneath = matteKeys ? Picture(w, h) : Picture();
+    Picture lastStart = matteKeys ? Picture(w, h) : Picture();
     // The topmost track with a render in date here holds everything up to it ("Media Composer renders
     // the composite result of all tracks into the top track", FX Guide p.57): start from its picture.
     qsizetype first = 0;
@@ -655,7 +702,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (!image) continue; // offline: the effect is computed
             result = Picture::fromImage(*image, w, h, c.interpolation);
             result.quantize(c.precision);
-            lastStart = result;
+            if (matteKeys) lastStart = result;
             first = i + 1;
             break;
         }
@@ -673,8 +720,10 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (!stamps.under.isNull()) result = over(stamps.under, result);
             pendingStamps = std::move(stamps.over);
         }
-        beneath = std::move(lastStart);
-        lastStart = result;
+        if (matteKeys) {
+            beneath = std::move(lastStart);
+            lastStart = result;
+        }
         const auto tf = trackFrame(*c.sequence, name, frame);
         if (!tf) continue;
         Picture layer;

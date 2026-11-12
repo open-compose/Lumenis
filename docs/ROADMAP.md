@@ -1706,7 +1706,14 @@ The items:
     project and bins, a long sequence in the Timeline, a render, a Transcode, scrubbing, and `--measure-playback`
     at each Video Quality setting. Record the times in `tests/data/perf_baseline.json` for each runner, and fail
     when one gets slower than the recorded time by more than a set margin. Profile the slowest paths (perf on
-    Linux, Instruments on macOS, WPA on Windows), fix them, and write the methods up in BUILDING.md.
+    Linux, Instruments on macOS, WPA on Windows), fix them, and write the methods up in BUILDING.md. In parts:
+    10.1a, the benchmarks and the check (done: docs/spec/performance.md, `tests/perf/bench.cpp` as `lumenis_bench`
+    with compositing, FFV1 coding, the audio mix, bins of 10,000 clips and the Timeline; `scripts/perf.py` against
+    `tests/data/perf_baseline.json`, ctests `perf_benchmarks_run` and `perf_compare` with `ctest --preset perf`);
+    10.1b, the slow paths fixed (started: `media::CorrectionPlan` reading a correction once per picture, a Color
+    Correction frame from over a minute to under 0.2 s; the compositor's passes on threads through
+    `detail::parallelRange` and without the rounding library call, the Matte Key pictures only when a track has one;
+    next: opening a bin of 10,000 clips, 6.7 s); 10.1c, the baselines recorded on the hosted runners after 10.0.
   * 10.2, long-run stability. Add a `--soak <hours>` mode that loops playback of the sample project's sequences
     with effects, renders and scrubbing, and logs memory, handles, threads and dropped frames every minute. A
     script checks the log for growth. Run 72 hours once on each OS (the owner's machines). Also run AddressSanitizer
@@ -1743,9 +1750,9 @@ The items:
     anyway; Linux: making the AppImage executable). 10.7 becomes the release pipeline without signing.
   * Patent codecs: releases follow US rules by default, so H.264, HEVC and the other codecs under `LUMENIS_PATENT_CODECS`
     are left out of the binaries we ship. INSTALL.md says how to turn them on where the law allows (building with
-    `LUMENIS_PATENT_CODECS=ON` and an FFmpeg with those codecs). Proposed: use the operating system's licensed H.264 and
-    HEVC (VideoToolbox on macOS, Media Foundation on Windows) in the releases, as the licensed-technology rule allows
-    (CLAUDE.md), waiting on the owner's yes.
+    `LUMENIS_PATENT_CODECS=ON` and an FFmpeg with those codecs). The releases use the operating system's licensed H.264 and HEVC
+    (VideoToolbox on macOS, Media Foundation on Windows) through FFmpeg, as the licensed-technology rule allows
+    (owner's decision, 2026-11-12); the AppImage uses the distribution's FFmpeg, leaving the choice to it.
   * Update hosting: GitHub. Releases are GitHub Releases. The update check reads the latest release and its feed
     (Sparkle and WinSparkle verify an EdDSA signature, a free key kept as a GitHub secret, not a certificate).
   * Crash reports: GitHub. Minidumps stay on the user's machine; after a crash the next start offers to open a new

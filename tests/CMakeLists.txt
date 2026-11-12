@@ -45,6 +45,7 @@ add_subdirectory(interop)
 add_subdirectory(media)
 add_subdirectory(ui)
 add_subdirectory(app)
+add_subdirectory(perf)
 
 # Makes every test's drive folder (lumenis_isolate_media_drives); ctest runs it before the tests
 # that need it, also under -R.

@@ -344,22 +344,38 @@ QStringList levelsPoints(const QString& tab) {
             QStringLiteral("outBlack"), QStringLiteral("outGray"), QStringLiteral("outWhite")};
 }
 
-double levelsValue(const ColorCorrection& c, const QString& tab, double value) {
+LevelsPoints levelsPointsOf(const ColorCorrection& c, const QString& tab) {
     const QString base = QStringLiteral("levels/") + tab + QLatin1Char('/');
     auto point = [&](const char* name) { return c.number(base + QLatin1String(name)); };
-    const double inBlack = point("inBlack"), inWhite = point("inWhite");
-    const double outBlack = point("outBlack"), outWhite = point("outWhite");
-    if (value <= inBlack) return outBlack;
-    if (value >= inWhite) return outWhite; // also when the white point is at or below the black point
-    const double x = (value - inBlack) / (inWhite - inBlack);
+    LevelsPoints p;
+    p.inBlack = point("inBlack");
+    p.inWhite = point("inWhite");
+    p.outBlack = point("outBlack");
+    p.outWhite = point("outWhite");
+    p.gray = levelsPoints(tab).contains(QStringLiteral("inGray"));
+    if (p.gray) {
+        p.inGray = point("inGray");
+        p.outGray = point("outGray");
+    }
+    return p;
+}
+
+double levelsValue(const LevelsPoints& p, double value) {
+    if (value <= p.inBlack) return p.outBlack;
+    if (value >= p.inWhite) return p.outWhite; // also when the white point is at or below the black point
+    const double x = (value - p.inBlack) / (p.inWhite - p.inBlack);
     double y = x;
-    if (levelsPoints(tab).contains(QStringLiteral("inGray"))) {
+    if (p.gray) {
         // The gray points as fractions of the black-to-white range: the curve y = x^k passes through both.
-        const double g = std::clamp((point("inGray") - inBlack) / (inWhite - inBlack), 0.01, 0.99);
-        const double h = outWhite != outBlack ? std::clamp((point("outGray") - outBlack) / (outWhite - outBlack), 0.01, 0.99) : 0.5;
+        const double g = std::clamp((p.inGray - p.inBlack) / (p.inWhite - p.inBlack), 0.01, 0.99);
+        const double h = p.outWhite != p.outBlack ? std::clamp((p.outGray - p.outBlack) / (p.outWhite - p.outBlack), 0.01, 0.99) : 0.5;
         y = std::pow(x, std::log(h) / std::log(g));
     }
-    return outBlack + (outWhite - outBlack) * y;
+    return p.outBlack + (p.outWhite - p.outBlack) * y;
+}
+
+double levelsValue(const ColorCorrection& c, const QString& tab, double value) {
+    return levelsValue(levelsPointsOf(c, tab), value);
 }
 
 QStringList curveGraphs() {
@@ -635,10 +651,20 @@ QList<QPointF> lumaRangeCurve(const ColorCorrection& c, LumaRange range) {
     return defaultLumaRangeCurve(range);
 }
 
+std::array<QList<QPointF>, 3> lumaRangeCurves(const ColorCorrection& c) {
+    std::array<QList<QPointF>, 3> curves;
+    for (int r = 0; r < 3; ++r) curves[static_cast<std::size_t>(r)] = lumaRangeCurve(c, static_cast<LumaRange>(r));
+    return curves;
+}
+
 std::array<double, 3> lumaRangeWeights(const ColorCorrection& c, double brightness) {
+    return lumaRangeWeights(lumaRangeCurves(c), brightness);
+}
+
+std::array<double, 3> lumaRangeWeights(const std::array<QList<QPointF>, 3>& curves, double brightness) {
     std::array<double, 3> w{};
     for (int r = 0; r < 3; ++r) {
-        const QList<QPointF> curve = lumaRangeCurve(c, static_cast<LumaRange>(r));
+        const QList<QPointF>& curve = curves[static_cast<std::size_t>(r)];
         double v = curve.constFirst().y();
         if (brightness >= curve.constLast().x()) {
             v = curve.constLast().y();

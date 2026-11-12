@@ -1,0 +1,6 @@
+{
+  "comment": "The benchmarks' recorded median times in milliseconds, per machine (ROADMAP 10.1; docs/spec/performance.md; scripts/perf.py --record writes them). A benchmark fails when it is more than 'margin' slower than its machine's time here and also more than 'floor_ms' slower.",
+  "floor_ms": 2.0,
+  "machines": {},
+  "margin": 0.3
+}

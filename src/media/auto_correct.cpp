@@ -73,7 +73,8 @@ double percentile(std::vector<double> values, double share) {
 std::pair<double, double> tonalRange(const ColorCorrection& c, const std::vector<Rgb>& source) {
     std::vector<double> y;
     y.reserve(source.size());
-    for (const Rgb& p : source) y.push_back(toYcc(colorCorrectedPixel(c, p)).y);
+    const CorrectionPlan plan(c); // read once for all the pixels
+    for (const Rgb& p : source) y.push_back(toYcc(plan.pixel(p)).y);
     return {percentile(y, kTail), percentile(y, 1.0 - kTail)};
 }
 
@@ -129,10 +130,12 @@ bool hslBalance(ColorCorrection& c, const std::vector<Rgb>& source) {
     for (int pass = 0; pass < 3; ++pass) {
         std::array<double, 3> weight{}, weight2{};
         std::array<QPointF, 3> chroma{};
+        const CorrectionPlan plan(c);
+        const auto curves = model::lumaRangeCurves(c);
         for (const Rgb& p : source) {
             // The ranges' shares go by the brightness before the corrections, as the picture weighs them.
-            const auto w = model::lumaRangeWeights(c, std::clamp(toYcc(p).y, 0.0, 255.0));
-            const Ycc out = toYcc(colorCorrectedPixel(c, p));
+            const auto w = model::lumaRangeWeights(curves, std::clamp(toYcc(p).y, 0.0, 255.0));
+            const Ycc out = toYcc(plan.pixel(p));
             for (std::size_t r = 0; r < 3; ++r) {
                 weight[r] += w[r];
                 weight2[r] += w[r] * w[r];
@@ -158,7 +161,8 @@ std::vector<Rgb> beforeCurves(const ColorCorrection& c, const std::vector<Rgb>& 
     without.reset(QStringLiteral("secondary"));
     std::vector<Rgb> out;
     out.reserve(source.size());
-    for (const Rgb& p : source) out.push_back(colorCorrectedPixel(without, p));
+    const CorrectionPlan plan(without);
+    for (const Rgb& p : source) out.push_back(plan.pixel(p));
     return out;
 }
 

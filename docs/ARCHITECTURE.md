@@ -263,6 +263,12 @@ the `fuzz` preset and run with `scripts/fuzz.py` (fuzz/README.md, BUILDING.md
 `fuzz_replay` runs the saved crash inputs (`fuzz/regressions/`) through
 them.
 
+`tests/perf/bench.cpp` (`lumenis_bench`) times compositing, decoding, the
+audio mix, large bins and the Timeline; `scripts/perf.py` compares the
+times with each machine's in `tests/data/perf_baseline.json`
+(docs/spec/performance.md). Whole-picture loops in `src/media` share their
+rows out with `detail::parallelRange` (`src/media/parallel.h`).
+
 Screenshots of the windows are compared across platforms in CI
 (`ui-consistency`); custom-painted widgets draw text with palette colours
 (`WindowText`, `BrightText`) so the text-free screenshots hide it.

@@ -1332,6 +1332,26 @@ install a runner. For a runner installed before that:
   the bin again as the same user on the same machine, or by deleting that
   file.
 
+## Profiling
+
+The benchmarks (docs/spec/performance.md) time the work an editor waits for:
+
+    build/ci/bin/lumenis_bench --list
+    build/ci/bin/lumenis_bench                          # all, with their medians
+    python3 scripts/perf.py --bench build/ci/bin/lumenis_bench            # compare with this machine's baseline
+    python3 scripts/perf.py --bench build/ci/bin/lumenis_bench --record   # record this machine's baseline
+
+`ctest --preset perf` runs the comparison; the other test presets leave it out. To profile one benchmark, run it long
+enough to look at with `--only <name> --runs 400`, then:
+
+* **Linux:** `perf record -g -p $(pgrep -x lumenis_bench)` and `perf report`; without perf, a few dozen
+  `gdb -p <pid> -batch -ex bt` samples show where the time goes.
+* **macOS:** Instruments' Time Profiler, attached to `lumenis_bench`.
+* **Windows:** Windows Performance Recorder (CPU usage) and Windows Performance Analyzer, or Visual Studio's
+  Performance Profiler.
+
+Build with the `ci` preset (RelWithDebInfo) so the stacks have names.
+
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours
