@@ -279,6 +279,7 @@ BackgroundQueueWindow::BackgroundQueueWindow(BackgroundQueue& queue, QWidget* pa
     layout->addWidget(tool, 0, Qt::AlignLeft);
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
+    scroll->setAccessibleName(tr("Jobs")); // screen readers (10.3)
     auto* body = new QWidget(scroll);
     rows_ = new QVBoxLayout(body);
     rows_->addStretch();

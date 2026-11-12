@@ -263,6 +263,10 @@ the `fuzz` preset and run with `scripts/fuzz.py` (fuzz/README.md, BUILDING.md
 `fuzz_replay` runs the saved crash inputs (`fuzz/regressions/`) through
 them.
 
+`tst_accessibility` checks that every control a screen reader reaches has a
+name (`src/ui/accessibility.*` names controls from their text or tooltip;
+docs/spec/accessibility.md).
+
 `tests/perf/bench.cpp` (`lumenis_bench`) times compositing, decoding, the
 audio mix, large bins and the Timeline; `scripts/perf.py` compares the
 times with each machine's in `tests/data/perf_baseline.json`

@@ -150,6 +150,8 @@ void MappableButton::setCommand(const QString& commandId) {
     command_ = commandId;
     setIcon(commandIcon(commandId));
     setToolTip(commandId.isEmpty() ? QString() : ButtonMapper::instance().text(commandId));
+    // Screen readers (10.3): a mapped button is named by its tooltip (accessibility.h); a blank one says so.
+    setAccessibleName(commandId.isEmpty() ? tr("Blank button") : QString());
     setProperty("command", commandId);
     update();
 }

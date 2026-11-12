@@ -358,6 +358,7 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     groups_->addStretch(1);
     auto* scroll = new QScrollArea(this);
     scroll->setObjectName(QStringLiteral("effectParameters"));
+    scroll->setAccessibleName(tr("Effect parameters")); // screen readers (10.3)
     scroll->setWidgetResizable(true);
     scroll->setWidget(body_);
     scroll->setFrameShape(QFrame::NoFrame);

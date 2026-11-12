@@ -62,6 +62,7 @@ TranscriptTool::TranscriptTool(QWidget* parent) : QWidget(parent) {
     layout->addWidget(banner_);
     view_ = new QTextEdit(this);
     view_->setObjectName(QStringLiteral("transcriptText"));
+    view_->setAccessibleName(tr("Transcript")); // screen readers (10.3)
     view_->setReadOnly(true);
     view_->setAcceptRichText(false);
     view_->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);

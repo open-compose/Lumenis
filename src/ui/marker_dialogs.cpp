@@ -104,6 +104,7 @@ MarkersWindow::MarkersWindow(Timeline& timeline, QWidget* parent) : QWidget(pare
     setWindowTitle(tr("Markers"));
     table_ = new QTableWidget(0, 6, this);
     table_->setObjectName(QStringLiteral("markersTable"));
+    table_->setAccessibleName(tr("Markers")); // screen readers (10.3)
     table_->setHorizontalHeaderLabels({QString(), tr("Name"), tr("User"), tr("TC"), tr("Track"), tr("Comment")});
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);

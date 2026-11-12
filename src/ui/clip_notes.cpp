@@ -67,6 +67,7 @@ ClipNotesWindow::ClipNotesWindow(Timeline& timeline, QWidget* parent) : QWidget(
     setWindowTitle(tr("Timeline Clip Notes"));
     table_ = new QTableWidget(0, ColumnCount, this);
     table_->setObjectName(QStringLiteral("clipNotesTable"));
+    table_->setAccessibleName(tr("Clip notes")); // screen readers (10.3)
     QStringList headings;
     for (int c = 0; c < ColumnCount; ++c) headings << columnName(c);
     table_->setHorizontalHeaderLabels(headings);

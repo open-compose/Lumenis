@@ -330,11 +330,13 @@ SourceBrowser::SourceBrowser(QWidget* parent) : QWidget(parent) {
     // shows that folder.
     places_ = new QTabWidget(middle);
     places_->setObjectName(QStringLiteral("sourceBrowserPlaces"));
+    places_->setAccessibleName(tr("Places")); // screen readers (10.3)
     folders_ = new QFileSystemModel(this);
     folders_->setFilter(QDir::AllDirs | QDir::NoDotAndDotDot | QDir::Drives);
     folders_->setRootPath(QString());
     tree_ = new QTreeView(places_);
     tree_->setObjectName(QStringLiteral("sourceBrowserExplore"));
+    tree_->setAccessibleName(tr("Folders and files")); // screen readers (10.3)
     tree_->setModel(folders_);
     for (int c = 1; c < folders_->columnCount(); ++c) tree_->hideColumn(c);
     tree_->setHeaderHidden(true);
@@ -460,6 +462,7 @@ QWidget* SourceBrowser::buildDisplay() {
 
     text_ = new QTreeView(views_);
     text_->setObjectName(QStringLiteral("sourceBrowserText"));
+    text_->setAccessibleName(tr("Files")); // screen readers (10.3)
     text_->setModel(proxy_);
     text_->setRootIsDecorated(false);
     text_->setUniformRowHeights(true);

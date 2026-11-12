@@ -514,6 +514,7 @@ DynamicMediaFoldersWindow::DynamicMediaFoldersWindow(QWidget* parent) : QWidget(
     layout->addLayout(buttons);
     list_ = new QTreeWidget;
     list_->setObjectName(QStringLiteral("folders"));
+    list_->setAccessibleName(tr("Dynamic Media Folders")); // screen readers (10.3)
     list_->setRootIsDecorated(false);
     list_->setHeaderLabels({tr("Enable"), tr("Folder"), tr("Profile"), tr("Acquire")});
     list_->header()->setSectionResizeMode(1, QHeaderView::Stretch);

@@ -1724,7 +1724,11 @@ The items:
     we paint ourselves: panels, Timeline, monitors, bins, buttons and palettes. Check focus order and that every
     command is reachable by keyboard. Check contrast and large fonts against the Interface settings. Try it with
     VoiceOver, Narrator/NVDA and Orca. Add `tst_accessibility` (every visible widget with a command has a name),
-    plus a checklist for the owner's manual check.
+    plus a checklist for the owner's manual check. In parts (docs/spec/accessibility.md): 10.3a, names (done:
+    `installAccessibleNames` in `src/ui/accessibility.*` naming controls from their text, tooltip or placeholder,
+    names in the code for the rest; `tst_accessibility` over the main window and the Tools menu's windows, 544
+    controls); 10.3b, roles and contents for the widgets we paint; 10.3c, the keyboard and focus; 10.3d, contrast,
+    large fonts and the owner's checks with the screen readers.
   * 10.4, localisation. Use Qt Linguist (`lupdate`/`lrelease` from qttools, LGPL). Add `translations/` and a
     language choice in the Interface setting. Translate commands.json, menus.json, settings.json and the effect
     labels through `model::shownName`. Add a check that no user-visible string bypasses `tr()`, and pseudo-localised
@@ -1770,6 +1774,14 @@ The items:
   scripts; move every job to hosted runners; check the history and branches for anything that must not be public
   (secrets, `ci-screenshots/*` branches, the owner's personal details); and add the community files (README for
   users, CONTRIBUTING with adding a language, SECURITY, issue templates for bugs and crashes) after §2.2 is decided.
+  The owner's details (owner's decision, 2026-11-12):
+  * Rewrite the history so the two commits authored by open-compose carry GitHub's no-reply address
+    (`175782430+open-compose@users.noreply.github.com`) instead of the owner's personal-domain email: `git filter-repo`
+    with a mailmap over every branch, then force-push. Commit ids change from those commits on, so every clone is made
+    again afterwards; the owner turns on "Keep my email addresses private" and "Block command line pushes that expose
+    my email" in GitHub's email settings first. No file holds the owner's email or name (checked 2026-11-12; only
+    third-party authors' credits).
+  * Delete the old workflow runs (and the `ci-screenshots/*` branches): their logs name the owner's machines.
 
 ## 6. Immediate next steps
 

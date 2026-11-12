@@ -103,6 +103,7 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
 
     tabs_ = new QTabWidget(this);
     tabs_->setObjectName(QStringLiteral("commandPaletteTabs"));
+    tabs_->setAccessibleName(tr("Command Palette tabs")); // screen readers (10.3)
     tabs_->setUsesScrollButtons(true);
     QStringList names;
     // One page per tab: its columns side by side, each a grid of label, button and (on the Workspaces tab)

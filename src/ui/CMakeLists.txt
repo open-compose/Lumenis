@@ -110,6 +110,7 @@ add_library(lumenis_ui STATIC
     settings.cpp
     settings_window.cpp
     theme.cpp
+    accessibility.cpp
     timeline.cpp
     timeline_automation.cpp
     timeline_captions.cpp

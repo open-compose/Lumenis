@@ -204,6 +204,7 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     // track button (4).
     fader_ = new QSlider(Qt::Vertical, this);
     fader_->setObjectName(QStringLiteral("fader"));
+    fader_->setAccessibleName(tr("Volume fader")); // screen readers (10.3)
     fader_->setRange(0, fader::kRange);
     fader_->setValue(fader::position(0));
     fader_->setPageStep(fader::kRange / 11);
@@ -211,6 +212,7 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     fader_->installEventFilter(this);
     level_ = new QLineEdit(fader::text(0), this);
     level_->setObjectName(QStringLiteral("level"));
+    level_->setAccessibleName(tr("Volume level")); // screen readers (10.3)
     level_->setAlignment(Qt::AlignCenter);
     level_->setFixedWidth(44);
     trackButton_ = smallButton(track, QStringLiteral("trackButton"), this, !master);
@@ -492,6 +494,7 @@ std::optional<MixerDisplay> askDisplay(const MixerDisplay& current, QWidget* par
 // The Fast menu is filled each time it opens (fastMenu()).
 AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("audioMixer"));
+    setAccessibleName(tr("Audio Mixer")); // screen readers (10.3)
 
     // The top bar (picture and table on p.691-693).
     auto* bar = new QHBoxLayout;
@@ -598,6 +601,7 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     stripLayout_->addStretch(1);
     auto* scroll = new QScrollArea(this);
     scroll->setObjectName(QStringLiteral("mixerStrips"));
+    scroll->setAccessibleName(tr("Audio Mixer tracks")); // screen readers (10.3)
     scroll->setWidgetResizable(true);
     scroll->setWidget(stripArea_);
     scroll->setFrameShape(QFrame::NoFrame);

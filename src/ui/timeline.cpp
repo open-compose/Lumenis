@@ -430,6 +430,7 @@ std::int64_t labelInterval(double scale, int fps) {
 
 TimelineView::TimelineView(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("timelineView"));
+    setAccessibleName(tr("Timeline")); // screen readers (10.3)
     setMouseTracking(false);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumHeight(kRulerHeight + kVideoRow);
@@ -2392,6 +2393,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     QToolButton* zoomOut = tool("zoomOut", Picture::ZoomOut, tr("Zoom Out"), true);
     scaleBar_ = new QSlider(Qt::Horizontal, toolbar_);
     scaleBar_->setObjectName(QStringLiteral("scaleBar"));
+    scaleBar_->setAccessibleName(tr("Timeline scale"));
     scaleBar_->setRange(0, 1000);
     scaleBar_->setFixedWidth(120);
     bar->addWidget(scaleBar_);

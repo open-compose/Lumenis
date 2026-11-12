@@ -8,6 +8,7 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/accessibility.h"
 
 #include "lumenis/model/script.h"
 #include "lumenis/ui/script_window.h"
@@ -238,6 +239,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     : QMainWindow(parent), commands_(commands), providers_(providers) {
     setObjectName(QStringLiteral("MainWindow"));
     setWindowTitle(QString::fromUtf8(branding::kProductName));
+    // Screen readers: every control without a name of its own is named from what it shows (10.3).
+    if (auto* app = qobject_cast<QApplication*>(QCoreApplication::instance())) installAccessibleNames(*app);
     resize(1280, 800);
 
     // Every workspace has the same default layout (p.74).

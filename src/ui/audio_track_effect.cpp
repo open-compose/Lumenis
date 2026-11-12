@@ -64,6 +64,7 @@ QString slotName(int slot) {
 
 AudioTrackEffectTool::AudioTrackEffectTool(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("audioTrackEffect"));
+    setAccessibleName(tr("Audio Track Effect")); // screen readers (10.3)
     setFocusPolicy(Qt::StrongFocus);
 
     // Select Track, Select Insert, Select Effect; Plug-in Settings; Bypass (picture on p.793). Compare

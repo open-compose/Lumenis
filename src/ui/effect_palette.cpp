@@ -274,8 +274,10 @@ EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
 
     categories_ = new QListWidget(this);
     categories_->setObjectName(QStringLiteral("effectCategories"));
+    categories_->setAccessibleName(tr("Effect categories")); // screen readers (10.3)
     effects_ = new EffectList(this);
     effects_->setObjectName(QStringLiteral("effectList"));
+    effects_->setAccessibleName(tr("Effects")); // screen readers (10.3)
     effects_->setDragEnabled(true);
     effects_->setDragDropMode(QAbstractItemView::DragOnly);
     effects_->setIconSize(QSize(26, 18));

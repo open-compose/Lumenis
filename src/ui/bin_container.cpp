@@ -441,6 +441,7 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
     auto* tree = new SidebarTree(this);
     tree_ = tree;
     tree_->setObjectName(QStringLiteral("binTree"));
+    tree_->setAccessibleName(tr("Bins")); // screen readers (10.3)
     tree_->setModel(model_);
     tree_->setHeaderHidden(true);
     tree_->setIndentation(14);

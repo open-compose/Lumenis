@@ -153,6 +153,7 @@ void BinTabBar::mouseReleaseEvent(QMouseEvent* event) {
 
 BinTabGroup::BinTabGroup(BinDockArea& area) : QTabWidget(&area), area_(area) {
     setObjectName(QStringLiteral("binTabs"));
+    setAccessibleName(tr("Bin tabs")); // screen readers (10.3)
     auto* bar = new BinTabBar(this);
     setTabBar(bar);
     setTabsClosable(true);

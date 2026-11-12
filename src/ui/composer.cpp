@@ -1263,6 +1263,7 @@ void MonitorPicture::dropEvent(QDropEvent* event) {
 // setButtonLayout() and setDisplay() (MainWindow::applySettings).
 Composer::Composer(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("composer"));
+    setAccessibleName(tr("Composer")); // screen readers (10.3)
     setFocusPolicy(Qt::StrongFocus);
 
     // The buttons' default commands; their pictures serve every palette
@@ -1476,6 +1477,9 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     // side the center duration display follows (p.380, p.384).
     c->clipName = infoBox(c->widget, source ? QStringLiteral("sourceClipName") : QStringLiteral("recordClipName"));
     c->tracking = infoBox(c->widget, source ? QStringLiteral("sourceTracking") : QStringLiteral("recordTracking"));
+    // Screen readers (10.3; ours): what the boxes are, as their text is only the clip's name and a timecode.
+    c->clipName->setAccessibleName(source ? tr("Source monitor clip name menu") : tr("Record monitor clip name menu"));
+    c->tracking->setAccessibleName(source ? tr("Source monitor tracking display") : tr("Record monitor tracking display"));
     c->clipMenu = new QMenu(c->clipName);
     connect(c->clipMenu, &QMenu::aboutToShow, this, [this, monitor] { clipNameMenu(monitor); });
     c->clipName->setMenu(c->clipMenu);

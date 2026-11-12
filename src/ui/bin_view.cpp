@@ -1709,6 +1709,7 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
 
     table_ = new QTableView(this);
     table_->setObjectName(QStringLiteral("binTable"));
+    table_->setAccessibleName(tr("Bin contents")); // screen readers (10.3)
     table_->setModel(proxy_);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);

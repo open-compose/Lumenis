@@ -143,6 +143,7 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     leftLayout->addLayout(top);
 
     auto* tabs = new QTabWidget(left);
+    tabs->setAccessibleName(tr("List settings")); // screen readers (10.3)
     // Input (p.945): the sequence with Load and Clear, the tracks, the Title.
     auto* input = new QWidget(tabs);
     auto* inputLayout = new QVBoxLayout(input);
@@ -176,6 +177,7 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     inputLayout->addWidget(new QLabel(tr("Tracks:"), input));
     auto* scroll = new QScrollArea(input);
     scroll->setWidgetResizable(true);
+    scroll->setAccessibleName(tr("Tracks"));
     tracks_ = new QWidget(scroll);
     trackRow_ = new QHBoxLayout(tracks_);
     trackRow_->addStretch();
@@ -316,6 +318,7 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     optionsLayout->addStretch();
     auto* optionsScroll = new QScrollArea(tabs);
     optionsScroll->setWidgetResizable(true);
+    optionsScroll->setAccessibleName(tr("Options"));
     optionsScroll->setWidget(options);
     tabs->addTab(optionsScroll, tr("List Options"));
 
@@ -365,8 +368,10 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     for (QPushButton* b : {clearList_, newList, cloneList}) buttons->addWidget(b);
     rightLayout->addLayout(buttons);
     listTabs_ = new QTabWidget(right);
+    listTabs_->setAccessibleName(tr("Lists")); // screen readers (10.3)
     master_ = new QPlainTextEdit(listTabs_);
     master_->setObjectName(QStringLiteral("listMaster"));
+    master_->setAccessibleName(tr("Master list")); // screen readers (10.3)
     master_->setReadOnly(true);
     master_->setLineWrapMode(QPlainTextEdit::NoWrap);
     const QFont mono = fixedFont();

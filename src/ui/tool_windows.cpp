@@ -41,6 +41,7 @@ namespace lumenis::ui {
 // so typing keeps going to the window.
 CalculatorWindow::CalculatorWindow(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("calculator"));
+    setAccessibleName(tr("Calculator")); // screen readers (10.3)
     setFocusPolicy(Qt::StrongFocus);
 
     format_ = new QComboBox(this);
@@ -292,6 +293,7 @@ ConsoleWindow::ConsoleWindow(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("console"));
     log_ = new QPlainTextEdit(this);
     log_->setObjectName(QStringLiteral("consoleLog"));
+    log_->setAccessibleName(tr("Console")); // screen readers (10.3)
     log_->setReadOnly(true);
     log_->setLineWrapMode(QPlainTextEdit::NoWrap);
     log_->setPlainText(ConsoleLog::instance().lines().join(QLatin1Char('\n')));

@@ -60,6 +60,7 @@ QString monitoringText(AudioPunchInTool::Monitoring m) {
 AudioPunchInTool::AudioPunchInTool(Timeline& timeline, QWidget* parent)
     : QWidget(parent), timeline_(timeline), input_(std::make_unique<media::AudioInput>()) {
     setObjectName(QStringLiteral("audioPunchIn"));
+    setAccessibleName(tr("Audio Punch-In")); // screen readers (10.3)
     setFocusPolicy(Qt::StrongFocus);
     inputStarter_ = [](media::AudioInput& in, const QString& device, int channels) { return in.start(device, channels); };
 
@@ -106,6 +107,9 @@ AudioPunchInTool::AudioPunchInTool(Timeline& timeline, QWidget* parent)
     };
     preroll_ = seconds(QStringLiteral("preroll"));
     postroll_ = seconds(QStringLiteral("postroll"));
+    // One "Pre/Post (sec):" row holds both, so neither is named by the label (screen readers, 10.3).
+    preroll_->setAccessibleName(tr("Preroll (seconds)"));
+    postroll_->setAccessibleName(tr("Postroll (seconds)"));
     handles_ = seconds(QStringLiteral("handles"));
     inputSource_ = new QComboBox(this);
     inputSource_->setObjectName(QStringLiteral("inputSource"));
