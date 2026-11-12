@@ -17,7 +17,7 @@ same work, and prints the median and fastest of its timed runs after one untimed
 | `encode_ffv1_1080p` | encoding 25 1080p frames as FFV1 (`media::MediaWriter`) |
 | `decode_ffv1_1080p` | decoding those 25 frames in order (`media::VideoReader`) |
 | `seek_ffv1_1080p` | 10 of them out of order, as scrubbing reads them |
-| `audio_mix_16_tracks` | mixing 16 tracks of tone into 10 seconds of 48 kHz stereo (`media::AudioMix`) |
+| `audio_mix_16_tracks` | mixing 16 tracks read from a WAV file into 10 seconds of 48 kHz stereo (`media::AudioMix`) |
 | `bin_write_10k`, `bin_read_10k` | saving and reading a bin of 10,000 clips (`model::BinFile`) |
 | `bin_show_10k` | opening that bin in a Bin view (`ui::BinView`) |
 | `bin_sort_10k` | sorting it by Name |
@@ -50,6 +50,13 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `compose_3d_warp_1080p` | 481 ms | about 170 ms | the same passes |
 | `compose_blur_1080p` | 155 ms | 37 ms | the same passes |
 | `bin_show_10k` | 6.7 s | about 10 ms | the Script view built for every bin, a widget row per clip, with a linear look-up per row |
+| `timeline_paint_16x400` | 250 ms | about 11 ms | the fitted scale worked out (a walk over the sequence) for every segment drawn; sync breaks compared every piece with every other |
+| `compose_3d_warp_1080p` | (170 ms) | about 150 ms | its placement on one thread, and two copies of the sources to swap them |
+
+Looked at and left as they are: the audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
+generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's. Left for later: every
+whole-picture pass now moves 33 MB of floats per 1080p frame, so the compositor's remaining time is mostly memory
+traffic; reusing pictures' buffers, or lighter pixels where the effects' precision allows, is the next lever.
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).

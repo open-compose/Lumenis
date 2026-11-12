@@ -507,6 +507,7 @@ std::int64_t TimelineView::frameAt(int x) const {
 }
 
 double TimelineView::xFor(std::int64_t frame) const {
+    if (paintScale_) return headerWidth() + (static_cast<double>(frame) - paintScale_->second) * paintScale_->first;
     return headerWidth() + (static_cast<double>(frame) - timeline_.firstFrame()) * timeline_.scale();
 }
 
@@ -571,6 +572,12 @@ void TimelineView::resizeEvent(QResizeEvent* event) {
 // drag outlines, the lasso, the zoom area, then the Track Selector panel over the left edge and
 // a patch arrow being dragged. firstVisible and lastVisible bound the frames worth drawing.
 void TimelineView::paintEvent(QPaintEvent*) {
+    // The scale and first frame stay the same while painting: worked out once (paintScale_).
+    paintScale_ = std::make_pair(timeline_.scale(), static_cast<double>(timeline_.firstFrame()));
+    struct Clear {
+        std::optional<std::pair<double, double>>& kept;
+        ~Clear() { kept.reset(); }
+    } clear{paintScale_};
     QPainter p(this);
     p.fillRect(rect(), timeline_.backgroundColor());
     if (timeline_.showsHeads()) {

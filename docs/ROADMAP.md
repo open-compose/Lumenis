@@ -1714,7 +1714,8 @@ The items:
     Correction frame from over a minute to under 0.2 s; the compositor's passes on threads through
     `detail::parallelRange` and without the rounding library call, the Matte Key pictures only when a track has one;
     the Bin view's Script view built only when shown and without its quadratic look-ups, opening a bin of 10,000
-    clips from 6.7 s to about 10 ms; next: the 3D Warp, the audio mix, the Timeline's painting); 10.1c, the baselines recorded on the hosted runners after 10.0.
+    clips from 6.7 s to about 10 ms; the Timeline painted with its scale worked out once and sync breaks found by
+    clip, 250 to 11 ms; the 3D Warp's placement on threads; next: the pictures' memory traffic); 10.1c, the baselines recorded on the hosted runners after 10.0.
   * 10.2, long-run stability. Add a `--soak <hours>` mode that loops playback of the sample project's sequences
     with effects, renders and scrubbing, and logs memory, handles, threads and dropped frames every minute. A
     script checks the log for growth. Run 72 hours once on each OS (the owner's machines). Also run AddressSanitizer

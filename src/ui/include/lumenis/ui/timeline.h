@@ -158,6 +158,9 @@ protected:
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
 private:
+    // The scale and first frame for the length of one paint (10.1b): working the fitted scale out walks the whole
+    // sequence, and xFor() is called for every segment painted. Set by paintEvent, cleared when it returns.
+    mutable std::optional<std::pair<double, double>> paintScale_;
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
     // Audio Data over an audio row's segments (timeline_automation.cpp).
     void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;

@@ -1,5 +1,8 @@
 #include "lumenis/model/sync_dupes.h"
 
+#include <QHash>
+#include <QPair>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -43,12 +46,17 @@ bool sameClip(const Segment& a, const Segment& b) {
 
 QList<SyncBreak> syncBreaks(const Sequence& sequence) {
     const QList<Piece> pieces = piecesOf(sequence, [](const Track& t) { return t.kind != TrackKind::Data; });
+    // The pieces of each clip, in the pieces' order (tracks in order): partners are only ever of the same clip, and
+    // looking through every piece for each made painting a long sequence slow (10.1b).
+    QHash<QPair<QString, QString>, QList<const Piece*>> byClip;
+    for (const Piece& q : pieces) byClip[qMakePair(q.segment->binId, q.segment->clipId)].append(&q);
     QList<SyncBreak> out;
     for (const Piece& p : pieces) {
         // Walk the segment's record frames in runs where the set of overlapping partners is the same.
         QList<std::int64_t> cuts{p.start, p.start + p.length};
         QList<const Piece*> partners;
-        for (const Piece& q : pieces) {
+        for (const Piece* qp : byClip.value(qMakePair(p.segment->binId, p.segment->clipId))) {
+            const Piece& q = *qp;
             if (q.track->kind == p.track->kind || !sameClip(*q.segment, *p.segment)) continue;
             const std::int64_t from = std::max(p.start, q.start);
             const std::int64_t to = std::min(p.start + p.length, q.start + q.length);

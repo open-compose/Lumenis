@@ -16,7 +16,6 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
-#include "lumenis/media/tone.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/correction_keyframes.h"
@@ -234,16 +233,37 @@ QList<Benchmark> benchmarks(const QString& dir, ui::MainWindow& window) {
                           return true;
                       }};
 
-    // Sound (lumenis/media/playback.h): 16 tracks of tone mixed to stereo, 10 seconds in 1024-sample blocks.
-    list << Benchmark{QStringLiteral("audio_mix_16_tracks"), QStringLiteral("mixing 16 tracks for 10 seconds of 48 kHz stereo"), 5, {}, [] {
+    // Sound (lumenis/media/playback.h): 16 tracks read from a 48 kHz stereo WAV file (each track one of its channels,
+    // from its own place in the file) mixed to stereo, 10 seconds in 1024-sample blocks.
+    const QString wav = QDir(dir).filePath(QStringLiteral("bench.wav"));
+    auto writeWav = [wav] {
+        if (QFile::exists(wav)) return true;
+        media::WriterSettings s;
+        s.format = QStringLiteral("wav");
+        s.audioCodec = QStringLiteral("pcm_s16le");
+        s.sampleRate = 48000;
+        s.channels = 2;
+        media::MediaWriter writer;
+        if (!writer.open(wav, s)) return false;
+        std::vector<float> block(2 * 4800);
+        for (int n = 0; n < 200; ++n) { // 20 seconds of noise-like sound
+            for (std::size_t i = 0; i < block.size(); ++i) block[i] = float(int((qHash(int(n * 9600 + int(i))) % 2001)) - 1000) / 4000.0f;
+            if (!writer.writeAudio(block.data(), 4800)) return false;
+        }
+        return writer.finish();
+    };
+    list << Benchmark{QStringLiteral("audio_mix_16_tracks"), QStringLiteral("mixing 16 tracks from a WAV file into 10 seconds of 48 kHz stereo"), 5,
+                      writeWav, [wav] {
                           std::vector<media::AudioPiece> pieces;
                           for (int t = 0; t < 16; ++t) {
                               media::AudioPiece p;
+                              p.path = wav;
+                              p.channel = t % 2;
+                              p.sourceStart = 48000LL * (t % 8); // each track from its own place in the file
                               p.at = 0;
                               p.length = 48000 * 10;
                               p.track = QStringLiteral("A%1").arg(t + 1);
                               p.left = p.right = 0.25f;
-                              p.tone = media::Tone{-18, 440 + 20 * t};
                               pieces.push_back(p);
                           }
                           media::AudioMix mix(pieces);

@@ -3,6 +3,7 @@
 #include "lumenis/media/tracking.h"
 
 #include "effect_drawing.h"
+#include "parallel.h"
 
 #include <QColor>
 #include <QJsonArray>
@@ -800,11 +801,14 @@ Picture placedLayer(const model::Effect& e, const Picture& source, double time, 
         drawMesh(layer, fg, place, shaped, shape, light);
         return layer;
     }
-    for (int py = 0; py < h; ++py) {
-        for (int px = 0; px < w; ++px) {
-            if (const auto at = place.planePoint(px + 0.5 - w / 2.0, h / 2.0 - (py + 0.5))) lookAt(fg, place, look, at->first, at->second, layer.pixel(px, py));
+    // Each pixel of the plane looked up on its own: rows shared out among the threads (10.1b).
+    detail::parallelRange(static_cast<std::size_t>(h), [&](std::size_t from, std::size_t to) {
+        for (int py = static_cast<int>(from); py < static_cast<int>(to); ++py) {
+            for (int px = 0; px < w; ++px) {
+                if (const auto at = place.planePoint(px + 0.5 - w / 2.0, h / 2.0 - (py + 0.5))) lookAt(fg, place, look, at->first, at->second, layer.pixel(px, py));
+            }
         }
-    }
+    }, 16);
     return layer;
 }
 
@@ -852,15 +856,17 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
     const QString fgCat = QStringLiteral("Foreground (3D)");
     const bool reverse = flag(e, fgCat, QStringLiteral("Reverse Animation"));
     if (reverse) time = 1.0 - time;
-    Picture fg = foreground;
-    Picture bg = background;
+    // The sources by reference, swapped as pointers (copies of whole pictures cost, 10.1b).
+    const Picture* fgp = &foreground;
+    const Picture* bgp = &background;
     // "Swap Sources: Switches the foreground and background sources for the effect" (p.574).
-    if (flag(e, fgCat, QStringLiteral("Swap Sources")) != reverse) std::swap(fg, bg);
+    if (flag(e, fgCat, QStringLiteral("Swap Sources")) != reverse) std::swap(fgp, bgp);
+    const Picture& fg = *fgp;
     // "Use Background Color to replace the bottom video track with a background color" (p.570).
-    if (enabled(e, QStringLiteral("Background Color (3D)"))) {
-        bg = Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black));
-    }
-    Picture out = bg.isNull() ? Picture(w, h) : bg;
+    Picture out = enabled(e, QStringLiteral("Background Color (3D)"))
+                      ? Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black))
+                  : bgp->isNull() ? Picture(w, h)
+                                  : *bgp;
     Picture layer = placedLayer(e, fg, time, span);
     // Corner Tracking (p.571): the placed picture moved as the trackers move from their reference frame.
     if (const auto map = trackedTransform(e, time, span, h > 0 ? static_cast<double>(w) / h : 1.0)) layer = transformed(layer, *map);
