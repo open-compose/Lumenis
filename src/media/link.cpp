@@ -11,7 +11,6 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QMap>
-#include <QMutexLocker>
 #include <QObject>
 #include <QPainter>
 #include <QRegularExpression>
@@ -19,8 +18,10 @@
 #include <QStorageInfo>
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <cmath>
+#include <mutex>
 
 // Linked media (ROADMAP Phase 2.2): master clips that point at files where they are, through a Link
 // kept as JSON in model::BinItem::link. This file makes such clips from probed files (linkClip(),
@@ -780,10 +781,24 @@ bool setPlaybackAtProjectRate(model::BinItem& clip, bool projectRate, QString* e
 struct FrameCache::Reader {
     QString path;
     int stream = -1;
-    QMutex mutex;
+    std::mutex mutex;
     VideoReader video;
     bool ok = false;
+    std::int64_t lastUsed = 0; // steady clock, ms
 };
+
+namespace {
+
+// A file not read for this long is closed (10.2): renders that were cleared or media deleted are let go (Windows
+// cannot delete a file that is open), with their decoders' threads and buffers, rather than waiting until eight
+// newer files push them out.
+constexpr std::int64_t kIdleMs = 60 * 1000;
+
+std::int64_t steadyMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+} // namespace
 
 FrameCache::FrameCache(int openFiles, int frames) : openFiles_(std::max(openFiles, 1)), frames_(std::max(frames, 1)) {}
 
@@ -794,13 +809,18 @@ FrameCache::~FrameCache() = default;
 // so the next call tries again (the file may have come online).
 std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
     // Called with mutex_ held.
+    const std::int64_t now = steadyMs();
+    // Idle files closed first; one still decoding elsewhere is held by its caller's shared_ptr until it is done.
+    readers_.remove_if([now](const std::shared_ptr<Reader>& r) { return now - r->lastUsed > kIdleMs; });
     for (auto it = readers_.begin(); it != readers_.end(); ++it) {
         if ((*it)->path == link.path && (*it)->stream == link.videoStream) {
             readers_.splice(readers_.begin(), readers_, it);
+            readers_.front()->lastUsed = now;
             return readers_.front();
         }
     }
     auto r = std::make_shared<Reader>();
+    r->lastUsed = now;
     r->path = link.path;
     r->stream = link.videoStream;
     r->ok = link.videoStream >= 0 && r->video.open(link.path, link.videoStream);
@@ -842,14 +862,14 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
                                  QString::number(size.width()), QString::number(size.height()), QString::number(blend, 'f', 3));
     std::shared_ptr<Reader> r;
     {
-        QMutexLocker lock(&mutex_);
+        std::unique_lock lock(mutex_);
         if (const auto it = images_.constFind(key); it != images_.constEnd()) return *it;
         r = reader(*link);
     }
     QImage image;
     QImage next;
     {
-        QMutexLocker lock(&r->mutex);
+        std::unique_lock lock(r->mutex);
         if (!r->ok) return {};
         image = r->video.frame(n);
         if (blend > 0.0) next = r->video.frame(n + 1);
@@ -865,7 +885,7 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     if (size.isValid() && image.size() != size) {
         image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
-    QMutexLocker lock(&mutex_);
+    std::unique_lock lock(mutex_);
     images_.insert(key, image);
     imageOrder_.removeAll(key);
     imageOrder_.append(key);
@@ -884,13 +904,13 @@ QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, 
                                  adapter.type, adapter.interlaced ? QStringLiteral("i") : QStringLiteral("p"));
     std::shared_ptr<Reader> r;
     {
-        QMutexLocker lock(&mutex_);
+        std::unique_lock lock(mutex_);
         if (const auto it = images_.constFind(key); it != images_.constEnd()) return *it;
         r = reader(link);
     }
     const FrameGetter frameAt = [&](std::int64_t n) -> QImage {
         if (n < 0 || (link.frames > 0 && n >= link.frames)) return {};
-        QMutexLocker lock(&r->mutex);
+        std::unique_lock lock(r->mutex);
         return r->ok ? r->video.frame(n) : QImage();
     };
     FieldConversion conv;
@@ -902,13 +922,13 @@ QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, 
     case model::FieldMotionAttribute::Progressive: conv.source = SourceFormat::Progressive; break;
     case model::FieldMotionAttribute::Film23: {
         conv.source = SourceFormat::FilmPulldown;
-        QMutexLocker lock(&mutex_);
+        std::unique_lock lock(mutex_);
         const auto it = patterns_.constFind(link.path);
         const bool known = it != patterns_.constEnd();
         lock.unlock();
         const int phase = known ? *it : detectPulldownPhase([&](std::int64_t n) { return frameAt(link.first + n); }, link.frames, link.topFieldFirst);
         if (!known) {
-            lock.relock();
+            lock.lock();
             patterns_.insert(link.path, phase);
         }
         conv.phase = phase;
@@ -916,14 +936,14 @@ QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, 
     }
     case model::FieldMotionAttribute::ProgressiveStrobe: {
         conv.source = SourceFormat::ProgressiveRepeated;
-        QMutexLocker lock(&mutex_);
+        std::unique_lock lock(mutex_);
         const QString repeatKey = link.path + QStringLiteral("|repeat");
         const auto it = patterns_.constFind(repeatKey);
         const bool known = it != patterns_.constEnd();
         lock.unlock();
         const int repeat = known ? *it : detectRepeatCount([&](std::int64_t n) { return frameAt(link.first + n); }, link.frames);
         if (!known) {
-            lock.relock();
+            lock.lock();
             patterns_.insert(repeatKey, repeat);
         }
         conv.repeat = repeat;
@@ -937,7 +957,7 @@ QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, 
     QImage image = media::convertedFrame(fromFirst, [&](double t) { return t * ratio; }, static_cast<double>(clipFrame), conv);
     if (image.isNull()) return {};
     if (size.isValid() && image.size() != size) image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    QMutexLocker lock(&mutex_);
+    std::unique_lock lock(mutex_);
     images_.insert(key, image);
     imageOrder_.removeAll(key);
     imageOrder_.append(key);
@@ -954,7 +974,7 @@ bool FrameCache::isOnline(const model::BinItem& item) {
 }
 
 void FrameCache::clear() {
-    QMutexLocker lock(&mutex_);
+    std::unique_lock lock(mutex_);
     readers_.clear();
     images_.clear();
     imageOrder_.clear();

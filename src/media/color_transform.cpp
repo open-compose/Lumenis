@@ -7,11 +7,11 @@
 #include "lumenis/media/aces.h"
 
 #include <QHash>
-#include <QMutex>
 #include <QRegularExpression>
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 namespace lumenis::media {
 
@@ -133,8 +133,8 @@ Registry& registry() {
     return r;
 }
 
-QMutex& registryMutex() {
-    static QMutex m;
+std::mutex& registryMutex() {
+    static std::mutex m;
     return m;
 }
 
@@ -174,7 +174,7 @@ QList<ColorStep> cdlSteps(const QString& name) {
 }
 
 QList<ColorStep> stepsOf(const QStringList& names) {
-    QMutexLocker lock(&registryMutex());
+    std::unique_lock lock(registryMutex());
     QList<ColorStep> steps;
     for (const QString& n : names) {
         if (isCdlTransformation(n)) {
@@ -220,7 +220,7 @@ bool isCdlTransformation(const QString& name) {
 }
 
 QStringList colorTransformationNames() {
-    QMutexLocker lock(&registryMutex());
+    std::unique_lock lock(registryMutex());
     return registry().names;
 }
 
@@ -229,7 +229,7 @@ void registerColorTransformation(const QString& name, const ColorTransformation&
 }
 
 void registerColorTransformation(const QString& name, const ColorTransformation& steps, const QString& type) {
-    QMutexLocker lock(&registryMutex());
+    std::unique_lock lock(registryMutex());
     if (!registry().steps.contains(name)) registry().names << name;
     registry().steps.insert(name, steps);
     registry().types.insert(name, type);
@@ -247,7 +247,7 @@ QStringList colorAdapterTypes(bool acesProject) {
 
 QString colorTransformationType(const QString& name) {
     if (name.startsWith(QLatin1String("External "))) return QStringLiteral("User Installed LUTs");
-    QMutexLocker lock(&registryMutex());
+    std::unique_lock lock(registryMutex());
     return registry().types.value(name, QStringLiteral("Generic"));
 }
 
@@ -272,7 +272,7 @@ QStringList withAcesWorkingSpace(const QStringList& names) {
 }
 
 bool hasColorTransformation(const QString& name) {
-    QMutexLocker lock(&registryMutex());
+    std::unique_lock lock(registryMutex());
     return registry().steps.contains(name);
 }
 

@@ -1,0 +1,10 @@
+# ThreadSanitizer suppressions (ROADMAP 10.2; BUILDING.md "Sanitizers"), read through TSAN_OPTIONS by the tsan test
+# preset. Empty: none are needed.
+#
+# Qt and FFmpeg are not built with ThreadSanitizer, and their threads (FFmpeg's frame threads, QImage's conversion pool,
+# QThreadPool's hand-over, QtTest's watchdog) synchronise in ways it cannot see. The preset's
+# ignore_noninstrumented_modules=1 leaves out the memory those libraries touch themselves, so what is checked is ours:
+# our code and our tests, built with -fsanitize=thread. Suppressing Qt by name instead (race:QArrayData..., race:libQt6...)
+# hid our own races too, since every thread passes through Qt.
+#
+# Add an entry here only for a report traced to a library, narrowly (a function name), with the reason.

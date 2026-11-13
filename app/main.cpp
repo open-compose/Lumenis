@@ -38,6 +38,7 @@
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
+#include "lumenis/ui/soak.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/menu_builder.h"
@@ -396,6 +397,25 @@ int main(int argc, char** argv) {
         QStringLiteral("seconds"), QStringLiteral("20"));
     parser.addOption(measurePlayback);
     parser.addOption(playSeconds);
+    // The long-run stability check (ROADMAP 10.2; docs/spec/soak.md, scripts/soak-check.py).
+    const QCommandLineOption soak(
+        QStringLiteral("soak"),
+        QStringLiteral("Loop playback, scrubbing, renders, edits and tool windows in a sample project for <hours> "
+                       "(a fraction is fine), logging memory, handles, threads and dropped frames, then exit."),
+        QStringLiteral("hours"));
+    const QCommandLineOption soakInterval(
+        QStringLiteral("soak-interval"), QStringLiteral("With --soak: seconds between log lines (default 60)."),
+        QStringLiteral("seconds"), QStringLiteral("60"));
+    const QCommandLineOption soakLog(
+        QStringLiteral("soak-log"), QStringLiteral("With --soak: the log, JSON lines (default soak.jsonl)."),
+        QStringLiteral("file"), QStringLiteral("soak.jsonl"));
+    const QCommandLineOption soakSeed(
+        QStringLiteral("soak-seed"), QStringLiteral("With --soak: the scrub positions' seed (default 1)."),
+        QStringLiteral("number"), QStringLiteral("1"));
+    parser.addOption(soak);
+    parser.addOption(soakInterval);
+    parser.addOption(soakLog);
+    parser.addOption(soakSeed);
     parser.addOption(smokeTest);
     const QCommandLineOption sampleProject(
         QStringLiteral("sample-project"),
@@ -999,7 +1019,7 @@ int main(int argc, char** argv) {
     // Test and tooling modes always start from the defaults so their output
     // does not depend on the user's saved settings.
     const bool useSavedSettings = !parser.isSet(defaultLayout) && !parser.isSet(dumpMenus)
-        && !parser.isSet(screenshot) && !parser.isSet(smokeTest) && !parser.isSet(measurePlayback);
+        && !parser.isSet(screenshot) && !parser.isSet(smokeTest) && !parser.isSet(measurePlayback) && !parser.isSet(soak);
     QSettings settings;
     if (useSavedSettings) {
         commands.loadShortcuts(settings);
@@ -1054,6 +1074,40 @@ int main(int argc, char** argv) {
             return 1;
         }
         return 0;
+    }
+
+    if (parser.isSet(soak)) {
+        bool hoursOk = false;
+        const double hours = parser.value(soak).toDouble(&hoursOk);
+        if (!hoursOk || hours <= 0.0) {
+            std::fprintf(stderr, "--soak needs a number of hours above 0\n");
+            return 1;
+        }
+        lumenis::ui::SoakOptions options;
+        options.hours = hours;
+        options.intervalSeconds = std::max(parser.value(soakInterval).toInt(), 1);
+        options.logPath = parser.value(soakLog);
+        options.seed = static_cast<std::uint32_t>(parser.value(soakSeed).toUInt());
+        window.resize(1600, 900);
+        window.show();
+        lumenis::ui::Soak run(window, commands, options);
+        QString error;
+        if (!run.prepare(&error)) {
+            std::fprintf(stderr, "soak: %s\n", qPrintable(error));
+            return 1;
+        }
+        int code = 0;
+        QObject::connect(&run, &lumenis::ui::Soak::finished, &guiApp, [&](int c) {
+            code = c;
+            QApplication::quit();
+        });
+        run.start();
+        guiApp.exec();
+        std::printf("soak: %d cycles, log %s\n", run.cycles(), qPrintable(options.logPath));
+        std::fflush(stdout);
+        // The project's files are in the soak's folder, which goes with `run`.
+        window.clearProject();
+        return code;
     }
 
     if (parser.isSet(measurePlayback)) {

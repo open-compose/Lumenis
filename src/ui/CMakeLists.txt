@@ -118,6 +118,7 @@ add_library(lumenis_ui STATIC
     timeline_find.cpp
     timeline_multirez.cpp
     timeline_correction.cpp
+    soak.cpp
     tool_windows.cpp
     workspace.cpp
     workspace_bar.cpp
@@ -212,6 +213,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/settings_window.h
     include/lumenis/ui/theme.h
     include/lumenis/ui/timeline.h
+    include/lumenis/ui/soak.h
     include/lumenis/ui/tool_windows.h
     include/lumenis/ui/workspace.h
     include/lumenis/ui/workspace_bar.h
@@ -239,4 +241,8 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
 
 target_include_directories(lumenis_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets Qt6::PrintSupport lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
+# The soak's process figures on Windows (soak.cpp): working set (psapi) and GDI/USER objects (user32).
+if(WIN32)
+    target_link_libraries(lumenis_ui PRIVATE psapi user32)
+endif()
 lumenis_set_warnings(lumenis_ui)

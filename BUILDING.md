@@ -154,6 +154,21 @@ with AddressSanitizer and UBSan and stop at the first report:
 
 The self-hosted Linux job runs them on every push.
 
+The `tsan` presets build with ThreadSanitizer (RelWithDebInfo) and run the tests below the UI (label `core`: tests/core,
+model, media and interop), where our own threads are (the compositor's passes, the frame cache, renders, decoding):
+
+    cmake --preset tsan && cmake --build --preset tsan && ctest --preset tsan
+
+Qt and FFmpeg are not built with ThreadSanitizer, and their own threads (FFmpeg's frame threads, QImage's conversion
+pool, QThreadPool, QtTest's watchdog) synchronise in ways it cannot see. The preset sets
+`ignore_noninstrumented_modules=1`, so only memory our code and tests touch is checked, and `tests/tsan.supp` is empty;
+suppressing Qt by name hid our own races too, since every thread passes through it. Our locks are `std::mutex`
+(pthreads, which ThreadSanitizer follows); a contended `QMutex` waits inside Qt (10.2). Use `std::mutex` for new
+locks. Left out: the UI tests (each binary is about 750 MB with ThreadSanitizer) and `tst_dcp` and `tst_transcription`,
+which start a program through `QProcess`: GCC 13's ThreadSanitizer runtime stops with `CHECK failed: tsan_rtl.cpp:253`
+in the child Qt starts with `clone`. To build only the tests the preset runs, `cmake --build --preset tsan --target
+<names>` with the names from `ctest --preset tsan -N`.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` builds, tests and packages on `ubuntu-24.04`
@@ -1364,6 +1379,37 @@ two builds by the instructions they run, which do not vary: `valgrind --tool=cal
 build/ci/bin/lumenis_bench --only <name> --runs 1` and read the `summary:` line of `cg.out` for each build. It counts the
 whole program, set-up included, so a difference is the change's; it says nothing about memory waits, so a change that
 only moves less memory needs timings too (the fastest of several runs).
+
+## Soak runs
+
+The long-run stability check (ROADMAP 10.2; docs/spec/soak.md): `--soak <hours>` opens a sample project of its own in
+a temporary folder and loops playback, scrubbing, renders, an edit and its undo and the tool windows, logging the
+process's memory, handles, threads, windows and bin items and the frames played and dropped, one JSON line a minute.
+Renders go to a media drive in that folder, never the computer's own. Then `scripts/soak-check.py` reads the log and
+fails when a figure keeps growing after the warm-up:
+
+    build/ci/bin/cutthulhu --soak 72 --soak-log soak-72h.jsonl            # Windows: build\ci\bin\cutthulhu.exe
+    python3 scripts/soak-check.py soak-72h.jsonl
+    python3 scripts/soak-check.py soak.jsonl --app build/ci/bin/cutthulhu --hours 72   # both in one
+
+For the owner's 72-hour runs, once on each OS: a release build (the package from the builds folder, or the `ci`
+preset), the machine left on with sleep off (macOS: `caffeinate -i` before the command; Windows: Power & sleep >
+Never), the window may be covered or minimised but not closed. Send the log back; the check prints each figure's growth
+per hour and what failed. A run that is stopped early still has a good log up to the last minute. Sanitizer soaks of a
+few hours (Linux or macOS; five to fifteen times slower, so fewer cycles):
+
+    ASAN_OPTIONS=detect_leaks=0 build/asan/bin/cutthulhu --soak 3 --soak-log soak-asan.jsonl
+    TSAN_OPTIONS="halt_on_error=0:ignore_noninstrumented_modules=1:log_path=tsan" build/tsan/bin/cutthulhu --soak 3 --soak-log soak-tsan.jsonl
+
+AddressSanitizer stops at its first report. ThreadSanitizer goes on and writes its reports to `tsan.<pid>`; read them for
+a frame of ours (`lumenis::`) in both stacks. ctest `soak_smoke` runs a minute of it on every build.
+
+**The soak says `closedDialog` in its log:** a step opened a dialog nobody answered, and the watchdog closed it at the
+next line. Find what opened it (the step number is in docs/spec/soak.md's order) and give the dialog a hook the soak
+answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
+
+**`stalled`:** no cycle finished for ten minutes; the run ends with exit 1. Attach a debugger (or take a stack sample,
+"Profiling" above) before it ends to see where it waits.
 
 ## Fuzzing
 

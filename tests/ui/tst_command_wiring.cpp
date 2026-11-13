@@ -236,6 +236,13 @@ private slots:
         // The title is the main text too (macOS shows no window titles on message boxes), the failures below it.
         QCOMPARE(boxes.first()->text(), QStringLiteral("Wiring"));
         QCOMPARE(boxes.first()->informativeText(), QStringLiteral("first\nsecond"));
+        // The same failure again adds nothing, and the box stops at 20 lines (10.2: a failure repeated all night).
+        reportFailure(window_.get(), QStringLiteral("Wiring: second"));
+        QCOMPARE(boxes.first()->informativeText(), QStringLiteral("first\nsecond"));
+        for (int i = 0; i < 100; ++i) reportFailure(window_.get(), QStringLiteral("Wiring: again %1").arg(i));
+        const QStringList lines = boxes.first()->informativeText().split(QLatin1Char('\n'));
+        QCOMPARE(lines.size(), 21);
+        QCOMPARE(lines.constLast(), QStringLiteral("... more in the Console"));
         boxes.first()->close();
     }
 

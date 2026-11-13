@@ -13,7 +13,6 @@
 #include <QKeyEvent>
 #include <QDialogButtonBox>
 #include <QLabel>
-#include <QMutexLocker>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QStorageInfo>
@@ -28,6 +27,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <mutex>
 
 // Small tool windows (tool_windows.h): the Calculator, the Console log and its window, and the
 // Configuration, Usage and Hardware tabs of Help > About. MainWindow (main_window.cpp) makes them and
@@ -205,7 +205,7 @@ void ConsoleLog::installMessageHandler() {
 // Console windows, on the UI thread) get it queued.
 void ConsoleLog::append(const QString& line) {
     {
-        const QMutexLocker lock(&mutex_);
+        const std::lock_guard lock(mutex_);
         lines_ << line;
         // Keep the log bounded.
         if (lines_.size() > 5000) lines_.remove(0, lines_.size() - 5000);
@@ -246,6 +246,17 @@ void showFailure(QWidget* parent, const QString& title, const QString& text) {
     if (owner) {
         for (QMessageBox* open : owner->findChildren<QMessageBox*>(QStringLiteral("failureMessage"), Qt::FindDirectChildrenOnly)) {
             if (open->isVisible() && open->property("failureTitle").toString() == title) {
+                // The same failure again adds nothing, and past 20 lines the rest is in the Console: a box left open
+                // while something fails over and over (a long run, 10.2) does not grow without end.
+                const QStringList shown = open->informativeText().split(QLatin1Char('\n'));
+                if (shown.contains(text)) return;
+                constexpr qsizetype kMostLines = 20;
+                if (shown.size() >= kMostLines) {
+                    if (shown.constLast() != QCoreApplication::translate("lumenis::ui", "... more in the Console")) {
+                        open->setInformativeText(open->informativeText() + QLatin1Char('\n') + QCoreApplication::translate("lumenis::ui", "... more in the Console"));
+                    }
+                    return;
+                }
                 open->setInformativeText(open->informativeText() + QLatin1Char('\n') + text);
                 return;
             }
@@ -260,13 +271,13 @@ void showFailure(QWidget* parent, const QString& title, const QString& text) {
 }
 
 QStringList ConsoleLog::lines() const {
-    const QMutexLocker lock(&mutex_);
+    const std::lock_guard lock(mutex_);
     return lines_;
 }
 
 void ConsoleLog::clear() {
     {
-        const QMutexLocker lock(&mutex_);
+        const std::lock_guard lock(mutex_);
         lines_.clear();
     }
     emit cleared();
@@ -297,6 +308,8 @@ ConsoleWindow::ConsoleWindow(QWidget* parent) : QWidget(parent) {
     log_->setAccessibleName(tr("Console")); // screen readers (10.3)
     log_->setReadOnly(true);
     log_->setLineWrapMode(QPlainTextEdit::NoWrap);
+    // As many lines as the log keeps (ConsoleLog::append), so a window left open does not grow without end (10.2).
+    log_->setMaximumBlockCount(5000);
     log_->setPlainText(ConsoleLog::instance().lines().join(QLatin1Char('\n')));
     command_ = new QLineEdit(this);
     command_->setObjectName(QStringLiteral("consoleCommand"));

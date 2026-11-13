@@ -13,6 +13,13 @@ function(lumenis_add_test name)
     # back without it.
     add_test(NAME ${name} COMMAND ${name} -o ${LUMENIS_TEST_LOGS}/${name}.txt,txt -o -,txt)
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    # The tests below the UI (core, model, media, interop) are labelled "core": the tsan preset runs only them. In the
+    # UI tests Qt's own threads (its thread pool, the file system model's gatherer) synchronise inside a Qt that is not
+    # built with ThreadSanitizer, which it reports as races that no suppression can tell from ours (tests/tsan.supp).
+    get_filename_component(dir ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+    if(dir MATCHES "^(core|model|media|interop)$")
+        set_tests_properties(${name} PROPERTIES LABELS core)
+    endif()
 endfunction()
 
 # Every test gets a media drive folder of its own and none of the system's volumes

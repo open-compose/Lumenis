@@ -9,7 +9,6 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
-#include <QMutex>
 #include <QSize>
 #include <QString>
 
@@ -17,6 +16,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <mutex>
 
 // Linking file-based media (Editing Guide ch.11, p.310-330): master clips
 // that point at media files where they are, with the files' metadata in the
@@ -171,7 +171,8 @@ QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& i
 bool relinkClip(model::BinItem& item, const QString& path, QString* error = nullptr);
 
 // Frames of linked clips, decoded on demand. Keeps a few files open and the
-// frames last asked for; safe to use from several threads.
+// frames last asked for; safe to use from several threads. A file not read for a
+// minute is closed the next time any file is asked for (10.2).
 class FrameCache {
 public:
     // Keeps up to `openFiles` files open and `frames` frames (each at the size it was asked for).
@@ -196,7 +197,7 @@ private:
                           QSize size);
 
     // Guards readers_ and the image cache; each Reader has its own lock for decoding.
-    QMutex mutex_;
+    std::mutex mutex_;
     int openFiles_;
     int frames_;
     std::list<std::shared_ptr<Reader>> readers_; // most recently used first

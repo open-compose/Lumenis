@@ -275,6 +275,11 @@ times with each machine's in `tests/data/perf_baseline.json`
 (docs/spec/performance.md). Whole-picture loops in `src/media` share their
 rows out with `detail::parallelRange` (`src/media/parallel.h`).
 
+`cutthulhu --soak <hours>` (`src/ui/soak.*`) loops playback, renders, edits and tool windows in a sample project of its
+own and logs the process's memory, handles, threads and windows a minute; `scripts/soak-check.py` fails a log whose
+figures keep growing (docs/spec/soak.md). The `tsan` presets run the tests below the UI under ThreadSanitizer; locks
+in our code are `std::mutex`, which it follows.
+
 Screenshots of the windows are compared across platforms in CI
 (`ui-consistency`); custom-painted widgets draw text with palette colours
 (`WindowText`, `BrightText`) so the text-free screenshots hide it.

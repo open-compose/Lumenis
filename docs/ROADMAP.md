@@ -1723,7 +1723,14 @@ The items:
   * 10.2, long-run stability. Add a `--soak <hours>` mode that loops playback of the sample project's sequences
     with effects, renders and scrubbing, and logs memory, handles, threads and dropped frames every minute. A
     script checks the log for growth. Run 72 hours once on each OS (the owner's machines). Also run AddressSanitizer
-    and UBSan soaks of a few hours, and add ThreadSanitizer (it isn't in the presets yet).
+    and UBSan soaks of a few hours, and add ThreadSanitizer (it isn't in the presets yet). Done but the runs by hand
+    (docs/spec/soak.md): `--soak <hours>` (`src/ui/soak.*`: playback, scrubbing, Render and Clear Renders, an edit and
+    Undo, tool windows; memory, handles, threads, GDI/USER objects, widgets, windows, bin items and frames a minute;
+    watchdogs for dialogs left open and stalls), `scripts/soak-check.py` with ctest `soak_smoke`, the `tsan` presets
+    (the tests below the UI, label `core`; `ignore_noninstrumented_modules=1`, our locks `std::mutex`). Found and fixed:
+    the frame cache kept files of cleared renders open with their decoders' threads (now closed after a minute idle);
+    the failure box and the Console window grew without end; Clear Renders' question blocked an unattended run. Waiting
+    on the owner: 72 hours on each OS and the sanitizer soaks (BUILDING.md "Soak runs").
   * 10.3, accessibility audit. Give every control a name and a role through `QAccessibleInterface` for the widgets
     we paint ourselves: panels, Timeline, monitors, bins, buttons and palettes. Check focus order and that every
     command is reachable by keyboard. Check contrast and large fonts against the Interface settings. Try it with

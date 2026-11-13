@@ -17,11 +17,10 @@
 #include <QHash>
 #include <QImageReader>
 #include <QJsonObject>
-#include <QMutex>
-#include <QMutexLocker>
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 namespace lumenis::media {
 
@@ -37,8 +36,8 @@ struct Cached {
     qint64 used = 0;
 };
 
-QMutex& cacheLock() {
-    static QMutex m;
+std::mutex& cacheLock() {
+    static std::mutex m;
     return m;
 }
 
@@ -58,7 +57,7 @@ QList<QImage> levelsOf(const QString& path, int limit) {
     const QFileInfo info(path);
     if (path.isEmpty() || !info.isFile()) return {};
     const QString key = path + QLatin1Char('|') + QString::number(limit);
-    QMutexLocker lock(&cacheLock());
+    std::unique_lock lock(cacheLock());
     auto it = cache().find(key);
     if (it == cache().end() || it->modified != info.lastModified()) {
         QImageReader reader(path);
@@ -342,7 +341,7 @@ QSize panZoomImageSize(const QString& path) {
 }
 
 void freePanZoomCache(const QString& path) {
-    QMutexLocker lock(&cacheLock());
+    std::unique_lock lock(cacheLock());
     if (path.isEmpty()) {
         cache().clear();
         return;

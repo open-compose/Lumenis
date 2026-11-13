@@ -2,13 +2,13 @@
 
 #include "lumenis/model/calculator.h"
 
-#include <QMutex>
 #include <QObject>
 #include <QStringList>
 #include <QDialog>
 #include <QWidget>
 
 #include <functional>
+#include <mutex>
 
 class QComboBox;
 class QLabel;
@@ -83,7 +83,7 @@ private:
     ConsoleLog();
     // Puts back the message handler from before installMessageHandler().
     ~ConsoleLog() override;
-    mutable QMutex mutex_; // guards lines_
+    mutable std::mutex mutex_; // guards lines_
     QStringList lines_;
 };
 

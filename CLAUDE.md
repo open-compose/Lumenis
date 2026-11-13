@@ -1071,6 +1071,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1b, the slow paths,
   has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
   in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects).
+  10.2, long-run stability (docs/spec/soak.md: `--soak <hours>` in `src/ui/soak.*`, `scripts/soak-check.py`, ctest
+  `soak_smoke`; the `tsan` presets on the tests labelled `core`), is done but the owner's 72-hour runs (BUILDING.md
+  "Soak runs"). Use `std::mutex`, not `QMutex`, for new locks (ThreadSanitizer follows it); a dialog that blocks needs a
+  hook the soak can answer (as `MainWindow::setRenderHook`).
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and
