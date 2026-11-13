@@ -78,6 +78,7 @@ bool on(const ColorCorrection& c, const QString& path) {
 // One range's Controls tab (p.633-634), read.
 struct Controls {
     std::optional<double> hue, saturation, contrast, brightness, gain, gamma, setup;
+    double hueCos = 1.0, hueSin = 0.0; // the hue rotation's, worked out once (10.1b)
     explicit Controls(const ColorCorrection& c, const QString& base) {
         auto read = [&](const char* name) { return applied(c, base + QLatin1String(name)); };
         hue = read("hue");
@@ -87,16 +88,21 @@ struct Controls {
         gain = read("gain");
         gamma = read("gamma");
         setup = read("setup");
+        if (hue) {
+            hueCos = std::cos(rad(*hue));
+            hueSin = std::sin(rad(*hue));
+        }
     }
     Controls() = default;
+    // Whether any control is set: one with none leaves a pixel exactly as it is.
+    bool any() const { return hue || saturation || contrast || brightness || gain || gamma || setup; }
 };
 
 // One range's Controls tab adjustments (p.633-634) on a pixel, fully: the caller blends by the range's share.
 Ycc controls(const Controls& k, Ycc p) {
     if (k.hue) {
         // "Shifts the hues in the image around the color wheel": a rotation of the chroma.
-        const double a = rad(*k.hue);
-        const double cb = p.cb * std::cos(a) - p.cr * std::sin(a), cr = p.cb * std::sin(a) + p.cr * std::cos(a);
+        const double cb = p.cb * k.hueCos - p.cr * k.hueSin, cr = p.cb * k.hueSin + p.cr * k.hueCos;
         p.cb = cb;
         p.cr = cr;
     }
@@ -130,6 +136,7 @@ Ycc controls(const Controls& k, Ycc p) {
 struct Wheel {
     bool used = false;
     double amount = 0, angle = 0;
+    double cb = 0, cr = 0; // cos(angle) * amount and sin(angle) * amount, worked out once (10.1b)
 };
 
 // What a Channels component (p.647) is made of.
@@ -158,6 +165,7 @@ struct CorrectionPlan::Data {
     Controls master;
     std::array<Controls, 3> ranges;
     std::array<Wheel, 4> wheels; // shadows, midtones, highlights, master
+    bool rangesUsed = false;     // a Shadows, Midtones or Highlights control or wheel is set
     std::optional<double> clipLow, clipHigh;
     // Channels (p.644-648).
     struct Channel {
@@ -214,7 +222,11 @@ CorrectionPlan::CorrectionPlan(const ColorCorrection& c) {
             if (!w.used) continue;
             w.amount = c.number(base + QStringLiteral("amount")) / 100.0 * 0.25;
             w.angle = redAngle() + rad(c.number(base + QStringLiteral("hue")));
+            w.cb = std::cos(w.angle) * w.amount;
+            w.cr = std::sin(w.angle) * w.amount;
         }
+        // The ranges' shares are needed only for a range's controls or wheel (10.1b: else a walk of three curves a pixel).
+        for (std::size_t r = 0; r < 3; ++r) d->rangesUsed = d->rangesUsed || d->ranges[r].any() || d->wheels[r].used;
         d->clipLow = applied(c, master + QStringLiteral("clipLow"));
         d->clipHigh = applied(c, master + QStringLiteral("clipHigh"));
     }
@@ -289,18 +301,22 @@ std::array<double, 3> hslPixel(const Plan& d, const std::array<double, 3>& rgb) 
     }
     if (d.invertLuma) p.y = 251.0 - p.y;
     // The ranges' shares of this pixel, by its brightness before the corrections (ours).
-    const std::array<double, 3> w = model::lumaRangeWeights(d.lumaCurves, std::clamp(p.y, 0.0, 255.0));
-    // Master, then Shadows, Midtones and Highlights.
+    const std::array<double, 3> w = d.rangesUsed ? model::lumaRangeWeights(d.lumaCurves, std::clamp(p.y, 0.0, 255.0))
+                                                 : std::array<double, 3>{0.0, 0.0, 0.0};
+    // Master, then Shadows, Midtones and Highlights; a range with nothing set blends the pixel with itself, so it is
+    // left out.
     p = controls(d.master, p);
-    for (std::size_t r = 0; r < 3; ++r) p = blend(p, controls(d.ranges[r], p), w[r]);
+    for (std::size_t r = 0; r < 3; ++r) {
+        if (d.ranges[r].any()) p = blend(p, controls(d.ranges[r], p), w[r]);
+    }
     // The ChromaWheels: an offset of hue and amount in the chroma plane (p.636-638), each wheel by its range's share,
     // Master over all.
     for (std::size_t i = 0; i < 4; ++i) {
         const Wheel& wheel = d.wheels[i];
         if (!wheel.used) continue;
         const double share = i == 3 ? 1.0 : w[i];
-        p.cb += std::cos(wheel.angle) * wheel.amount * share;
-        p.cr += std::sin(wheel.angle) * wheel.amount * share;
+        p.cb += wheel.cb * share;
+        p.cr += wheel.cr * share;
     }
     // Clip Low and Clip High: "All pixels with the Low clip value or less are clipped to black" (p.634).
     if (d.clipLow && p.y <= *d.clipLow) p = {16.0, 0.0, 0.0};
