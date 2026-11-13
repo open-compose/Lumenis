@@ -277,7 +277,7 @@ rows out with `detail::parallelRange` (`src/media/parallel.h`).
 
 The interface's languages (`src/ui/translation.*`, `translations/`; docs/spec/localisation.md) are Qt Linguist files
 compiled in as resources; JSON resources' texts are translated where they are shown (`translatedResource`,
-`model::shownName`), since they are often also identifiers.
+`model::shownName`), since they are often also identifiers. `tst_untranslated` finds texts that skip translation.
 
 `cutthulhu --soak <hours>` (`src/ui/soak.*`) loops playback, renders, edits and tool windows in a sample project of its
 own and logs the process's memory, handles, threads and windows a minute; `scripts/soak-check.py` fails a log whose

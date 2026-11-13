@@ -1,4 +1,5 @@
 #include "lumenis/ui/source_browser.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/media/managed.h"
 
@@ -266,7 +267,7 @@ QVariant SourceMediaModel::data(const QModelIndex& index, int role) const {
 
 QVariant SourceMediaModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole) return {};
-    return columns().value(section);
+    return translatedResource("binColumns", columns().value(section)); // names.json (10.4b)
 }
 
 Qt::ItemFlags SourceMediaModel::flags(const QModelIndex& index) const {

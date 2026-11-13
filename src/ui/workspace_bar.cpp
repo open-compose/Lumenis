@@ -1,4 +1,5 @@
 #include "lumenis/ui/workspace_bar.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/workspace.h"
@@ -93,7 +94,8 @@ void WorkspaceBar::paintEvent(QPaintEvent*) {
             p.setPen(palette().color(QPalette::WindowText));
             const QRect label(r.left() + 2, icon.bottom() + 4, r.width() - 4, 14);
             p.drawText(label, Qt::AlignHCenter | Qt::AlignTop,
-                       p.fontMetrics().elidedText(names[i].toUpper(), Qt::ElideRight, label.width()));
+                       // A built-in workspace's name in the language installed (names.json, 10.4b); the user's own as typed.
+                       p.fontMetrics().elidedText(translatedResource("workspaces", names[i]).toUpper(), Qt::ElideRight, label.width()));
         }
     }
 }

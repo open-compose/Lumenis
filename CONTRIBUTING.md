@@ -32,3 +32,7 @@ marked obsolete, for the translators to reuse.
 **To check that a window translates,** start with `--language pseudo`: every translated text is accented and longer
 ("[Ŝáṽé ~~]"). Text that stays plain English was never sent through `tr()` or `translatedResource()`, and a control
 that cuts the longer text is too small for German or French.
+
+**A name the code shows** (a built-in bin column, bin view or workspace) goes in `src/ui/resources/names.json` and is
+shown through `translatedResource`; a text kept in `src/model` is marked `QT_TRANSLATE_NOOP(context, ...)`. ctest
+`tst_untranslated` fails on a text the user sees that was never translated.

@@ -22,18 +22,18 @@ TimecodeFormat timecodeFormat(const CalculatorFormat& f) {
 
 const QList<CalculatorFormat>& calculatorFormats() {
     static const QList<CalculatorFormat> formats{
-        {QStringLiteral("23.976 Timecode"), Rational(24000, 1001), 24, false, 0},
-        {QStringLiteral("24 Timecode"), Rational(24), 24, false, 0},
-        {QStringLiteral("25 Timecode"), Rational(25), 25, false, 0},
-        {QStringLiteral("29.97 NDF Timecode"), Rational(30000, 1001), 30, false, 0},
-        {QStringLiteral("29.97 DF Timecode"), Rational(30000, 1001), 30, true, 0},
-        {QStringLiteral("30 Timecode"), Rational(30), 30, false, 0},
-        {QStringLiteral("50 Timecode"), Rational(50), 50, false, 0},
-        {QStringLiteral("59.94 NDF Timecode"), Rational(60000, 1001), 60, false, 0},
-        {QStringLiteral("59.94 DF Timecode"), Rational(60000, 1001), 60, true, 0},
-        {QStringLiteral("60 Timecode"), Rational(60), 60, false, 0},
-        {QStringLiteral("35mm, 4 perf (16 fr/ft)"), Rational(24), 0, false, 16},
-        {QStringLiteral("16mm (40 fr/ft)"), Rational(24), 0, false, 40},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "23.976 Timecode")), Rational(24000, 1001), 24, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "24 Timecode")), Rational(24), 24, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "25 Timecode")), Rational(25), 25, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "29.97 NDF Timecode")), Rational(30000, 1001), 30, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "29.97 DF Timecode")), Rational(30000, 1001), 30, true, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "30 Timecode")), Rational(30), 30, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "50 Timecode")), Rational(50), 50, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "59.94 NDF Timecode")), Rational(60000, 1001), 60, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "59.94 DF Timecode")), Rational(60000, 1001), 60, true, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "60 Timecode")), Rational(60), 60, false, 0},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "35mm, 4 perf (16 fr/ft)")), Rational(24), 0, false, 16},
+        {QStringLiteral(QT_TRANSLATE_NOOP("calculator", "16mm (40 fr/ft)")), Rational(24), 0, false, 40},
     };
     return formats;
 }

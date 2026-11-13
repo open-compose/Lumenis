@@ -114,6 +114,8 @@ lumenis_add_test(tst_accessibility SOURCES tst_accessibility.cpp LIBS ${ui_test_
 # 10.4: the interface's languages, the pseudo-locale and the resources' texts through the translator
 # (docs/spec/localisation.md); translations_current: the .ts files hold every text (scripts/update-translations.py).
 lumenis_add_test(tst_translation SOURCES tst_translation.cpp LIBS ${ui_test_libs})
+# 10.4b: every text shown goes through translation (the pseudo-locale shows any that does not).
+lumenis_add_test(tst_untranslated SOURCES tst_untranslated.cpp LIBS ${ui_test_libs})
 if(Qt6LinguistTools_FOUND)
     target_compile_definitions(tst_translation PRIVATE LUMENIS_HAVE_TRANSLATIONS)
     find_package(Python3 COMPONENTS Interpreter QUIET)

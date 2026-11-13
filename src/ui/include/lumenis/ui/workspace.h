@@ -29,6 +29,9 @@ public:
     enum class MoveBehavior { LastKnownState, LastSavedState };
 
     static constexpr int kMaxWorkspaces = 12;
+    // The built-in workspaces' names (Edit, Color, Effects, Audio), as stored; shown through
+    // translatedResource("workspaces", name) (names.json).
+    static const QStringList& builtinNames();
 
     // Starts with the built-in workspaces, Edit active. A workspace's layout is a PanelManager::saveLayout()
     // object, applied with restoreLayout().

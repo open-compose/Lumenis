@@ -1,4 +1,5 @@
 #include "lumenis/ui/bin_dialogs.h"
+#include "lumenis/ui/translation.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -84,7 +85,9 @@ ChooseColumnsDialog::ChooseColumnsDialog(const QStringList& available, const QSt
     // between headings without selecting them; Space selects or deselects the current one.
     list_->setSelectionMode(QAbstractItemView::MultiSelection);
     for (const QString& h : available) {
-        auto* item = new QListWidgetItem(h, list_);
+        // Shown in the language installed, kept by its heading (10.4b; names.json).
+        auto* item = new QListWidgetItem(translatedResource("binColumns", h), list_);
+        item->setData(Qt::UserRole, h);
         item->setSelected(shown.contains(h));
     }
     connect(search_, &QLineEdit::textChanged, this, [this](const QString& text) {
@@ -135,7 +138,7 @@ QLineEdit* ChooseColumnsDialog::search() const {
 QStringList ChooseColumnsDialog::chosen() const {
     QStringList out;
     for (int i = 0; i < list_->count(); ++i) {
-        if (list_->item(i)->isSelected()) out << list_->item(i)->text();
+        if (list_->item(i)->isSelected()) out << list_->item(i)->data(Qt::UserRole).toString();
     }
     return out;
 }

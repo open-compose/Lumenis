@@ -1,4 +1,5 @@
 #include "lumenis/ui/tool_windows.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/core/branding.h"
 #include "lumenis/media/ofx_host.h"
@@ -47,7 +48,7 @@ CalculatorWindow::CalculatorWindow(QWidget* parent) : QWidget(parent) {
     format_ = new QComboBox(this);
     format_->setObjectName(QStringLiteral("calculatorFormat"));
     format_->setAccessibleName(tr("Format")); // screen readers (10.3)
-    for (const model::CalculatorFormat& f : model::calculatorFormats()) format_->addItem(f.name);
+    for (const model::CalculatorFormat& f : model::calculatorFormats()) format_->addItem(translatedResource("calculator", f.name)); // the name stays the model's
     format_->setCurrentIndex(calc_.format());
     connect(format_, &QComboBox::currentIndexChanged, this, [this](int index) {
         calc_.setFormat(index);

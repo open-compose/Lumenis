@@ -1754,7 +1754,11 @@ The items:
     resources when Qt's Linguist tools are found, `src/ui/translation.*` with the Interface setting's Language, `--language`
     and the pseudo-locale, the resources translated where shown through `translatedResource` and `model::shownName`;
     tests `tst_translation`, `translations_current`; CONTRIBUTING.md); 10.4b, a check that no user-visible text skips
-    translation, and the texts it finds; 10.4c, pseudo-localised screenshots; 10.4d, the translations themselves.
+    translation, and the texts it finds (done: test `tst_untranslated` in the pseudo-locale, `src/ui/resources/names.json`
+    for the built-in bin column, bin view and workspace names; the calculator's formats and the tracking labels as
+    QT_TRANSLATE_NOOP texts; the Composer's tooltips naming commands, not their ids); 10.4c, pseudo-localised screenshots; 10.4d, the translations themselves. The
+    owner's decision (2026-11-13) for 10.4d: Claude drafts all four languages with the terms editors already know, each
+    .ts left "unfinished" until a native speaker reviews it (Irish needs the most care: its editing vocabulary is thin).
   * 10.5, crash reporting. Use Crashpad (Apache 2.0, compatible with GPLv3; THIRD-PARTY-NOTICES.md) to write
     minidumps locally. After a crash, the next start says where the dump is. Add a symbol upload step in the
     release builds. Sending dumps waits on the owner's collection decision; nothing leaves the machine without the

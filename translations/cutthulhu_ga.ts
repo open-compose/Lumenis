@@ -1347,6 +1347,527 @@
     </message>
 </context>
 <context>
+    <name>binColumns</name>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AFD</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ASC_SAT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>ASC_SOP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Bit Depth</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio SR</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Aux TC 24</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary Ink</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AuxInk Dur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AuxInk Edge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AuxInk End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>AuxInk Film</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Cadence</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Camroll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CFPS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color Framing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color Space</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color Transformations</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Comments</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Creation Date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Disk Label</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>DPX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Drive</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Field Motion</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Film TC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Film Type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>FPS</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame Count Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame Count End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Frame Count Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>IData-Link</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Image Aspect Ratio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>IN-OUT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ink Dur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ink Edge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ink End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ink Film</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Ink Number</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Journalist</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN Dur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN Film</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN IN-OUT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN Mark IN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN Mark OUT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>KN Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Labroll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Lock</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>LUT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mark IN</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mark OUT</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Marker</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master Dur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master Edge</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master End</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master Film</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media File Path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media Status</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Modified Date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Offline</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Perf</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pixel Aspect Ratio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Plug-In</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Production</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Project</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pullin</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Pullout</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Reformatting Options</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Scene</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Shoot date</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Slip</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Sound TC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Soundroll</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source File</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Source Path</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Take</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tape</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TapeID</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 24</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 25</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 25PD</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 30</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 30NP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>TC 60</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Track Formats</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Transfer</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>VFX</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>VFX Reel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Vendor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video Data Rate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Video File Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>VITC</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary TC1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary TC2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary TC3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary TC4</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Auxiliary TC5</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>binViews</name>
+    <message>
+        <source>Basic</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Capture</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Custom</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Format</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Media Tool</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Statistics</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>calculator</name>
+    <message>
+        <source>23.976 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>24 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>25 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>29.97 NDF Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>29.97 DF Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>30 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>50 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>59.94 NDF Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>59.94 DF Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>60 Timecode</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>35mm, 4 perf (16 fr/ft)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>16mm (40 fr/ft)</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>commandPalette</name>
     <message>
         <source>Move</source>
@@ -7280,6 +7801,30 @@
     </message>
     <message>
         <source>Generate Error Report in Console</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>stopped</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>paused</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>busy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>assets</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>error</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>idle</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -23071,6 +23616,80 @@ Media files are not deleted.</source>
     </message>
     <message>
         <source>Sync Rollers for Sync Locked Tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>tracking</name>
+    <message>
+        <source>None</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Master</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>In/Out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Absolute</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Remain</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clip Name</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Mas</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Dur</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>I/O</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Abs</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Rem</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Nam</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>workspaces</name>
+    <message>
+        <source>Edit</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Effects</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Audio</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

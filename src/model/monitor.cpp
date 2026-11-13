@@ -16,15 +16,15 @@ TimecodeFormat formatOf(const BinItem& item) { return timecodeFormatOf(item); }
 } // namespace
 
 QString trackingLabel(TrackingFormat format) {
-    // The option names of the table on p.387.
+    // The option names of the table on p.387; shown translated, as translatedResource("tracking", label) (10.4b).
     switch (format) {
-    case TrackingFormat::None: return QStringLiteral("None");
-    case TrackingFormat::Master: return QStringLiteral("Master");
-    case TrackingFormat::Duration: return QStringLiteral("Duration");
-    case TrackingFormat::InOut: return QStringLiteral("In/Out");
-    case TrackingFormat::Absolute: return QStringLiteral("Absolute");
-    case TrackingFormat::Remain: return QStringLiteral("Remain");
-    case TrackingFormat::ClipName: return QStringLiteral("Clip Name");
+    case TrackingFormat::None: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "None"));
+    case TrackingFormat::Master: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "Master"));
+    case TrackingFormat::Duration: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "Duration"));
+    case TrackingFormat::InOut: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "In/Out"));
+    case TrackingFormat::Absolute: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "Absolute"));
+    case TrackingFormat::Remain: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "Remain"));
+    case TrackingFormat::ClipName: return QStringLiteral(QT_TRANSLATE_NOOP("tracking", "Clip Name"));
     }
     return {};
 }

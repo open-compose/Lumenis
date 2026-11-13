@@ -3,7 +3,7 @@
 
 Each language in translations/languages.json has translations/cutthulhu_<code>.ts, a Qt Linguist file of every text
 the user sees: the code's tr() texts, and the JSON resources' texts (commands, menus, settings, the Command Palette's
-tabs, and effect names, categories, parameters and their choices). lupdate (Qt's Linguist tools) finds the first; this
+tabs, the built-in names of names.json, and effect names, categories, parameters and their choices). lupdate (Qt's Linguist tools) finds the first; this
 script writes the second into a temporary C++ file of QT_TRANSLATE_NOOP lines for lupdate to read. Effect texts are
 extracted as model::shownName shows them (the renames in src/model/shown_names.cpp applied), so a translator never
 sees, and never brings back, a name we renamed.
@@ -98,6 +98,10 @@ def resource_texts():
                     add("settings", c.get("label"))
     for tab in load("command_palette.json")["tabs"]:
         add("commandPalette", tab.get("name"))
+    names = load("names.json")
+    for context in ("binColumns", "binViews", "workspaces"):
+        for name in names.get(context, []):
+            add(context, name)
     pairs = renames()
     effects = load("effects.json")
     for tab in effects.get("tabs", []):

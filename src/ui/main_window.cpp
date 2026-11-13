@@ -300,6 +300,9 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     // sound for playback.
     frames_ = new MediaFrames(this);
     audio_ = std::make_unique<media::AudioPlayer>();
+    // The buttons' tooltips are their commands' texts, from the registry: given before any button is made (the Composer's
+    // are made in createPanels), or they showed the command's id (10.4b found it).
+    ButtonMapper::instance().setRegistry(&commands_);
     createPanels();
     // Show local media icons (p.1154): "Clip icons will appear blue to indicate the media is local or
     // pink to indicate mixed resolution." Ours: local is every one of the clip's files there and none
@@ -9619,7 +9622,7 @@ void MainWindow::syncWorkspaceUi() {
         workspaceActions_.clear();
         QAction* first = menu->actions().value(0);
         for (const QString& name : workspaces_->names()) {
-            auto* a = new QAction(name, menu);
+            auto* a = new QAction(translatedResource("workspaces", name), menu); // built-in names translated (10.4b)
             a->setCheckable(true);
             a->setChecked(name == workspaces_->active());
             a->setProperty(kDynamicMenuItem, true);

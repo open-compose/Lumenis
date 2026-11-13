@@ -1,5 +1,7 @@
 #include "lumenis/ui/timecode_window.h"
+#include "lumenis/ui/translation.h"
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -20,11 +22,16 @@ constexpr QRgb kWindowBlack = 0xff141414;
 // "Mas", "Dur", "I/O", "Abs", "Rem", "Nam" (ours: the picture on p.389 shows "Mas" for Master).
 QString abbreviation(model::TrackingFormat format) {
     switch (format) {
-    case model::TrackingFormat::InOut: return QStringLiteral("I/O");
-    case model::TrackingFormat::ClipName: return QStringLiteral("Nam");
+    // Translated in the "tracking" context, with the Composer's (10.4b).
+    case model::TrackingFormat::Master: return QCoreApplication::translate("tracking", "Mas");
+    case model::TrackingFormat::Duration: return QCoreApplication::translate("tracking", "Dur");
+    case model::TrackingFormat::InOut: return QCoreApplication::translate("tracking", "I/O");
+    case model::TrackingFormat::Absolute: return QCoreApplication::translate("tracking", "Abs");
+    case model::TrackingFormat::Remain: return QCoreApplication::translate("tracking", "Rem");
+    case model::TrackingFormat::ClipName: return QCoreApplication::translate("tracking", "Nam");
     case model::TrackingFormat::None: return {};
-    default: return model::trackingLabel(format).left(3);
     }
+    return {};
 }
 
 } // namespace
@@ -147,7 +154,7 @@ QMenu* TimecodeWindow::menuFor(int index) {
         sub->setEnabled(!composer_.state(monitor).isEmpty());
         for (model::TrackingFormat f : model::trackingFormats()) {
             if (f == model::TrackingFormat::None) continue;
-            QAction* a = sub->addAction(model::trackingLabel(f));
+            QAction* a = sub->addAction(translatedResource("tracking", model::trackingLabel(f)));
             a->setCheckable(true);
             a->setChecked(current.monitor == monitor && current.format == f);
             connect(a, &QAction::triggered, this, [this, index, m = monitor, f] { setLine(index, Line{m, f}); });
@@ -172,7 +179,7 @@ QMenu* TimecodeWindow::menuFor(int index) {
         menu->addAction(tr("Sequence Timecode :"))->setEnabled(false);
         for (model::TrackingFormat f : model::trackingFormats()) {
             if (f == model::TrackingFormat::None || f == model::TrackingFormat::ClipName) continue;
-            menu->addAction(QStringLiteral("%1\t%2").arg(model::trackingLabel(f), record.tracking(f)))->setEnabled(false);
+            menu->addAction(QStringLiteral("%1\t%2").arg(translatedResource("tracking", model::trackingLabel(f)), record.tracking(f)))->setEnabled(false);
         }
     }
     return menu;

@@ -23,6 +23,12 @@ namespace {
 const QStringList kBuiltins = {QStringLiteral("Edit"), QStringLiteral("Color"), QStringLiteral("Effects"),
                                QStringLiteral("Audio")};
 
+} // namespace
+
+const QStringList& WorkspaceManager::builtinNames() { return kBuiltins; }
+
+namespace {
+
 // Bump when the stored form changes incompatibly; older data is ignored.
 constexpr int kStoreVersion = 1;
 constexpr auto kGroup = "workspaces";

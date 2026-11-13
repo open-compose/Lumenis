@@ -15,6 +15,13 @@ list).
   * `settings`: settings.json's setting names, tabs, labels, suffixes, special texts, reset buttons and choices
     (`settings_window.cpp`, `SettingKind::title`);
   * `commandPalette`: its tab names;
+  * `binColumns`, `binViews`, `workspaces`: the built-in bin column headings, bin views and workspaces, listed in
+    `src/ui/resources/names.json` (the bin, Choose Columns, Find, the Source Browser, the workspace bar and menu);
+    `tst_untranslated` checks the list against `model::binHeadings`, `builtInBinViews`, `SourceMediaModel::columns`
+    and `WorkspaceManager::builtinNames`;
+  * texts kept in the model (the calculator's formats, the tracking formats) are marked `QT_TRANSLATE_NOOP(context,
+    ...)` where they are written, so lupdate finds them, and shown through `translatedResource` in the `calculator`
+    and `tracking` contexts;
   * `effects`: effect, category and parameter names and their choices, through `model::shownName`
     (`src/model/shown_names.cpp`), after its renames (docs/spec/trademarks.md). The texts are extracted as renamed, so
     a translator never sees, and never brings back, a name we renamed.
@@ -56,7 +63,14 @@ then the new `.ts` translated in Qt Linguist (or any XLIFF/TS tool) and committe
 ## Parts
 
 * 10.4a, the infrastructure above (`src/ui/translation.*`, test `tst_translation`, ctest `translations_current`), is done.
-* 10.4b: a check that no user-visible text skips translation, and the texts it finds (the pseudo-locale's screenshots
-  show some: the workspace buttons, the bin's column headings, the monitors' tracking displays).
+* 10.4b, the check, is done: `tst_untranslated` starts in the pseudo-locale, opens the main window with a project and
+  every window of the Tools menu (answering any question they ask first), and reads what the widgets show: labels,
+  buttons, group boxes, placeholders, tabs, combo box items, headings, menus, window titles and tooltips. A text with
+  a plain word of three letters or more left once the bracketed parts are taken out was never translated. Names that
+  are the same in every language pass: the product, units, and widgets that show names (the List Tool's output
+  formats, the Source Browser's folder crumbs, input devices, drive paths: `kNameWidgets`). Its first run found 72
+  texts; they are translated. It found a bug too: the Composer's button tooltips showed command ids, the button
+  mapper having no command registry. Windows outside the Tools menu (dialogs, the Settings windows) are checked by
+  the pseudo-locale's screenshots (10.4c).
 * 10.4c: pseudo-localised screenshots in the screenshot comparison.
 * 10.4d: the translations (the owner's decision on who writes them).

@@ -23,7 +23,7 @@ BackgroundIndicator::BackgroundIndicator(QWidget* parent) : QWidget(parent) {
         angle_ = (angle_ + 30) % 360;
         update();
     });
-    setToolTip(description());
+    setToolTip(shownDescription());
 }
 
 void BackgroundIndicator::setState(const State& state) {
@@ -33,7 +33,7 @@ void BackgroundIndicator::setState(const State& state) {
     const bool spinning = state.busy && state.services == BackgroundQueue::ServiceState::Active;
     if (spinning && !spin_.isActive()) spin_.start();
     if (!spinning) spin_.stop();
-    setToolTip(description());
+    setToolTip(shownDescription());
     update();
 }
 
@@ -48,6 +48,20 @@ QString BackgroundIndicator::description() const {
     if (state_.assets && d == QStringLiteral("busy")) d += QStringLiteral(" assets");
     if (state_.error) d += QStringLiteral(" error");
     return d;
+}
+
+QString BackgroundIndicator::shownDescription() const {
+    // description()'s words as the tooltip shows them, in the language installed (10.4b).
+    QStringList words;
+    for (const QString& w : description().split(QLatin1Char(' '))) {
+        if (w == QLatin1String("stopped")) words << tr("stopped");
+        else if (w == QLatin1String("paused")) words << tr("paused");
+        else if (w == QLatin1String("busy")) words << tr("busy");
+        else if (w == QLatin1String("assets")) words << tr("assets");
+        else if (w == QLatin1String("error")) words << tr("error");
+        else words << tr("idle");
+    }
+    return words.join(QLatin1Char(' '));
 }
 
 void BackgroundIndicator::paintEvent(QPaintEvent*) {

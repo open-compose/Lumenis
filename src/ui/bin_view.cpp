@@ -1,4 +1,5 @@
 #include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/model/matte_key_clip.h"
 #include "lumenis/model/proxy.h"
@@ -677,7 +678,7 @@ bool BinItemModel::setData(const QModelIndex& index, const QVariant& value, int 
 
 QVariant BinItemModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation != Qt::Horizontal) return {};
-    if (role == Qt::DisplayRole) return heading(section);
+    if (role == Qt::DisplayRole) return translatedResource("binColumns", heading(section)); // names.json (10.4b)
     // A clicked heading is highlighted (p.268).
     const bool selected = selectedHeadings_.contains(heading(section));
     if (role == Qt::BackgroundRole && selected) return QApplication::palette().color(QPalette::Highlight);
@@ -1925,12 +1926,12 @@ void BinView::updateViewMenu() {
     const model::BinDisplay& d = document_.bin().display;
     QSignalBlocker block(viewMenu_);
     viewMenu_->clear();
-    for (const model::BinViewPreset& v : model::builtInBinViews()) viewMenu_->addItem(v.name, v.name);
+    for (const model::BinViewPreset& v : model::builtInBinViews()) viewMenu_->addItem(translatedResource("binViews", v.name), v.name);
     for (const model::BinViewPreset& v : BinViewLibrary::views()) viewMenu_->addItem(v.name, v.name);
     viewMenu_->insertSeparator(viewMenu_->count());
     viewMenu_->addItem(tr("Save As..."));
     viewMenu_->setItemData(viewMenu_->count() - 1, true, kSaveAsRole);
-    QString shown = d.viewName.isEmpty() ? tr("Untitled") : d.viewName;
+    QString shown = d.viewName.isEmpty() ? tr("Untitled") : translatedResource("binViews", d.viewName);
     int index = d.viewName.isEmpty() ? -1 : viewMenu_->findData(d.viewName);
     if (index < 0) {
         viewMenu_->insertItem(0, shown, d.viewName);

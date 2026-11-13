@@ -1,4 +1,5 @@
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/ui/correction_monitors.h"
 
@@ -326,11 +327,11 @@ QIcon glyph(Glyph g, const QColor& color) {
 // The short labels before tracking values (p.386).
 QString trackingPrefix(model::TrackingFormat f) {
     switch (f) {
-    case model::TrackingFormat::Master: return QStringLiteral("Mas");
-    case model::TrackingFormat::Duration: return QStringLiteral("Dur");
-    case model::TrackingFormat::InOut: return QStringLiteral("I/O");
-    case model::TrackingFormat::Absolute: return QStringLiteral("Abs");
-    case model::TrackingFormat::Remain: return QStringLiteral("Rem");
+    case model::TrackingFormat::Master: return QCoreApplication::translate("tracking", "Mas");
+    case model::TrackingFormat::Duration: return QCoreApplication::translate("tracking", "Dur");
+    case model::TrackingFormat::InOut: return QCoreApplication::translate("tracking", "I/O");
+    case model::TrackingFormat::Absolute: return QCoreApplication::translate("tracking", "Abs");
+    case model::TrackingFormat::Remain: return QCoreApplication::translate("tracking", "Rem");
     case model::TrackingFormat::ClipName:
     case model::TrackingFormat::None: return {};
     }
@@ -1485,12 +1486,12 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     c->clipName->setMenu(c->clipMenu);
     c->trackingMenu = new QMenu(c->tracking);
     for (model::TrackingFormat f : model::trackingFormats()) {
-        QAction* a = c->trackingMenu->addAction(model::trackingLabel(f));
+        QAction* a = c->trackingMenu->addAction(translatedResource("tracking", model::trackingLabel(f)));
         a->setCheckable(true);
         connect(a, &QAction::triggered, this, [this, monitor, f] { setTracking(monitor, f); });
     }
     connect(c->trackingMenu, &QMenu::aboutToShow, this, [this, c, monitor] {
-        for (QAction* a : c->trackingMenu->actions()) a->setChecked(a->text() == model::trackingLabel(tracking(monitor)));
+        for (QAction* a : c->trackingMenu->actions()) a->setChecked(a->text() == translatedResource("tracking", model::trackingLabel(tracking(monitor))));
     });
     c->tracking->setMenu(c->trackingMenu);
     auto* info = new QHBoxLayout;
@@ -1524,12 +1525,12 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     c->tracking2 = infoBox(c->info2, source ? QStringLiteral("sourceTracking2") : QStringLiteral("recordTracking2"));
     c->trackingMenu2 = new QMenu(c->tracking2);
     for (model::TrackingFormat f : model::trackingFormats()) {
-        QAction* a = c->trackingMenu2->addAction(model::trackingLabel(f));
+        QAction* a = c->trackingMenu2->addAction(translatedResource("tracking", model::trackingLabel(f)));
         a->setCheckable(true);
         connect(a, &QAction::triggered, this, [this, monitor, f] { setSecondTracking(monitor, f); });
     }
     connect(c->trackingMenu2, &QMenu::aboutToShow, this, [this, c, monitor] {
-        for (QAction* a : c->trackingMenu2->actions()) a->setChecked(a->text() == model::trackingLabel(secondTracking(monitor)));
+        for (QAction* a : c->trackingMenu2->actions()) a->setChecked(a->text() == translatedResource("tracking", model::trackingLabel(secondTracking(monitor))));
     });
     c->tracking2->setMenu(c->trackingMenu2);
     // The Fast Menu: the monitor's right-click menu (ours: the guide names "Fast Menu icons" only).

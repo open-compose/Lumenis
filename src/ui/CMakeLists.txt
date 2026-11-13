@@ -251,6 +251,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
         resources/eq_templates.json
         resources/keyboard.json
         resources/menus.json
+        resources/names.json
         resources/settings.json
         resources/whats_new.html
         resources/icons/app.png

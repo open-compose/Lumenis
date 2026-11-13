@@ -42,6 +42,8 @@ public:
     // The indicator's look as a word, for its tooltip and tests: "idle", "busy", "assets", "stopped", "paused", with
     // " error" after it when the triangle shows.
     QString description() const;
+    // The same words translated, as the tooltip shows them.
+    QString shownDescription() const;
     QSize sizeHint() const override { return {22, 22}; }
 
 signals:

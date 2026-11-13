@@ -1,4 +1,5 @@
 #include "lumenis/ui/find_window.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/project_bins.h"
@@ -718,7 +719,8 @@ void FindWindow::chooseColumns() {
         auto* list = new QListWidget(&dialog);
         for (const QString& h : model::binHeadings()) {
             if (h == QLatin1String("Name")) continue;
-            auto* item = new QListWidgetItem(h, list);
+            auto* item = new QListWidgetItem(translatedResource("binColumns", h), list); // the heading in its data
+            item->setData(Qt::UserRole, h);
             item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
             item->setCheckState(columns_.contains(h) ? Qt::Checked : Qt::Unchecked);
         }
@@ -730,7 +732,7 @@ void FindWindow::chooseColumns() {
         if (dialog.exec() == QDialog::Accepted) {
             QStringList picked;
             for (int i = 0; i < list->count(); ++i) {
-                if (list->item(i)->checkState() == Qt::Checked) picked << list->item(i)->text();
+                if (list->item(i)->checkState() == Qt::Checked) picked << list->item(i)->data(Qt::UserRole).toString();
             }
             chosen = picked;
         }
