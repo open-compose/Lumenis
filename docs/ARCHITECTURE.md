@@ -266,7 +266,8 @@ them.
 Help > Find Command (`src/ui/find_command.*`) runs any command by name from
 the keyboard. `tst_accessibility` checks that every control a screen reader reaches has a
 name (`src/ui/accessibility.*` names controls from their text or tooltip;
-docs/spec/accessibility.md).
+docs/spec/accessibility.md), that the palette's text and the focus ring have WCAG's contrast
+(`contrastRatio`), and that rows grow with larger fonts (`rowHeightFor` in theme.h).
 
 `tests/perf/bench.cpp` (`lumenis_bench`) times compositing, decoding, the
 audio mix, large bins and the Timeline; `scripts/perf.py` compares the

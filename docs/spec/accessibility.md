@@ -59,13 +59,25 @@ key. Ours, so a keyboard user reaches everything:
   can run now, with its place in the menus and its key; typing filters it (every word must appear), Up and Down
   choose, Enter runs the chosen command where the focus was, Esc closes. It is in the menu inventory as an addition.
 * **Focus that can be seen.** The widgets we paint draw no focus of their own; when one of them gets the focus from the
-  keyboard (Tab, Shift+Tab or a shortcut such as cycling the panels) a ring in the Highlight colour is drawn over its
+  keyboard (Tab, Shift+Tab or a shortcut such as cycling the panels) a ring in a lighter Highlight colour
+  (`focusRingColor`, 10.3d) is drawn over its
   edge, and it goes with the focus. A click shows none (as a browser's :focus-visible), so mouse users and the
   screenshots see nothing new.
 * `tst_accessibility` checks that cycling the windows leaves the focus in the active panel, that the ring follows
   keyboard focus and not clicks, and that a command on no menu and no key runs from Find Command with Enter.
 
-## Still to do
+## Contrast and large fonts (10.3d)
 
-* 10.3d: contrast and large fonts against the Interface settings, and the owner's checks with VoiceOver, Narrator or
-  NVDA and Orca (a checklist in docs/checklists/).
+* **Contrast** (WCAG 2.2, ours to follow: 4.5:1 for text, 1.4.3; 3:1 for a focus indicator, 1.4.11). The theme's text
+  colours measure 6.8 to 10.5:1 on what they are drawn on, highlighted text 4.6:1. Two did not pass and changed: the
+  placeholder text (drawn in the dimmed colour, 3.6:1) is #9a9a9a, about 5:1 on fields; the focus ring, the Highlight
+  colour at 2.5:1 on the window, is that colour lighter by 40% (`focusRingColor`), above 3:1 on the window, fields and
+  buttons. Dimmed text stays dim: WCAG exempts controls that cannot be used.
+* **Large fonts.** Item view rows were a fixed 18 pixels, so a larger font chosen in the Interface settings (Override
+  font size for all Bin Container Sidebars, Override all bin font sizes, p.1201) or with Set Font was cut. Rows now grow
+  by as much as the font is taller than the application's (`rowHeightFor` in theme.h, used by the style's item view
+  rows and the bin's table); the application's own font keeps the old heights on every platform, so screenshots match.
+* `tst_accessibility` checks the palette's text pairs and the ring with `contrastRatio`, and that 28-point bin and
+  Sidebar fonts make rows at least as tall as the text, and that the rows go back.
+* **By hand:** docs/checklists/screen-readers.md, 23 tasks with what VoiceOver, Narrator or NVDA and Orca should say,
+  for the owner to run on each platform.

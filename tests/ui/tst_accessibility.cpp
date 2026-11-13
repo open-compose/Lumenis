@@ -11,6 +11,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/accessibility.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/composer.h"
@@ -23,6 +24,9 @@
 #include "lumenis/ui/theme.h"
 
 #include <QAbstractButton>
+#include <QHeaderView>
+#include <QTableView>
+#include <QTreeView>
 #include <QComboBox>
 #include <QLabel>
 #include <QAccessibleValueInterface>
@@ -292,6 +296,90 @@ private slots:
     }
 
     // A widget we paint shows where the keyboard focus is when it came from the keyboard, not from a click.
+    // 10.3d: text and the focus ring stand out from what they are drawn on (WCAG 2.2: 4.5:1 for text, 1.4.3; 3:1 for
+    // a focus indicator, 1.4.11). Dimmed text is exempt (1.4.3's "inactive user interface components").
+    void colorsHaveContrast() {
+        const QPalette p = qApp->palette();
+        struct Pair {
+            const char* what;
+            QPalette::ColorRole text, background;
+            double least;
+        };
+        const Pair pairs[] = {
+            {"text on window", QPalette::WindowText, QPalette::Window, 4.5},
+            {"text in fields and lists", QPalette::Text, QPalette::Base, 4.5},
+            {"text on alternate rows", QPalette::Text, QPalette::AlternateBase, 4.5},
+            {"button text", QPalette::ButtonText, QPalette::Button, 4.5},
+            {"highlighted text", QPalette::HighlightedText, QPalette::Highlight, 4.5},
+            {"placeholder text", QPalette::PlaceholderText, QPalette::Base, 4.5},
+            {"tooltips", QPalette::ToolTipText, QPalette::ToolTipBase, 4.5},
+        };
+        for (const Pair& pair : pairs) {
+            const double r = contrastRatio(p.color(QPalette::Active, pair.text), p.color(QPalette::Active, pair.background));
+            QVERIFY2(r >= pair.least, qPrintable(QStringLiteral("%1: %2:1").arg(QLatin1String(pair.what)).arg(r, 0, 'f', 2)));
+        }
+        const QColor ring = focusRingColor(p);
+        for (QPalette::ColorRole under : {QPalette::Window, QPalette::Base, QPalette::Button}) {
+            const double r = contrastRatio(ring, p.color(under));
+            QVERIFY2(r >= 3.0, qPrintable(QStringLiteral("focus ring on role %1: %2:1").arg(int(under)).arg(r, 0, 'f', 2)));
+        }
+        // The formula itself: black on white is 21:1, a colour on itself 1:1, either order.
+        QCOMPARE(contrastRatio(Qt::black, Qt::white), 21.0);
+        QCOMPARE(contrastRatio(Qt::white, Qt::black), 21.0);
+        QCOMPARE(contrastRatio(QColor(0x80, 0x80, 0x80), QColor(0x80, 0x80, 0x80)), 1.0);
+    }
+
+    // 10.3d: the Interface settings' larger bin and Sidebar fonts (p.1201) make taller rows, so the text is not cut;
+    // the default font keeps the fixed row height every platform shares.
+    void largeFontsGrowTheRows() {
+        Settings& s = window_->settings();
+        const QString ui = QStringLiteral("Interface");
+        BinContainer& bins = window_->binContainer();
+        const QString id = bins.newBin();
+        BinDocument* doc = bins.openBin(id);
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Large");
+        doc->addItem(item);
+        QCoreApplication::processEvents();
+        BinView* view = bins.viewFor(doc);
+        QVERIFY(view);
+        auto* table = view->findChild<QTableView*>(QStringLiteral("binTable"));
+        QVERIFY(table);
+        QTreeView* tree = bins.tree();
+        QVERIFY(tree);
+        auto rowHeight = [](QAbstractItemView* v) {
+            const QModelIndex first = v->model()->index(0, 0);
+            return first.isValid() ? v->visualRect(first).height() : -1;
+        };
+        // At the default font (Qt's header keeps a row no lower than its minimum section size).
+        const int tableRow = rowHeight(table);
+        QVERIFY(tableRow >= kRowHeight);
+        QCOMPARE(rowHeight(tree), kRowHeight);
+
+        s.setValue(ui, QStringLiteral("overrideBinFontSizes"), true);
+        s.setValue(ui, QStringLiteral("overrideBinFontSize"), 28);
+        s.setValue(ui, QStringLiteral("overrideSidebarFontSize"), true);
+        s.setValue(ui, QStringLiteral("sidebarFontSize"), 28);
+        QCoreApplication::processEvents();
+        tree->doItemsLayout();
+        QCOMPARE(table->font().pointSize(), 28);
+        QVERIFY(rowHeight(table) >= table->fontMetrics().height());
+        QVERIFY(rowHeight(table) > tableRow);
+        QCOMPARE(tree->font().pointSize(), 28);
+        QVERIFY(rowHeight(tree) >= tree->fontMetrics().height());
+
+        // Back to the defaults: the shared height again.
+        s.setValue(ui, QStringLiteral("overrideBinFontSizes"), false);
+        s.setValue(ui, QStringLiteral("overrideSidebarFontSize"), false);
+        QCoreApplication::processEvents();
+        tree->doItemsLayout();
+        QCOMPARE(rowHeight(table), tableRow);
+        QCOMPARE(rowHeight(tree), kRowHeight);
+        bins.closeBin(doc);
+    }
+
     void focusRingFollowsKeyboardFocus() {
         auto* view = window_->findChild<TimelineView*>(QStringLiteral("timelineView"));
         QVERIFY(view);

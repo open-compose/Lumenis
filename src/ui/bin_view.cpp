@@ -1905,6 +1905,9 @@ void BinView::applyDisplay() {
     for (QWidget* w : {static_cast<QWidget*>(table_), static_cast<QWidget*>(frames_), static_cast<QWidget*>(script_)}) {
         if (w->font() != f) w->setFont(f);
     }
+    // Rows grow by as much as a larger font is taller than the application's (10.3d), so the text is not cut; the
+    // default font keeps the usual height, the same on every platform.
+    table_->verticalHeader()->setDefaultSectionSize(rowHeightFor(QFontMetrics(f)));
 
     stack_->setCurrentIndex(static_cast<int>(d.mode));
     if (QAbstractButton* b = modes_->button(static_cast<int>(d.mode))) b->setChecked(true);

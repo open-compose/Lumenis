@@ -1,10 +1,12 @@
 #include "lumenis/ui/theme.h"
 
+#include <algorithm>
 #include <array>
 #include <QApplication>
 #include <QColor>
 #include <QFont>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPalette>
@@ -119,7 +121,9 @@ public:
             s.setHeight(kHeaderHeight);
             break;
         case CT_ItemViewItem:
-            s.setHeight(kRowHeight);
+            // Fixed so rows match on every platform, but never shorter than a larger font a user chose (the Interface
+            // settings' sidebar and bin font sizes, Set Font; 10.3d): the default 12 px font fits in kRowHeight.
+            s.setHeight(option ? rowHeightFor(option->fontMetrics) : kRowHeight);
             break;
         case CT_TabBarTab:
             // Tab widths follow the text; rounding them keeps small
@@ -186,6 +190,9 @@ QPalette darkPalette() {
     const QColor button(0x47, 0x47, 0x47);
     const QColor text(0xdc, 0xdc, 0xdc);
     const QColor disabledText(0x80, 0x80, 0x80);
+    // Placeholders ("Type part of a command's name") are read, so they keep 4.5:1 against the fields (WCAG 2 AA, 10.3d;
+    // docs/spec/accessibility.md); disabled text is exempt and stays dimmer.
+    const QColor placeholderText(0x9a, 0x9a, 0x9a);
     const QColor highlight(0x4f, 0x77, 0xa8);
 
     QPalette p;
@@ -195,7 +202,7 @@ QPalette darkPalette() {
     p.setColor(QPalette::AlternateBase, alternate);
     p.setColor(QPalette::ToolTipBase, base);
     p.setColor(QPalette::ToolTipText, text);
-    p.setColor(QPalette::PlaceholderText, disabledText);
+    p.setColor(QPalette::PlaceholderText, placeholderText);
     p.setColor(QPalette::Text, text);
     p.setColor(QPalette::Button, button);
     p.setColor(QPalette::ButtonText, text);
@@ -215,6 +222,11 @@ QPalette darkPalette() {
 }
 
 } // namespace
+
+int rowHeightFor(const QFontMetrics& metrics) {
+    const int base = QFontMetrics(QApplication::font()).height();
+    return kRowHeight + std::max(0, metrics.height() - base);
+}
 
 void applyTheme(QApplication& app) {
     QApplication::setStyle(new LumenisStyle);

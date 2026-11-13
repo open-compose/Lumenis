@@ -1076,6 +1076,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   segments, position bars as sliders, monitor pictures), is done: add a new painted widget to `kPainted` there.
   10.3c, the keyboard (focus into the panel on Cycle windows/Next Tab through `PanelManager::focusInto`, Help > Find
   Command in `src/ui/find_command.*`, the keyboard focus ring in `accessibility.cpp`), is done.
+  10.3d's automated half (contrast through `contrastRatio`/`focusRingColor`, rows growing with larger fonts through
+  `rowHeightFor` in theme.h) is done; the screen-reader check by hand waits on the owner
+  (docs/checklists/screen-readers.md). Size a new item view's rows with `rowHeightFor`.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them

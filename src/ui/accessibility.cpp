@@ -24,6 +24,9 @@
 #include <QPointer>
 #include <QTextDocumentFragment>
 
+#include <algorithm>
+#include <cmath>
+
 namespace lumenis::ui {
 
 namespace {
@@ -62,7 +65,7 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
-        p.setPen(QPen(palette().color(QPalette::Highlight), 2));
+        p.setPen(QPen(focusRingColor(palette()), 2));
         p.drawRect(rect().adjusted(1, 1, -1, -1));
     }
 };
@@ -128,6 +131,20 @@ private:
 };
 
 } // namespace
+
+QColor focusRingColor(const QPalette& palette) {
+    return palette.color(QPalette::Highlight).lighter(140);
+}
+
+double contrastRatio(const QColor& a, const QColor& b) {
+    auto luminance = [](const QColor& c) {
+        auto channel = [](double v) { return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * channel(static_cast<double>(c.redF())) + 0.7152 * channel(static_cast<double>(c.greenF())) +
+               0.0722 * channel(static_cast<double>(c.blueF()));
+    };
+    const double la = luminance(a), lb = luminance(b);
+    return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+}
 
 QString derivedAccessibleName(const QWidget* w) {
     if (const auto* b = qobject_cast<const QAbstractButton*>(w)) {

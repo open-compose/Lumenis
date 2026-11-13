@@ -5,6 +5,7 @@
 #include <QIcon>
 
 class QApplication;
+class QFontMetrics;
 
 namespace lumenis::ui {
 
@@ -123,6 +124,10 @@ QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));
 // windows render the same on macOS, Windows and Linux (Phase 1 gate 1);
 // native pieces such as the macOS menu bar and file dialogs stay native.
 void applyTheme(QApplication& app);
+
+// The height of an item view's row for text in `metrics` (10.3d): kRowHeight for the application's font, and that
+// much taller as a font a user chose (Set Font, the Interface settings' bin and Sidebar sizes) is taller than it.
+int rowHeightFor(const QFontMetrics& metrics);
 
 // Family name of the bundled UI font ("Inter"), or empty if it failed to load.
 const char* uiFontFamily();
