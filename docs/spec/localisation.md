@@ -77,4 +77,11 @@ then the new `.ts` translated in Qt Linguist (or any XLIFF/TS tool) and committe
   0.5%; BUILDING.md "CI screenshots"). They show what the check above cannot: text cut by a control too small for
   it (the bin tab's "Untitled", a Timeline setting wider than its window), for the translators and for 10.4d. The
   Timeline settings' screenshot is now 800 pixels tall: at 580 its radio groups were squashed out of sight.
-* 10.4d: the translations (the owner's decision on who writes them).
+* 10.4d, the translations, is in two parts. 10.4d1: German, French and Italian drafted by Claude (the owner's
+  decision, 2026-11-13) with the words editors in each language already use, every text of each file translated and
+  left "unfinished" in Qt Linguist until a native speaker has reviewed it (lrelease builds unfinished texts in, so the
+  drafts show). Each language's terms, and why, are in `translations/glossary_<code>.md`; a reviewer starts there.
+  Checked by a script: placeholders, tags, Alt-key letters, tabs, newlines and spacing as in the English. 10.4d2:
+  Irish, the same way, its terms from téarma.ie and Irish software translations, coined ones marked in its glossary.
+  Qt's own texts (the standard buttons) come from Qt's translations (`qtbase_<code>.qm`), which a Linux build has only
+  with the distribution's Qt translations package (`qt6-translations-l10n` on Ubuntu).

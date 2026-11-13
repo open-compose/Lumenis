@@ -7,7 +7,11 @@ BUILDING.md says how to build and test; docs/ARCHITECTURE.md maps the code; docs
 The interface is written in English; each other language is a Qt Linguist file in `translations/`
 (docs/spec/localisation.md). You need Qt's Linguist tools (BUILDING.md, "Translations").
 
-**To translate a language that is already listed** (German, French, Italian, Irish):
+**To review a language that is already listed** (German, French, Italian, Irish): every text has a draft, marked
+unfinished. Read `translations/glossary_<code>.md` first: it gives the terms used and why; change a term there and in
+the texts together. Then mark each text you have checked done (Ctrl+Enter), correcting it where needed.
+
+**To translate a language that is already listed:**
 
 1. Open `translations/cutthulhu_<code>.ts` in Qt Linguist (`linguist translations/cutthulhu_de.ts`).
 2. Translate texts and mark each one done (Ctrl+Enter). A text left empty shows in English.
