@@ -25,7 +25,8 @@ class MainWindow;
 // What the process holds now, from the operating system. A figure the system does not give is -1.
 struct ProcessStats {
     double residentMb = -1;  // resident memory (working set on Windows)
-    double heapMb = -1;      // the heap's bytes in use (Linux, glibc); resident memory also counts freed arenas
+    double heapMb = -1;      // the heap's bytes in use (Linux with glibc, macOS); resident memory also counts what the
+                             // allocator keeps after it was freed
     int handles = -1;        // open file descriptors (Linux, macOS) or kernel handles (Windows)
     int threads = -1;
     int gdiObjects = -1;     // Windows only
@@ -38,6 +39,8 @@ struct SoakOptions {
     int intervalSeconds = 60;   // between log lines
     QString logPath;            // JSON lines; written as they come, so a crash keeps what came before
     std::uint32_t seed = 1;     // the scrub positions and the order of the steps
+    int cycles = 0;             // when above 0, the run also ends after this many cycles (ctest soak_smoke: one,
+                                // however slow the build)
 };
 
 // The soak run. prepare() makes the project and its media in a folder of its own (with renders on a media drive

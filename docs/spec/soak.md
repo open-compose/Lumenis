@@ -29,7 +29,7 @@ crashed session. 10.2 runs what an editor does, in a loop, for hours, and checks
   | --- | --- |
   | `t` | seconds since the start |
   | `residentMb` | resident memory (working set on Windows) |
-  | `heapMb` | the heap's bytes in use (Linux with glibc 2.33 or later, -1 elsewhere): resident memory also counts what glibc keeps in its per-thread arenas after it was freed, which grows as decoders' threads come and go without a leak |
+  | `heapMb` | the heap's bytes in use (Linux with glibc 2.33 or later through `mallinfo2`, macOS through `malloc_zone_statistics`; -1 on Windows) |
   | `handles` | open file descriptors (Linux `/proc/self/fd`, macOS `proc_pidinfo`) or kernel handles (Windows) |
   | `threads` | the process's threads |
   | `gdiObjects`, `userObjects` | Windows' GDI and USER objects (-1 elsewhere) |
@@ -40,7 +40,8 @@ crashed session. 10.2 runs what an editor does, in a loop, for hours, and checks
 
   Two other lines can appear: `{"closedDialog": <name>, "step": n}` when a dialog was still open at the next interval
   (it is closed so the run goes on; a progress dialog is working, not waiting, and is left alone), and `{"stalled": n}` when no cycle finished for ten minutes (the run ends, exit 1).
-* `--soak-seed` sets the scrub positions; `processStats()` gives the process's figures for each OS.
+* `--soak-cycles <n>` also ends the run after that many cycles (ctest `soak_smoke` takes one, however slow the
+  build); `--soak-seed` sets the scrub positions; `processStats()` gives the process's figures for each OS.
 
 ## `scripts/soak-check.py`
 
@@ -58,9 +59,12 @@ per hour **and** its last quarter is above its second (a cache that filled and s
 | `binItems` | 2 |
 | `gdiObjects`, `userObjects` | 20 |
 
-`--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; the dialogs the soak had to
-close are listed. `--smoke` checks only the log's form, the cycles and stalls: ctest `soak_smoke` runs about a minute
-of it, which is too short to judge growth. Dropped frames are reported, not judged (they depend on the machine).
+Where `heapMb` is given (Linux, macOS), memory is judged by it and `residentMb` is shown but not judged: resident
+memory also counts what the allocator keeps after it was freed (glibc's per-thread arenas, macOS's zones), which rises
+in steps as decoders' threads come and go and then stays, without a leak. On Windows `residentMb` (the working set) is
+judged. `--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; the dialogs the soak had to
+close are listed. `--smoke` checks only the log's form, the cycles and stalls: ctest `soak_smoke` runs one cycle of
+it, which is too short to judge growth. Dropped frames are reported, not judged (they depend on the machine).
 
 ## The runs
 
@@ -79,5 +83,10 @@ of it, which is too short to judge growth. Dropped frames are reported, not judg
   5000 lines (`tst_command_wiring failedCommandsSayWhy`).
 * **The bins grew by a precompute a cycle** (`binItems` 11 to 39 in 40 minutes): what the guide says Clear Renders
   does, so the soak now deletes them; with that, a two-hour run's figures are flat.
+* **Resident memory rose while the heap did not**: once the precomputes were deleted, each cycle cleared the frame
+  cache and its decoders' threads came and went; resident memory rose 714 to 794 MB in six minutes while the heap in
+  use stayed at 62-74 MB (with `MALLOC_ARENA_MAX=2`, one step to 570 MB and then flat). Not a leak: the allocator keeps
+  what the threads freed. So the log has `heapMb` and the check judges it where it is given. Every line is a cycle's
+  end: the run writes no last line when it stops, which could fall in the middle of a render.
 * **Clear Renders asked a question nobody answered** (an `exec()` dialog): the soak answers it through
   `MainWindow::setClearRendersHook`, and its watchdog closes any dialog left open and logs which.

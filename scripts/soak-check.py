@@ -113,6 +113,7 @@ def main():
     parser.add_argument("--app", help="run this cutthulhu with --soak first, writing the log")
     parser.add_argument("--hours", type=float, default=1.0, help="with --app: how long (default 1)")
     parser.add_argument("--interval", type=int, default=60, help="with --app: seconds between lines (default 60)")
+    parser.add_argument("--cycles", type=int, default=0, help="with --app: also end after this many cycles")
     parser.add_argument("--smoke", action="store_true", help="check the log's form, cycles and stalls, not growth")
     for key, allowed in DEFAULTS.items():
         parser.add_argument("--max-" + key, type=float, default=allowed, dest=key,
@@ -121,6 +122,8 @@ def main():
 
     if args.app:
         command = [args.app, "--soak", str(args.hours), "--soak-interval", str(args.interval), "--soak-log", args.log]
+        if args.cycles > 0:
+            command += ["--soak-cycles", str(args.cycles)]
         env = dict(os.environ)
         env.setdefault("QT_QPA_PLATFORM", "offscreen")
         run = subprocess.run(command, env=env, timeout=args.hours * 3600 + 900)
@@ -135,6 +138,12 @@ def main():
     cycles = samples[-1].get("cycles", 0) if samples else 0
     shown = samples[-1].get("shown", 0) if samples else 0
     dropped = samples[-1].get("dropped", 0) if samples else 0
+    # Where the heap in use is known (Linux, macOS), it is what a leak shows in: resident memory also counts what the
+    # allocator keeps after it was freed (glibc's per-thread arenas, macOS's zones), which can rise in steps as threads
+    # come and go and then stay. Resident memory is then shown but not judged.
+    if "heapMb" in results and "residentMb" in results:
+        results["residentMb"]["ok"] = True
+        results["residentMb"]["note"] = "not judged: heapMb is"
     problems = [key for key, r in results.items() if not r["ok"]]
     if stalled:
         problems.append("stalled")
@@ -167,8 +176,9 @@ def main():
               f"({summary['droppedShare'] * 100:.1f}%)")
         for key, r in results.items():
             mark = "ok  " if r["ok"] else "FAIL"
+            note = f"; {r['note']}" if "note" in r else ""
             print(f"  {mark} {key:12} {r['first']:10.1f} -> {r['last']:10.1f}   {r['perHour']:+9.2f}/hour "
-                  f"(allowed {r['allowedPerHour']:g}; quarters {r['secondQuarter']:.1f} -> {r['lastQuarter']:.1f})")
+                  f"(allowed {r['allowedPerHour']:g}; quarters {r['secondQuarter']:.1f} -> {r['lastQuarter']:.1f}{note})")
         if dialogs:
             print("  dialogs the soak closed: " + ", ".join(sorted(set(dialogs))))
         if stalled:

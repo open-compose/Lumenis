@@ -1402,7 +1402,7 @@ few hours (Linux or macOS; five to fifteen times slower, so fewer cycles):
     TSAN_OPTIONS="halt_on_error=0:ignore_noninstrumented_modules=1:log_path=tsan" build/tsan/bin/cutthulhu --soak 3 --soak-log soak-tsan.jsonl
 
 AddressSanitizer stops at its first report. ThreadSanitizer goes on and writes its reports to `tsan.<pid>`; read them for
-a frame of ours (`lumenis::`) in both stacks. ctest `soak_smoke` runs a minute of it on every build.
+a frame of ours (`lumenis::`) in both stacks. ctest `soak_smoke` runs one cycle of it on every build (up to a quarter hour under the sanitizers).
 
 **The soak says `closedDialog` in its log:** a step opened a dialog nobody answered, and the watchdog closed it at the
 next line. Find what opened it (the step number is in docs/spec/soak.md's order) and give the dialog a hook the soak

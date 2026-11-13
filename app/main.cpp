@@ -412,7 +412,11 @@ int main(int argc, char** argv) {
     const QCommandLineOption soakSeed(
         QStringLiteral("soak-seed"), QStringLiteral("With --soak: the scrub positions' seed (default 1)."),
         QStringLiteral("number"), QStringLiteral("1"));
+    const QCommandLineOption soakCycles(
+        QStringLiteral("soak-cycles"), QStringLiteral("With --soak: also end after <n> cycles (default: only the hours)."),
+        QStringLiteral("n"), QStringLiteral("0"));
     parser.addOption(soak);
+    parser.addOption(soakCycles);
     parser.addOption(soakInterval);
     parser.addOption(soakLog);
     parser.addOption(soakSeed);
@@ -1088,6 +1092,7 @@ int main(int argc, char** argv) {
         options.intervalSeconds = std::max(parser.value(soakInterval).toInt(), 1);
         options.logPath = parser.value(soakLog);
         options.seed = static_cast<std::uint32_t>(parser.value(soakSeed).toUInt());
+        options.cycles = std::max(parser.value(soakCycles).toInt(), 0);
         window.resize(1600, 900);
         window.show();
         lumenis::ui::Soak run(window, commands, options);

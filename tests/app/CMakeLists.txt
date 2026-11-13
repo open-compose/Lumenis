@@ -103,17 +103,18 @@ add_test(NAME app_ffmpeg_provider COMMAND lumenis_app --list-providers)
 set_tests_properties(app_ffmpeg_provider PROPERTIES
     PASS_REGULAR_EXPRESSION "org\\.ffmpeg\\.libavcodec.*available.*FFmpeg [0-9n]")
 
-# The long-run stability check (ROADMAP 10.2; docs/spec/soak.md): a minute of `--soak`, its log read by
-# scripts/soak-check.py for its form, at least one cycle and no stall (a minute is too short to judge growth; the long
-# runs are by hand, BUILDING.md "Soak runs"). Renders go to the test's own drive folder.
+# The long-run stability check (ROADMAP 10.2; docs/spec/soak.md): one cycle of `--soak` (about half a minute; a
+# sanitizer build takes longer, up to the quarter hour), its log read by scripts/soak-check.py for its form, the
+# cycle and no stall (too short to judge growth; the long runs are by hand, BUILDING.md "Soak runs"). Renders go to
+# the test's own drive folder.
 if(Python3_Interpreter_FOUND)
     add_test(NAME soak_smoke
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/soak-check.py ${CMAKE_CURRENT_BINARY_DIR}/soak_smoke.jsonl
-                --app $<TARGET_FILE:lumenis_app> --hours 0.018 --interval 5 --smoke)
+                --app $<TARGET_FILE:lumenis_app> --hours 0.25 --cycles 1 --interval 5 --smoke)
     set_tests_properties(soak_smoke PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
         PASS_REGULAR_EXPRESSION "soak: ok"
-        TIMEOUT 300)
+        TIMEOUT 1200)
 endif()
 
 lumenis_isolate_media_drives()

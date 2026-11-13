@@ -50,6 +50,7 @@
 #elif defined(Q_OS_MACOS)
 #include <libproc.h>
 #include <mach/mach.h>
+#include <malloc/malloc.h>
 #include <unistd.h>
 #elif defined(Q_OS_LINUX)
 #include <QTextStream>
@@ -103,6 +104,10 @@ ProcessStats processStats() {
         const int used = proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, fds.data(), bytes);
         if (used >= 0) s.handles = used / static_cast<int>(sizeof(proc_fdinfo));
     }
+    // The heap in use over every malloc zone (resident memory also counts what the zones keep after it was freed).
+    malloc_statistics_t heap{};
+    malloc_zone_statistics(nullptr, &heap);
+    s.heapMb = static_cast<double>(heap.size_in_use) / (1024.0 * 1024.0);
 #elif defined(Q_OS_LINUX)
     QFile status(QStringLiteral("/proc/self/status"));
     if (status.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -282,7 +287,8 @@ void Soak::start() {
                                              {QStringLiteral("cpu"), QSysInfo::currentCpuArchitecture()},
                                              {QStringLiteral("hours"), options_.hours},
                                              {QStringLiteral("interval"), options_.intervalSeconds},
-                                             {QStringLiteral("seed"), static_cast<qint64>(options_.seed)}}}};
+                                             {QStringLiteral("seed"), static_cast<qint64>(options_.seed)},
+                                             {QStringLiteral("cycles"), options_.cycles}}}};
     if (!writeLine(QJsonDocument(header).toJson(QJsonDocument::Compact))) {
         stopAll(1);
         return;
@@ -396,9 +402,14 @@ void Soak::nextStep() {
         // A dialog a step opened (a render's failure message, say) is closed, as an editor would.
         if (QWidget* modal = QApplication::activeModalWidget()) modal->close();
         ++cycles_;
+        if (options_.cycles > 0 && cycles_ >= options_.cycles) sampleDue_ = true; // the last cycle's figures
         if (sampleDue_) {
             QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete); // closed windows gone before they are counted
             sample();
+        }
+        if (options_.cycles > 0 && cycles_ >= options_.cycles) {
+            stopAll(0);
+            return;
         }
         stepTimer_.start(200);
         break;
@@ -492,7 +503,8 @@ void Soak::stopAll(int code) {
         shown_ += composer.playStats().shown - lastShown_;
         dropped_ += composer.playStats().dropped - lastDropped_;
     }
-    if (code == 0) sample(); // the last figures, at the end
+    // No last line here: the run may end in the middle of a step (a render's buffers in use), and every line must be
+    // a cycle's end to compare with the others.
     sampleTimer_.stop();
     endTimer_.stop();
     if (log_) log_->close();
