@@ -456,7 +456,10 @@ entry), so the screenshot comparison still runs.
 ### CI screenshots: where they are and how to look at the differences
 
 "UI looks the same on all platforms" compares each platform's screenshots
-with Linux's. Each job stores its screenshots in the repository, not in
+with Linux's: `1x`, `2x` (QT_SCALE_FACTOR=2) and `pseudo`, the 1x windows in
+the pseudo-locale (`--language pseudo`, docs/spec/localisation.md), whose
+longer, accented texts show a control too small for German or French and
+check that the layout stays the same everywhere with them. Each job stores its screenshots in the repository, not in
 artifact storage:
 * `scripts/ci-screenshots.py` does this on Linux and macOS, and
   `scripts/ci-screenshots.ps1` on Windows (GitHub's Git Data API, so the PC

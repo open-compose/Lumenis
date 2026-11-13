@@ -72,5 +72,9 @@ then the new `.ts` translated in Qt Linguist (or any XLIFF/TS tool) and committe
   texts; they are translated. It found a bug too: the Composer's button tooltips showed command ids, the button
   mapper having no command registry. Windows outside the Tools menu (dialogs, the Settings windows) are checked by
   the pseudo-locale's screenshots (10.4c).
-* 10.4c: pseudo-localised screenshots in the screenshot comparison.
+* 10.4c, pseudo-localised screenshots, is done: every CI job's Screenshots step also takes `--screenshot shots/pseudo
+  --language pseudo`, and ui-consistency compares them with Linux's like the others (the text-free images within
+  0.5%; BUILDING.md "CI screenshots"). They show what the check above cannot: text cut by a control too small for
+  it (the bin tab's "Untitled", a Timeline setting wider than its window), for the translators and for 10.4d. The
+  Timeline settings' screenshot is now 800 pixels tall: at 580 its radio groups were squashed out of sight.
 * 10.4d: the translations (the owner's decision on who writes them).

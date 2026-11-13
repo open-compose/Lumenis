@@ -78,6 +78,8 @@ jobs:
         run: |
           build/ci/bin/cutthulhu --screenshot shots/1x
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          build/ci/bin/cutthulhu --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
         # Through the repository, not artifact storage (scripts/ci-screenshots.py).
@@ -256,6 +258,8 @@ jobs:
           app=build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu
           "$app" --screenshot shots/1x
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          "$app" --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
         # Through the repository, not artifact storage (scripts/ci-screenshots.py).
@@ -386,6 +390,8 @@ jobs:
           app=build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu
           "$app" --screenshot shots/1x
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          "$app" --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
         # Through the repository, not artifact storage (scripts/ci-screenshots.py).
@@ -569,6 +575,10 @@ jobs:
           $env:QT_SCALE_FACTOR = '2'
           build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          Remove-Item Env:QT_SCALE_FACTOR
+          build\ci\bin\cutthulhu.exe --screenshot shots\pseudo --language pseudo | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Pass the screenshots to ui-consistency
         # Through the repository, not artifact storage (scripts/ci-screenshots.ps1).
@@ -745,6 +755,8 @@ jobs:
           rm -rf shots
           build/ci/bin/cutthulhu --screenshot shots/1x
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          build/ci/bin/cutthulhu --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
         # Through the repository, not artifact storage (scripts/ci-screenshots.py).
@@ -880,6 +892,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:QT_SCALE_FACTOR = '2'
           build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
+          Remove-Item Env:QT_SCALE_FACTOR
+          build\ci\bin\cutthulhu.exe --screenshot shots\pseudo --language pseudo | Out-Host
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Pass the screenshots to ui-consistency

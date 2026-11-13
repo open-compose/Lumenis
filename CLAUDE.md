@@ -1082,7 +1082,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   never translate it where it is read (it is often the identifier), and run `scripts/update-translations.py` after
   changing any text (CONTRIBUTING.md). 10.4b, the check (test `tst_untranslated` reads every text shown in the
   pseudo-locale with the Tools windows open; built-in names in `src/ui/resources/names.json`, kept complete by the
-  same test; model texts as `QT_TRANSLATE_NOOP`, shown through `translatedResource`), is done.
+  same test; model texts as `QT_TRANSLATE_NOOP`, shown through `translatedResource`), is done. 10.4c, the
+  pseudo-locale's screenshots (`shots/pseudo` in each CI job, compared by ui-consistency), is done.
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and

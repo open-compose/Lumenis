@@ -1524,8 +1524,9 @@ int main(int argc, char** argv) {
                 const auto* kind = lumenis::ui::SettingsSchema::builtIn().find(QStringLiteral("Timeline"));
                 lumenis::ui::SettingsDialog dialog(*kind, user.entries.at(user.activeIndex(QStringLiteral("Timeline"))), &window);
                 // A fixed size: its natural width follows the font, which
-                // differs between platforms.
-                dialog.setFixedSize(400, 580);
+                // differs between platforms. Tall enough for every option:
+                // at 580 the radio groups were squashed out of sight.
+                dialog.setFixedSize(400, 800);
                 dialog.show();
                 QCoreApplication::processEvents();
                 // macOS puts Cancel before OK: no highlighted default or
