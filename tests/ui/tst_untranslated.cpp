@@ -35,6 +35,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QTabBar>
+#include <QTreeView>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -211,6 +212,18 @@ private slots:
         for (const model::BinViewPreset& v : model::builtInBinViews()) QVERIFY2(views.contains(v.name), qPrintable(v.name));
         const QSet<QString> workspaces = listed("workspaces");
         for (const QString& w : WorkspaceManager::builtinNames()) QVERIFY2(workspaces.contains(w), qPrintable(w));
+    }
+
+    // Longer texts must not squeeze user data out of sight: the Sidebar's bin names keep most of its width however
+    // long the Transcription column's "Transcription On" is (it took the whole Sidebar in Irish).
+    void longerTextsLeaveBinNamesRoom() {
+        const auto trees = window_->findChildren<QTreeView*>(QStringLiteral("binTree"));
+        QVERIFY(!trees.isEmpty());
+        for (QTreeView* tree : trees) {
+            if (!tree->isVisible()) continue;
+            QVERIFY2(tree->header()->sectionSize(0) >= tree->viewport()->width() * 3 / 5,
+                     qPrintable(QStringLiteral("%1 of %2").arg(tree->header()->sectionSize(0)).arg(tree->viewport()->width())));
+        }
     }
 
     // Everything shown with the main window and the Tools menu's windows open.

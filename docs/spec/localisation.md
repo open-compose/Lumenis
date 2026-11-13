@@ -81,7 +81,11 @@ then the new `.ts` translated in Qt Linguist (or any XLIFF/TS tool) and committe
   decision, 2026-11-13) with the words editors in each language already use, every text of each file translated and
   left "unfinished" in Qt Linguist until a native speaker has reviewed it (lrelease builds unfinished texts in, so the
   drafts show). Each language's terms, and why, are in `translations/glossary_<code>.md`; a reviewer starts there.
-  Checked by a script: placeholders, tags, Alt-key letters, tabs, newlines and spacing as in the English. 10.4d2:
-  Irish, the same way, its terms from téarma.ie and Irish software translations, coined ones marked in its glossary.
+  Checked by a script: placeholders, tags, Alt-key letters, tabs, newlines and spacing as in the English. 10.4d2,
+  Irish, the same way (its terms from téarma.ie, Irish software translations and TG4/RTÉ, coined ones marked in its
+  glossary; three plural forms, n = 1, n = 2 and the rest), is done. Irish's longer "Transcription On" showed a layout
+  fault: the Sidebar's stretched Name column was squeezed to nothing. The Sidebar now sizes its columns itself, the
+  names first with at least 60% of its width (`SidebarTree::fitColumns` in `bin_container.cpp`, test
+  `tst_untranslated longerTextsLeaveBinNamesRoom`).
   Qt's own texts (the standard buttons) come from Qt's translations (`qtbase_<code>.qm`), which a Linux build has only
   with the distribution's Qt translations package (`qt6-translations-l10n` on Ubuntu).

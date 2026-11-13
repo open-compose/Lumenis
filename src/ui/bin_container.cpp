@@ -84,6 +84,41 @@ protected:
         }
         QTreeView::keyPressEvent(event);
     }
+    // The columns' widths: the Name column first, with at least 60% of the Sidebar, then Size, then the Transcription
+    // column (p.447) as wide as its text in what is left, eliding beyond that. Left to Qt, the stretched Name column was
+    // squeezed out of sight once a longer language's "Transcription On" (Irish's is half as long again) did not fit.
+    void fitColumns() {
+        if (transcriptionColumn < 0 || !model()) return;
+        const int width = viewport()->width();
+        const int size = header()->sectionSize(sizeColumn);
+        const int nameFloor = width * 3 / 5;
+        const int transcription = std::max(0, std::min(sizeHintForColumn(transcriptionColumn), width - size - nameFloor));
+        header()->resizeSection(transcriptionColumn, transcription);
+        header()->resizeSection(nameColumn, std::max(nameFloor, width - size - transcription));
+    }
+public:
+    // The columns fitColumns sizes; -1 until set.
+    int nameColumn = -1;
+    int sizeColumn = -1;
+    int transcriptionColumn = -1;
+
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QTreeView::resizeEvent(event);
+        fitColumns();
+    }
+    void dataChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) override {
+        QTreeView::dataChanged(topLeft, bottomRight, roles);
+        fitColumns();
+    }
+    void rowsInserted(const QModelIndex& parent, int start, int end) override {
+        QTreeView::rowsInserted(parent, start, end);
+        fitColumns();
+    }
+    void reset() override {
+        QTreeView::reset();
+        fitColumns();
+    }
 };
 
 // A Favorite Bin is named after its file.
@@ -456,10 +491,14 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
     tree_->setAutoExpandDelay(kAutoExpandDelay);
     tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     tree_->header()->setStretchLastSection(false);
-    tree_->header()->setSectionResizeMode(BinTreeModel::kNameColumn, QHeaderView::Stretch);
+    tree_->header()->setSectionResizeMode(BinTreeModel::kNameColumn, QHeaderView::Fixed);
     tree_->header()->setSectionResizeMode(BinTreeModel::kSizeColumn, QHeaderView::Fixed);
     tree_->header()->resizeSection(BinTreeModel::kSizeColumn, 52);
-    tree_->header()->setSectionResizeMode(BinTreeModel::kTranscriptionColumn, QHeaderView::ResizeToContents);
+    tree_->header()->setSectionResizeMode(BinTreeModel::kTranscriptionColumn, QHeaderView::Fixed);
+    // Sized by SidebarTree::fitColumns: the names first.
+    tree->nameColumn = BinTreeModel::kNameColumn;
+    tree->sizeColumn = BinTreeModel::kSizeColumn;
+    tree->transcriptionColumn = BinTreeModel::kTranscriptionColumn;
     // Delete and Backspace delete the selected entries, unless a name is being
     // typed.
     tree->onDelete = [this] {

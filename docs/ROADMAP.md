@@ -1758,7 +1758,7 @@ The items:
     for the built-in bin column, bin view and workspace names; the calculator's formats and the tracking labels as
     QT_TRANSLATE_NOOP texts; the Composer's tooltips naming commands, not their ids); 10.4c, pseudo-localised screenshots (done: `shots/pseudo` in every job's
     Screenshots step, compared by ui-consistency); 10.4d, the translations themselves (10.4d1, German, French and Italian drafts with
-    their glossaries in `translations/`, done; 10.4d2, Irish). The
+    their glossaries in `translations/`, done; 10.4d2, Irish, done), so 10.4 is done but the native speakers' reviews. The
     owner's decision (2026-11-13) for 10.4d: Claude drafts all four languages with the terms editors already know, each
     .ts left "unfinished" until a native speaker reviews it (Irish needs the most care: its editing vocabulary is thin).
   * 10.5, crash reporting. Use Crashpad (Apache 2.0, compatible with GPLv3; THIRD-PARTY-NOTICES.md) to write

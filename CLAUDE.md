@@ -1085,7 +1085,7 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   same test; model texts as `QT_TRANSLATE_NOOP`, shown through `translatedResource`), is done. 10.4c, the
   pseudo-locale's screenshots (`shots/pseudo` in each CI job, compared by ui-consistency), is done. 10.4d1, the
   German, French and Italian drafts (every text translated, left unfinished for a native speaker's review; terms in
-  `translations/glossary_<code>.md`), is done; 10.4d2 is Irish.
+  `translations/glossary_<code>.md`), is done; so is 10.4d2, Irish, so 10.4 is, but the native speakers' reviews.
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and
