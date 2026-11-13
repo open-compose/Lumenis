@@ -16,6 +16,7 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
+#include "lumenis/model/intraframe.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/correction_keyframes.h"
@@ -175,9 +176,12 @@ QList<Benchmark> benchmarks(const QString& dir, ui::MainWindow& window) {
                           [c] { return !media::composeFrame(c->composition, 10).toImage().isNull(); }};
     }
     {
-        const model::Effect blur{QStringLiteral("Image"), QStringLiteral("Blur Effect"),
-                                 QJsonObject{{QStringLiteral("Blur Effect Blur Parameters"),
-                                              QJsonObject{{QStringLiteral("Hor"), 40}, {QStringLiteral("Vert"), 40}}}}};
+        model::Effect blur{QStringLiteral("Image"), QStringLiteral("Blur Effect"),
+                           QJsonObject{{QStringLiteral("Blur Effect Blur Parameters"),
+                                        QJsonObject{{QStringLiteral("Hor"), 40}, {QStringLiteral("Vert"), 40}}}}};
+        // Within a rectangle over most of the frame: without an object the Blur Effect shows the picture as it is (FX
+        // Guide p.392), and the benchmark timed only a copy.
+        model::addIntraframeObject(blur, model::IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.1, 0.1, 0.8, 0.8)));
         auto c = effectCase(blur, false);
         list << Benchmark{QStringLiteral("compose_blur_1080p"), QStringLiteral("a 1080p frame through the Blur Effect"), 10, {},
                           [c] { return !media::composeFrame(c->composition, 10).toImage().isNull(); }};

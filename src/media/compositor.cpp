@@ -424,7 +424,7 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (is3DEffect(e)) {
         // "When you use the 3D Warp effect as a transition ... Media Composer applies the effect to the incoming
         // video. To apply the effect to the outgoing video, click the Swap Sources button" (p.294).
-        return warp3dPicture(e, incoming, outgoing, time, model::EffectSpan(t.duration, true));
+        return warp3dPicture(e, incoming, std::move(outgoing), time, model::EffectSpan(t.duration, true));
     }
     if (model::isAniMatte(e)) {
         // An AniMatte transition: "For single-track matte wipes, displays the incoming segment within the matte
@@ -911,7 +911,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             }
             if (is3DEffect(e)) {
                 // A 3D effect places the segment in 3D over the tracks below (FX Guide ch.11; warp3d.cpp).
-                result = warp3dPicture(e, layer, result, time, length);
+                result = warp3dPicture(e, layer, std::move(result), time, length);
                 result.quantize(c.precision);
                 continue;
             }

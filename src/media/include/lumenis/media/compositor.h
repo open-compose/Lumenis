@@ -156,6 +156,9 @@ bool is3DEffect(const model::Effect& effect);
 // tracks below, or the outgoing video of a transition). Pictures of one size.
 Picture warp3dPicture(const model::Effect& effect, const Picture& foreground, const Picture& background, double time,
                       const model::EffectSpan& span);
+// The same, made in `background`'s pixels when the caller is done with it (10.1b).
+Picture warp3dPicture(const model::Effect& effect, const Picture& foreground, Picture&& background, double time,
+                      const model::EffectSpan& span);
 // The foreground alone placed by a 3D effect at `time` of `span`, on a transparent picture (no shadow, trail
 // or background): what Stamp keeps.
 Picture warp3dLayer(const model::Effect& effect, const Picture& foreground, double time, const model::EffectSpan& span);

@@ -1,4 +1,5 @@
 #include "effect_drawing.h"
+#include "parallel.h"
 
 #include "lumenis/model/safe_color_limiter.h"
 
@@ -6,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 // The Image effects that change a picture's colours or detail (ROADMAP 6.3b2;
 // docs/spec/image-effects.md): the Color Effect (FX Guide p.469, p.533-536), and the Blur Effect and
@@ -29,34 +31,59 @@ double fromCode(double c) { return (c - kBlack) / (kWhite - kBlack); }
 // Rec. 709 luma weights, for the luma and chroma adjustments.
 constexpr double kR = 0.2126, kG = 0.7152, kB = 0.0722;
 
-// A separable box blur of radius r (in pixels) along x or y, three times over for a near-Gaussian.
+// A separable box blur of radius r (in pixels) along x or y, three times over for a near-Gaussian; edges are held, so
+// a plain picture stays plain. Lines are shared out among threads (10.1b), and down the picture each thread takes
+// `kColumns` columns at a time into a buffer of its own, so it reads whole cache lines instead of one pixel a row; the
+// sums are the same as one line at a time, value for value.
 void boxBlur(Picture& p, int r, bool horizontal) {
     if (r <= 0) return;
     const int w = p.width();
     const int h = p.height();
+    if (w <= 0 || h <= 0) return;
     const int n = horizontal ? w : h;
     const int lines = horizontal ? h : w;
-    std::vector<float> line(static_cast<std::size_t>(n) * 4);
-    for (int pass = 0; pass < 3; ++pass) {
-        for (int l = 0; l < lines; ++l) {
-            auto px = [&](int i) { return horizontal ? p.pixel(i, l) : p.pixel(l, i); };
-            for (int i = 0; i < n; ++i) std::copy(px(i), px(i) + 4, &line[static_cast<std::size_t>(i) * 4]);
-            // Edges are held, so a plain picture stays plain.
-            double sum[4] = {0, 0, 0, 0};
-            auto at = [&](int i, int c) { return static_cast<double>(line[static_cast<std::size_t>(std::clamp(i, 0, n - 1)) * 4 + static_cast<std::size_t>(c)]); };
-            for (int i = -r; i <= r; ++i) {
-                for (int c = 0; c < 4; ++c) sum[c] += at(i, c);
-            }
-            const double count = 2.0 * r + 1.0;
-            for (int i = 0; i < n; ++i) {
-                float* o = px(i);
-                for (int c = 0; c < 4; ++c) {
-                    o[c] = static_cast<float>(sum[c] / count);
-                    sum[c] += at(i + r + 1, c) - at(i - r, c);
+    constexpr int kColumns = 16;
+    const int group = horizontal ? 1 : kColumns;
+    const std::size_t groups = static_cast<std::size_t>((lines + group - 1) / group);
+    const double count = 2.0 * r + 1.0;
+    float* data = p.data().data();
+    const std::size_t stride = static_cast<std::size_t>(w) * 4;
+    // Where value c of pixel i of line l is.
+    auto offset = [&](int l, int i) {
+        return horizontal ? static_cast<std::size_t>(l) * stride + static_cast<std::size_t>(i) * 4
+                          : static_cast<std::size_t>(i) * stride + static_cast<std::size_t>(l) * 4;
+    };
+    parallelRange(groups, [&](std::size_t from, std::size_t to) {
+        const std::size_t width = static_cast<std::size_t>(group) * 4; // values of one i across the group's lines
+        std::vector<float> line(static_cast<std::size_t>(n) * width);
+        std::vector<double> sum(width);
+        for (std::size_t gi = from; gi < to; ++gi) {
+            const int first = static_cast<int>(gi) * group;
+            const int in = std::min(group, lines - first);
+            const std::size_t used = static_cast<std::size_t>(in) * 4;
+            for (int pass = 0; pass < 3; ++pass) {
+                for (int i = 0; i < n; ++i) {
+                    // The group's lines side by side: in the vertical case `in` neighbouring pixels of row i.
+                    std::copy_n(data + offset(first, i), used, &line[static_cast<std::size_t>(i) * width]);
+                }
+                auto at = [&](int i) { return &line[static_cast<std::size_t>(std::clamp(i, 0, n - 1)) * width]; };
+                std::fill(sum.begin(), sum.end(), 0.0);
+                for (int i = -r; i <= r; ++i) {
+                    const float* v = at(i);
+                    for (std::size_t k = 0; k < used; ++k) sum[k] += static_cast<double>(v[k]);
+                }
+                for (int i = 0; i < n; ++i) {
+                    float* o = data + offset(first, i);
+                    const float* add = at(i + r + 1);
+                    const float* drop = at(i - r);
+                    for (std::size_t k = 0; k < used; ++k) {
+                        o[k] = static_cast<float>(sum[k] / count);
+                        sum[k] += static_cast<double>(add[k]) - static_cast<double>(drop[k]);
+                    }
                 }
             }
         }
-    }
+    }, 1);
 }
 
 } // namespace
@@ -192,7 +219,10 @@ Picture detailEffectPicture(const model::Effect& e, const Picture& layer, double
     } else {
         const int tw = std::max(1, static_cast<int>(std::lround(hor)));
         const int th = std::max(1, static_cast<int>(std::lround(vert)));
-        for (int ty = 0; ty < layer.height(); ty += th) {
+        // Rows of tiles on threads (10.1b): each writes only its own tiles.
+        const std::size_t rows = static_cast<std::size_t>((layer.height() + th - 1) / th);
+        parallelRange(rows, [&](std::size_t fromRow, std::size_t toRow) {
+        for (int ty = static_cast<int>(fromRow) * th; ty < static_cast<int>(toRow) * th && ty < layer.height(); ty += th) {
             for (int tx = 0; tx < layer.width(); tx += tw) {
                 double sum[4] = {0, 0, 0, 0};
                 int count = 0;
@@ -211,6 +241,7 @@ Picture detailEffectPicture(const model::Effect& e, const Picture& layer, double
                 }
             }
         }
+        }, 1);
     }
     return opacity >= 1.0 ? done : mix(layer, done, opacity);
 }

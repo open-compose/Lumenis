@@ -53,6 +53,8 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `timeline_paint_16x400` | 250 ms | about 11 ms | the fitted scale worked out (a walk over the sequence) for every segment drawn; sync breaks compared every piece with every other |
 | `compose_3d_warp_1080p` | (170 ms) | about 150 ms | its placement on one thread, and two copies of the sources to swap them |
 | `compose_dissolve_1080p` | (about 110 ms) | about 50 ms | memory traffic: both sides copied into the transition, and every blend making a new picture, zeroed before it was written |
+| `compose_blur_1080p` | 223 ms | about 120 ms | the benchmark had no object, so it timed a copy (the Blur Effect shows the picture as it is without one, FX Guide p.392); with one over most of the frame, the box blur ran on one thread and down the picture a pixel per row |
+| `compose_3d_warp_1080p` | (about 116 ms fastest) | about 100 ms fastest | a copy of the background; Shadow and Trail's sparkle on one thread |
 
 Looked at and left as they are: the audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
 generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
@@ -62,8 +64,13 @@ picture the caller is done with (`Picture&&`) and blend in its pixels, which `co
 use by moving their pictures in; pictures whose every pixel is about to be written start unwritten
 (`Picture::uninitialized`, `PixelData`'s `detail::DefaultInitAllocator`), as does `fromImage` when the image fills the
 frame. Write a new blend or effect the same way: take a `Picture&&` when it can work in place, and start an output it
-writes whole with `Picture::uninitialized`. Left for later: lighter pixels (16-bit half floats) where the effects'
-precision allows, and the other effects' passes that still copy their source.
+writes whole with `Picture::uninitialized`. The box blurs (`boxBlur` in color_effects.cpp, `blurMask` in
+intraframe.cpp) share their lines among threads and go down the picture a group of columns at a time into a buffer of
+their own, with the same sums as before value for value; the Mosaic's rows of tiles, the Intraframe objects' blend,
+the 3D Warp's Shadow and Trail sparkle run on threads, and `warp3dPicture` has a `Picture&&` background. Times on the
+development machine vary by a third from run to run since it moved to a busier host: compare the fastest of several
+runs. Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
+passes that still copy their source.
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).

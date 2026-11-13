@@ -4,6 +4,7 @@
 // objects, and AniMatte's Key In and Key Out mattes. The compositor calls intraframePicture for a segment's effect and for
 // an AniMatte transition.
 #include "effect_drawing.h"
+#include "parallel.h"
 
 #include "lumenis/media/color_correction.h"
 #include "lumenis/media/color_match.h"
@@ -71,29 +72,48 @@ QString visibleName(const model::Effect& e) {
     return QStringLiteral("Object Visible");
 }
 
-// A box blur of a mask, radius r across or down, three times over (near-Gaussian), edges held.
+// A box blur of a mask, radius r across or down, three times over (near-Gaussian), edges held. As boxBlur in
+// color_effects.cpp: lines on threads, down the mask `kColumns` columns at a time, the same sums value for value (10.1b).
 void blurMask(std::vector<float>& m, int w, int h, int r, bool horizontal) {
     if (r <= 0 || w <= 0 || h <= 0) return;
     const int n = horizontal ? w : h;
     const int lines = horizontal ? h : w;
-    std::vector<float> line(static_cast<std::size_t>(n));
-    auto index = [&](int l, int i) {
+    constexpr int kColumns = 64;
+    const int group = horizontal ? 1 : kColumns;
+    const std::size_t groups = static_cast<std::size_t>((lines + group - 1) / group);
+    const double count = 2.0 * r + 1.0;
+    float* data = m.data();
+    auto offset = [&](int l, int i) {
         return horizontal ? static_cast<std::size_t>(l) * static_cast<std::size_t>(w) + static_cast<std::size_t>(i)
                           : static_cast<std::size_t>(i) * static_cast<std::size_t>(w) + static_cast<std::size_t>(l);
     };
-    for (int pass = 0; pass < 3; ++pass) {
-        for (int l = 0; l < lines; ++l) {
-            for (int i = 0; i < n; ++i) line[static_cast<std::size_t>(i)] = m[index(l, i)];
-            auto at = [&](int i) { return static_cast<double>(line[static_cast<std::size_t>(std::clamp(i, 0, n - 1))]); };
-            double sum = 0.0;
-            for (int i = -r; i <= r; ++i) sum += at(i);
-            const double count = 2.0 * r + 1.0;
-            for (int i = 0; i < n; ++i) {
-                m[index(l, i)] = static_cast<float>(sum / count);
-                sum += at(i + r + 1) - at(i - r);
+    detail::parallelRange(groups, [&](std::size_t from, std::size_t to) {
+        const std::size_t width = static_cast<std::size_t>(group);
+        std::vector<float> line(static_cast<std::size_t>(n) * width);
+        std::vector<double> sum(width);
+        for (std::size_t gi = from; gi < to; ++gi) {
+            const int first = static_cast<int>(gi) * group;
+            const std::size_t used = static_cast<std::size_t>(std::min(group, lines - first));
+            for (int pass = 0; pass < 3; ++pass) {
+                for (int i = 0; i < n; ++i) std::copy_n(data + offset(first, i), used, &line[static_cast<std::size_t>(i) * width]);
+                auto at = [&](int i) { return &line[static_cast<std::size_t>(std::clamp(i, 0, n - 1)) * width]; };
+                std::fill(sum.begin(), sum.end(), 0.0);
+                for (int i = -r; i <= r; ++i) {
+                    const float* v = at(i);
+                    for (std::size_t k = 0; k < used; ++k) sum[k] += static_cast<double>(v[k]);
+                }
+                for (int i = 0; i < n; ++i) {
+                    float* o = data + offset(first, i);
+                    const float* add = at(i + r + 1);
+                    const float* drop = at(i - r);
+                    for (std::size_t k = 0; k < used; ++k) {
+                        o[k] = static_cast<float>(sum[k] / count);
+                        sum[k] += static_cast<double>(add[k]) - static_cast<double>(drop[k]);
+                    }
+                }
             }
         }
-    }
+    }, 1);
 }
 
 // A mask drawn by `paint` into a w x h image, as coverage 0 to 1.
@@ -622,11 +642,15 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
             const Picture original = mode == QLatin1String("Scratch Removal") ? scratchRemovalSource(oe, cat, layer, frames, time, span) : layer;
             mod = paintMode(modeEffect, mode, cur, original, bounds, place.x * unit, place.y * unit, time, span);
         }
-        for (std::size_t i = 0; i < count; ++i) {
-            const float a = m[i];
-            if (a <= 0.0f) continue;
-            for (std::size_t c = 0; c < 4; ++c) cur.data()[i * 4 + c] += (mod.data()[i * 4 + c] - cur.data()[i * 4 + c]) * a;
-        }
+        float* cd = cur.data().data();
+        const float* md = mod.data().data();
+        detail::parallelRange(count, [&](std::size_t from, std::size_t to) {
+            for (std::size_t i = from; i < to; ++i) {
+                const float a = m[i];
+                if (a <= 0.0f) continue;
+                for (std::size_t c = 0; c < 4; ++c) cd[i * 4 + c] += (md[i * 4 + c] - cd[i * 4 + c]) * a;
+            }
+        });
     }
     return over(cur, below);
 }

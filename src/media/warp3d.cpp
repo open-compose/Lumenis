@@ -847,8 +847,12 @@ QList<double> clearTimes(const model::Effect& effect) {
     return is3D(effect) ? timesOf(effect, "Clears") : QList<double>{};
 }
 
-Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const Picture& background, double time,
-                      const model::EffectSpan& span) {
+namespace {
+
+// warp3dPicture's work. `owned` is the background when the caller is done with it, so the picture is made in its
+// pixels instead of a copy of them (10.1b); else null.
+Picture warp3dComposite(const model::Effect& e, const Picture& foreground, const Picture& background, Picture* owned, double time,
+                        const model::EffectSpan& span) {
     const int w = foreground.width();
     const int h = foreground.height();
     // "Reverse Animation: Causes the entire effect to be reversed, including the direction of movement as
@@ -863,10 +867,16 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
     if (flag(e, fgCat, QStringLiteral("Swap Sources")) != reverse) std::swap(fgp, bgp);
     const Picture& fg = *fgp;
     // "Use Background Color to replace the bottom video track with a background color" (p.570).
-    Picture out = enabled(e, QStringLiteral("Background Color (3D)"))
-                      ? Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black))
-                  : bgp->isNull() ? Picture(w, h)
-                                  : *bgp;
+    Picture out;
+    if (enabled(e, QStringLiteral("Background Color (3D)"))) {
+        out = Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black));
+    } else if (bgp->isNull()) {
+        out = Picture(w, h);
+    } else if (owned && bgp == owned) {
+        out = std::move(*owned); // the foreground is the other picture, so nothing reads this one again
+    } else {
+        out = *bgp;
+    }
     Picture layer = placedLayer(e, fg, time, span);
     // Corner Tracking (p.571): the placed picture moved as the trackers move from their reference frame.
     if (const auto map = trackedTransform(e, time, span, h > 0 ? static_cast<double>(w) / h : 1.0)) layer = transformed(layer, *map);
@@ -882,16 +892,19 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
         const int ox = static_cast<int>(std::lround(number(e, QStringLiteral("Shadow"), QStringLiteral("X"), time, span) * 0.4 * unit));
         const int oy = static_cast<int>(std::lround(-number(e, QStringLiteral("Shadow"), QStringLiteral("Y"), time, span) * 0.4 * unit));
         const float opacity = static_cast<float>(std::clamp(number(e, QStringLiteral("Shadow"), QStringLiteral("Opac."), time, span), 0.0, 100.0) / 100.0);
-        for (int py = 0; py < h; ++py) {
-            for (int px = 0; px < w; ++px) {
-                const int qx = px - ox, qy = py - oy;
-                if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
-                const float a = layer.pixel(qx, qy)[3] * opacity;
-                float* o = out.pixel(px, py);
-                for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
-                o[3] += a;
+        // Rows on threads (10.1b): each writes only its own rows of `out`.
+        detail::parallelRange(static_cast<std::size_t>(h), [&](std::size_t from, std::size_t to) {
+            for (int py = static_cast<int>(from); py < static_cast<int>(to); ++py) {
+                for (int px = 0; px < w; ++px) {
+                    const int qx = px - ox, qy = py - oy;
+                    if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+                    const float a = layer.pixel(qx, qy)[3] * opacity;
+                    float* o = out.pixel(px, py);
+                    for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
+                    o[3] += a;
+                }
             }
-        }
+        }, 16);
     } else if (trail) {
         // "Use Trail to add a trail to an effect as it moves across the screen ... it is a cumulative effect"
         // (p.585); Decay 0-100 (75). Ours: the effect as it was on the frames before, each copy Decay percent
@@ -906,18 +919,32 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
         for (auto it = copies.rbegin(); it != copies.rend(); ++it) {
             Picture copy = faded(placedLayer(e, fg, time - it->first * step, span), it->second);
             if (sparkly) {
-                for (int py = 0; py < h; ++py) {
-                    for (int px = 0; px < w; ++px) {
-                        const float keep = sparkle(px, py, it->first) > 0.7f ? 1.0f : 0.0f;
-                        float* c = copy.pixel(px, py);
-                        for (int ch = 0; ch < 4; ++ch) c[ch] *= keep;
+                detail::parallelRange(static_cast<std::size_t>(h), [&](std::size_t from, std::size_t to) {
+                    for (int py = static_cast<int>(from); py < static_cast<int>(to); ++py) {
+                        for (int px = 0; px < w; ++px) {
+                            const float keep = sparkle(px, py, it->first) > 0.7f ? 1.0f : 0.0f;
+                            float* c = copy.pixel(px, py);
+                            for (int ch = 0; ch < 4; ++ch) c[ch] *= keep;
+                        }
                     }
-                }
+                }, 16);
             }
-            out = over(copy, out);
+            out = over(copy, std::move(out));
         }
     }
-    return over(layer, out);
+    return over(layer, std::move(out));
+}
+
+} // namespace
+
+Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const Picture& background, double time,
+                      const model::EffectSpan& span) {
+    return warp3dComposite(e, foreground, background, nullptr, time, span);
+}
+
+Picture warp3dPicture(const model::Effect& e, const Picture& foreground, Picture&& background, double time,
+                      const model::EffectSpan& span) {
+    return warp3dComposite(e, foreground, background, &background, time, span);
 }
 
 // ---------------------------------------------------------------- forward geometry (6.7a4)
