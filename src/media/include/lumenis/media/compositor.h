@@ -17,7 +17,10 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 // The compositor (ROADMAP Phase 6.1; docs/spec/compositor.md): a sequence's picture at one frame, made
@@ -39,12 +42,40 @@ enum class EffectPrecision { Bits8, Bits16, Bits32 };
 // (Qt's smooth scaling, which averages when shrinking); Draft (Nearest Neighbor) takes the nearest pixel.
 enum class ImageInterpolation { Advanced, Standard, Draft };
 
+namespace detail {
+// An allocator whose resize and sized construction leave floats unwritten (10.1b): a 1080p picture is 33 MB, and
+// zeroing one that every pixel of is about to be written costs as much as the work. Filling ones still fill.
+template <typename T>
+struct DefaultInitAllocator : std::allocator<T> {
+    template <typename U>
+    struct rebind {
+        using other = DefaultInitAllocator<U>;
+    };
+    DefaultInitAllocator() = default;
+    template <typename U>
+    DefaultInitAllocator(const DefaultInitAllocator<U>&) noexcept {}
+    template <typename U>
+    void construct(U* p) noexcept(std::is_nothrow_default_constructible_v<U>) {
+        ::new (static_cast<void*>(p)) U;
+    }
+    template <typename U, typename... Args>
+    void construct(U* p, Args&&... args) {
+        std::allocator_traits<std::allocator<T>>::construct(static_cast<std::allocator<T>&>(*this), p, std::forward<Args>(args)...);
+    }
+};
+} // namespace detail
+
+// A picture's pixels: floats, four a pixel.
+using PixelData = std::vector<float, detail::DefaultInitAllocator<float>>;
+
 // A picture being composited: width x height pixels of red, green, blue and alpha, 0 to 1,
 // premultiplied by alpha, row by row.
 class Picture {
 public:
     Picture() = default;
     Picture(int width, int height); // transparent
+    // width x height pixels with no values yet, for a caller that writes every one (10.1b).
+    static Picture uninitialized(int width, int height);
     static Picture solid(int width, int height, const QColor& color);
     // `image` fitted inside width x height, keeping its shape and centred; the rest transparent.
     // `interpolation` says how it is resized.
@@ -58,8 +89,8 @@ public:
     const float* pixel(int x, int y) const {
         return &data_[(static_cast<std::size_t>(y) * static_cast<std::size_t>(width_) + static_cast<std::size_t>(x)) * 4];
     }
-    std::vector<float>& data() { return data_; }
-    const std::vector<float>& data() const { return data_; }
+    PixelData& data() { return data_; }
+    const PixelData& data() const { return data_; }
 
     // Each channel rounded to the precision's steps.
     void quantize(EffectPrecision precision);
@@ -69,14 +100,18 @@ public:
 private:
     int width_ = 0;
     int height_ = 0;
-    std::vector<float> data_;
+    PixelData data_;
 };
 
 // The blends the effects are made of. All take pictures of one size.
 // `a` towards `b` by t (0: a, 1: b).
 Picture mix(const Picture& a, const Picture& b, double t);
+// The same, made in `a`'s pixels when the caller is done with it (no new 33 MB picture at 1080p, 10.1b).
+Picture mix(Picture&& a, const Picture& b, double t);
 // `top` over `bottom`.
 Picture over(const Picture& top, const Picture& bottom);
+// The same, made in `bottom`'s pixels when the caller is done with it (10.1b).
+Picture over(const Picture& top, Picture&& bottom);
 // `picture` with its opacity multiplied by `level` (0 to 1).
 Picture faded(const Picture& picture, double level);
 // The film blend of Film Dissolve and Film Fade (FX Guide p.462): ours, the mix done in density

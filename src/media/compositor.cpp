@@ -63,6 +63,14 @@ Picture::Picture(int width, int height)
     : width_(std::max(width, 0)), height_(std::max(height, 0)),
       data_(static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_) * 4, 0.0f) {}
 
+Picture Picture::uninitialized(int width, int height) {
+    Picture p;
+    p.width_ = std::max(width, 0);
+    p.height_ = std::max(height, 0);
+    p.data_.resize(static_cast<std::size_t>(p.width_) * static_cast<std::size_t>(p.height_) * 4);
+    return p;
+}
+
 Picture Picture::solid(int width, int height, const QColor& color) {
     Picture p(width, height);
     const float a = static_cast<float>(color.alphaF());
@@ -73,14 +81,15 @@ Picture Picture::solid(int width, int height, const QColor& color) {
 }
 
 Picture Picture::fromImage(const QImage& image, int width, int height, ImageInterpolation interpolation) {
-    Picture p(width, height);
-    if (image.isNull() || p.isNull()) return p;
+    if (image.isNull() || width <= 0 || height <= 0) return Picture(width, height);
     QImage fitted = image;
     if (image.size() != QSize(width, height)) {
         fitted = image.scaled(width, height, Qt::KeepAspectRatio,
                               interpolation == ImageInterpolation::Draft ? Qt::FastTransformation : Qt::SmoothTransformation);
     }
     fitted = fitted.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+    // A picture the image fills is written whole below; one with bars round the image starts transparent.
+    Picture p = fitted.size() == QSize(width, height) ? uninitialized(width, height) : Picture(width, height);
     const int ox = (width - fitted.width()) / 2;
     const int oy = (height - fitted.height()) / 2;
     // Each byte's value as a float, worked out once (the same values as dividing each one, 10.1b).
@@ -143,8 +152,19 @@ QImage Picture::toImage() const {
 
 // ---------------------------------------------------------------- blends
 
+Picture mix(Picture&& a, const Picture& b, double t) {
+    if (a.width() != b.width() || a.height() != b.height()) return mix(static_cast<const Picture&>(a), b, t);
+    const float f = static_cast<float>(std::clamp(t, 0.0, 1.0));
+    float* x = a.data().data();
+    const float* y = b.data().data();
+    detail::parallelRange(a.data().size(), [&](std::size_t from, std::size_t to) {
+        for (std::size_t i = from; i < to; ++i) x[i] += (y[i] - x[i]) * f;
+    });
+    return std::move(a);
+}
+
 Picture mix(const Picture& a, const Picture& b, double t) {
-    Picture out(a.width(), a.height());
+    Picture out = Picture::uninitialized(a.width(), a.height());
     const float f = static_cast<float>(std::clamp(t, 0.0, 1.0));
     const auto& x = a.data();
     const auto& y = b.data();
@@ -155,8 +175,23 @@ Picture mix(const Picture& a, const Picture& b, double t) {
     return out;
 }
 
+Picture over(const Picture& top, Picture&& bottom) {
+    // Pictures of different sizes keep the copying version's result (top's size).
+    if (top.width() != bottom.width() || top.height() != bottom.height()) return over(top, static_cast<const Picture&>(bottom));
+    const float* t = top.data().data();
+    float* b = bottom.data().data();
+    // Each pixel reads only itself, so the result can be written over the bottom picture.
+    detail::parallelRange(bottom.data().size() / 4, [&](std::size_t from, std::size_t to) {
+        for (std::size_t i = from * 4; i < to * 4; i += 4) {
+            const float keep = 1.0f - t[i + 3];
+            for (std::size_t c = 0; c < 4; ++c) b[i + c] = t[i + c] + b[i + c] * keep;
+        }
+    });
+    return std::move(bottom);
+}
+
 Picture over(const Picture& top, const Picture& bottom) {
-    Picture out(top.width(), top.height());
+    Picture out = Picture::uninitialized(top.width(), top.height());
     const auto& t = top.data();
     const auto& b = bottom.data();
     float* o = out.data().data();
@@ -403,11 +438,11 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     }
     if (e.category == QLatin1String("Blend") && e.name == QLatin1String("Picture-in-Picture")) {
         // "On a transition, the incoming video appears inside the outgoing video" (p.458).
-        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
+        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), std::move(outgoing));
     }
     if (e.category == QLatin1String("Key") && isImageEffect(e)) {
         // Chroma Key on a transition (p.473). Ours: the incoming video keyed over the outgoing.
-        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
+        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), std::move(outgoing));
     }
     if (isOfxEffect(e) || isMissingOfxEffect(e)) return ofxTransitionPicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
     if (isIllusionTransition(e)) {
@@ -417,13 +452,13 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (isPlasmaWipe(e)) return plasmaWipePicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
     if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
-    if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
-    if (name == QLatin1String("Fade to Color")) return mix(outgoing, Picture::solid(width, height, colour), progress);
+    if (name == QLatin1String("Dissolve")) return mix(std::move(outgoing), incoming, progress);
+    if (name == QLatin1String("Fade to Color")) return mix(std::move(outgoing), Picture::solid(width, height, colour), progress);
     if (name == QLatin1String("Fade from Color")) return mix(Picture::solid(width, height, colour), incoming, progress);
     if (name == QLatin1String("Dip to Color")) {
         // "fades from the outgoing video to any color and then fades up to the incoming video".
         const Picture solid = Picture::solid(width, height, colour);
-        return progress < 0.5 ? mix(outgoing, solid, progress * 2.0) : mix(solid, incoming, progress * 2.0 - 1.0);
+        return progress < 0.5 ? mix(std::move(outgoing), solid, progress * 2.0) : mix(solid, incoming, progress * 2.0 - 1.0);
     }
     if (name == QLatin1String("Film Dissolve") || name == QLatin1String("Film Fade")) return filmMix(outgoing, incoming, progress);
     return {};
@@ -712,12 +747,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     for (qsizetype i = first; i < c.tracks.size(); ++i) {
         const QString& name = c.tracks.at(i);
         if (!pendingStamps.isNull()) {
-            result = over(pendingStamps, result);
+            result = over(pendingStamps, std::move(result));
             pendingStamps = {};
         }
         if (c.effects) {
             Stamps stamps = stampsOf(c, name, frame);
-            if (!stamps.under.isNull()) result = over(stamps.under, result);
+            if (!stamps.under.isNull()) result = over(stamps.under, std::move(result));
             pendingStamps = std::move(stamps.over);
         }
         if (matteKeys) {
@@ -752,7 +787,13 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 const bool feature = e.parameters.value(cat).toObject().value(QStringLiteral("Feature Match")).toBool(true);
                 layer = Picture::fromImage(fluidMorph(a.toImage(), b.toImage(), tf->progress, feature), w, h, c.interpolation);
             } else if (c.effects) {
-                layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
+                // Moved in, so the blend is made in their pixels rather than in new 33 MB pictures (10.1b).
+                layer = transitionPicture(*tf->transition, std::move(out), std::move(in), tf->progress, w, h);
+                if (layer.isNull()) {
+                    // An effect not built yet took them and made nothing: the cut needs its side again (rare).
+                    out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, nullptr, tf->outgoingBlend, tf->outgoingOffset);
+                    in = segmentPicture(c, tf->segment, tf->frame, nullptr, tf->blend, tf->segmentOffset);
+                }
             }
             if (layer.isNull()) {
                 // Not built yet: the cut, which lies after the outgoing side's frames.
@@ -788,7 +829,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Avid Titler+ (p.302-324): the title over the segment, filler's empty picture included.
                 layer = titlePicture(e, layer, time, model::EffectSpan(std::max<std::int64_t>(length, 1)));
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -796,7 +837,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // SubCap's caption over the segment's own picture, filler's empty picture included (subcap.cpp).
                 layer = subcapPicture(e, layer);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -804,7 +845,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Timecode Burn-In's displays over the segment's own picture (burn_in.cpp).
                 layer = burnInPicture(e, layer, c, name, frame);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -828,7 +869,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                     layer = regionStabilizePicture(e, layer, tf->offset, seg.length, material, pictureAt);
                 }
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -864,7 +905,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 if (!made.isNull()) layer = Picture::fromImage(made, w, h, c.interpolation);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -878,7 +919,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Avid Pan & Zoom: the image over the placeholder segment (FX Guide p.239-241).
                 layer = panZoomPicture(e, layer, time, length, c.effectPreview);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -900,7 +941,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 layer = colorCorrectedShapesPicture(e, layer, at, shapeAt, t, span, c.shapeView);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -937,7 +978,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 layer = ofxSegmentPicture(e, layer, time, length, more);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
@@ -950,14 +991,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 if (c.limitSafeColors || e.name != QLatin1String("Safe Color Limiter")) layer = imageEffectPicture(e, layer, time, length);
                 layer.quantize(c.precision);
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 result.quantize(c.precision);
                 continue;
             }
             if (isPanAndScan(e)) {
                 // Pan and Scan reformats its segment and the tracks below, as the other Reformat effects do
                 // (p.229-231), unless the Effect Preview shows the original.
-                result = over(layer, result);
+                result = over(layer, std::move(result));
                 if (!c.effectPreview) result = panScanPicture(e, result, time, length);
                 result.quantize(c.precision);
                 continue;
@@ -989,10 +1030,10 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 layer.quantize(c.precision);
             }
         }
-        result = over(layer, result);
+        result = over(layer, std::move(result));
         result.quantize(c.precision);
     }
-    if (!pendingStamps.isNull()) result = over(pendingStamps, result);
+    if (!pendingStamps.isNull()) result = over(pendingStamps, std::move(result));
     return result;
 }
 

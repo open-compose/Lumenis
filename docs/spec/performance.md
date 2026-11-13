@@ -52,11 +52,18 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `bin_show_10k` | 6.7 s | about 10 ms | the Script view built for every bin, a widget row per clip, with a linear look-up per row |
 | `timeline_paint_16x400` | 250 ms | about 11 ms | the fitted scale worked out (a walk over the sequence) for every segment drawn; sync breaks compared every piece with every other |
 | `compose_3d_warp_1080p` | (170 ms) | about 150 ms | its placement on one thread, and two copies of the sources to swap them |
+| `compose_dissolve_1080p` | (about 110 ms) | about 50 ms | memory traffic: both sides copied into the transition, and every blend making a new picture, zeroed before it was written |
 
 Looked at and left as they are: the audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
-generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's. Left for later: every
-whole-picture pass now moves 33 MB of floats per 1080p frame, so the compositor's remaining time is mostly memory
-traffic; reusing pictures' buffers, or lighter pixels where the effects' precision allows, is the next lever.
+generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
+
+The compositor's memory traffic (a 1080p picture is 33 MB of floats): `over` and `mix` have versions that take a
+picture the caller is done with (`Picture&&`) and blend in its pixels, which `composeFrame` and `transitionPicture`
+use by moving their pictures in; pictures whose every pixel is about to be written start unwritten
+(`Picture::uninitialized`, `PixelData`'s `detail::DefaultInitAllocator`), as does `fromImage` when the image fills the
+frame. Write a new blend or effect the same way: take a `Picture&&` when it can work in place, and start an output it
+writes whole with `Picture::uninitialized`. Left for later: lighter pixels (16-bit half floats) where the effects'
+precision allows, and the other effects' passes that still copy their source.
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).

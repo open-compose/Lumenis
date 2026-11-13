@@ -1069,7 +1069,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Phase 10's step plan (10.0-10.8) and the owner's answers are in ROADMAP; the repository goes public after Phase 10.
   10.1a, the benchmarks (docs/spec/performance.md: `tests/perf/bench.cpp` as `lumenis_bench`, `scripts/perf.py` with
   `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1b, the slow paths,
-  has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling").
+  has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
+  in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects).
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and

@@ -70,7 +70,7 @@ Picture safeColorLimiterPicture(const model::Effect& e, const Picture& layer, do
     const model::SafeLimiting limiting = model::safeColorLimiting(e, time, span);
     if (!limiting.compositeLuma && !limiting.rgb) return layer;
     Picture out = layer;
-    std::vector<float>& data = out.data();
+    PixelData& data = out.data();
     for (std::size_t i = 0; i + 3 < data.size(); i += 4) {
         const float a = data[i + 3];
         if (a <= 0.0f) continue;

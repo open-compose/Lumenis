@@ -664,7 +664,7 @@ Picture colorCorrectedShapesPicture(const model::Effect& effect, const Picture& 
     if (!model::hasCorrectionShapes(effect) || out.isNull() || view == View::Base) return out;
     const std::vector<float> m = correctionShapesMask(effect, out.width(), out.height(), time, span);
     if (view == View::Alpha) {
-        std::vector<float>& d = out.data();
+        PixelData& d = out.data();
         // "Show Alpha Icon - when selected displays the alpha" (p.698): white where the shapes cover, opaque.
         for (std::size_t i = 0; i < m.size() && i * 4 + 3 < d.size(); ++i) {
             for (std::size_t c = 0; c < 3; ++c) d[i * 4 + c] = m[i];
@@ -676,8 +676,8 @@ Picture colorCorrectedShapesPicture(const model::Effect& effect, const Picture& 
     const Picture shaped = colorCorrectedPicture(shapes, model::shapeOptionsOf(effect).serial ? out : layer);
     // The shape layer alone (ours): outside the shapes the picture without the base correction.
     if (view == View::Shapes) out = layer;
-    std::vector<float>& o = out.data();
-    const std::vector<float>& s = shaped.data();
+    PixelData& o = out.data();
+    const PixelData& s = shaped.data();
     for (std::size_t i = 0; i < m.size() && i * 4 + 3 < o.size() && i * 4 + 3 < s.size(); ++i) {
         for (std::size_t c = 0; c < 4; ++c) o[i * 4 + c] += (s[i * 4 + c] - o[i * 4 + c]) * m[i];
     }
