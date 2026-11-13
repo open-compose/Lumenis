@@ -1504,6 +1504,7 @@ private:
     // Puts a new motion effect clip in its bin, selects it there and loads it into the Source monitor.
     void placeMotionClip(const QString& sourceBin, const model::BinItem& item);
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
+    QString shownLanguage_; // the Interface setting's language last read (10.4)
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
     bool lastRenderBackground_ = false; // and whether it chose Background Process
     bool renderOnTheFly_ = true; // Composer > Render On-the-Fly

@@ -791,6 +791,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Manage Speaker Names (docs/spec/transcripts.md): the project's list in `Speakers.json`, Merge into the first selected
   name and the lowest Speaker ID, "+" starting from "New Speaker", renaming to a name a transcript already has merging the
   two, a cleared name kept in the list (dimmed) when it was listed, Clear and Delete for each selected name.
+* The interface's language (docs/spec/localisation.md, 10.4): a choice in the Interface setting's General tab ("ours":
+  the guides describe none), taking effect when the application starts again, English when nothing is chosen; the
+  pseudo-locale listed with the languages for testing.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical

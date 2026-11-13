@@ -1,4 +1,5 @@
 #include "lumenis/ui/menu_builder.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/ui/command_registry.h"
 
@@ -39,7 +40,7 @@ bool populate(QMenu* menu, const QJsonArray& items, CommandRegistry& commands, Q
             menu->addAction(action);
         } else if (item.isObject()) {
             const QJsonObject o = item.toObject();
-            QMenu* sub = menu->addMenu(o.value(QStringLiteral("title")).toString());
+            QMenu* sub = menu->addMenu(translatedResource("menus", o.value(QStringLiteral("title")).toString()));
             sub->setObjectName(QStringLiteral("menu:") + o.value(QStringLiteral("id")).toString());
             if (!populate(sub, o.value(QStringLiteral("items")).toArray(), commands, error)) {
                 return false;
@@ -106,7 +107,7 @@ bool buildMenus(QMenuBar* bar, CommandRegistry& commands, const QByteArray& json
     }
     for (const QJsonValue& value : doc.object().value(QStringLiteral("menus")).toArray()) {
         const QJsonObject o = value.toObject();
-        QMenu* menu = bar->addMenu(o.value(QStringLiteral("title")).toString());
+        QMenu* menu = bar->addMenu(translatedResource("menus", o.value(QStringLiteral("title")).toString()));
         menu->setObjectName(QStringLiteral("menu:") + o.value(QStringLiteral("id")).toString());
         if (!populate(menu, o.value(QStringLiteral("items")).toArray(), commands, error)) {
             return false;

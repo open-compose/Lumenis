@@ -1048,7 +1048,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                                                       p.kind == QLatin1String("angle"));
             QLabel* nameLabel = nullptr;
             if (p.kind == QLatin1String("checkbox")) {
-                auto* c = new QCheckBox(p.text, box);
+                auto* c = new QCheckBox(model::shownName(p.text), box);
                 c->setObjectName(QStringLiteral("param:") + k);
                 c->setChecked(p.defaultValue.toBool());
                 connect(c, &QCheckBox::toggled, this, [this, category, name = p.name](bool on) {

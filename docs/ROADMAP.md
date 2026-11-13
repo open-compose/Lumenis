@@ -1749,6 +1749,12 @@ The items:
     language choice in the Interface setting. Translate commands.json, menus.json, settings.json and the effect
     labels through `model::shownName`. Add a check that no user-visible string bypasses `tr()`, and pseudo-localised
     screenshots (long strings, accents) for the screenshot comparison. The languages are the owner's choice (below).
+    In four parts (docs/spec/localisation.md): 10.4a, the infrastructure (done: `translations/` with languages.json and
+    a `.ts` a language, `scripts/update-translations.py` extracting the JSON resources' texts for lupdate, lrelease into
+    resources when Qt's Linguist tools are found, `src/ui/translation.*` with the Interface setting's Language, `--language`
+    and the pseudo-locale, the resources translated where shown through `translatedResource` and `model::shownName`;
+    tests `tst_translation`, `translations_current`; CONTRIBUTING.md); 10.4b, a check that no user-visible text skips
+    translation, and the texts it finds; 10.4c, pseudo-localised screenshots; 10.4d, the translations themselves.
   * 10.5, crash reporting. Use Crashpad (Apache 2.0, compatible with GPLv3; THIRD-PARTY-NOTICES.md) to write
     minidumps locally. After a crash, the next start says where the dump is. Add a symbol upload step in the
     release builds. Sending dumps waits on the owner's collection decision; nothing leaves the machine without the

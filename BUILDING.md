@@ -1380,6 +1380,24 @@ build/ci/bin/lumenis_bench --only <name> --runs 1` and read the `summary:` line 
 whole program, set-up included, so a difference is the change's; it says nothing about memory waits, so a change that
 only moves less memory needs timings too (the fastest of several runs).
 
+## Translations
+
+The interface's languages (ROADMAP 10.4; docs/spec/localisation.md; CONTRIBUTING.md, "Translations") are Qt Linguist
+files in `translations/`, compiled in when CMake finds Qt's Linguist tools:
+
+* **Linux:** `sudo apt-get install qt6-l10n-tools qt6-tools-dev` (Fedora: `qt6-qttools-devel qt6-linguist`);
+  `scripts/bootstrap-linux.sh` installs them.
+* **macOS and Windows:** part of the Qt the bootstrap scripts install (aqt's qttools).
+
+Then `cmake --preset ci` again. `python3 scripts/update-translations.py` brings the `.ts` files up to date after a text
+changes (ctest `translations_current` checks them); start with `--language de` (or `fr`, `it`, `ga`, `pseudo`) to see a
+language without changing the Interface setting.
+
+**CMake says "Qt's Linguist tools were not found: Cutthulhu builds in English only":** install them as above and run
+CMake again. The Interface setting then offers only English and the pseudo-locale; `tst_translation` and
+`translations_current` check less. Release builds set `-DLUMENIS_REQUIRE_TRANSLATIONS=ON`, which stops instead. The
+owner's WSL runner needs the two packages too: `sudo apt-get install qt6-l10n-tools qt6-tools-dev` there.
+
 ## Soak runs
 
 The long-run stability check (ROADMAP 10.2; docs/spec/soak.md): `--soak <hours>` opens a sample project of its own in

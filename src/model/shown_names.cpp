@@ -1,6 +1,8 @@
 // Shown names for effects and parameter categories (shown_names.h; docs/spec/trademarks.md).
 #include "lumenis/model/shown_names.h"
 
+#include <QCoreApplication>
+
 #include <utility>
 
 namespace lumenis::model {
@@ -42,7 +44,10 @@ constexpr std::pair<const char*, const char*> kShown[] = {
 QString shownName(const QString& stored) {
     QString out = stored;
     for (const auto& [from, to] : kShown) out.replace(QLatin1String(from), QLatin1String(to));
-    return out;
+    // Then in the language installed (10.4): Qt Linguist's "effects" context holds these names as renamed here
+    // (scripts/update-translations.py applies the same table), so a translation never brings a mark back.
+    if (out.isEmpty()) return out;
+    return QCoreApplication::translate("effects", out.toUtf8().constData());
 }
 
 } // namespace lumenis::model

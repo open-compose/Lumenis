@@ -111,6 +111,19 @@ target_compile_definitions(tst_command_wiring PRIVATE
     DIMMED_COMMANDS="${PROJECT_SOURCE_DIR}/tests/data/dimmed_commands.json")
 # 10.3: every control a screen reader reaches has a name (docs/spec/accessibility.md).
 lumenis_add_test(tst_accessibility SOURCES tst_accessibility.cpp LIBS ${ui_test_libs})
+# 10.4: the interface's languages, the pseudo-locale and the resources' texts through the translator
+# (docs/spec/localisation.md); translations_current: the .ts files hold every text (scripts/update-translations.py).
+lumenis_add_test(tst_translation SOURCES tst_translation.cpp LIBS ${ui_test_libs})
+if(Qt6LinguistTools_FOUND)
+    target_compile_definitions(tst_translation PRIVATE LUMENIS_HAVE_TRANSLATIONS)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND AND TARGET Qt6::lupdate)
+        add_test(NAME translations_current
+            COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/update-translations.py --check
+                    --lupdate $<TARGET_FILE:Qt6::lupdate>)
+        set_tests_properties(translations_current PROPERTIES PASS_REGULAR_EXPRESSION "translations: current" TIMEOUT 300)
+    endif()
+endif()
 lumenis_add_test(tst_cut_list_ui SOURCES tst_cut_list_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_send_to SOURCES tst_send_to.cpp LIBS ${ui_test_libs} lumenis::media)
 # Render Effect and Clear Renders in the application (docs/spec/rendering.md).

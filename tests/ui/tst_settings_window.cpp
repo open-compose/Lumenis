@@ -115,8 +115,9 @@ private slots:
                     // Import's OMFI/AAF report options are described with AAF import, "Sequence Report for AAF Imports"
                     // (p.237-238; 9.2c).
                     const bool aafReport = k.kind == QLatin1String("Import") && o.page >= 237 && o.page <= 238;
+                    // Ours, where the guides say nothing (the interface's language, 10.4): no page, marked "ours".
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
-                                 exportChapter || transcriptChapter || colorChapter || aafReport,
+                                 exportChapter || transcriptChapter || colorChapter || aafReport || (o.ours && o.page == 0),
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;

@@ -1,0 +1,62 @@
+# Localisation (10.4)
+
+Ours: the guides describe only the English interface. The owner's languages are English (the default and the source),
+German, French, Italian and Irish; adding another must stay easy for us and for users (a `.ts` file and a line in a
+list).
+
+## How a text reaches the screen
+
+* **The code's texts** are in `tr()` (or `QCoreApplication::translate`), in English. Qt Linguist's `lupdate` finds them.
+* **The JSON resources' texts** are translated where they are shown, never where they are read, because many are also
+  identifiers (a setting's kind, a stored effect name, a Command Palette tab): `translatedResource(context, text)` in
+  `src/ui/translation.h`, with the contexts
+  * `commands`: commands.json's `text` (`CommandRegistry`, so menus, buttons, the Command Palette and Find Command);
+  * `menus`: menus.json's `title` (`menu_builder.cpp`);
+  * `settings`: settings.json's setting names, tabs, labels, suffixes, special texts, reset buttons and choices
+    (`settings_window.cpp`, `SettingKind::title`);
+  * `commandPalette`: its tab names;
+  * `effects`: effect, category and parameter names and their choices, through `model::shownName`
+    (`src/model/shown_names.cpp`), after its renames (docs/spec/trademarks.md). The texts are extracted as renamed, so
+    a translator never sees, and never brings back, a name we renamed.
+* User data (bin, clip, sequence and track names, markers, titles) is never translated.
+
+## The files
+
+* `translations/languages.json`: the languages, `{"code", "name"}` with the name in its own language.
+* `translations/cutthulhu_<code>.ts`: one Qt Linguist file a language, every text with its translation (empty until
+  translated; an untranslated text shows in English).
+* `scripts/update-translations.py` runs `lupdate` over `src/` and `app/` and over the JSON resources' texts (written
+  for it as `QT_TRANSLATE_NOOP` lines in a temporary file) into every `.ts`, keeping translations; a text that is gone
+  is marked obsolete with its translation kept. `--check` compares the messages each file would have with those it has
+  (not the bytes: Qt versions write the same file differently); ctest `translations_current` runs it, so a new text is
+  not forgotten.
+* CMake (`src/ui/CMakeLists.txt`) compiles each `.ts` with `lrelease` into `:/lumenis/translations/cutthulhu_<code>.qm`
+  when Qt's Linguist tools are found (`find_package(Qt6 COMPONENTS LinguistTools)`); without them the build is English
+  only and says so, and `LUMENIS_REQUIRE_TRANSLATIONS=ON` (release builds) makes them required.
+
+## Choosing the language
+
+* The Interface setting's **Language (when Cutthulhu starts again)** (General tab; ours), its choices English, the
+  languages built in and the pseudo-locale (`"choicesFrom": "languages"`). Changing it says once that it takes effect
+  at the next start; the choice is also kept outside the user's settings (`QSettings`, `interface/language`), since the
+  language is needed before a user is chosen.
+* At start-up (`app/main.cpp`): `--language <code>`, else `LUMENIS_LANGUAGE`, else the saved choice, else English.
+  Tooling modes (`--screenshot`, `--dump-menus`, `--smoke-test`, `--soak` ...) start in English unless `--language`
+  is given. `installLanguage` installs our translation and Qt's own (`qtbase_<code>.qm`, the standard buttons and
+  dialogs, where the Qt installation has it) and sets the default locale (numbers and dates in the language's way).
+* **The pseudo-locale** (`--language pseudo`): every translated text accented, about 40% longer and in brackets
+  ("[Ŝáṽé ~~]"), placeholders, mnemonics, tags and entities kept. Text that stays plain was never translated; a
+  control too small for a longer text shows cut. It needs no file (`PseudoTranslator`).
+
+## Adding a language
+
+CONTRIBUTING.md, "Translations": a line in `translations/languages.json`, `python3 scripts/update-translations.py`,
+then the new `.ts` translated in Qt Linguist (or any XLIFF/TS tool) and committed.
+
+## Parts
+
+* 10.4a, the infrastructure above (`src/ui/translation.*`, test `tst_translation`, ctest `translations_current`), is done.
+* 10.4b: a check that no user-visible text skips translation, and the texts it finds (the pseudo-locale's screenshots
+  show some: the workspace buttons, the bin's column headings, the monitors' tracking displays).
+* 10.4c: pseudo-localised screenshots in the screenshot comparison.
+* 10.4d: the translations (the owner's decision on who writes them).

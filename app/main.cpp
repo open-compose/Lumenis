@@ -39,6 +39,7 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/soak.h"
+#include "lumenis/ui/translation.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/menu_builder.h"
@@ -424,6 +425,13 @@ int main(int argc, char** argv) {
     const QCommandLineOption sampleProject(
         QStringLiteral("sample-project"),
         QStringLiteral("With --dump-menus: open a new temporary project first, as an editor would."));
+    // The interface's language (ROADMAP 10.4): a code from translations/languages.json, or "pseudo" (translation.h).
+    const QCommandLineOption language(
+        QStringLiteral("language"),
+        QStringLiteral("Start in the language <code> (en, de, fr, it, ga, or pseudo for testing), whatever the Interface "
+                       "setting says."),
+        QStringLiteral("code"));
+    parser.addOption(language);
     parser.addOption(dumpMenus);
     parser.addOption(sampleProject);
     parser.addOption(screenshot);
@@ -1015,6 +1023,16 @@ int main(int argc, char** argv) {
         for (const QString& e : errors) lumenis::ui::ConsoleLog::instance().append(QObject::tr("OFX: %1").arg(e));
     }
 
+    // The language first: the commands' texts and every window are made in it. Tooling modes start in English unless
+    // --language says otherwise, as they start from the default settings.
+    {
+        const bool toolingMode = parser.isSet(defaultLayout) || parser.isSet(dumpMenus) || parser.isSet(screenshot) ||
+                                 parser.isSet(smokeTest) || parser.isSet(measurePlayback) || parser.isSet(soak);
+        const QString code = lumenis::ui::startupLanguage(parser.value(language), !toolingMode);
+        if (!lumenis::ui::installLanguage(guiApp, code)) {
+            std::fprintf(stderr, "language %s is not built in; starting in English\n", qPrintable(code));
+        }
+    }
     lumenis::ui::CommandRegistry commands;
     commands.loadBuiltin();
 

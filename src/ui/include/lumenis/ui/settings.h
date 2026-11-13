@@ -41,6 +41,7 @@ struct SettingOption {
     int page = 0; // the Editing Guide page that describes it; 0 when not given
     bool fxGuide = false; // `page` is the FX Guide's ("guide": "fx")
     bool later = false; // shown, not available yet: value() returns the default
+    bool ours = false;  // not in the guides (no page to cite): ours, on the watch list (docs/spec/ui-inventory.md)
     QList<SettingChoice> choices;
 
     // The value a stored one stands for: the default when nothing is stored,

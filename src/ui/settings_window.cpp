@@ -1,4 +1,5 @@
 #include "lumenis/ui/settings_window.h"
+#include "lumenis/ui/translation.h"
 #include "lumenis/ui/target_settings_dialog.h"
 
 #include "lumenis/model/safe_colors.h"
@@ -58,6 +59,14 @@
 // the tools that some settings stand for (toolRequested).
 
 namespace lumenis::ui {
+
+namespace {
+// A setting's name, tab, label or choice as settings.json has it, in the language installed (10.4). The JSON's text
+// stays the identifier: only what is shown is translated.
+QString shown(const QString& text) {
+    return translatedResource("settings", text);
+}
+} // namespace
 
 using model::SettingEntry;
 using model::SettingsFile;
@@ -119,7 +128,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
             QWidget* row = nullptr;
             const QJsonValue current = value(o);
             if (o.type == QLatin1String("bool")) {
-                auto* box = new QCheckBox(o.label);
+                auto* box = new QCheckBox(shown(o.label));
                 box->setChecked(current.toBool());
                 editor = row = box;
             } else if (o.type == QLatin1String("safeColorGraph")) {
@@ -130,13 +139,13 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
             } else if (o.type == QLatin1String("choice") && o.style == QLatin1String("radio")) {
                 // Radio buttons in a box titled with the label; the QButtonGroup "<key>Group" ids
                 // are indices into o.choices, which values() reads back.
-                QWidget* holder = o.label.isEmpty() ? new QWidget : new QGroupBox(o.label);
+                QWidget* holder = o.label.isEmpty() ? new QWidget : new QGroupBox(shown(o.label));
                 auto* buttons = new QVBoxLayout(holder);
                 auto* group = new QButtonGroup(holder);
                 group->setObjectName(o.key + QStringLiteral("Group"));
                 for (int i = 0; i < o.choices.size(); ++i) {
                     const SettingChoice& c = o.choices.at(i);
-                    auto* r = new QRadioButton(c.label, holder);
+                    auto* r = new QRadioButton(shown(c.label), holder);
                     r->setObjectName(o.key + QLatin1Char(':') + c.value);
                     r->setChecked(c.value == current.toString());
                     if (c.later) {
@@ -153,18 +162,18 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 row = new QWidget;
                 auto* h = new QHBoxLayout(row);
                 h->setContentsMargins(0, 0, 0, 0);
-                if (!o.label.isEmpty() && o.type != QLatin1String("button")) h->addWidget(new QLabel(o.label, row));
+                if (!o.label.isEmpty() && o.type != QLatin1String("button")) h->addWidget(new QLabel(shown(o.label), row));
                 if (o.type == QLatin1String("int")) {
                     auto* spin = new QSpinBox(row);
                     spin->setRange(o.min, o.max);
                     spin->setValue(current.toInt());
-                    if (!o.specialText.isEmpty()) spin->setSpecialValueText(o.specialText);
+                    if (!o.specialText.isEmpty()) spin->setSpecialValueText(shown(o.specialText));
                     editor = spin;
                     if (!o.resetButton.isEmpty()) {
                         // "To return this option to its default value, click the rs (recommended
                         // sample) button" (p.1147).
                         auto* reset = new QToolButton(row);
-                        reset->setText(o.resetButton);
+                        reset->setText(shown(o.resetButton));
                         reset->setObjectName(o.key + QStringLiteral("Reset"));
                         const int fallback = o.defaultValue.toInt();
                         QObject::connect(reset, &QToolButton::clicked, spin, [spin, fallback] { spin->setValue(fallback); });
@@ -179,7 +188,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 } else if (o.type == QLatin1String("choice")) {
                     auto* menu = new QComboBox(row);
                     for (const SettingChoice& c : o.choices) {
-                        menu->addItem(c.label, c.value);
+                        menu->addItem(shown(c.label), c.value);
                         if (c.later) {
                             if (auto* m = qobject_cast<QStandardItemModel*>(menu->model())) {
                                 m->item(menu->count() - 1)->setEnabled(false);
@@ -241,7 +250,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     editor = new QLabel(row);
                 } else if (o.type == QLatin1String("button")) {
                     // A button opening a window of its own (Transcript's Manage Speakers, p.445): buttonClicked(key).
-                    auto* button = new QPushButton(o.label, row);
+                    auto* button = new QPushButton(shown(o.label), row);
                     connect(button, &QPushButton::clicked, this, [this, key = o.key] { emit buttonClicked(key); });
                     editor = button;
                 } else {
@@ -254,7 +263,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 }
                 h->addWidget(editor);
                 if (auto* reset = row->findChild<QToolButton*>(o.key + QStringLiteral("Reset"))) h->addWidget(reset);
-                if (!o.suffix.isEmpty()) h->addWidget(new QLabel(o.suffix, row));
+                if (!o.suffix.isEmpty()) h->addWidget(new QLabel(shown(o.suffix), row));
                 h->addStretch(1);
             }
             editor->setObjectName(o.key);
@@ -273,7 +282,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
     if (kind.tabs.size() > 1) {
         tabs_ = new QTabWidget(this);
         tabs_->setObjectName(QStringLiteral("settingsTabs"));
-        for (const SettingTab& t : kind.tabs) tabs_->addTab(page(t), t.name);
+        for (const SettingTab& t : kind.tabs) tabs_->addTab(page(t), shown(t.name));
         layout->addWidget(tabs_);
     } else if (!kind.tabs.isEmpty()) {
         layout->addWidget(page(kind.tabs.constFirst()));
@@ -308,7 +317,7 @@ void SettingsDialog::useSaveButtons() {
     });
     connect(saveAsButton, &QPushButton::clicked, this, [this] {
         bool ok = false;
-        const QString name = QInputDialog::getText(this, tr("Save %1 Setting").arg(kind_.kind), tr("Setting Name:"), QLineEdit::Normal,
+        const QString name = QInputDialog::getText(this, tr("Save %1 Setting").arg(shown(kind_.kind)), tr("Setting Name:"), QLineEdit::Normal,
                                                    QString(), &ok);
         if (ok) this->saveAs(name);
     });
@@ -434,7 +443,7 @@ void SettingsList::refresh() {
     const SettingsFile& f = file();
     auto entryItem = [&](int index, QTreeWidgetItem* item) {
         const SettingEntry& e = f.entries.at(index);
-        item->setText(kSettingColumn, e.kind);
+        item->setText(kSettingColumn, shown(e.kind));
         item->setText(kNameColumn, e.name);
         item->setData(kSettingColumn, kEntryRole, index);
         item->setFlags(item->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled);
@@ -448,7 +457,7 @@ void SettingsList::refresh() {
         // Several versions: under the setting's name, with check boxes for
         // the active one (picture on p.1136).
         auto* group = new QTreeWidgetItem(this);
-        group->setText(kSettingColumn, kind);
+        group->setText(kSettingColumn, shown(kind));
         group->setFlags(Qt::ItemIsEnabled);
         for (int i : versions) {
             auto* item = new QTreeWidgetItem(group);

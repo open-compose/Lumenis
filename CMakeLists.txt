@@ -29,6 +29,17 @@ option(LUMENIS_FUZZ "Build the libFuzzer targets in fuzz/" OFF)
 # the Qt 6.8 LTS series.
 set(LUMENIS_QT_MIN_VERSION 6.4)
 find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
+# Qt's Linguist tools compile the interface's translations (ROADMAP 10.4; translations/, docs/spec/localisation.md).
+# Optional for a development build, which is then in English only; release builds need them (LUMENIS_REQUIRE_TRANSLATIONS).
+option(LUMENIS_REQUIRE_TRANSLATIONS "Fail if Qt's Linguist tools are missing" OFF)
+if(LUMENIS_REQUIRE_TRANSLATIONS)
+    find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS LinguistTools)
+else()
+    find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} QUIET COMPONENTS LinguistTools)
+endif()
+if(NOT Qt6LinguistTools_FOUND)
+    message(STATUS "Qt's Linguist tools were not found: Cutthulhu builds in English only (BUILDING.md, \"Translations\")")
+endif()
 if(LUMENIS_BUILD_TESTS)
     find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 endif()

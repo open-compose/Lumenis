@@ -1,4 +1,5 @@
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/core/branding.h"
 
@@ -61,7 +62,8 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
         const QJsonObject o = value.toObject();
         CommandSpec spec;
         spec.id = o.value(QStringLiteral("id")).toString();
-        spec.text = o.value(QStringLiteral("text")).toString().replace(QStringLiteral("%PRODUCT%"), product);
+        // In the language installed (10.4; commands.json's text is what Qt Linguist translates, %PRODUCT% included).
+        spec.text = translatedResource("commands", o.value(QStringLiteral("text")).toString()).replace(QStringLiteral("%PRODUCT%"), product);
         QString keys = o.value(QStringLiteral("shortcut")).toString();
 #ifdef Q_OS_MACOS
         // Where the guide gives a different macOS key, e.g. Control+Tab,

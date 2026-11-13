@@ -1,4 +1,5 @@
 #include "lumenis/ui/settings.h"
+#include "lumenis/ui/translation.h"
 
 #include <algorithm>
 
@@ -32,12 +33,12 @@ const SettingOption* SettingKind::option(const QString& key) const {
 }
 
 QString SettingKind::title() const {
-    return QObject::tr("%1 Settings").arg(kind);
+    return QObject::tr("%1 Settings").arg(translatedResource("settings", kind));
 }
 
 // The document is {"settings": [{"kind", "scope", "page", "opens", "versions": [{"name", "values"}], "tabs": [{"name", "options":
 // [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "guide", "later",
-// "choices": [{"value", "label", "later"}]}]}]}]}.
+// "choices": [{"value", "label", "later"}], "choicesFrom"}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
     SettingsSchema schema;
     QJsonParseError parseError;
@@ -80,11 +81,16 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.page = oo.value(QStringLiteral("page")).toInt();
                 option.fxGuide = oo.value(QStringLiteral("guide")).toString() == QLatin1String("fx");
                 option.later = oo.value(QStringLiteral("later")).toBool();
+                option.ours = oo.value(QStringLiteral("ours")).toBool();
                 for (const QJsonValue& c : oo.value(QStringLiteral("choices")).toArray()) {
                     const QJsonObject co = c.toObject();
                     option.choices << SettingChoice{co.value(QStringLiteral("value")).toString(),
                                                     co.value(QStringLiteral("label")).toString(),
                                                     co.value(QStringLiteral("later")).toBool()};
+                }
+                // Choices from a list kept elsewhere: "languages", the interface languages built in (translation.h, 10.4).
+                if (oo.value(QStringLiteral("choicesFrom")).toString() == QLatin1String("languages")) {
+                    for (const Language& l : availableLanguages()) option.choices << SettingChoice{l.code, l.name, false};
                 }
                 tab.options << option;
             }

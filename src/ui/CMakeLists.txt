@@ -120,6 +120,7 @@ add_library(lumenis_ui STATIC
     timeline_correction.cpp
     soak.cpp
     tool_windows.cpp
+    translation.cpp
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/audio_eq.h
@@ -215,10 +216,29 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/timeline.h
     include/lumenis/ui/soak.h
     include/lumenis/ui/tool_windows.h
+    include/lumenis/ui/translation.h
     include/lumenis/ui/workspace.h
     include/lumenis/ui/workspace_bar.h
 )
 add_library(lumenis::ui ALIAS lumenis_ui)
+
+# The interface's translations (10.4): translations/cutthulhu_<code>.ts compiled to .qm by Qt's lrelease and kept as
+# resources under :/lumenis/translations, with the list of languages. A .ts added to translations/ is picked up when
+# CMake runs again.
+qt_add_resources(lumenis_ui lumenis_language_list
+    PREFIX /lumenis/translations
+    BASE ${PROJECT_SOURCE_DIR}/translations
+    FILES ${PROJECT_SOURCE_DIR}/translations/languages.json
+)
+if(Qt6LinguistTools_FOUND)
+    file(GLOB LUMENIS_TS_FILES CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/translations/cutthulhu_*.ts)
+    qt_add_lrelease(lumenis_ui TS_FILES ${LUMENIS_TS_FILES} QM_FILES_OUTPUT_VARIABLE LUMENIS_QM_FILES OPTIONS -silent)
+    qt_add_resources(lumenis_ui lumenis_translations
+        PREFIX /lumenis/translations
+        BASE ${CMAKE_CURRENT_BINARY_DIR}
+        FILES ${LUMENIS_QM_FILES}
+    )
+endif()
 
 qt_add_resources(lumenis_ui lumenis_ui_resources
     PREFIX /lumenis/ui

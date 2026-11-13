@@ -815,7 +815,9 @@
             {"key": "toolPaletteLabels", "type": "bool", "label": "Show Labels in Tool Palette", "default": false, "page": 392},
             {"key": "classicCharacterMapping", "type": "bool", "label": "Use Classic Character Mapping", "default": false, "page": 377, "guide": "fx", "later": true},
             {"key": "workspaceMove", "type": "choice", "style": "radio", "label": "When moving to a workspace", "default": "known", "page": 1200,
-             "choices": [{"value": "known", "label": "Load the last known state"}, {"value": "saved", "label": "Load the last saved state"}]}
+             "choices": [{"value": "known", "label": "Load the last known state"}, {"value": "saved", "label": "Load the last saved state"}]},
+            {"key": "language", "type": "choice", "style": "menu", "label": "Language (when Cutthulhu starts again)", "default": "en",
+             "ours": true, "choicesFrom": "languages"}
           ]
         },
         {

@@ -265,7 +265,7 @@ EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
     tabs_ = new QTabBar(this);
     tabs_->setObjectName(QStringLiteral("effectTabs"));
     tabs_->setDrawBase(false);
-    for (const EffectCatalog::Tab& t : EffectCatalog::builtin().tabs()) tabs_->addTab(t.name);
+    for (const EffectCatalog::Tab& t : EffectCatalog::builtin().tabs()) tabs_->addTab(model::shownName(t.name)); // shown in the language installed
     find_ = new QLineEdit(this);
     find_->setObjectName(QStringLiteral("effectQuickFind"));
     find_->setPlaceholderText(tr("Quick Find"));

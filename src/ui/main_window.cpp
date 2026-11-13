@@ -8,6 +8,7 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/translation.h"
 #include "lumenis/ui/accessibility.h"
 #include "lumenis/ui/find_command.h"
 
@@ -8741,6 +8742,23 @@ void MainWindow::applySettings() {
     binContainer_->setAutoSaveTiming(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")) * 60 * 1000,
                                      s.number(QStringLiteral("Bin"), QStringLiteral("inactivitySeconds")) * 1000,
                                      s.number(QStringLiteral("Bin"), QStringLiteral("forceAutoSaveMinutes")) * 60 * 1000);
+    // The interface's language (ours, 10.4; translation.h): kept for the next start, since the windows are already made
+    // in the language Cutthulhu started in. Said once when the user changes it, not when the setting is first read.
+    {
+        const QString language = s.text(QStringLiteral("Interface"), QStringLiteral("language"));
+        if (!language.isEmpty() && language != shownLanguage_) {
+            const bool changed = !shownLanguage_.isEmpty();
+            shownLanguage_ = language;
+            saveLanguage(language);
+            if (changed && language != installedLanguage()) {
+                auto* box = new QMessageBox(QMessageBox::Information, tr("Language"),
+                                            tr("The new language is used when Cutthulhu starts again."), QMessageBox::Ok, this);
+                box->setObjectName(QStringLiteral("languageNote"));
+                box->setAttribute(Qt::WA_DeleteOnClose);
+                box->open();
+            }
+        }
+    }
     // Interface settings, Bins tab (p.1201), and the viewer background (Timeline and Viewers tab).
     {
         const QString ui = QStringLiteral("Interface");

@@ -1,0 +1,9 @@
+{
+  "comment": "The interface languages (ROADMAP 10.4; docs/spec/localisation.md). Each has translations/cutthulhu_<code>.ts, made and kept up to date by scripts/update-translations.py; English is the source and needs no file. To add a language: a line here, then scripts/update-translations.py, then translate the new .ts in Qt Linguist (CONTRIBUTING.md, Translations).",
+  "languages": [
+    {"code": "de", "name": "Deutsch"},
+    {"code": "fr", "name": "Français"},
+    {"code": "it", "name": "Italiano"},
+    {"code": "ga", "name": "Gaeilge"}
+  ]
+}

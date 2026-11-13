@@ -1075,6 +1075,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `soak_smoke`; the `tsan` presets on the tests labelled `core`), is done but the owner's 72-hour runs (BUILDING.md
   "Soak runs"). Use `std::mutex`, not `QMutex`, for new locks (ThreadSanitizer follows it); a dialog that blocks needs a
   hook the soak can answer (as `MainWindow::setRenderHook`).
+  10.4, localisation, is in four parts (ROADMAP; docs/spec/localisation.md). 10.4a, the infrastructure (`translations/`
+  with `languages.json` and `cutthulhu_<code>.ts`, `scripts/update-translations.py`, `src/ui/translation.*` with the
+  Interface setting's Language, `--language`, the pseudo-locale; tests `tst_translation`, `translations_current`), is
+  done. Show a JSON resource's text through `translatedResource(context, text)` (effects through `model::shownName`),
+  never translate it where it is read (it is often the identifier), and run `scripts/update-translations.py` after
+  changing any text (CONTRIBUTING.md).
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and

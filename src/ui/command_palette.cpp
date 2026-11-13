@@ -1,4 +1,5 @@
 #include "lumenis/ui/command_palette.h"
+#include "lumenis/ui/translation.h"
 
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/theme.h"
@@ -176,7 +177,7 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
         }
         columns->addStretch(1);
         tabNames_ << tab.value(QStringLiteral("name")).toString();
-        tabs_->addTab(page, tabNames_.constLast());
+        tabs_->addTab(page, translatedResource("commandPalette", tabNames_.constLast())); // the name stays the identifier
     }
 
     // As you type, matching buttons are listed (picture on p.100).
