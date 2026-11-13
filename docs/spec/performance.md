@@ -70,7 +70,10 @@ intraframe.cpp) share their lines among threads and go down the picture a group 
 their own, with the same sums as before value for value; the Mosaic's rows of tiles, the Intraframe objects' blend,
 the 3D Warp's Shadow and Trail sparkle run on threads, and `warp3dPicture` has a `Picture&&` background. Times on the
 development machine vary by a third from run to run since it moved to a busier host: compare the fastest of several
-runs. Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
+runs, or two builds' instruction counts under callgrind (BUILDING.md "Profiling"). `composeFrame` takes the first layer
+laid over its transparent start as it is (layer + 0), not blended: 145 million instructions fewer for a 1080p dissolve
+frame. Looked at and left: rounding to the effects' precision by a table of the steps' values in place of the division
+measured no faster (the division is vectorised). Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
 passes that still copy their source.
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,

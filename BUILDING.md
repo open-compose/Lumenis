@@ -1359,6 +1359,12 @@ enough to look at with `--only <name> --runs 400`, then:
 
 Build with the `ci` preset (RelWithDebInfo) so the stacks have names.
 
+**When times are noisy** (a shared or virtual machine, where the same build can vary by a third from run to run), compare
+two builds by the instructions they run, which do not vary: `valgrind --tool=callgrind --callgrind-out-file=cg.out
+build/ci/bin/lumenis_bench --only <name> --runs 1` and read the `summary:` line of `cg.out` for each build. It counts the
+whole program, set-up included, so a difference is the change's; it says nothing about memory waits, so a change that
+only moves less memory needs timings too (the fastest of several runs).
+
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours

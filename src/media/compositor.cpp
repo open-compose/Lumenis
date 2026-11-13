@@ -709,8 +709,11 @@ Stamps stampsOf(const Composition& c, const QString& name, std::int64_t frame) {
 Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     const int w = c.size.width();
     const int h = c.size.height();
+    if (!c.sequence || w <= 0 || h <= 0) return Picture(w, h);
     Picture result(w, h);
-    if (!c.sequence || w <= 0 || h <= 0) return result;
+    // Whether `result` is still the transparent picture it starts as: the first layer laid over it is then the layer
+    // itself (layer + 0), so it is taken as it is rather than blended (10.1b).
+    bool blank = true;
     // What lay below the track under the one being added, for Matte Key's three layers; kept only when a track has a
     // Matte Key at this frame (a copy of the whole picture for each track otherwise, 10.1b).
     bool matteKeys = false;
@@ -737,6 +740,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (!image) continue; // offline: the effect is computed
             result = Picture::fromImage(*image, w, h, c.interpolation);
             result.quantize(c.precision);
+            blank = false;
             if (matteKeys) lastStart = result;
             first = i + 1;
             break;
@@ -749,10 +753,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         if (!pendingStamps.isNull()) {
             result = over(pendingStamps, std::move(result));
             pendingStamps = {};
+            blank = false;
         }
         if (c.effects) {
             Stamps stamps = stampsOf(c, name, frame);
-            if (!stamps.under.isNull()) result = over(stamps.under, std::move(result));
+            if (!stamps.under.isNull()) {
+                result = over(stamps.under, std::move(result));
+                blank = false;
+            }
             pendingStamps = std::move(stamps.over);
         }
         if (matteKeys) {
@@ -761,6 +769,9 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         }
         const auto tf = trackFrame(*c.sequence, name, frame);
         if (!tf) continue;
+        // Only the generic over at the end of this pass may use `result` being blank; anything else changes it first.
+        const bool wasBlank = blank;
+        blank = false;
         Picture layer;
         if (tf->transition) {
             Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing, tf->outgoingBlend, tf->outgoingOffset);
@@ -1030,7 +1041,11 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 layer.quantize(c.precision);
             }
         }
-        result = over(layer, std::move(result));
+        if (wasBlank && layer.width() == w && layer.height() == h) {
+            result = std::move(layer);
+        } else {
+            result = over(layer, std::move(result));
+        }
         result.quantize(c.precision);
     }
     if (!pendingStamps.isNull()) result = over(pendingStamps, std::move(result));
