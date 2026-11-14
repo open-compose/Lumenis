@@ -531,6 +531,15 @@ encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now
 
 To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
+### ProRes media fails on a Mac: "cannot open the prores_videotoolbox encoder"
+
+Making ProRes media (Transcode, Consolidate, renders, a ProRes Video Resolution) failed on the owner's M1 Mac mini
+with "cannot open the prores_videotoolbox encoder: Generic error in an external library" (CI, 2026-11-14). FFmpeg's
+VideoToolbox encoders use the hardware encoder only unless their `allow_sw` option is set, and only the Pro, Max and
+Ultra chips (and later ones) have a ProRes engine. The writer (`MediaWriter`, `src/media/media.cpp`) now sets
+`allow_sw` on every `*_videotoolbox` encoder, so Macs without the engine use Apple's software encoder.
+`tst_media transcodeProRes` makes ProRes on the self-hosted M1, so it fails if this comes back.
+
 ### "FFmpeg 6.0 or later was not found"
 
 CMake needs FFmpeg's development files.

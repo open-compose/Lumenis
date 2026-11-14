@@ -96,7 +96,9 @@ def main():
             failures.append(f"--crash-issue-url gave {issue[:200]!r}")
         elif not title.startswith("Crash: ") or "Backtrace:" not in body or "Memory map:" in body:
             failures.append(f"the issue's title or body is wrong: {title!r}\n{body[:1500]}")
-        elif (len(home) > 1 and home in body) or "~" not in body or "+0x" not in body or len(issue) > 8000:
+        # The backtrace's "+" (Linux "(+0x1f2)", macOS "main + 156", Windows "+0x1f2") must survive the URL, where an
+        # unencoded "+" reads as a space.
+        elif (len(home) > 1 and home in body) or "~" not in body or "+" not in body or len(issue) > 8000:
             failures.append(f"the issue names the home folder, loses '+', or is too long ({len(issue)}):\n{body[:1500]}")
         else:
             print(f"crash report: issue link {len(issue)} characters")

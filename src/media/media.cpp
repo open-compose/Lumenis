@@ -1429,6 +1429,10 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->thread_count = threads;
             if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
             if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
+            // FFmpeg's VideoToolbox encoders ask for the hardware encoder alone unless allow_sw is set; a Mac without a
+            // ProRes engine (the M1, M2 and M3 without Pro or Max) then fails to open them ("Generic error in an
+            // external library"). Apple's software encoder is the OS's too.
+            if (QByteArray(codec->name).endsWith("_videotoolbox")) av_opt_set(d.venc->priv_data, "allow_sw", "1", 0);
             // On the context and its encoder both: "g", "bf", "maxrate", "minrate" and "bufsize" are the context's,
             // "intra_vlc" or OpenEXR's "format" the encoder's own (set on priv_data alone, the context's were lost:
             // movie export's XDCAM got no GOP or 50 Mb/s rate before 11.1c).
