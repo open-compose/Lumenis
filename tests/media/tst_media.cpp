@@ -707,6 +707,87 @@ private slots:
         setProjectFormat({}, Rational(), false);
     }
 
+    // MPEG IMX as managed media (p.1240, p.1272-1274; 11.1c3): offered in NTSC 30i and PAL 25i; MPEG-2 4:2:2 intra frames
+    // at a constant rate in D-10's 720 x 608 (PAL) or 720 x 512 (NTSC) with black blanking lines above the picture, which
+    // is shown filling the project frame; NTSC's lower field first.
+    void transcodeImx() {
+        if (!findResolution(QStringLiteral("mpeg_imx50"))) QSKIP("No MPEG-2 encoder in this FFmpeg");
+        auto offered = [](const QString& id) {
+            const QList<Resolution> list = resolutions();
+            return std::any_of(list.begin(), list.end(), [&](const Resolution& r) { return r.id == id; });
+        };
+        setProjectFormat(QSize(720, 576), Rational(25), false, Rational(4, 3));
+        QVERIFY(!offered(QStringLiteral("mpeg_imx50"))); // 25p is not in the tables
+        setProjectFormat(QSize(1920, 1080), Rational(25), true, Rational(16, 9));
+        QVERIFY(!offered(QStringLiteral("mpeg_imx30")));
+
+        QTemporaryDir dir;
+        auto sourceAt = [&](const QString& name, Rational rate) {
+            const QString path = dir.filePath(name);
+            WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("ffv1");
+            s.pixelFormat = QStringLiteral("bgr0");
+            s.width = 48;
+            s.height = 36;
+            s.frameRate = rate;
+            if (!writeVideo(path, s, 25)) return std::optional<model::BinItem>();
+            LinkOptions o;
+            o.editRate = rate;
+            return linkClip(*probe(path), o);
+        };
+        QString error;
+        // PAL: 720 x 608, upper field first, 50 Mb/s constant (a second of it about 6 MB).
+        setProjectFormat(QSize(720, 576), Rational(25), true, Rational(4, 3));
+        QVERIFY(offered(QStringLiteral("mpeg_imx50")));
+        const auto pal = sourceAt(QStringLiteral("Pier.mov"), Rational(25));
+        QVERIFY(pal);
+        MediaCreation c;
+        c.raster = QSize(720, 576);
+        c.resolution = *findResolution(QStringLiteral("mpeg_imx50"));
+        c.videoDrive = dir.path();
+        const auto made = transcodeClip(*pal, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("MPEG50"));
+        const auto link = linkOf(*made);
+        QVERIFY(link);
+        const auto v1 = probe(link->path);
+        QVERIFY(v1 && v1->firstVideo());
+        QCOMPARE(v1->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(v1->firstVideo()->profile, QStringLiteral("4:2:2"));
+        QCOMPARE(QSize(v1->firstVideo()->width, v1->firstVideo()->height), QSize(720, 608));
+        QVERIFY(v1->firstVideo()->interlaced);
+        QVERIFY(v1->firstVideo()->topFieldFirst);
+        QVERIFY2(QFileInfo(link->path).size() > 4'000'000, qPrintable(QString::number(QFileInfo(link->path).size())));
+        FrameCache cache;
+        const QImage stored = cache.frame(*made, 9);
+        QCOMPARE(stored.size(), QSize(720, 608));
+        QVERIFY(qGray(stored.pixel(360, 8)) < 24); // the blanking lines
+        const QImage shown = cache.frame(*made, 9, QSize(720, 576));
+        QCOMPARE(shown.size(), QSize(720, 576));
+        // The 48 x 36 source fills 720 x 540 of the frame (by its pixels, rows 18 to 557), as it was written: the
+        // blanking lines are not shown, nor do they push the picture down.
+        QVERIFY(near(shown.copy(360, 24, 1, 1), colourOf(9), 24));
+        QVERIFY(near(shown.copy(360, 551, 1, 1), colourOf(9), 24));
+        QVERIFY(qGray(shown.pixel(360, 6)) < 24 && qGray(shown.pixel(360, 570)) < 24);
+
+        // NTSC: 720 x 512, lower field first.
+        setProjectFormat(QSize(720, 486), Rational(30000, 1001), true, Rational(4, 3));
+        const auto ntsc = sourceAt(QStringLiteral("Dock.mov"), Rational(30000, 1001));
+        QVERIFY(ntsc);
+        c.raster = QSize(720, 486);
+        c.resolution = *findResolution(QStringLiteral("mpeg_imx30"));
+        const auto nt = transcodeClip(*ntsc, 0, -1, c, &error);
+        QVERIFY2(nt, qPrintable(error));
+        const auto ntProbe = probe(linkOf(*nt)->path);
+        QVERIFY(ntProbe && ntProbe->firstVideo());
+        QCOMPARE(QSize(ntProbe->firstVideo()->width, ntProbe->firstVideo()->height), QSize(720, 512));
+        QVERIFY(ntProbe->firstVideo()->interlaced);
+        QVERIFY(!ntProbe->firstVideo()->topFieldFirst);
+        QVERIFY(near(cache.frame(*nt, 9, QSize(720, 486)).copy(360, 243, 1, 1), colourOf(9), 24));
+        setProjectFormat({}, Rational(), false);
+    }
+
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the
     // new media and the new clip and segments have none; off, the new clip keeps the encoding.
     void transcodeColorEncoding() {

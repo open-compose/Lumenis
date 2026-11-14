@@ -137,16 +137,16 @@ QString trackList(bool video, int channels) {
 
 // How wide the pixels of media stored at `stored` for a project of `raster` are: the project's picture in fewer
 // pixels, each wider (DVCPRO HD's 1280 x 1080 for 1920 x 1080: 3:2); DV's 480 lines of NTSC's 486 are lines of the same
-// height (toStoredRaster()). The project's pixels are its picture's aspect ratio (projectAspect()) over its raster's.
+// height, as are MPEG IMX's (storedPlacement()). The project's pixels are its picture's aspect ratio (projectAspect()) over its raster's.
 double storedPixelAspect(QSize raster, QSize stored) {
     if (raster.isEmpty() || stored.isEmpty()) return 1.0;
     const Rational aspect = projectAspect();
     const double frame = aspect.num() > 0 && aspect.den() > 0 ? aspect.toDouble()
                                                                 : static_cast<double>(raster.width()) / raster.height();
     const double projectPixel = frame * raster.height() / raster.width();
-    const bool cropped = raster.height() == 486 && stored.height() == 480;
+    const bool sameLines = storedPlacement(raster, stored).has_value();
     const double sx = static_cast<double>(raster.width()) / stored.width();
-    const double sy = cropped ? 1.0 : static_cast<double>(raster.height()) / stored.height();
+    const double sy = sameLines ? 1.0 : static_cast<double>(raster.height()) / stored.height();
     return projectPixel * sx / sy;
 }
 
@@ -281,8 +281,10 @@ public:
         if (r.codec == QLatin1String("mpeg2video")) {
             s.videoOptions << xdcamOptions(r, clip_.editRate);
             s.bitRate = r.bitRate;
-            // Interlaced projects' XDCAM is interlaced, upper field first (1080i).
+            // Interlaced projects' MPEG-2 is interlaced: upper field first (1080i, PAL), lower in NTSC's 486 lines
+            // (p.1121).
             s.interlaced = projectInterlaced();
+            s.bottomFieldFirst = creation_.raster.height() == 486 || creation_.raster.height() == 480;
         }
         return true;
     }
@@ -966,6 +968,33 @@ QList<Resolution> allResolutions() {
         r.formats = formats;
         return r;
     };
+    // MPEG IMX: every frame intra (no GOP), a fixed size a frame (the VBV buffer one frame's worth), 10-bit DC and the
+    // non-linear quantiser as D-10 streams are made (SMPTE 356M).
+    auto imx = [](const char* id, const char* name, int mbps, int quality) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.pixelFormat = QStringLiteral("yuv422p");
+        r.codec = QStringLiteral("mpeg2video");
+        r.probed = QStringLiteral("4:2:2");
+        r.quality = quality;
+        r.bitRate = static_cast<std::int64_t>(mbps) * 1000000;
+        const QString rate = QString::number(mbps) + QLatin1Char('M');
+        const QString buffer = QString::number(mbps * 40000); // 2 Mbit at 50 Mb/s: one 25 fps frame
+        r.options = {{QStringLiteral("g"), QStringLiteral("1")},
+                     {QStringLiteral("bf"), QStringLiteral("0")},
+                     {QStringLiteral("intra_vlc"), QStringLiteral("1")},
+                     {QStringLiteral("non_linear_quant"), QStringLiteral("1")},
+                     {QStringLiteral("qmax"), QStringLiteral("28")}, // the most the non-linear quantiser takes
+                     {QStringLiteral("dc"), QStringLiteral("10")},
+                     {QStringLiteral("maxrate"), rate},
+                     {QStringLiteral("minrate"), rate},
+                     {QStringLiteral("bufsize"), buffer},
+                     {QStringLiteral("rc_init_occupancy"), buffer}};
+        r.formats = {{QSize(720, 486), Rational(30000, 1001), ResolutionFormat::Scan::Interlaced, QSize(720, 512)},
+                     {QSize(720, 576), Rational(25), ResolutionFormat::Scan::Interlaced, QSize(720, 608)}};
+        return r;
+    };
     using Scan = ResolutionFormat::Scan;
     const Rational ntsc(30000, 1001);
     const Rational pal(25);
@@ -1023,6 +1052,9 @@ QList<Resolution> allResolutions() {
         dv("dv25_420", "DV25 420", "yuv420p", "", 1, {pal25i, pal25p}),
         dv("dv50", "DV50", "yuv422p", "", 2, {ntsc30i, ntscDv30i, pal25i, pal25p}),
         dv("dvcpro_hd", "DVCPro HD", "yuv422p", "", 2, dvcproHd),
+        // MPEG IMX (p.1240: "the SMPTE Type D-10 bit stream ... 4:2:2"; p.1272-1274: NTSC 30i and PAL 25i): MPEG-2
+        // 4:2:2 intra frames at a constant 30, 40 or 50 Mb/s in D-10's raster with the blanking above the picture.
+        imx("mpeg_imx30", "MPEG30", 30, 1), imx("mpeg_imx40", "MPEG40", 40, 2), imx("mpeg_imx50", "MPEG50", 50, 3),
     };
 }
 
@@ -1109,9 +1141,11 @@ bool canMake(const Resolution& r) {
     return true; // DNx: checked when the media is made, as before
 }
 
-// XDCAM's GOP: 15 frames at the NTSC family's rates, 12 at the others (Sony's long GOP; ours for 23.976).
+// XDCAM's GOP: 15 frames at the NTSC family's rates, 12 at the others (Sony's long GOP; ours for 23.976); MPEG IMX
+// keeps its own (intra frames).
 QList<QPair<QString, QString>> xdcamOptions(const Resolution& r, Rational rate) {
     QList<QPair<QString, QString>> o = r.options;
+    if (std::any_of(o.begin(), o.end(), [](const auto& option) { return option.first == QLatin1String("g"); })) return o;
     const double fps = rate.toDouble();
     const bool ntsc = std::abs(fps - 29.97) < 0.01 || std::abs(fps - 59.94) < 0.01;
     o << QPair<QString, QString>{QStringLiteral("g"), ntsc ? QStringLiteral("15") : QStringLiteral("12")};
@@ -1164,11 +1198,22 @@ QSize resolutionRaster(const Resolution& resolution, QSize raster, Rational rate
     return f && !f->stored.isEmpty() ? f->stored : raster;
 }
 
+std::optional<QRect> storedPlacement(QSize raster, QSize stored) {
+    if (raster.width() != 720 || stored.width() != 720) return std::nullopt;
+    if (raster.height() == 486 && stored.height() == 480) return QRect(0, -4, 720, 486); // DV
+    if (raster.height() == 486 && stored.height() == 512) return QRect(0, 26, 720, 486); // MPEG IMX, NTSC
+    if (raster.height() == 576 && stored.height() == 608) return QRect(0, 32, 720, 576); // MPEG IMX, PAL
+    return std::nullopt;
+}
+
 QImage toStoredRaster(const QImage& picture, QSize stored) {
     if (picture.isNull() || picture.size() == stored) return picture;
-    if (picture.height() == 486 && stored.height() == 480) {
-        // NTSC to DV: the top four lines and the bottom two go (p.1195).
-        return picture.copy(0, 4, picture.width(), 480).scaled(stored, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    if (const auto placed = storedPlacement(picture.size(), stored)) {
+        QImage out(stored, QImage::Format_RGBA8888);
+        out.fill(Qt::black); // video black, as VBI Blank fills it (p.1226; its "RGB: 16, 16, 16" in 601 levels)
+        QPainter p(&out);
+        p.drawImage(placed->topLeft(), picture);
+        return out;
     }
     return picture.scaled(stored, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
@@ -1176,16 +1221,17 @@ QImage toStoredRaster(const QImage& picture, QSize stored) {
 QRectF fitPictureRect(QSize image, double pixelAspect, QSize size) {
     const QRectF whole(QPointF(0, 0), QSizeF(size));
     if (image.isEmpty() || size.isEmpty()) return whole;
+    const ProjectFormatNow format = currentProjectFormat();
+    if (const auto placed = storedPlacement(format.raster, image)) {
+        // DV's lines in an NTSC frame, MPEG IMX's blanking lines above it (storedPlacement()): line for line, whatever
+        // the pixels' shape the stream says.
+        const double line = static_cast<double>(size.height()) / format.raster.height();
+        return QRectF(0, -placed->y() * line, size.width(), image.height() * line);
+    }
     if (std::abs(pixelAspect - 1.0) < 1e-3 || pixelAspect <= 0) {
         // Square pixels: by their pixels, as before.
         const QSizeF fit = QSizeF(image).scaled(QSizeF(size), Qt::KeepAspectRatio);
         return QRectF(QPointF((size.width() - fit.width()) / 2, (size.height() - fit.height()) / 2), fit);
-    }
-    const ProjectFormatNow format = currentProjectFormat();
-    if (image.height() == 480 && format.raster.height() == 486) {
-        // DV in an NTSC frame: its 480 lines are the frame's 5th to 484th.
-        const double line = static_cast<double>(size.height()) / 486.0;
-        return QRectF(0, 4 * line, size.width(), 480 * line);
     }
     // The frame's shape as shown, and the picture's.
     const double frame = format.aspect.num() > 0 && format.aspect.den() > 0
@@ -1203,7 +1249,8 @@ QRectF fitPictureRect(QSize image, double pixelAspect, QSize size) {
 
 QImage fitPicture(const QImage& image, double pixelAspect, QSize size) {
     if (image.isNull() || !size.isValid() || image.size() == size) return image;
-    if (std::abs(pixelAspect - 1.0) < 1e-3 || pixelAspect <= 0) {
+    if ((std::abs(pixelAspect - 1.0) < 1e-3 || pixelAspect <= 0) &&
+        !storedPlacement(currentProjectFormat().raster, image.size())) {
         return image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
     QImage out(size, QImage::Format_RGB32);

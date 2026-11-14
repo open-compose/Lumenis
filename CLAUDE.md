@@ -1109,7 +1109,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_media transcodeXdcam`), is done. 11.1c2, DV25, DV50, DVCPro HD and XDCAM HD 35/17.5 in their own rasters (`ResolutionFormat`
   with the stored raster and scan, `media::resolutionRaster`/`toStoredRaster`, the pixels' shape through
   `WriterSettings::pixelAspect` and the Pixel Aspect Ratio column, frames fitted by their shown shape through
-  `media::fitPicture` and `model::withPixelAspect`; test `tst_media transcodeDv`), is done. 10.6 is an update check that only tells the user (no
+  `media::fitPicture` and `model::withPixelAspect`; test `tst_media transcodeDv`), is done. 11.1c3, MPEG IMX 30/40/50 (D-10's rasters
+  with the blanking above the picture through `media::storedPlacement`, `WriterSettings::bottomFieldFirst`; test
+  `tst_media transcodeImx`), is done, so 11.1c is. ProRes is offered only where its encoder makes MXF media here
+  (`encodesHere` in managed.cpp; VideoToolbox's needs the profile in the stream's parameters, BUILDING.md). 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

@@ -215,6 +215,8 @@ struct WriterSettings {
     // Interlaced, upper field first: encoded with interlaced DCT and motion estimation where the encoder has them
     // (MPEG-2: XDCAM in interlaced projects), and the stream says so.
     bool interlaced = false;
+    // With `interlaced`, lower field first instead (NTSC's 486 lines, Editing Guide p.1121).
+    bool bottomFieldFirst = false;
     // The width of a pixel over its height (the stream's sample aspect ratio): 1 for square pixels, DVCPRO HD's 3:2
     // for 1280 x 1080 (ROADMAP 11.1c2).
     double pixelAspect = 1.0;

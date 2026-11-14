@@ -290,7 +290,9 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
             if (const char* trc = av_color_transfer_name(par->color_trc)) s.colorTransfer = QString::fromUtf8(trc);
         }
         s.interlaced = par->field_order != AV_FIELD_PROGRESSIVE && par->field_order != AV_FIELD_UNKNOWN;
-        s.topFieldFirst = par->field_order != AV_FIELD_BB && par->field_order != AV_FIELD_BT;
+        // The field shown first (AVFieldOrder names the coded order first: TB is "top coded first, bottom displayed
+        // first", as FFmpeg reads lower-field-first MXF); unknown and progressive count as upper.
+        s.topFieldFirst = par->field_order != AV_FIELD_BB && par->field_order != AV_FIELD_TB;
         if (st->nb_frames > 0) {
             s.length = st->nb_frames;
         } else if (st->duration != kNoPts && st->duration > 0) {
@@ -1450,7 +1452,7 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
                 av_opt_set(d.venc, key.toUtf8().constData(), value.toUtf8().constData(), AV_OPT_SEARCH_CHILDREN);
             }
             if (s.interlaced) {
-                d.venc->field_order = AV_FIELD_TT;
+                d.venc->field_order = s.bottomFieldFirst ? AV_FIELD_BB : AV_FIELD_TT;
                 d.venc->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
             }
             if (s.quality > 0) {
@@ -1480,6 +1482,17 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         d.vframe->width = s.width;
         d.vframe->height = s.height;
         if (av_frame_get_buffer(d.vframe, 0) < 0) return failed(QStringLiteral("out of memory"));
+        // Interlaced pictures say which field comes first: MPEG-2 writes its top_field_first from the frame, not from the
+        // context's field order (which goes into the container).
+        if (s.interlaced) {
+#ifdef AV_FRAME_FLAG_INTERLACED
+            d.vframe->flags |= AV_FRAME_FLAG_INTERLACED;
+            if (!s.bottomFieldFirst) d.vframe->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#else
+            d.vframe->interlaced_frame = 1;
+            d.vframe->top_field_first = s.bottomFieldFirst ? 0 : 1;
+#endif
+        }
     }
     // The audio encoder, and a swresample context from interleaved float to its sample format.
     if (!s.audioCodec.isEmpty()) {

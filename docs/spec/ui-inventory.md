@@ -2872,8 +2872,13 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   HD at 720p 23.976, 25 and 29.97, which DV carries as pulldown in a stream of
   another rate.
 * At least 256x120 (p.355).
+* MPEG30, MPEG40 and MPEG50 (MPEG IMX, "the SMPTE Type D-10 bit stream",
+  p.1240) in NTSC 30i and PAL 25i (p.1272-1274): MPEG-2 4:2:2 intra frames at
+  a constant rate in D-10's 720 x 512 and 720 x 608, the blanking lines above
+  the picture black as VBI Blank leaves them (p.1226), NTSC lower field first
+  (p.1121; ROADMAP 11.1c3).
 * Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, XAVC, AVC-Intra,
-  MPEG IMX, MXF OP1a and OMF (ROADMAP 11.1).
+  MXF OP1a and OMF (ROADMAP 11.1).
 
 ### Media Creation setting (p.134–136, p.1206–1209)
 * A project setting, from File > Media > Media Creation Settings (Ctrl+5)

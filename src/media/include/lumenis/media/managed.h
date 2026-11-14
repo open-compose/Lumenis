@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
+#include <QRect>
 #include <QRectF>
 #include <QSet>
 #include <QSize>
@@ -73,9 +74,14 @@ bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate, s
 // The raster the resolution's media is stored in for that project raster and rate: the format's own (DVCPro HD's
 // 1280 x 1080 in 1920 x 1080 projects at 29.97, DV's 720 x 480 in NTSC's 720 x 486), else the project's.
 QSize resolutionRaster(const Resolution& resolution, QSize raster, Rational rate);
-// A project-raster picture made the size the media is stored in (resolutionRaster()): NTSC's 486 lines lose the top four
-// and the bottom two for DV's 480 ("crops the top four and bottom two scan lines", p.1195); other sizes are the same
-// picture scaled, their pixels another shape.
+// Where an SD project's picture lies in a stored raster with other lines, in the stored raster's pixels: DV's 480
+// lines are NTSC's 5th to 484th (0, -4, 720, 486; "crops the top four and bottom two scan lines", p.1195), and MPEG
+// IMX's D-10 frame has the vertical blanking above the picture (720 x 608 for PAL with the picture from line 32, 720 x
+// 512 for NTSC from line 26; SMPTE 356M; p.1240, p.971). Nothing for other rasters, which are the same picture scaled.
+std::optional<QRect> storedPlacement(QSize raster, QSize stored);
+// A project-raster picture made the size the media is stored in (resolutionRaster()): placed by storedPlacement() where
+// it has one (DV loses NTSC's top four lines and bottom two; MPEG IMX's blanking lines above the picture are black, the
+// Video Display setting's VBI "Blank", p.1226); other sizes are the same picture scaled, their pixels another shape.
 QImage toStoredRaster(const QImage& picture, QSize stored);
 // A decoded picture, whose pixels are `pixelAspect` wide (1: square; FFmpeg's sample aspect ratio), fitted into `size`, a
 // picture of the project frame (setProjectFormat()'s aspect; square pixels without one), on black: by the shape it is

@@ -1843,7 +1843,10 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
     shape they are shown at (`media::fitPicture` in the frame cache, `model::withPixelAspect` for spatial adapters), so
     anamorphic media, HDV's linked 1440 x 1080 too, fills the frame; `fixOpAtom` labels DV clip-wrapped; test `tst_media
     transcodeDv`. Ours: not at the rates DV carries as pulldown, 24p DV and 720p DVCPro HD below 50). 11.1c3, MPEG IMX
-    30, 40 and 50.
+    30, 40 and 50 (done: MPEG-2 4:2:2 intra frames at a constant rate, D-10's 720 x 608 and 720 x 512 with black
+    blanking lines above the picture through `media::storedPlacement`, NTSC lower field first through
+    `WriterSettings::bottomFieldFirst` and the frames' own field flags; the probe's displayed field order now reads
+    FFmpeg's TB as lower first; test `tst_media transcodeImx`), so 11.1c is.
   * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1d, DNxUncompressed and the DNxHD
     bit-rate names.
 * 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-857) on a time-stretch engine of
