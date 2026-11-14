@@ -987,6 +987,8 @@ public:
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.
     media::MediaCreation mediaCreation(const QString& tab) const;
+    // Tells the media library the project's format (media::setProjectFormat).
+    void tellMediaTheFormat() const;
     // Background Consolidate and Transcode (p.356-357).
     BackgroundQueue& backgroundQueue() const { return *backgroundQueue_; }
     // The background services (8.4a, p.375-377). backgroundServices: Tools > Background Services' dialog (or the hook's

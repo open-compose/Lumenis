@@ -1269,8 +1269,9 @@ qint64 berLength(const QByteArray& b, qsizetype& at) {
 // and the header metadata after it (the random index pack at the end lists
 // the partitions); the essence is not touched.
 // * It clip-wraps the essence (one KLV for the whole of it, as Avid's media
-//   is) but labels VC-3 (DNx), ProRes and BWF essence containers frame-wrapped
-//   (SMPTE ST 2019-4, RDD 44 and 382: byte 15, 01 frame, 02 clip). Readers that go
+//   is) but labels VC-3 (DNx), ProRes, MPEG-2 (XDCAM) and BWF essence containers
+//   frame-wrapped (SMPTE ST 2019-4, RDD 44 and 382: byte 15, 01 frame, 02 clip;
+//   ST 381's MPEG: byte 16). Readers that go
 //   by the label, such as bmx (ROADMAP Phase 2 gate 2), then cannot read
 //   the essence.
 // * Its package UMIDs are random in every file: one stem, the material
@@ -1347,6 +1348,13 @@ bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& f
                 region[i + 14] = 0x02;
                 changed = true;
             }
+            // MPEG elementary streams (XDCAM; SMPTE ST 381): 04, the stream id 60-6f, then the wrapping last, 01 frame
+            // and 02 clip.
+            const auto stream = static_cast<std::uint8_t>(region.at(i + 14));
+            if (region.mid(i + 8, 5) == kMiddle && kind == 0x04 && (stream & 0xf0) == 0x60 && region.at(i + 15) == 0x01) {
+                region[i + 15] = 0x02;
+                changed = true;
+            }
         }
         if (changed && (!f.seek(offset) || f.write(region) != region.size())) return false;
     }
@@ -1421,8 +1429,15 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->thread_count = threads;
             if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
             if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
+            // On the context and its encoder both: "g", "bf", "maxrate", "minrate" and "bufsize" are the context's,
+            // "intra_vlc" or OpenEXR's "format" the encoder's own (set on priv_data alone, the context's were lost:
+            // movie export's XDCAM got no GOP or 50 Mb/s rate before 11.1c).
             for (const auto& [key, value] : s.videoOptions) {
-                av_opt_set(d.venc->priv_data, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+                av_opt_set(d.venc, key.toUtf8().constData(), value.toUtf8().constData(), AV_OPT_SEARCH_CHILDREN);
+            }
+            if (s.interlaced) {
+                d.venc->field_order = AV_FIELD_TT;
+                d.venc->flags |= AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME;
             }
             if (s.quality > 0) {
                 d.venc->flags |= AV_CODEC_FLAG_QSCALE;

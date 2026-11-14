@@ -43,12 +43,22 @@ struct Resolution {
     QString osProfile;   // the profile for the OS's encoder (VideoToolbox: "standard", "xq"), where it differs
     QString probed;      // the profile FFmpeg reports when it reads the media: "DNXHR HQ", "HQ"
     int quality = 0;     // for picking the better of two: comparable DNx and ProRes levels rank the same
+    // The encoder's own options and bit rate (XDCAM's MPEG-2: rate, GOP; ROADMAP 11.1c).
+    QList<QPair<QString, QString>> options;
+    std::int64_t bitRate = 0;
+    // The project formats it is made for, as raster and frame rate pairs (p.1252-1272); empty: any (DNx, ProRes).
+    QList<QPair<QSize, Rational>> formats;
 };
-// The resolutions media can be made in, by this build on this computer: Avid DNx, then Apple ProRes where an
-// encoder may be used (resolutionEncoder()).
-const QList<Resolution>& resolutions();
-// The FFmpeg encoder that makes a resolution's media here ("dnxhd", "prores_videotoolbox", "prores_ks"), and its
-// profile; empty when there is none.
+// The project's format, for the resolutions offered (resolutions()) and how interlaced media is encoded; set by the
+// main window when a project opens or its format changes. Until then, every format.
+void setProjectFormat(QSize raster, Rational rate, bool interlaced);
+// Whether the resolution is made for a project of that raster and rate.
+bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate);
+// The resolutions media can be made in, by this build on this computer, for the project's format (setProjectFormat()):
+// Avid DNx, Apple ProRes where an encoder may be used (resolutionEncoder()), then XDCAM where the format takes it.
+QList<Resolution> resolutions();
+// The FFmpeg encoder that makes a resolution's media here ("dnxhd", "prores_videotoolbox", "prores_ks", "mpeg2video"),
+// and its profile; empty when there is none.
 QString resolutionEncoder(const Resolution& resolution);
 QString resolutionProfile(const Resolution& resolution);
 // The resolution media copied or probed as `codec` with FFmpeg's `profile` is in (for relinking by quality); nullptr
@@ -56,7 +66,8 @@ QString resolutionProfile(const Resolution& resolution);
 const Resolution* resolutionOfProbed(const QString& codec, const QString& profile);
 // Any resolution we know by id or name, whether or not this build can make it (media made elsewhere); nullptr if none.
 const Resolution* knownResolution(const QString& idOrName);
-// By id or name; nullptr if there is none.
+// By id or name, among those this build can make (whatever the project's format: making media in one that does not fit
+// the project fails with the reason); nullptr if there is none.
 const Resolution* findResolution(const QString& idOrName);
 const Resolution& defaultResolution(); // Avid DNx HQ
 

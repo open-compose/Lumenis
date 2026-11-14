@@ -1305,6 +1305,10 @@
         <source>OFX: %1 left out: %2.</source>
         <translation type="unfinished">OFX: %1 esclusi: %2.</translation>
     </message>
+    <message>
+        <source>%1 is not made in %2 x %3 projects at %4 fps.</source>
+        <translation type="unfinished">%1 non viene creato nei progetti %2 x %3 a %4 fps.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>

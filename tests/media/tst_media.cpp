@@ -18,6 +18,7 @@
 #include <QSet>
 #include <QTest>
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 
@@ -523,6 +524,74 @@ private slots:
         QVERIFY(near(cache.frame(*made, 4), colourOf(4), 14));
         // Copied frame for frame, as DNx media is (Consolidate).
         QVERIFY(canConsolidate(*made));
+    }
+
+    // XDCAM HD 50 and XDCAM EX 35 as managed media (p.1252-1269; 11.1c1): offered only in the project formats the guide's
+    // tables give, MPEG-2 long GOP at its rate (the encoder's options reach the context: a 50 Mb/s file is that big),
+    // interlaced in interlaced projects, and refused for a format it is not made for.
+    void transcodeXdcam() {
+        if (!findResolution(QStringLiteral("xdcam_hd50"))) QSKIP("No MPEG-2 encoder in this FFmpeg");
+        auto offered = [](const QString& id) {
+            const QList<Resolution> list = resolutions();
+            return std::any_of(list.begin(), list.end(), [&](const Resolution& r) { return r.id == id; });
+        };
+        setProjectFormat(QSize(3840, 2160), Rational(25), false);
+        QVERIFY(!offered(QStringLiteral("xdcam_hd50")));
+        QVERIFY(offered(QStringLiteral("dnx_hq")));
+        setProjectFormat(QSize(1280, 720), Rational(24000, 1001), false);
+        QVERIFY(!offered(QStringLiteral("xdcam_hd50")));
+        QVERIFY(offered(QStringLiteral("xdcam_ex35")));
+        setProjectFormat(QSize(1920, 1080), Rational(25), true);
+        QVERIFY(offered(QStringLiteral("xdcam_hd50")));
+
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Market.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 25));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(1920, 1080);
+        c.resolution = *findResolution(QStringLiteral("xdcam_hd50"));
+        c.videoDrive = dir.path();
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("XDCAM HD 50Mbits"));
+        const auto link = linkOf(*made);
+        QVERIFY(link);
+        const auto v1 = probe(link->path);
+        QVERIFY(v1 && v1->firstVideo());
+        QCOMPARE(v1->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(v1->firstVideo()->profile, QStringLiteral("4:2:2"));
+        QCOMPARE(v1->firstVideo()->length, 25);
+        QVERIFY(v1->firstVideo()->interlaced);
+        QVERIFY(v1->firstVideo()->topFieldFirst);
+        // Labelled clip-wrapped as it is written (SMPTE ST 381: MPEG, stream 60, wrapping 02).
+        {
+            QFile f(link->path);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QByteArray bytes = f.readAll();
+            QVERIFY(bytes.contains(QByteArray::fromHex("0d01030102046002")));
+            QVERIFY(!bytes.contains(QByteArray::fromHex("0d01030102046001")));
+        }
+        // One second at a constant 50 Mb/s: about 6 MB (FFmpeg's default rate, as before the fix, would be 200 kb/s).
+        QVERIFY2(QFileInfo(link->path).size() > 4'000'000, qPrintable(QString::number(QFileInfo(link->path).size())));
+        FrameCache cache;
+        QVERIFY(near(cache.frame(*made, 12), colourOf(12), 16));
+        // Not for a UHD project.
+        c.raster = QSize(3840, 2160);
+        QVERIFY(!transcodeClip(*clip, 0, -1, c, &error));
+        QVERIFY(error.contains(QStringLiteral("XDCAM HD 50Mbits")));
+        setProjectFormat({}, Rational(), false);
     }
 
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the

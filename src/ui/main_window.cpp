@@ -1187,6 +1187,8 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     if (settingsWindow_) settingsWindow_->setProject(project);
     // Renders are made and found at the project's proxy mode (p.527).
     model::setRenderProxy(project.settings.proxy);
+    // The resolutions media can be made in follow the project's format (p.1240-1272; ROADMAP 11.1c).
+    tellMediaTheFormat();
     // External LUTs (p.541-542; 8.5d1): the project's and every project's, listed as "External <name>".
     {
         QStringList failures;
@@ -1268,6 +1270,7 @@ AboutInfoDialog* MainWindow::createAboutInfo() {
 // Closing the project: the reverse of setProject(), and the Settings windows are hidden.
 void MainWindow::clearProject() {
     project_.reset();
+    media::setProjectFormat({}, Rational(), false); // every format again, until the next project
     setWindowTitle(QString::fromUtf8(branding::kProductName));
     commands_.setHandler(QStringLiteral("file.close_project"), {});
     binContainer_->setProject({}, {}, Rational(24000, 1001));
@@ -3570,6 +3573,14 @@ bool MainWindow::setProxyMode(int mode) {
     return true;
 }
 
+// The project's raster, rate and scan to the media library: the resolutions offered and XDCAM's fields follow them
+// (media::setProjectFormat; p.1240-1272).
+void MainWindow::tellMediaTheFormat() const {
+    if (!project_) return;
+    const ProjectFormat& f = project_->settings.format;
+    media::setProjectFormat(QSize(f.width, f.height), f.editRate, f.scan == ScanMode::Interlaced);
+}
+
 bool MainWindow::setProjectFormat(const ProjectFormat& format) {
     if (!project_ || format.editRate != project_->settings.format.editRate) return false;
     if (project_->settings.format == format) return true;
@@ -3581,6 +3592,7 @@ bool MainWindow::setProjectFormat(const ProjectFormat& format) {
     if (!model::proxyModes(format).contains(changed.proxy)) changed.proxy = 0;
     if (!saveProjectSettings(changed, tr("Format"))) return false;
     model::setRenderProxy(changed.proxy);
+    tellMediaTheFormat();
     binContainer_->setSequenceFormat(QString::fromStdString(format.label()));
     if (settingsWindow_) settingsWindow_->setProject(project_);
     frames_->clear();

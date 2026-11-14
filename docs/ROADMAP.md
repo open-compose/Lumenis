@@ -1830,8 +1830,17 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
     builds with `LUMENIS_PATENT_CODECS` (ours); `resolutionEncoder`/`resolutionProfile`, MXF OP-Atom labelled
     clip-wrapped by `fixOpAtom`, relinking by quality through `Resolution::quality`, the settings' Video Resolution
     menus through `"choicesFrom": "resolutions"`; test `tst_media transcodeProRes`).
-  * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1c, DV and XDCAM (MPEG-2, FFmpeg);
-    11.1d, DNxUncompressed and the DNxHD bit-rate names.
+  * 11.1c, DV and XDCAM (their MPEG-2 and DV patents have expired; FFmpeg's encoders, in every build), in parts.
+    11.1c1, XDCAM HD 50Mbits and XDCAM EX 35 Mbits (done: MPEG-2 long GOP at the project's raster, offered only in the
+    formats of the guide's tables (p.1252-1269) through `media::setProjectFormat` from `MainWindow::tellMediaTheFormat`
+    and `Resolution::formats`, refused with the reason in another; 50 Mb/s constant or 35 Mb/s, GOP 12 or 15, interlaced
+    upper field first in interlaced projects (`WriterSettings::interlaced`); `fixOpAtom` labels the MPEG essence
+    clip-wrapped. The writer's encoder options now reach FFmpeg's codec context (`AV_OPT_SEARCH_CHILDREN`): movie
+    export's XDCAM had lost its GOP and rate; test `tst_media transcodeXdcam`). 11.1c2, DV25 411/420, DV50 and DVCPro
+    HD, and XDCAM HD 35 and 17.5 Mbits: their own rasters (720 x 480, 1280 or 1440 x 1080, 960 x 720) and non-square
+    pixels, kept as the clip's pixel aspect for display. 11.1c3, MPEG IMX 30, 40 and 50.
+  * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1d, DNxUncompressed and the DNxHD
+    bit-rate names.
 * 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-857) on a time-stretch engine of
   our own: overlap-add (WSOLA, waveform-similarity overlap-add, for speech and music alike), pitch as a stretch and a
   resample.

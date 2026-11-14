@@ -20,6 +20,8 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <cmath>
+#include <mutex>
 
 // Managed media (ROADMAP Phase 2.4a/b): media the application writes itself, as MXF OP-Atom files,
 // one per track, in "<drive>/Avid MediaFiles/MXF/<n>/". This file holds:
@@ -36,6 +38,12 @@
 // LUMENIS_MEDIA_DRIVES (BUILDING.md); scripts/check-mxf.py checks the files with bmx.
 
 namespace lumenis::media {
+
+namespace {
+// Defined with the resolutions, below.
+QList<QPair<QString, QString>> xdcamOptions(const Resolution& r, Rational rate);
+bool projectInterlaced();
+} // namespace
 
 namespace {
 
@@ -223,14 +231,38 @@ public:
         return creation_.progress(std::min(1.0, static_cast<double>(done_) / static_cast<double>(total_)));
     }
 
+    // The picture's encoder settings for the creation's resolution: encoder, profile, pixel format, and XDCAM's rate,
+    // GOP and fields. False, with the reason, when the resolution is not made for the project's format (p.1252-1272).
+    bool videoSettings(WriterSettings& s, QString* error) const {
+        const Resolution& r = creation_.resolution;
+        if (!resolutionFits(r, creation_.raster, clip_.editRate)) {
+            if (error) {
+                *error = QObject::tr("%1 is not made in %2 x %3 projects at %4 fps.")
+                             .arg(r.name)
+                             .arg(creation_.raster.width())
+                             .arg(creation_.raster.height())
+                             .arg(clip_.editRate.toDouble(), 0, 'g', 5);
+            }
+            return false;
+        }
+        s.videoCodec = resolutionEncoder(r);
+        s.videoProfile = resolutionProfile(r);
+        s.pixelFormat = r.pixelFormat;
+        if (r.codec == QLatin1String("mpeg2video")) {
+            s.videoOptions << xdcamOptions(r, clip_.editRate);
+            s.bitRate = r.bitRate;
+            // Interlaced projects' XDCAM is interlaced, upper field first (1080i).
+            s.interlaced = projectInterlaced();
+        }
+        return true;
+    }
+
     // V1 re-encoded in the creation's resolution (DNxHR or ProRes, resolutionEncoder()) and raster.
     bool transcodeVideo(const QString& path, QString* error) {
         VideoReader reader;
         if (!reader.open(link_.path, link_.videoStream, error)) return false;
         WriterSettings s = settingsFor(QStringLiteral("V1"));
-        s.videoCodec = resolutionEncoder(creation_.resolution);
-        s.videoProfile = resolutionProfile(creation_.resolution);
-        s.pixelFormat = creation_.resolution.pixelFormat;
+        if (!videoSettings(s, error)) return false;
         s.width = creation_.raster.width();
         s.height = creation_.raster.height();
         MediaWriter writer;
@@ -274,9 +306,7 @@ public:
     // `keep`, a cancel ends the file at the frames written so far (`written`) instead of failing.
     bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error, bool keep, std::int64_t& written) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
-        s.videoCodec = resolutionEncoder(creation_.resolution);
-        s.videoProfile = resolutionProfile(creation_.resolution);
-        s.pixelFormat = creation_.resolution.pixelFormat;
+        if (!videoSettings(s, error)) return false;
         s.width = creation_.raster.width();
         s.height = creation_.raster.height();
         MediaWriter writer;
@@ -857,6 +887,34 @@ QList<Resolution> allResolutions() {
         r.quality = quality;
         return r;
     };
+    // XDCAM: the formats from the guide's tables (raster, then the frame rates: interlaced projects by their frame
+    // rate, so 1080i/59.94 is 29.97), and the rate options shared with movie export's XDCAM.
+    struct Rasters {
+        int width;
+        int height;
+        QList<Rational> rates;
+    };
+    auto xdcam = [](const char* id, const char* name, const char* pixel, int mbps, bool constant, const char* probed,
+                    int quality, const QList<Rasters>& rasters) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.pixelFormat = QString::fromLatin1(pixel);
+        r.codec = QStringLiteral("mpeg2video");
+        r.probed = QString::fromLatin1(probed);
+        r.quality = quality;
+        r.bitRate = static_cast<std::int64_t>(mbps) * 1000000;
+        const QString rate = QString::number(mbps) + QLatin1Char('M');
+        r.options = {{QStringLiteral("bf"), QStringLiteral("2")},
+                     {QStringLiteral("intra_vlc"), QStringLiteral("1")},
+                     {QStringLiteral("maxrate"), rate},
+                     {QStringLiteral("bufsize"), QStringLiteral("17825792")}};
+        if (constant) r.options << QPair<QString, QString>{QStringLiteral("minrate"), rate};
+        for (const Rasters& f : rasters) {
+            for (const Rational& fps : f.rates) r.formats << QPair<QSize, Rational>{QSize(f.width, f.height), fps};
+        }
+        return r;
+    };
     return {
         // The quality levels p.1240 names, in order of quality.
         dnx("dnx_lb", "Avid DNx LB", "dnxhr_lb", "yuv422p", false, "DNXHR LB", 1),
@@ -871,6 +929,14 @@ QList<Resolution> allResolutions() {
         prores("prores_hq", "Apple ProRes 422 HQ", "hq", "hq", "yuv422p10le", "HQ", 4),
         prores("prores_4444", "Apple ProRes 4444", "4444", "4444", "yuv444p10le", "4444", 5),
         prores("prores_4444xq", "Apple ProRes 4444 XQ", "4444xq", "xq", "yuv444p10le", "XQ", 6),
+        // XDCAM (p.1252-1269): MPEG-2 long GOP, at the project's raster. XDCAM HD 50 is 4:2:2 at a constant 50 Mb/s,
+        // XDCAM EX 35 4:2:0 up to 35 Mb/s; the GOP is set from the rate when the media is made (xdcamOptions()).
+        xdcam("xdcam_hd50", "XDCAM HD 50Mbits", "yuv422p", 50, true, "4:2:2", 3,
+              {{1920, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}},
+               {1280, 720, {Rational(25), Rational(30000, 1001), Rational(50), Rational(60000, 1001)}}}),
+        xdcam("xdcam_ex35", "XDCAM EX 35 Mbits", "yuv420p", 35, false, "Main", 2,
+              {{1920, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}},
+               {1280, 720, {Rational(24000, 1001), Rational(25), Rational(30000, 1001), Rational(50), Rational(60000, 1001)}}}),
     };
 }
 
@@ -886,21 +952,81 @@ QString proresEncoder() {
 
 } // namespace
 
-const QList<Resolution>& resolutions() {
-    // DNx always (its availability is checked when media is made, as before); ProRes only where it can be made.
-    static const QList<Resolution> list = [] {
-        QList<Resolution> out;
-        for (const Resolution& r : allResolutions()) {
-            if (r.codec == QLatin1String("prores") && proresEncoder().isEmpty()) continue;
-            out << r;
-        }
-        return out;
-    }();
-    return list;
+namespace {
+
+// The project's format (setProjectFormat()); an empty raster for none yet.
+struct ProjectFormatNow {
+    QSize raster;
+    Rational rate;
+    bool interlaced = false;
+};
+std::mutex& projectFormatLock() {
+    static std::mutex lock;
+    return lock;
+}
+ProjectFormatNow& projectFormatNow() {
+    static ProjectFormatNow format;
+    return format;
+}
+ProjectFormatNow currentProjectFormat() {
+    const std::lock_guard<std::mutex> hold(projectFormatLock());
+    return projectFormatNow();
+}
+
+// Every resolution, made once: findResolution() and defaultResolution() hand out pointers into it.
+const QList<Resolution>& stableResolutions() {
+    static const QList<Resolution> all = allResolutions();
+    return all;
+}
+
+// Whether this build, on this computer, has an encoder it may use for the resolution.
+bool canMake(const Resolution& r) {
+    if (r.codec == QLatin1String("prores")) return !proresEncoder().isEmpty();
+    if (r.codec == QLatin1String("mpeg2video")) return encoderAvailable(QStringLiteral("mpeg2video"));
+    return true; // DNx: checked when the media is made, as before
+}
+
+// XDCAM's GOP: 15 frames at the NTSC family's rates, 12 at the others (Sony's long GOP; ours for 23.976).
+QList<QPair<QString, QString>> xdcamOptions(const Resolution& r, Rational rate) {
+    QList<QPair<QString, QString>> o = r.options;
+    const double fps = rate.toDouble();
+    const bool ntsc = std::abs(fps - 29.97) < 0.01 || std::abs(fps - 59.94) < 0.01;
+    o << QPair<QString, QString>{QStringLiteral("g"), ntsc ? QStringLiteral("15") : QStringLiteral("12")};
+    return o;
+}
+
+bool projectInterlaced() {
+    return currentProjectFormat().interlaced;
+}
+
+} // namespace
+
+void setProjectFormat(QSize raster, Rational rate, bool interlaced) {
+    const std::lock_guard<std::mutex> hold(projectFormatLock());
+    projectFormatNow() = {raster, rate, interlaced};
+}
+
+bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate) {
+    if (resolution.formats.isEmpty()) return true;
+    return std::any_of(resolution.formats.begin(), resolution.formats.end(), [&](const QPair<QSize, Rational>& f) {
+        return f.first == raster && f.second == rate;
+    });
+}
+
+QList<Resolution> resolutions() {
+    const ProjectFormatNow format = currentProjectFormat();
+    QList<Resolution> out;
+    for (const Resolution& r : stableResolutions()) {
+        if (!canMake(r)) continue;
+        if (!format.raster.isEmpty() && !resolutionFits(r, format.raster, format.rate)) continue;
+        out << r;
+    }
+    return out;
 }
 
 QString resolutionEncoder(const Resolution& resolution) {
     if (resolution.codec == QLatin1String("prores")) return proresEncoder();
+    if (resolution.codec == QLatin1String("mpeg2video")) return QStringLiteral("mpeg2video");
     return QStringLiteral("dnxhd");
 }
 
@@ -912,7 +1038,7 @@ QString resolutionProfile(const Resolution& resolution) {
 }
 
 const Resolution* resolutionOfProbed(const QString& codec, const QString& profile) {
-    static const QList<Resolution> all = allResolutions();
+    const QList<Resolution>& all = stableResolutions();
     const QString family = codec.startsWith(QLatin1String("prores")) ? QStringLiteral("prores") : codec;
     for (const Resolution& r : all) {
         if (r.codec == family && r.probed.compare(profile, Qt::CaseInsensitive) == 0) return &r;
@@ -921,22 +1047,21 @@ const Resolution* resolutionOfProbed(const QString& codec, const QString& profil
 }
 
 const Resolution* knownResolution(const QString& idOrName) {
-    static const QList<Resolution> all = allResolutions();
-    for (const Resolution& r : all) {
+    for (const Resolution& r : stableResolutions()) {
         if (r.id == idOrName || r.name == idOrName) return &r;
     }
     return nullptr;
 }
 
 const Resolution* findResolution(const QString& idOrName) {
-    for (const Resolution& r : resolutions()) {
-        if (r.id == idOrName || r.name == idOrName) return &r;
+    for (const Resolution& r : stableResolutions()) {
+        if ((r.id == idOrName || r.name == idOrName) && canMake(r)) return &r;
     }
     return nullptr;
 }
 
 const Resolution& defaultResolution() {
-    return resolutions().at(2);
+    return stableResolutions().at(2); // Avid DNx HQ
 }
 
 // The writable volumes that can hold media (system, temporary and read-only file systems are

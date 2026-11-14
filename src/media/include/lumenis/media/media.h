@@ -207,10 +207,14 @@ struct WriterSettings {
     // The transfer characteristic the stream declares, by FFmpeg's name ("linear" ...); empty: Rec. 709 or 601 as the
     // size says.
     QString colorTransfer;
-    // The video encoder's own options, e.g. OpenEXR's "format" ("half", "float"); and a fixed quality, FFmpeg's
+    // The video encoder's options, its own (OpenEXR's "format": "half", "float") or FFmpeg's for every encoder ("g",
+    // "maxrate", "bufsize"); and a fixed quality, FFmpeg's
     // qscale (1 best to 31), 0 for none (JPEG stills' Quality, 7.1b).
     QList<QPair<QString, QString>> videoOptions;
     int quality = 0;
+    // Interlaced, upper field first: encoded with interlaced DCT and motion estimation where the encoder has them
+    // (MPEG-2: XDCAM in interlaced projects), and the stream says so.
+    bool interlaced = false;
     // Audio; empty codec for none.
     QString audioCodec;  // "pcm_s16le", "pcm_s24le", ...
     int sampleRate = 48000;

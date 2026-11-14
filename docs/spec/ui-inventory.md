@@ -2858,9 +2858,12 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   only"): through VideoToolbox on macOS, and elsewhere through FFmpeg's
   encoder in builds with `LUMENIS_PATENT_CODECS` (ours: Media Composer makes
   ProRes only on macOS). Listed only where it can be made (ROADMAP 11.1a).
+* XDCAM HD 50Mbits and XDCAM EX 35 Mbits (MPEG-2 long GOP, FFmpeg) in the
+  project formats the tables list them for (p.1252-1269): the resolution menus
+  offer what the project's format takes (ROADMAP 11.1c1).
 * At least 256x120 (p.355).
 * Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, XAVC, AVC-Intra, DV,
-  XDCAM, MXF OP1a and OMF (ROADMAP 11.1).
+  DVCPro HD, XDCAM HD 35 and 17.5, MPEG IMX, MXF OP1a and OMF (ROADMAP 11.1).
 
 ### Media Creation setting (p.134–136, p.1206–1209)
 * A project setting, from File > Media > Media Creation Settings (Ctrl+5)
