@@ -20,8 +20,10 @@
 // Avid's AudioSuite plug-ins come from its own plug-in format, which Cutthulhu does not host (no
 // public SDK; docs/EXTENSIONS.md). The processes here are our own: the simple ones the guide
 // describes in its plug-in reference (Gain, Normalize, Invert, Reverse, DC Offset Removal, Signal
-// Generator; p.836-855), then every audio effect (built-in and CLAP, lumenis/media/audio_fx.h) run
-// over the sound offline, as the guide's "Audio Track Effect and AudioSuite" plug-ins are.
+// Generator; p.836-855), Pitch Shift, Time Compression Expansion and Time Shift on our time-stretch
+// engine (p.850-860, lumenis/media/time_stretch.h), then every audio effect (built-in and CLAP,
+// lumenis/media/audio_fx.h) run over the sound offline, as the guide's "Audio Track Effect and
+// AudioSuite" plug-ins are.
 namespace lumenis::media {
 
 // One process the Plug-In Selection menu offers (p.797).
@@ -37,6 +39,9 @@ struct AudioSuiteInfo {
     bool generator = false;
     // Only for creating new master clips (Duplicate, p.839), not on Timeline segments.
     bool masterClipOnly = false;
+    // Makes the sound longer or shorter (Pitch Shift without Time Correction, Time Compression Expansion, Time Shift):
+    // master clips only, "Create new media with a longer or shorter duration than the source media" (p.801).
+    bool changesLength = false;
     QMap<QString, double> defaults() const;
     const AudioEffectParam* param(const QString& paramId) const;
 };
@@ -48,8 +53,10 @@ std::optional<AudioSuiteInfo> findAudioSuitePlugin(const QString& id);
 
 // Runs process `id` with `params` (missing ones at their defaults) over `channels` (each one channel
 // of the same length, 48 kHz), in place. Channels are processed each by itself, except where a
-// process says otherwise (Normalize's "Levels On All Chans-Tracks", p.803). False, with `error`, for
-// an id nothing provides.
+// process says otherwise (Normalize's "Levels On All Chans-Tracks", p.803; the time processes
+// stretch them together, as a stereo pair, p.856). A process that changes the length
+// (AudioSuiteInfo::changesLength) leaves channels of the new length. False, with `error`, for an id
+// nothing provides.
 bool processAudioSuite(const QString& id, const QMap<QString, double>& params, std::vector<std::vector<float>>& channels,
                        QString* error = nullptr);
 
@@ -74,7 +81,8 @@ std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& se
 // of silence after them ("Handle Length for End of Master Clip", p.802), processed together by
 // `effect` (Normalize's "Levels On All Chans-Tracks" weighs them together, p.803) and written as
 // managed media: a new audio clip named `name`, one track per track used, starting at the
-// clip's timecode at `in`.
+// clip's timecode at `in`. A process that changes the length makes the clip as long as what it made,
+// in whole frames ("the plug-ins automatically lengthen or shorten the clip", p.803).
 struct AudioSuiteClipRequest {
     model::BinItem clip;
     QList<int> tracks;

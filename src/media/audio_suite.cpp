@@ -4,9 +4,11 @@
 
 #include "lumenis/media/link.h"
 #include "lumenis/media/playback.h"
+#include "lumenis/media/time_stretch.h"
 #include "lumenis/model/audio_suite.h"
 
 #include <QObject>
+#include <QtGlobal>
 
 #include <algorithm>
 #include <cmath>
@@ -40,7 +42,7 @@ AudioEffectParam choice(const char* id, const char* name, const QStringList& cho
 
 // The rms and peak buttons of Gain, Normalize and Signal Generator (p.844, p.850, p.856).
 AudioEffectParam calibration() {
-    return choice("calibration", "Calibration", {QObject::tr("Peak"), QObject::tr("RMS")}, 0);
+    return choice("calibration", QT_TRANSLATE_NOOP("QObject", "Calibration"), {QObject::tr("Peak"), QObject::tr("RMS")}, 0);
 }
 
 AudioSuiteInfo process(const char* id, const char* name, QList<AudioEffectParam> params = {}) {
@@ -53,32 +55,69 @@ AudioSuiteInfo process(const char* id, const char* name, QList<AudioEffectParam>
     return i;
 }
 
-// Our ranges and defaults: the guide gives Signal Generator's (p.855); the others are ours.
+// Our ranges and defaults: the guide gives Signal Generator's (p.855); the others are ours. The names are marked for
+// lupdate (QT_TRANSLATE_NOOP) and translated where param() and process() make them.
 const QList<AudioSuiteInfo>& builtIn() {
     static const QList<AudioSuiteInfo> list = [] {
         QList<AudioSuiteInfo> l;
-        l << process("suite.gain", "Gain", {param("gain", "Gain", "dB", -96, 24, 0)});
-        l << process("suite.normalize", "Normalize",
-                     {param("level", "Level", "dB", -40, 0, 0), calibration(),
+        l << process("suite.gain", QT_TRANSLATE_NOOP("QObject", "Gain"), {param("gain", QT_TRANSLATE_NOOP("QObject", "Gain"), "dB", -96, 24, 0)});
+        l << process("suite.normalize", QT_TRANSLATE_NOOP("QObject", "Normalize"),
+                     {param("level", QT_TRANSLATE_NOOP("QObject", "Level"), "dB", -40, 0, 0), calibration(),
                       // Named as the Processing Mode Selection menu names them (p.803).
-                      choice("mode", "Processing", {QObject::tr("Levels On All Chans-Tracks"), QObject::tr("Level On Each Chan-Track")}, 0)});
-        l << process("suite.invert", "Invert");
-        l << process("suite.reverse", "Reverse");
-        l << process("suite.dc", "DC Offset Removal");
+                      choice("mode", QT_TRANSLATE_NOOP("QObject", "Processing"), {QObject::tr("Levels On All Chans-Tracks"), QObject::tr("Level On Each Chan-Track")}, 0)});
+        l << process("suite.invert", QT_TRANSLATE_NOOP("QObject", "Invert"));
+        l << process("suite.reverse", QT_TRANSLATE_NOOP("QObject", "Reverse"));
+        l << process("suite.dc", QT_TRANSLATE_NOOP("QObject", "DC Offset Removal"));
         // "Creates a new master clip from a selected audio master clip" between its marks (p.839).
-        AudioSuiteInfo dup = process("suite.duplicate", "Duplicate");
+        AudioSuiteInfo dup = process("suite.duplicate", QT_TRANSLATE_NOOP("QObject", "Duplicate"));
         dup.masterClipOnly = true;
         l << dup;
-        AudioSuiteInfo gen = process("suite.signal", "Signal Generator",
-                                     {param("frequency", "Frequency", "Hz", 20, 20000, 1000),
-                                      param("level", "Level", "dB", -95, 0, -20),
-                                      choice("signal", "Signal",
+        AudioSuiteInfo gen = process("suite.signal", QT_TRANSLATE_NOOP("QObject", "Signal Generator"),
+                                     {param("frequency", QT_TRANSLATE_NOOP("QObject", "Frequency"), "Hz", 20, 20000, 1000),
+                                      param("level", QT_TRANSLATE_NOOP("QObject", "Level"), "dB", -95, 0, -20),
+                                      choice("signal", QT_TRANSLATE_NOOP("QObject", "Signal"),
                                              {QObject::tr("Sine"), QObject::tr("Square"), QObject::tr("Sawtooth"), QObject::tr("Triangle"),
                                               QObject::tr("White Noise"), QObject::tr("Pink Noise")},
                                              0),
                                       calibration()});
         gen.generator = true;
         l << gen;
+        // The time processes (p.850-860), on our WSOLA engine (time_stretch.h). Their finer controls, shared by Pitch
+        // Shift and Time Compression Expansion (p.850, p.857): Crossfade (0 is Auto), Min Pitch and Accuracy.
+        const QList<AudioEffectParam> fine{param("crossfade", QT_TRANSLATE_NOOP("QObject", "Crossfade"), "ms", 0, 200, 0),
+                                           param("minPitch", QT_TRANSLATE_NOOP("QObject", "Min Pitch"), "Hz", 40, 1000, 40),
+                                           param("accuracy", QT_TRANSLATE_NOOP("QObject", "Accuracy"), "% sound", 0, 100, 50)};
+        AudioEffectParam coarse = param("coarse", QT_TRANSLATE_NOOP("QObject", "Coarse"), "semitones", -12, 12, 0);
+        coarse.steps = 25;
+        AudioSuiteInfo pitch = process("suite.pitch_shift", QT_TRANSLATE_NOOP("QObject", "Pitch Shift"),
+                                       QList<AudioEffectParam>{param("gain", QT_TRANSLATE_NOOP("QObject", "Gain"), "dB", -24, 6, 0), coarse,
+                                                               param("fine", QT_TRANSLATE_NOOP("QObject", "Fine"), "cents", -100, 100, 0)} +
+                                           fine +
+                                           QList<AudioEffectParam>{choice("timeCorrection", QT_TRANSLATE_NOOP("QObject", "Time Correction"),
+                                                                          {QObject::tr("Off"), QObject::tr("On")}, 1)});
+        pitch.masterClipOnly = true;
+        pitch.changesLength = true; // without Time Correction it varispeeds (p.851)
+        l << pitch;
+        AudioSuiteInfo tce = process("suite.time_compression", QT_TRANSLATE_NOOP("QObject", "Time Compression Expansion"),
+                                     QList<AudioEffectParam>{param("ratio", QT_TRANSLATE_NOOP("QObject", "Ratio"), "x", 0.25, 4.0, 1.0)} + fine);
+        tce.masterClipOnly = true;
+        tce.changesLength = true;
+        l << tce;
+        AudioEffectParam transpose = param("transpose", QT_TRANSLATE_NOOP("QObject", "Transpose"), "semitones", -24, 24, 0);
+        AudioSuiteInfo shift = process(
+            "suite.time_shift", "Time Shift",
+            {choice("mode", QT_TRANSLATE_NOOP("QObject", "Mode"),
+                    {QObject::tr("Monophonic"), QObject::tr("Polyphonic"), QObject::tr("Rhythmic"), QObject::tr("Varispeed")}, 1),
+             choice("range", QT_TRANSLATE_NOOP("QObject", "Range"), {QObject::tr("Low"), QObject::tr("Mid"), QObject::tr("High"), QObject::tr("Wide")}, 3),
+             param("gain", QT_TRANSLATE_NOOP("QObject", "Gain"), "dB", -6, 0, 0),
+             param("shift", QT_TRANSLATE_NOOP("QObject", "Time Shift"), "%", 25, 400, 100),
+             param("window", QT_TRANSLATE_NOOP("QObject", "Window"), "ms", 6, 185, 18),
+             param("threshold", QT_TRANSLATE_NOOP("QObject", "Threshold"), "dB", -40, 0, -6),
+             param("decay", QT_TRANSLATE_NOOP("QObject", "Decay Rate"), "ms", 10, 1000, 100),
+             transpose});
+        shift.masterClipOnly = true;
+        shift.changesLength = true;
+        l << shift;
         return l;
     }();
     return list;
@@ -146,6 +185,50 @@ void generate(std::vector<float>& c, int signal, double frequency) {
         }
         c[i] = static_cast<float>(v);
     }
+}
+
+// Pitch Shift, Time Compression Expansion and Time Shift (p.850-860) on the time-stretch engine.
+std::vector<std::vector<float>> timeProcess(const QString& id, const QMap<QString, double>& params, const AudioSuiteInfo& info,
+                                            std::vector<std::vector<float>> channels) {
+    auto v = [&](const char* key) { return value(params, info, key); };
+    StretchOptions o;
+    o.sampleRate = kPlaybackRate;
+    if (id != QLatin1String("suite.time_shift")) {
+        o.crossfadeMs = v("crossfade");
+        o.minPitchHz = v("minPitch");
+        o.accuracy = v("accuracy") / 100.0;
+    }
+    if (id == QLatin1String("suite.pitch_shift")) {
+        // The input level first (p.850), then the transposition in semitones and cents.
+        for (auto& c : channels) scale(c, dbToGain(v("gain")));
+        return pitchShift(channels, v("coarse") + v("fine") / 100.0, v("timeCorrection") >= 0.5, o);
+    }
+    if (id == QLatin1String("suite.time_compression")) return timeStretch(channels, v("ratio"), o);
+    // Time Shift: its Gain attenuates the input (p.858); 25% of the speed is four times the length (p.859).
+    for (auto& c : channels) scale(c, dbToGain(v("gain")));
+    const double speed = v("shift") / 100.0;
+    const double length = 1.0 / speed;
+    const double semitones = v("transpose");
+    const int mode = static_cast<int>(std::lround(v("mode")));
+    if (mode == 3) return varispeed(channels, speed, kPlaybackRate); // time and pitch linked, as tape (p.858)
+    if (mode == 2) {
+        // Rhythmic: cut at the transients, then any transposition with the length kept.
+        o.accuracy = 0.0;
+        auto s = rhythmicStretch(channels, length, v("threshold"), v("decay"), o);
+        return std::abs(semitones) < 1e-9 ? s : pitchShift(s, semitones, true, o);
+    }
+    // Monophonic: joins found for the range's lowest pitch, with windows three of its periods long and the search
+    // towards sound. Polyphonic: the Window control's length (p.859-860). Ours: the ranges' lowest pitches.
+    static constexpr double kRangeLow[] = {40.0, 80.0, 160.0, 40.0};
+    o.minPitchHz = kRangeLow[std::clamp(static_cast<int>(std::lround(v("range"))), 0, 3)];
+    if (mode == 0) {
+        o.crossfadeMs = 1500.0 / o.minPitchHz; // half the window: one and a half periods
+        o.accuracy = 1.0;
+    } else {
+        o.crossfadeMs = v("window") / 2.0;
+        o.accuracy = 0.5;
+    }
+    return pitchShift(channels, semitones, true, o, length);
 }
 
 } // namespace
@@ -241,6 +324,9 @@ bool processAudioSuite(const QString& id, const QMap<QString, double>& params, s
         }
     } else if (id == QLatin1String("suite.duplicate")) {
         // The sound as it is.
+    } else if (id == QLatin1String("suite.pitch_shift") || id == QLatin1String("suite.time_compression") ||
+               id == QLatin1String("suite.time_shift")) {
+        channels = timeProcess(id, params, *info, channels);
     } else if (id == QLatin1String("suite.signal")) {
         const double level = dbToGain(value(params, *info, "level"));
         const bool rms = value(params, *info, "calibration") >= 0.5;
@@ -347,13 +433,19 @@ std::optional<model::BinItem> audioSuiteClip(const AudioSuiteClipRequest& r, con
         channels.push_back(std::move(c));
     }
     if (!processAudioSuite(r.effect, r.params, channels, error)) return std::nullopt;
+    // A time process made the sound longer or shorter: the clip is as long as it, in whole frames, the rest silence.
+    std::int64_t made = total;
+    if (!channels.empty() && static_cast<std::int64_t>(channels.front().size()) != samples) {
+        made = std::max<std::int64_t>(
+            1, static_cast<std::int64_t>(std::ceil(samplesToFrames(static_cast<std::int64_t>(channels.front().size()), r.clip.editRate) - 1e-9)));
+    }
     QString start;
     if (const auto first = model::timecodeFrames(r.clip.fields.value(QStringLiteral("Start")), r.clip.editRate)) {
         const TimecodeFormat format = TimecodeFormat::forRate(r.clip.editRate, model::isDropFrame(r.clip));
         start = QString::fromStdString(Timecode(*first + in, format).toString());
     }
-    auto made = renderedAudioClip(
-        r.name, r.clip.editRate, total, static_cast<int>(channels.size()),
+    auto clip = renderedAudioClip(
+        r.name, r.clip.editRate, made, static_cast<int>(channels.size()),
         [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) {
             for (std::size_t c = 0; c < channels.size(); ++c) {
                 out[c].assign(static_cast<std::size_t>(count), 0.0f);
@@ -364,7 +456,7 @@ std::optional<model::BinItem> audioSuiteClip(const AudioSuiteClipRequest& r, con
             }
         },
         start, creation, error);
-    return made;
+    return clip;
 }
 
 } // namespace lumenis::media

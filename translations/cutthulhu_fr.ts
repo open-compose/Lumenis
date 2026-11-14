@@ -1307,7 +1307,147 @@
     </message>
     <message>
         <source>%1 is not made in %2 x %3 projects at %4 fps.</source>
-        <translation type="unfinished">%1 n'est pas créé dans les projets %2 x %3 à %4 i/s.</translation>
+        <translation type="unfinished">%1 n&apos;est pas créé dans les projets %2 x %3 à %4 i/s.</translation>
+    </message>
+    <message>
+        <source>Monophonic</source>
+        <translation type="unfinished">Monophonique</translation>
+    </message>
+    <message>
+        <source>Polyphonic</source>
+        <translation type="unfinished">Polyphonique</translation>
+    </message>
+    <message>
+        <source>Rhythmic</source>
+        <translation type="unfinished">Rythmique</translation>
+    </message>
+    <message>
+        <source>Varispeed</source>
+        <translation type="unfinished">Varispeed</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation type="unfinished">Grave</translation>
+    </message>
+    <message>
+        <source>Mid</source>
+        <translation type="unfinished">Médium</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation type="unfinished">Aigu</translation>
+    </message>
+    <message>
+        <source>Wide</source>
+        <translation type="unfinished">Large</translation>
+    </message>
+    <message>
+        <source>Calibration</source>
+        <translation type="unfinished">Étalonnage</translation>
+    </message>
+    <message>
+        <source>Gain</source>
+        <translation type="unfinished">Gain</translation>
+    </message>
+    <message>
+        <source>Normalize</source>
+        <translation type="unfinished">Normaliser</translation>
+    </message>
+    <message>
+        <source>Level</source>
+        <translation type="unfinished">Niveau</translation>
+    </message>
+    <message>
+        <source>Processing</source>
+        <translation type="unfinished">Traitement</translation>
+    </message>
+    <message>
+        <source>Reverse</source>
+        <translation type="unfinished">Inverser</translation>
+    </message>
+    <message>
+        <source>DC Offset Removal</source>
+        <translation type="unfinished">Suppression de la composante continue</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation type="unfinished">Dupliquer</translation>
+    </message>
+    <message>
+        <source>Signal Generator</source>
+        <translation type="unfinished">Générateur de signal</translation>
+    </message>
+    <message>
+        <source>Frequency</source>
+        <translation type="unfinished">Fréquence</translation>
+    </message>
+    <message>
+        <source>Signal</source>
+        <translation type="unfinished">Signal</translation>
+    </message>
+    <message>
+        <source>Crossfade</source>
+        <translation type="unfinished">Fondu enchaîné</translation>
+    </message>
+    <message>
+        <source>Min Pitch</source>
+        <translation type="unfinished">Hauteur min.</translation>
+    </message>
+    <message>
+        <source>Accuracy</source>
+        <translation type="unfinished">Précision</translation>
+    </message>
+    <message>
+        <source>Coarse</source>
+        <translation type="unfinished">Grossier</translation>
+    </message>
+    <message>
+        <source>Pitch Shift</source>
+        <translation type="unfinished">Transposition</translation>
+    </message>
+    <message>
+        <source>Fine</source>
+        <translation type="unfinished">Fin</translation>
+    </message>
+    <message>
+        <source>Time Correction</source>
+        <translation type="unfinished">Correction temporelle</translation>
+    </message>
+    <message>
+        <source>Time Compression Expansion</source>
+        <translation type="unfinished">Compression/expansion temporelle</translation>
+    </message>
+    <message>
+        <source>Ratio</source>
+        <translation type="unfinished">Rapport</translation>
+    </message>
+    <message>
+        <source>Transpose</source>
+        <translation type="unfinished">Transposer</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation type="unfinished">Mode</translation>
+    </message>
+    <message>
+        <source>Range</source>
+        <translation type="unfinished">Plage</translation>
+    </message>
+    <message>
+        <source>Time Shift</source>
+        <translation type="unfinished">Décalage temporel</translation>
+    </message>
+    <message>
+        <source>Window</source>
+        <translation type="unfinished">Fenêtre</translation>
+    </message>
+    <message>
+        <source>Threshold</source>
+        <translation type="unfinished">Seuil</translation>
+    </message>
+    <message>
+        <source>Decay Rate</source>
+        <translation type="unfinished">Taux de décroissance</translation>
     </message>
 </context>
 <context>

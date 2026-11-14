@@ -35,9 +35,10 @@ AudioSuite effect templates.
 * **Duplicate** (p.839) copies the clip between its marks into a new master
   clip; it is offered only in master clip mode ("This plug-in applies only
   when you use the Create New Master Clips features").
-* Later: Pitch Shift (p.850), Time Compression Expansion (p.856) and Time
-  Shift (p.857), which need a time stretch, and change the length (master
-  clips only, p.805).
+* Pitch Shift (p.850), Time Compression Expansion (p.856) and Time Shift
+  (p.857) run on our time-stretch engine (docs/spec/time-stretch.md). They
+  change the length, so they make new master clips only (p.801), as long
+  as what they made (p.803; ROADMAP 11.2).
 
 ## On segments (`model::AudioSuiteEffect`, `Segment::audioSuite`)
 

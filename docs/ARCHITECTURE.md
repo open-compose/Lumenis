@@ -107,7 +107,8 @@ headers in `include/lumenis/<library>/`.
   docs/spec/clap-host.md), `ofx_host.*` (OFX image effect plug-ins in the
   Effect Palette, docs/spec/ofx-host.md; `ocio_colour.*`, their colour conversions through
   the optional OpenColorIO), `audio_suite.*` (AudioSuite processes and
-  rendering, docs/spec/audiosuite.md), `compositor.*` (sequence frames
+  rendering, docs/spec/audiosuite.md), `time_stretch.*` (the WSOLA time stretch, rhythmic stretch, varispeed and
+  pitch shift behind its time processes, docs/spec/time-stretch.md), `compositor.*` (sequence frames
   from the video tracks with their effects, docs/spec/compositor.md), `wipes.cpp` (the 2D
   transitions, docs/spec/wipes.md), `image_effects.cpp` and `color_effects.cpp` (Picture-in-Picture,
   Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `key_effects.cpp`

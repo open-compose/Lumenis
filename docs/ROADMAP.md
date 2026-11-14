@@ -1849,9 +1849,12 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
     FFmpeg's TB as lower first; test `tst_media transcodeImx`), so 11.1c is.
   * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1d, DNxUncompressed and the DNxHD
     bit-rate names.
-* 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-857) on a time-stretch engine of
+* 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-860) on a time-stretch engine of
   our own: overlap-add (WSOLA, waveform-similarity overlap-add, for speech and music alike), pitch as a stretch and a
-  resample.
+  resample (done: docs/spec/time-stretch.md, `src/media/time_stretch.*` with `timeStretch`, `rhythmicStretch` cutting
+  at transients, `varispeed` and `pitchShift`; the three processes for new master clips, as long as what they made
+  (`AudioSuiteInfo::changesLength`); AudioSuite's names marked for translation; tests `tst_time_stretch`,
+  `tst_audio_suite newMasterClip`. Later: Time Shift's Formant shift and Follow, the lengths in other units).
 * 11.3, the smaller items: Show Adapters > Spatial and Color, AudioSuite's Nested Level Selection, import gain, the
   Import setting's OMFI/AAF tab, Media Creation's Apply to All and drives, Motion Effects Render Using.
 * 11.4, the medium ones: Consolidate/Transcode and Relink options, export from a monitor and by drag and drop, the

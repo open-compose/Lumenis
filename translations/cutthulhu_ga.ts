@@ -1310,6 +1310,146 @@
         <source>%1 is not made in %2 x %3 projects at %4 fps.</source>
         <translation type="unfinished">Ní dhéantar %1 i dtionscadail %2 x %3 ag %4 fps.</translation>
     </message>
+    <message>
+        <source>Monophonic</source>
+        <translation type="unfinished">Monafónach</translation>
+    </message>
+    <message>
+        <source>Polyphonic</source>
+        <translation type="unfinished">Polafónach</translation>
+    </message>
+    <message>
+        <source>Rhythmic</source>
+        <translation type="unfinished">Rithimeach</translation>
+    </message>
+    <message>
+        <source>Varispeed</source>
+        <translation type="unfinished">Luas athraitheach</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation type="unfinished">Íseal</translation>
+    </message>
+    <message>
+        <source>Mid</source>
+        <translation type="unfinished">Lár</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation type="unfinished">Ard</translation>
+    </message>
+    <message>
+        <source>Wide</source>
+        <translation type="unfinished">Leathan</translation>
+    </message>
+    <message>
+        <source>Calibration</source>
+        <translation type="unfinished">Calabrú</translation>
+    </message>
+    <message>
+        <source>Gain</source>
+        <translation type="unfinished">Neartú</translation>
+    </message>
+    <message>
+        <source>Normalize</source>
+        <translation type="unfinished">Normalaigh</translation>
+    </message>
+    <message>
+        <source>Level</source>
+        <translation type="unfinished">Leibhéal</translation>
+    </message>
+    <message>
+        <source>Processing</source>
+        <translation type="unfinished">Próiseáil</translation>
+    </message>
+    <message>
+        <source>Reverse</source>
+        <translation type="unfinished">Aisiompaigh</translation>
+    </message>
+    <message>
+        <source>DC Offset Removal</source>
+        <translation type="unfinished">Fritháireamh DC a bhaint</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation type="unfinished">Dúblaigh</translation>
+    </message>
+    <message>
+        <source>Signal Generator</source>
+        <translation type="unfinished">Gineadóir comhartha</translation>
+    </message>
+    <message>
+        <source>Frequency</source>
+        <translation type="unfinished">Minicíocht</translation>
+    </message>
+    <message>
+        <source>Signal</source>
+        <translation type="unfinished">Comhartha</translation>
+    </message>
+    <message>
+        <source>Crossfade</source>
+        <translation type="unfinished">Traschéimniú</translation>
+    </message>
+    <message>
+        <source>Min Pitch</source>
+        <translation type="unfinished">Airde íos.</translation>
+    </message>
+    <message>
+        <source>Accuracy</source>
+        <translation type="unfinished">Cruinneas</translation>
+    </message>
+    <message>
+        <source>Coarse</source>
+        <translation type="unfinished">Garbh</translation>
+    </message>
+    <message>
+        <source>Pitch Shift</source>
+        <translation type="unfinished">Aistriú airde</translation>
+    </message>
+    <message>
+        <source>Fine</source>
+        <translation type="unfinished">Mín</translation>
+    </message>
+    <message>
+        <source>Time Correction</source>
+        <translation type="unfinished">Ceartú ama</translation>
+    </message>
+    <message>
+        <source>Time Compression Expansion</source>
+        <translation type="unfinished">Comhbhrú/leathnú ama</translation>
+    </message>
+    <message>
+        <source>Ratio</source>
+        <translation type="unfinished">Cóimheas</translation>
+    </message>
+    <message>
+        <source>Transpose</source>
+        <translation type="unfinished">Trasuigh</translation>
+    </message>
+    <message>
+        <source>Mode</source>
+        <translation type="unfinished">Mód</translation>
+    </message>
+    <message>
+        <source>Range</source>
+        <translation type="unfinished">Raon</translation>
+    </message>
+    <message>
+        <source>Time Shift</source>
+        <translation type="unfinished">Aistriú ama</translation>
+    </message>
+    <message>
+        <source>Window</source>
+        <translation type="unfinished">Fuinneog</translation>
+    </message>
+    <message>
+        <source>Threshold</source>
+        <translation type="unfinished">Tairseach</translation>
+    </message>
+    <message>
+        <source>Decay Rate</source>
+        <translation type="unfinished">Ráta meatha</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>

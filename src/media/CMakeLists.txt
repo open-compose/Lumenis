@@ -61,6 +61,7 @@ add_library(lumenis_media STATIC
     link.cpp
     ltc.cpp
     tone.cpp
+    time_stretch.cpp
     waveform.cpp
     waveform_sync.cpp
     playback.cpp
@@ -106,6 +107,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/link.h
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h
+    include/lumenis/media/time_stretch.h
     include/lumenis/media/waveform.h
     include/lumenis/media/waveform_sync.h
     include/lumenis/media/playback.h

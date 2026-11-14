@@ -64,6 +64,7 @@ lumenis_add_test(tst_copy_media SOURCES tst_copy_media.cpp LIBS lumenis::media)
 # MultiRez and Dynamic Relink (docs/spec/dynamic-relink.md).
 lumenis_add_test(tst_dynamic_relink SOURCES tst_dynamic_relink.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)
+lumenis_add_test(tst_time_stretch SOURCES tst_time_stretch.cpp LIBS lumenis::media)
 lumenis_add_test(tst_waveform SOURCES tst_waveform.cpp LIBS lumenis::media)
 # Syncing clips by their sound (Editing Guide p.1124, p.1126).
 lumenis_add_test(tst_waveform_sync SOURCES tst_waveform_sync.cpp LIBS lumenis::media)

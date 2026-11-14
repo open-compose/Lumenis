@@ -458,6 +458,21 @@ private slots:
         }
         QVERIFY(findAudioSuitePlugin(QStringLiteral("suite.duplicate"))->masterClipOnly);
 
+        // Time Compression Expansion at 1.5: the new clip is half as long again, in whole frames ("the plug-ins
+        // automatically lengthen or shorten the clip", p.803); Time Shift at 400% a quarter of it (p.859).
+        r.effect = QStringLiteral("suite.time_compression");
+        r.params = {{QStringLiteral("ratio"), 1.5}};
+        r.name = QStringLiteral("two_TCE");
+        const auto longer = audioSuiteClip(r, creation, &error);
+        QVERIFY2(longer, qPrintable(error));
+        QCOMPARE(longer->durationFrames, std::int64_t{75});
+        r.effect = QStringLiteral("suite.time_shift");
+        r.params = {{QStringLiteral("shift"), 400.0}};
+        r.name = QStringLiteral("two_TimeShift");
+        const auto shorter = audioSuiteClip(r, creation, &error);
+        QVERIFY2(shorter, qPrintable(error));
+        QCOMPARE(shorter->durationFrames, std::int64_t{13}); // 12.5 frames, rounded up
+
         // No tracks: refused.
         r.tracks = {};
         QVERIFY(!audioSuiteClip(r, creation, &error));

@@ -1112,7 +1112,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `media::fitPicture` and `model::withPixelAspect`; test `tst_media transcodeDv`), is done. 11.1c3, MPEG IMX 30/40/50 (D-10's rasters
   with the blanking above the picture through `media::storedPlacement`, `WriterSettings::bottomFieldFirst`; test
   `tst_media transcodeImx`), is done, so 11.1c is. ProRes is offered only where its encoder makes MXF media here
-  (`encodesHere` in managed.cpp; VideoToolbox's needs the profile in the stream's parameters, BUILDING.md). 10.6 is an update check that only tells the user (no
+  (`encodesHere` in managed.cpp; VideoToolbox's needs the profile in the stream's parameters, BUILDING.md). 11.2, the time-stretch engine
+  (docs/spec/time-stretch.md: WSOLA in `src/media/time_stretch.*`, AudioSuite's Pitch Shift, Time Compression Expansion
+  and Time Shift for new master clips through `AudioSuiteInfo::changesLength`; test `tst_time_stretch`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
