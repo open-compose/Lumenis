@@ -231,6 +231,33 @@
     </message>
 </context>
 <context>
+    <name>CrashReport</name>
+    <message>
+        <source>The system&apos;s report: %1</source>
+        <translation type="unfinished">Tuairisc an chórais: %1</translation>
+    </message>
+    <message>
+        <source>Crash Report</source>
+        <translation type="unfinished">Tuairisc ar Thuairteáil</translation>
+    </message>
+    <message>
+        <source>%1 closed unexpectedly last time. A report of what happened was saved on this computer; nothing was sent anywhere. If you report the problem, please include it.</source>
+        <translation type="unfinished">Dúnadh %1 gan choinne an uair dheireanach. Sábháladh tuairisc ar a tharla ar an ríomhaire seo; níor seoladh aon rud. Má thuairiscíonn tú an fhadhb, cuir an tuairisc léi, le do thoil.</translation>
+    </message>
+    <message>
+        <source>Show Folder</source>
+        <translation type="unfinished">Taispeáin an Fillteán</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n earlier report(s) in the same folder.</source>
+        <translation type="unfinished">
+            <numerusform>%n tuairisc níos luaithe san fhillteán céanna.</numerusform>
+            <numerusform>%n thuairisc níos luaithe san fhillteán céanna.</numerusform>
+            <numerusform>%n tuairisc níos luaithe san fhillteán céanna.</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>EffectEditor</name>
     <message>
         <source>Ending at Cut</source>

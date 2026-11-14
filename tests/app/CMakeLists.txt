@@ -117,4 +117,12 @@ if(Python3_Interpreter_FOUND)
         TIMEOUT 1200)
 endif()
 
+# Crash reports (ROADMAP 10.5; app/crash_report.h): crashes on purpose and checks the reports. Not under the
+# sanitizers, whose own handlers take the crash instead.
+if(Python3_Interpreter_FOUND AND NOT CMAKE_CXX_FLAGS MATCHES "sanitize")
+    add_test(NAME crash_report
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-crash-report.py --app $<TARGET_FILE:lumenis_app>)
+    set_tests_properties(crash_report PROPERTIES PASS_REGULAR_EXPRESSION "crash reports: ok" TIMEOUT 300)
+endif()
+
 lumenis_isolate_media_drives()

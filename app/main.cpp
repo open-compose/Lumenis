@@ -51,6 +51,9 @@
 #include "lumenis/ui/workspace.h"
 
 #include <QApplication>
+#include <QDesktopServices>
+#include <QMessageBox>
+#include <QUrl>
 #include <tuple>
 #include <QIcon>
 #include <QCommandLineParser>
@@ -105,7 +108,7 @@
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
 // check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
 // ci-screenshots.py); BUILDING.md describes them. Module search paths are in module_paths.cpp and
-// the Windows crash report in crash_report.cpp.
+// the crash reports (--crash-reports, and --crash-test for their test) in crash_report.cpp.
 
 namespace {
 
@@ -118,11 +121,50 @@ bool isHeadlessInvocation(int argc, char** argv) {
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
             || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb" || arg == "--import-edl"
             || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale" || arg == "--import-otio"
-            || arg == "--export-otio" || arg == "--import-fcpxml" || arg == "--export-fcpxml") {
+            || arg == "--export-otio" || arg == "--import-fcpxml" || arg == "--export-fcpxml" || arg == "--crash-test"
+            || arg == "--crash-reports") {
             return true;
         }
     }
     return false;
+}
+
+// After a crash, the next normal start says where the report is (ROADMAP 10.5; crash_report.h): a message that does
+// not block, with Show Folder, and a line on stderr; each report once. Nothing is sent anywhere.
+void announceCrashReports(const QString& folder) {
+    const QStringList reports = unseenCrashReports(folder);
+    if (reports.isEmpty()) return;
+    const QString product = QString::fromUtf8(lumenis::branding::kProductName);
+    QString where = QDir::toNativeSeparators(reports.first());
+    const QString system = systemCrashReportFor(reports.first());
+    if (!system.isEmpty()) {
+        where += QLatin1Char('\n') + QCoreApplication::translate("CrashReport", "The system's report: %1")
+                                          .arg(QDir::toNativeSeparators(system));
+    }
+    if (reports.size() > 1) {
+        const int earlier = static_cast<int>(reports.size() - 1);
+        where += QLatin1Char('\n');
+        where += QCoreApplication::translate("CrashReport", "%n earlier report(s) in the same folder.", nullptr, earlier);
+    }
+    std::fprintf(stderr, "%s closed unexpectedly last time; crash report: %s\n", lumenis::branding::kExecutableName,
+                 qPrintable(QDir::toNativeSeparators(reports.first())));
+    auto* box = new QMessageBox(
+        QMessageBox::Warning, QCoreApplication::translate("CrashReport", "Crash Report"),
+        QCoreApplication::translate("CrashReport",
+                                    "%1 closed unexpectedly last time. A report of what happened was saved on this "
+                                    "computer; nothing was sent anywhere. If you report the problem, please include it.")
+            .arg(product));
+    box->setInformativeText(where);
+    box->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    QPushButton* showFolder =
+        box->addButton(QCoreApplication::translate("CrashReport", "Show Folder"), QMessageBox::ActionRole);
+    box->addButton(QMessageBox::Ok);
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(box, &QMessageBox::buttonClicked, box, [folder, showFolder](QAbstractButton* button) {
+        if (button == showFolder) QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+    });
+    box->show();
+    markCrashReportsShown(folder);
 }
 
 // A frame rate given on the command line: "25", "29.97" (NTSC rates written short) or "24000/1001".
@@ -437,7 +479,29 @@ int main(int argc, char** argv) {
     parser.addOption(screenshot);
     parser.addOption(defaultLayout);
     parser.addOption(openProject);
+    // Crash reports (ROADMAP 10.5; crash_report.h): the reports not yet shown, and a crash on purpose for their test.
+    const QCommandLineOption crashReports(
+        QStringLiteral("crash-reports"), QStringLiteral("List the crash reports not yet shown, newest first, then exit."));
+    QCommandLineOption crashTest(QStringLiteral("crash-test"),
+                                 QStringLiteral("Crash on purpose: <kind> is segv, abort or exception (for the tests)."),
+                                 QStringLiteral("kind"));
+    crashTest.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(crashReports);
+    parser.addOption(crashTest);
     parser.process(*app);
+
+    // Reports into the folder from here on; before this point a crash goes to stderr only.
+    const QString crashFolder = defaultCrashReportFolder();
+    setCrashReportFolder(crashFolder);
+    if (parser.isSet(crashTest)) crashForTest(parser.value(crashTest));
+    if (parser.isSet(crashReports)) {
+        for (const QString& report : unseenCrashReports(crashFolder)) {
+            std::printf("%s\n", qPrintable(QDir::toNativeSeparators(report)));
+            const QString system = systemCrashReportFor(report);
+            if (!system.isEmpty()) std::printf("  system report: %s\n", qPrintable(system));
+        }
+        return 0;
+    }
 
     lumenis::ext::ProviderRegistry registry;
     // The built-in providers first, then modules (docs/EXTENSIONS.md).
@@ -1687,6 +1751,9 @@ int main(int argc, char** argv) {
         dialog->show();
     };
     QObject::connect(&window, &lumenis::ui::MainWindow::closeProjectRequested, &guiApp, [&] { showSelectProject(); });
+
+    // A crash last time: where its report is (ROADMAP 10.5).
+    announceCrashReports(crashFolder);
 
     // --project <file>: straight into the project, as the default user.
     if (parser.isSet(openProject)) {

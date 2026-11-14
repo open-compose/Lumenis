@@ -231,6 +231,32 @@
     </message>
 </context>
 <context>
+    <name>CrashReport</name>
+    <message>
+        <source>The system&apos;s report: %1</source>
+        <translation type="unfinished">Bericht des Systems: %1</translation>
+    </message>
+    <message>
+        <source>Crash Report</source>
+        <translation type="unfinished">Absturzbericht</translation>
+    </message>
+    <message>
+        <source>%1 closed unexpectedly last time. A report of what happened was saved on this computer; nothing was sent anywhere. If you report the problem, please include it.</source>
+        <translation type="unfinished">%1 wurde beim letzten Mal unerwartet beendet. Ein Bericht über den Vorfall wurde auf diesem Computer gespeichert; nichts wurde gesendet. Wenn Sie das Problem melden, fügen Sie ihn bitte bei.</translation>
+    </message>
+    <message>
+        <source>Show Folder</source>
+        <translation type="unfinished">Ordner anzeigen</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n earlier report(s) in the same folder.</source>
+        <translation type="unfinished">
+            <numerusform>%n früherer Bericht im selben Ordner.</numerusform>
+            <numerusform>%n frühere Berichte im selben Ordner.</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>EffectEditor</name>
     <message>
         <source>Ending at Cut</source>

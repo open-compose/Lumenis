@@ -1086,6 +1086,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   pseudo-locale's screenshots (`shots/pseudo` in each CI job, compared by ui-consistency), is done. 10.4d1, the
   German, French and Italian drafts (every text translated, left unfinished for a native speaker's review; terms in
   `translations/glossary_<code>.md`), is done; so is 10.4d2, Irish, so 10.4 is, but the native speakers' reviews.
+  10.5a, crash reports (docs/spec/crash-reports.md: `app/crash_report.*` with the OS's own means, the owner's choice
+  over Crashpad; a minidump and text report on Windows, a signal handler's report on Linux and macOS, in "Crash
+  Reports" or `LUMENIS_CRASH_DIR`; the notice at the next start, `--crash-reports`; ctest `crash_report`), is done.
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and

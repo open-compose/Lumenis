@@ -1432,6 +1432,23 @@ answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
 **`stalled`:** no cycle finished for ten minutes; the run ends with exit 1. Attach a debugger (or take a stack sample,
 "Profiling" above) before it ends to see where it waits.
 
+## Crash reports
+
+A crash writes a report (ROADMAP 10.5; docs/spec/crash-reports.md) into "Crash Reports" in the application's local
+data folder (`LUMENIS_CRASH_DIR` sets another), and the next start says where it is. `cutthulhu --crash-reports` lists
+the reports not yet shown. Send the newest `crash-*.txt` with a problem report, and on Windows the `.dmp` beside it.
+
+* **Windows:** the report names functions and lines when `cutthulhu.pdb` is next to the executable (it is in the
+  packages). Open the `.dmp` in Visual Studio or WinDbg with the same build's PDB for every thread and variable.
+* **Linux:** the backtrace is module + offset (`cutthulhu(+0x1e959a)`); with the same build's executable,
+  `addr2line -C -f -e cutthulhu 0x1e959a` gives the function and line (the build needs debug information:
+  `RelWithDebInfo`, or 10.5b's debug files). For a library, look its name up in the report's memory map.
+* **macOS:** the system's own report (`~/Library/Logs/DiagnosticReports/cutthulhu-*.ips`, also in Console.app under
+  Crash Reports) has every thread; the notice names it.
+
+The sanitizer builds leave crashes to ASan and TSan, whose reports say more; `LUMENIS_NO_CRASH_HANDLER=1` turns ours off
+elsewhere (to get a core file without our report, or under a debugger that stops at signals anyway).
+
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours

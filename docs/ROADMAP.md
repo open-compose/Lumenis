@@ -1761,10 +1761,13 @@ The items:
     their glossaries in `translations/`, done; 10.4d2, Irish, done), so 10.4 is done but the native speakers' reviews. The
     owner's decision (2026-11-13) for 10.4d: Claude drafts all four languages with the terms editors already know, each
     .ts left "unfinished" until a native speaker reviews it (Irish needs the most care: its editing vocabulary is thin).
-  * 10.5, crash reporting. Use Crashpad (Apache 2.0, compatible with GPLv3; THIRD-PARTY-NOTICES.md) to write
-    minidumps locally. After a crash, the next start says where the dump is. Add a symbol upload step in the
-    release builds. Sending dumps waits on the owner's collection decision; nothing leaves the machine without the
-    user's consent.
+  * 10.5, crash reporting. Crashpad was the plan, but no package manager ships it and it builds only with
+    Chromium's tools; the owner chose the operating systems' own means instead (2026-11-14): a minidump and a text
+    report on Windows (DbgHelp), a signal handler's report on Linux and macOS (with the system's own report there).
+    After a crash, the next start says where the report is. Sending reports waits on the owner's collection decision;
+    nothing leaves the machine without the user's consent. In two parts (docs/spec/crash-reports.md): 10.5a, the
+    reports and the notice (done: `app/crash_report.*`, `--crash-reports`, ctest `crash_report`); 10.5b, symbols kept
+    for the release builds and a script to read a Linux report.
   * 10.6, auto-update. Check a signed update feed at start-up, and from Help with a setting to turn it off. Install
     with Sparkle on macOS and WinSparkle on Windows (both MIT); on Linux, use AppImageUpdate's zsync data (MIT) or
     only tell the user. Waits on update hosting and signing.

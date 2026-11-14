@@ -279,6 +279,9 @@ The interface's languages (`src/ui/translation.*`, `translations/`; docs/spec/lo
 compiled in as resources; JSON resources' texts are translated where they are shown (`translatedResource`,
 `model::shownName`), since they are often also identifiers. `tst_untranslated` finds texts that skip translation.
 
+Crash reports (`app/crash_report.*`, docs/spec/crash-reports.md) are the operating systems' own: a minidump and a
+text report on Windows, a signal handler's report on Linux and macOS; the next start says where they are.
+
 `cutthulhu --soak <hours>` (`src/ui/soak.*`) loops playback, renders, edits and tool windows in a sample project of its
 own and logs the process's memory, handles, threads and windows a minute; `scripts/soak-check.py` fails a log whose
 figures keep growing (docs/spec/soak.md). The `tsan` presets run the tests below the UI under ThreadSanitizer; locks
