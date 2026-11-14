@@ -1440,11 +1440,16 @@ the reports not yet shown. Send the newest `crash-*.txt` with a problem report, 
 
 * **Windows:** the report names functions and lines when `cutthulhu.pdb` is next to the executable (it is in the
   packages). Open the `.dmp` in Visual Studio or WinDbg with the same build's PDB for every thread and variable.
-* **Linux:** the backtrace is module + offset (`cutthulhu(+0x1e959a)`); with the same build's executable,
-  `addr2line -C -f -e cutthulhu 0x1e959a` gives the function and line (the build needs debug information:
-  `RelWithDebInfo`, or 10.5b's debug files). For a library, look its name up in the report's memory map.
+* **Linux:** the backtrace is module + offset (`cutthulhu(+0x1e959a)`).
+  `python3 scripts/symbolize-crash.py crash-....txt` gives each frame's function, file and line, using the report's
+  memory map and `addr2line` (binutils) on the same build's files. When those are not where the report says, give a
+  folder with them, or with the `cutthulhu.debug_<date>_<commit>` the CI keeps beside each AppImage (gunzip it first):
+  `--search ~/Documents/Cutthulhu builds`.
 * **macOS:** the system's own report (`~/Library/Logs/DiagnosticReports/cutthulhu-*.ips`, also in Console.app under
-  Crash Reports) has every thread; the notice names it.
+  Crash Reports) has every thread; the notice names it. It shows lines when the build's dSYM is found: unzip the
+  `Cutthulhu-dSYM_<date>_<commit>.zip` kept beside the .dmg somewhere Spotlight indexes, or use
+  `atos -o Cutthulhu.dSYM/Contents/Resources/DWARF/Cutthulhu -l <load address> <address>` with the addresses from the
+  report.
 
 The sanitizer builds leave crashes to ASan and TSan, whose reports say more; `LUMENIS_NO_CRASH_HANDLER=1` turns ours off
 elsewhere (to get a core file without our report, or under a debugger that stops at signals anyway).

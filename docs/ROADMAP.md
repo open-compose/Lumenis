@@ -1767,7 +1767,9 @@ The items:
     After a crash, the next start says where the report is. Sending reports waits on the owner's collection decision;
     nothing leaves the machine without the user's consent. In two parts (docs/spec/crash-reports.md): 10.5a, the
     reports and the notice (done: `app/crash_report.*`, `--crash-reports`, ctest `crash_report`); 10.5b, symbols kept
-    for the release builds and a script to read a Linux report.
+    for the release builds and a script to read a Linux report (done: the Linux debug file and the macOS dSYM kept
+    beside each self-hosted package, the Windows PDB in the packages, `scripts/symbolize-crash.py`), so 10.5 is done but
+    sending reports, which waits on the owner's collection decision.
   * 10.6, auto-update. Check a signed update feed at start-up, and from Help with a setting to turn it off. Install
     with Sparkle on macOS and WinSparkle on Windows (both MIT); on Linux, use AppImageUpdate's zsync data (MIT) or
     only tell the user. Waits on update hosting and signing.

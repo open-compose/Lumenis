@@ -52,5 +52,11 @@ builds.
 ## Parts
 
 * 10.5a, the reports and the notice above, is done.
-* 10.5b: symbols for the release builds (the PDB is installed already; Linux debug files and macOS dSYMs kept with
-  each package) and a script that turns a Linux report's offsets into functions and lines.
+* 10.5b, symbols, is done. The builds are RelWithDebInfo; the packages ship unstripped (`CPACK_STRIP_FILES OFF`) and
+  the Windows packages carry `cutthulhu.pdb`. Each self-hosted CI job keeps, beside its package in the owner's builds
+  folder: on Linux `cutthulhu.debug` (`objcopy --only-keep-debug`, gzipped), on macOS `Cutthulhu.dSYM` (zipped;
+  `dsymutil` of the build tree's executable, whose UUID the packaged one keeps). `scripts/symbolize-crash.py` turns a
+  Linux report's frames into functions, files and lines through `addr2line`, finding each module's load address in the
+  report's memory map; `--search <folder>` finds the module or its `.debug` file elsewhere. The ctest `crash_report`
+  checks on Linux that it names the function that crashed. Nothing is uploaded: a symbol server waits on the owner's
+  collection decision.

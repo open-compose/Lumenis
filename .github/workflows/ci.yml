@@ -427,6 +427,17 @@ jobs:
         # In the folder set up by "setup-mac-runner.sh builds" (BUILDING.md).
         run: scripts/keep-build.sh build/ci-macos/*.dmg
 
+      - name: Keep the debug symbols (dSYM) beside it
+        # So a crash report from that .dmg reads as functions and lines (ROADMAP 10.5b; BUILDING.md, "Crash
+        # reports"): the build tree's executable has the same UUID as the packaged one.
+        continue-on-error: true
+        run: |
+          rm -rf build/ci-macos/Cutthulhu.dSYM build/ci-macos/Cutthulhu-dSYM.zip
+          xcrun dsymutil build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu -o build/ci-macos/Cutthulhu.dSYM
+          dwarfdump --uuid build/ci-macos/Cutthulhu.dSYM
+          ditto -c -k --keepParent build/ci-macos/Cutthulhu.dSYM build/ci-macos/Cutthulhu-dSYM.zip
+          scripts/keep-build.sh build/ci-macos/Cutthulhu-dSYM.zip
+
   windows-local:
     # The owner's Windows PC as a self-hosted runner (scripts/setup-windows-
     # runner.ps1): a service under its own standard user, with Qt in C:\Qt
@@ -786,6 +797,15 @@ jobs:
       - name: Keep the AppImage for the owner to try
         # In the folder set up by "setup-wsl-runner.sh builds" (BUILDING.md).
         run: scripts/keep-build.sh build/ci/*.AppImage
+
+      - name: Keep the debug information beside it
+        # For scripts/symbolize-crash.py --search, whatever the AppImage's tools strip (ROADMAP 10.5b; BUILDING.md,
+        # "Crash reports").
+        continue-on-error: true
+        run: |
+          objcopy --only-keep-debug build/ci/bin/cutthulhu build/ci/cutthulhu.debug
+          gzip -f build/ci/cutthulhu.debug
+          scripts/keep-build.sh build/ci/cutthulhu.debug.gz
 
       - name: Sanitizers (AddressSanitizer, UBSan)
         # Memory errors that glibc tolerates and MSVC's heap does not (a

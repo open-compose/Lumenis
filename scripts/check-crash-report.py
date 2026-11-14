@@ -7,13 +7,15 @@ to a temporary folder, and checks for each crash:
     report, Windows Error Reporting) is kept;
   * that a text report was written with the product's opening lines and what happened, and on Windows a minidump
     beside it ("MDMP");
-then that --crash-reports lists the three, newest first.
+then that --crash-reports lists the three, newest first, and on Linux that scripts/symbolize-crash.py names the function
+that crashed.
 
     python3 scripts/check-crash-report.py --app build/ci/bin/cutthulhu
 """
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,6 +67,14 @@ def main():
                 if not os.path.exists(dump) or open(dump, "rb").read(4) != b"MDMP":
                     failures.append(f"{kind}: no minidump {dump}")
             print(f"crash report: {kind}: {reports[0]} ({len(text.splitlines())} lines)")
+            # Linux: the report reads back as functions (and lines, with debug information) through
+            # scripts/symbolize-crash.py.
+            if kind == "segv" and sys.platform.startswith("linux") and shutil.which("addr2line"):
+                symbolize = os.path.join(os.path.dirname(os.path.abspath(__file__)), "symbolize-crash.py")
+                read = subprocess.run([sys.executable, symbolize, os.path.join(folder, reports[0])],
+                                      capture_output=True, text=True, errors="replace", timeout=120)
+                if "crashForTest" not in read.stdout:
+                    failures.append(f"symbolize-crash.py did not name crashForTest:\n{read.stdout}{read.stderr}")
             # The next report's name differs by its start time (to the second) or its process id.
             time.sleep(1.1)
         listed = subprocess.run([args.app, "--crash-reports"], env=env, capture_output=True, text=True,
