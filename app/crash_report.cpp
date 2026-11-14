@@ -92,6 +92,8 @@ bool handlerDisabled() {
 
 namespace {
 
+// The filter there before ours: the C++ runtime's, which turns an uncaught C++ exception into std::terminate().
+LPTOP_LEVEL_EXCEPTION_FILTER g_previousFilter = nullptr;
 wchar_t g_reportPathW[4096] = {};
 wchar_t g_dumpPathW[4096] = {};
 HANDLE g_reportFile = INVALID_HANDLE_VALUE;
@@ -150,6 +152,10 @@ void writeMinidump(EXCEPTION_POINTERS* info) {
 // text report, the minidump, then Windows carries on as it would have (EXCEPTION_CONTINUE_SEARCH). Only the first
 // crash is reported, should a second thread crash meanwhile.
 LONG WINAPI report(EXCEPTION_POINTERS* info) {
+    // An uncaught C++ exception (MSVC's code 0xE06D7363) goes to the runtime's filter, which calls std::terminate():
+    // onTerminate keeps its message and aborts, and onAbort reports that, message included.
+    constexpr DWORD kCppException = 0xE06D7363;
+    if (info->ExceptionRecord->ExceptionCode == kCppException && g_previousFilter) return g_previousFilter(info);
     static LONG reported = 0;
     if (InterlockedExchange(&reported, 1) != 0) return EXCEPTION_CONTINUE_SEARCH;
     if (g_reportPathW[0]) {
@@ -263,7 +269,7 @@ void onAbort(int) {
 void installCrashReport() {
     std::set_terminate(onTerminate);
     if (handlerDisabled()) return;
-    SetUnhandledExceptionFilter(report);
+    g_previousFilter = SetUnhandledExceptionFilter(report);
     std::signal(SIGABRT, onAbort);
     // No "abort() has been called" box or Windows Error Reporting dialog: the report is ours.
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);

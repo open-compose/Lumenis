@@ -26,7 +26,9 @@ has its name (`setCrashReportFolder`), also into the reports folder:
 
 What is caught: SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT and SIGTRAP (POSIX, on an alternate stack, so a stack
 overflow on the main thread is caught too); unhandled exceptions and `abort()` (qFatal, `std::terminate`) on Windows;
-an uncaught C++ exception everywhere (`std::set_terminate` keeps its message, then aborts). Windows' fail-fast heap
+an uncaught C++ exception everywhere (`std::set_terminate` keeps its message, then aborts; on Windows the exception
+first reaches the unhandled-exception filter as code 0xE06D7363, which ours hands to the C++ runtime's filter so that
+`std::terminate` runs). Windows' fail-fast heap
 corruption (0xc0000374) ends the process without running the filter; Windows Error Reporting has it.
 
 The POSIX handler uses only async-signal-safe calls on buffers prepared beforehand (the path and the opening lines);
