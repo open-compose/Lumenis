@@ -489,6 +489,49 @@ QString systemCrashReportFor(const QString& report) {
     return {};
 }
 
+QUrl crashIssueUrl(const QString& report, const QString& homepage) {
+    QFile file(report);
+    QString text;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) text = QString::fromUtf8(file.readAll());
+    // Not the memory map: long, and full of paths.
+    const qsizetype map = text.indexOf(QLatin1String("\nMemory map:"));
+    if (map >= 0) text.truncate(map);
+    // The home folder as "~", in either separator, so no user name goes into the issue.
+    const QString home = QDir::homePath();
+    if (!home.isEmpty() && home != QLatin1String("/")) {
+        text.replace(home, QStringLiteral("~"), Qt::CaseInsensitive);
+        text.replace(QDir::toNativeSeparators(home), QStringLiteral("~"), Qt::CaseInsensitive);
+    }
+    // The title: the line saying what happened ("cutthulhu crashed: signal 11 (SIGSEGV, ...)").
+    QString what;
+    for (const QString& line : text.split(QLatin1Char('\n'))) {
+        if (line.contains(QLatin1String(" crashed: "))) {
+            what = line.mid(line.indexOf(QLatin1String(" crashed: ")) + 10).trimmed();
+            break;
+        }
+    }
+    // GitHub refuses very long addresses; the backtrace's first lines are the useful ones.
+    constexpr qsizetype kMaxReport = 5000;
+    if (text.size() > kMaxReport) text = text.left(kMaxReport) + QStringLiteral("\n...");
+    const bool windows = QFileInfo::exists(QFileInfo(report).path() + QLatin1Char('/') +
+                                           QFileInfo(report).completeBaseName() + QStringLiteral(".dmp"));
+    QString body = QStringLiteral("**What I was doing when it crashed:**\n\n\n**The crash report** (%1):\n\n```\n%2\n```\n")
+                       .arg(QFileInfo(report).fileName(), text.trimmed());
+    if (windows) {
+        body += QStringLiteral("\nThe minidump beside the report (%1.dmp) helps most: drag it here if you are happy to share it "
+                               "(it holds the program's memory at the crash).\n")
+                    .arg(QFileInfo(report).completeBaseName());
+    }
+    // Each value percent-encoded in full: QUrlQuery leaves "+" as it is, which GitHub reads as a space (the
+    // backtrace's offsets are "+0x...").
+    const QString title = QStringLiteral("Crash: %1").arg(what.isEmpty() ? QStringLiteral("unknown") : what);
+    QUrl url(homepage + QStringLiteral("/issues/new"));
+    url.setQuery(QStringLiteral("title=") + QString::fromLatin1(QUrl::toPercentEncoding(title)) + QStringLiteral("&body=") +
+                     QString::fromLatin1(QUrl::toPercentEncoding(body)),
+                 QUrl::StrictMode);
+    return url;
+}
+
 void crashForTest(const QString& kind) {
 #if defined(_WIN32)
     // No Windows Error Reporting dialog waiting for a click on a test machine.

@@ -238,11 +238,11 @@
     </message>
     <message>
         <source>Crash Report</source>
-        <translation type="unfinished">Rapporto sull'arresto anomalo</translation>
+        <translation type="unfinished">Rapporto sull&apos;arresto anomalo</translation>
     </message>
     <message>
         <source>%1 closed unexpectedly last time. A report of what happened was saved on this computer; nothing was sent anywhere. If you report the problem, please include it.</source>
-        <translation type="unfinished">L'ultima volta %1 si è chiuso in modo imprevisto. Un rapporto sull'accaduto è stato salvato su questo computer; non è stato inviato nulla. Se segnalate il problema, allegatelo.</translation>
+        <translation type="unfinished">L&apos;ultima volta %1 si è chiuso in modo imprevisto. Un rapporto sull&apos;accaduto è stato salvato su questo computer; non è stato inviato nulla. Se segnalate il problema, allegatelo.</translation>
     </message>
     <message>
         <source>Show Folder</source>
@@ -254,6 +254,10 @@
             <numerusform>%n rapporto precedente nella stessa cartella.</numerusform>
             <numerusform>%n rapporti precedenti nella stessa cartella.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Report on GitHub...</source>
+        <translation type="unfinished">Segnala su GitHub...</translation>
     </message>
 </context>
 <context>

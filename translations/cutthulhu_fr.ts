@@ -242,7 +242,7 @@
     </message>
     <message>
         <source>%1 closed unexpectedly last time. A report of what happened was saved on this computer; nothing was sent anywhere. If you report the problem, please include it.</source>
-        <translation type="unfinished">%1 s'est fermé de manière inattendue la dernière fois. Un rapport de l'incident a été enregistré sur cet ordinateur; rien n'a été envoyé. Si vous signalez le problème, veuillez le joindre.</translation>
+        <translation type="unfinished">%1 s&apos;est fermé de manière inattendue la dernière fois. Un rapport de l&apos;incident a été enregistré sur cet ordinateur; rien n&apos;a été envoyé. Si vous signalez le problème, veuillez le joindre.</translation>
     </message>
     <message>
         <source>Show Folder</source>
@@ -254,6 +254,10 @@
             <numerusform>%n rapport antérieur dans le même dossier.</numerusform>
             <numerusform>%n rapports antérieurs dans le même dossier.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Report on GitHub...</source>
+        <translation type="unfinished">Signaler sur GitHub...</translation>
     </message>
 </context>
 <context>

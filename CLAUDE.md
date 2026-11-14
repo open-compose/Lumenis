@@ -1088,7 +1088,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `translations/glossary_<code>.md`), is done; so is 10.4d2, Irish, so 10.4 is, but the native speakers' reviews.
   10.5a, crash reports (docs/spec/crash-reports.md: `app/crash_report.*` with the OS's own means, the owner's choice
   over Crashpad; a minidump and text report on Windows, a signal handler's report on Linux and macOS, in "Crash
-  Reports" or `LUMENIS_CRASH_DIR`; the notice at the next start, `--crash-reports`; ctest `crash_report`), is done. 10.5b, symbols (the Linux `.debug` and macOS dSYM kept beside each
+  Reports" or `LUMENIS_CRASH_DIR`; the notice at the next start with Report on GitHub through `crashIssueUrl`, `--crash-reports`; ctest
+  `crash_report`), is done. 10.5b, symbols (the Linux `.debug` and macOS dSYM kept beside each
   self-hosted package, the PDB in the Windows packages, `scripts/symbolize-crash.py` for Linux reports), is done.
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,

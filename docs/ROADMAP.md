@@ -1764,12 +1764,13 @@ The items:
   * 10.5, crash reporting. Crashpad was the plan, but no package manager ships it and it builds only with
     Chromium's tools; the owner chose the operating systems' own means instead (2026-11-14): a minidump and a text
     report on Windows (DbgHelp), a signal handler's report on Linux and macOS (with the system's own report there).
-    After a crash, the next start says where the report is. Sending reports waits on the owner's collection decision;
-    nothing leaves the machine without the user's consent. In two parts (docs/spec/crash-reports.md): 10.5a, the
+    After a crash, the next start says where the report is, and its Report on GitHub opens a new issue filled in from
+    the report for the user to read and submit (the owner's answer below); the application sends nothing itself. In two parts (docs/spec/crash-reports.md): 10.5a, the
     reports and the notice (done: `app/crash_report.*`, `--crash-reports`, ctest `crash_report`); 10.5b, symbols kept
     for the release builds and a script to read a Linux report (done: the Linux debug file and the macOS dSYM kept
     beside each self-hosted package, the Windows PDB in the packages, `scripts/symbolize-crash.py`), so 10.5 is done but
-    sending reports, which waits on the owner's collection decision.
+    the GitHub issue (done:
+    `crashIssueUrl`, the notice's Report on GitHub).
   * 10.6, the update check (the owner's decision, 2026-11-14: no automatic updates; editors talking to the owner do not
     want an update during an important session). At start-up, and from Help, ask GitHub for the latest release; when it
     is newer than the one running, say so and link to its page, and the user decides whether and when to download and

@@ -39,14 +39,22 @@ TSan) and `LUMENIS_NO_CRASH_HANDLER=1` keep the sanitizer's or the system's hand
 
 A normal start (not the tooling modes) with reports not yet shown opens a message that does not block: "Cutthulhu
 closed unexpectedly last time ...", the newest report's path (and on macOS the system's), how many earlier ones there
-are, and Show Folder. The reports are then remembered as shown in `shown.txt` in the folder. `cutthulhu
+are, Show Folder, and Report on GitHub. That opens a new issue at the project's GitHub page (the branding's homepage)
+in the browser, filled in from the newest report by `crashIssueUrl`: the title says what happened, the body has a
+line to say what the user was doing, the report's opening lines, what happened and the backtrace, without the memory
+map and with the home folder's path written `~`, so no user name goes with it; on Windows it asks the user to drag the
+minidump in if they are happy to share it. The user reads, changes and submits it, or not: the application sends
+nothing (the owner's decision, 2026-11-12). The link stays under GitHub's length limit (5000 characters of report).
+The reports are then remembered as shown in `shown.txt` in the folder. `cutthulhu
 --crash-reports` lists the ones not yet shown, newest first.
 
 ## Tests
 
 ctest `crash_report` (`scripts/check-crash-report.py`): `cutthulhu --crash-test segv|abort|exception` (a hidden
 option) into a temporary folder; each ends as a crash, writes one report with its opening lines and what happened
-(and on Windows a minidump starting "MDMP"), and `--crash-reports` lists the three, newest first. Not in the sanitizer
+(and on Windows a minidump starting "MDMP"), and `--crash-reports` lists the three, newest first. The hidden
+`--crash-issue-url <report>` prints the GitHub issue link, checked for its title and body, no memory map, no home
+folder and the backtrace's "+" kept. Not in the sanitizer
 builds.
 
 ## Parts

@@ -7,7 +7,8 @@ to a temporary folder, and checks for each crash:
     report, Windows Error Reporting) is kept;
   * that a text report was written with the product's opening lines and what happened, and on Windows a minidump
     beside it ("MDMP");
-then that --crash-reports lists the three, newest first, and on Linux that scripts/symbolize-crash.py names the function
+then that --crash-reports lists the three, newest first, that the GitHub issue made from a report (--crash-issue-url)
+is filled in without the memory map or the home folder, and on Linux that scripts/symbolize-crash.py names the function
 that crashed.
 
     python3 scripts/check-crash-report.py --app build/ci/bin/cutthulhu
@@ -20,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 
 KINDS = {
     # kind: what the report says on Windows, and elsewhere
@@ -77,6 +79,28 @@ def main():
                     failures.append(f"symbolize-crash.py did not name crashForTest:\n{read.stdout}{read.stderr}")
             # The next report's name differs by its start time (to the second) or its process id.
             time.sleep(1.1)
+        # The GitHub issue the notice's Report on GitHub opens: filled in from the report, without the memory map or
+        # the user's home folder (a line naming it is added to a copy of a report).
+        newest = sorted(f for f in os.listdir(folder) if f.endswith(".txt"))[0]
+        home = os.path.expanduser("~")
+        copy = os.path.join(folder, "issue-check.txt")
+        with open(copy, "w", encoding="utf-8") as out:
+            out.write(open(os.path.join(folder, newest), encoding="utf-8", errors="replace").read().replace(
+                "Backtrace:", "  file: " + os.path.join(home, "Projects", "x.avb") + "\nBacktrace:", 1))
+        issue = subprocess.run([args.app, "--crash-issue-url", copy], env=env, capture_output=True, text=True,
+                               errors="replace", timeout=120).stdout.strip()
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(issue).query)
+        body = query.get("body", [""])[0]
+        title = query.get("title", [""])[0]
+        if not issue.startswith("https://github.com/") or "/issues/new?" not in issue:
+            failures.append(f"--crash-issue-url gave {issue[:200]!r}")
+        elif not title.startswith("Crash: ") or "Backtrace:" not in body or "Memory map:" in body:
+            failures.append(f"the issue's title or body is wrong: {title!r}\n{body[:1500]}")
+        elif (len(home) > 1 and home in body) or "~" not in body or "+0x" not in body or len(issue) > 8000:
+            failures.append(f"the issue names the home folder, loses '+', or is too long ({len(issue)}):\n{body[:1500]}")
+        else:
+            print(f"crash report: issue link {len(issue)} characters")
+        os.remove(copy)
         listed = subprocess.run([args.app, "--crash-reports"], env=env, capture_output=True, text=True,
                                 errors="replace", timeout=120).stdout.split()
         reports = [line for line in listed if line.endswith(".txt")]

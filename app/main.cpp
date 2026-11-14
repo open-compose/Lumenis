@@ -122,7 +122,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
             || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb" || arg == "--import-edl"
             || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale" || arg == "--import-otio"
             || arg == "--export-otio" || arg == "--import-fcpxml" || arg == "--export-fcpxml" || arg == "--crash-test"
-            || arg == "--crash-reports") {
+            || arg == "--crash-reports" || arg == "--crash-issue-url") {
             return true;
         }
     }
@@ -130,7 +130,8 @@ bool isHeadlessInvocation(int argc, char** argv) {
 }
 
 // After a crash, the next normal start says where the report is (ROADMAP 10.5; crash_report.h): a message that does
-// not block, with Show Folder, and a line on stderr; each report once. Nothing is sent anywhere.
+// not block, with Show Folder and Report on GitHub (a filled-in issue the user submits, or not), and a line on stderr;
+// each report once. Nothing is sent by the application.
 void announceCrashReports(const QString& folder) {
     const QStringList reports = unseenCrashReports(folder);
     if (reports.isEmpty()) return;
@@ -158,10 +159,18 @@ void announceCrashReports(const QString& folder) {
     box->setTextInteractionFlags(Qt::TextSelectableByMouse);
     QPushButton* showFolder =
         box->addButton(QCoreApplication::translate("CrashReport", "Show Folder"), QMessageBox::ActionRole);
+    // A new GitHub issue filled in from the report, opened in the browser for the user to read, change and submit
+    // (the owner's decision, ROADMAP 10.5): nothing is sent until they do.
+    QPushButton* reportIssue =
+        box->addButton(QCoreApplication::translate("CrashReport", "Report on GitHub..."), QMessageBox::ActionRole);
     box->addButton(QMessageBox::Ok);
     box->setAttribute(Qt::WA_DeleteOnClose);
-    QObject::connect(box, &QMessageBox::buttonClicked, box, [folder, showFolder](QAbstractButton* button) {
+    const QString newest = reports.first();
+    QObject::connect(box, &QMessageBox::buttonClicked, box, [folder, newest, showFolder, reportIssue](QAbstractButton* button) {
         if (button == showFolder) QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+        if (button == reportIssue) {
+            QDesktopServices::openUrl(crashIssueUrl(newest, QString::fromUtf8(lumenis::branding::kHomepage)));
+        }
     });
     box->show();
     markCrashReportsShown(folder);
@@ -486,6 +495,12 @@ int main(int argc, char** argv) {
                                  QStringLiteral("Crash on purpose: <kind> is segv, abort or exception (for the tests)."),
                                  QStringLiteral("kind"));
     crashTest.setFlags(QCommandLineOption::HiddenFromHelp);
+    // The GitHub issue the notice's Report on GitHub opens for a report, printed (for the tests).
+    QCommandLineOption crashIssue(QStringLiteral("crash-issue-url"),
+                                  QStringLiteral("Print the GitHub issue link made for the crash report <file>."),
+                                  QStringLiteral("file"));
+    crashIssue.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(crashIssue);
     parser.addOption(crashReports);
     parser.addOption(crashTest);
     parser.process(*app);
@@ -494,6 +509,12 @@ int main(int argc, char** argv) {
     const QString crashFolder = defaultCrashReportFolder();
     setCrashReportFolder(crashFolder);
     if (parser.isSet(crashTest)) crashForTest(parser.value(crashTest));
+    if (parser.isSet(crashIssue)) {
+        std::printf("%s\n", crashIssueUrl(parser.value(crashIssue), QString::fromUtf8(lumenis::branding::kHomepage))
+                                .toEncoded(QUrl::FullyEncoded)
+                                .constData());
+        return 0;
+    }
     if (parser.isSet(crashReports)) {
         for (const QString& report : unseenCrashReports(crashFolder)) {
             std::printf("%s\n", qPrintable(QDir::toNativeSeparators(report)));

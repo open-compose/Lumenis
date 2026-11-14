@@ -256,6 +256,10 @@
             <numerusform>%n tuairisc níos luaithe san fhillteán céanna.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Report on GitHub...</source>
+        <translation type="unfinished">Tuairiscigh ar GitHub...</translation>
+    </message>
 </context>
 <context>
     <name>EffectEditor</name>

@@ -1436,7 +1436,9 @@ answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
 
 A crash writes a report (ROADMAP 10.5; docs/spec/crash-reports.md) into "Crash Reports" in the application's local
 data folder (`LUMENIS_CRASH_DIR` sets another), and the next start says where it is. `cutthulhu --crash-reports` lists
-the reports not yet shown. Send the newest `crash-*.txt` with a problem report, and on Windows the `.dmp` beside it.
+the reports not yet shown. The notice's Report on GitHub opens a new issue filled in from the newest report (no memory
+map, the home folder written `~`); add what you were doing, attach the `.dmp` on Windows if you are happy to, and
+submit it. Or send the `crash-*.txt`, and the `.dmp`, another way.
 
 * **Windows:** the report names functions and lines when `cutthulhu.pdb` is next to the executable (it is in the
   packages). Open the `.dmp` in Visual Studio or WinDbg with the same build's PDB for every thread and variable.

@@ -255,6 +255,10 @@
             <numerusform>%n frühere Berichte im selben Ordner.</numerusform>
         </translation>
     </message>
+    <message>
+        <source>Report on GitHub...</source>
+        <translation type="unfinished">Auf GitHub melden...</translation>
+    </message>
 </context>
 <context>
     <name>EffectEditor</name>
