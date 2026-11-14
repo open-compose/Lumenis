@@ -531,14 +531,20 @@ encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now
 
 To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
-### ProRes media fails on a Mac: "cannot open the prores_videotoolbox encoder"
+### ProRes media fails on a Mac: "cannot open the prores_videotoolbox encoder", "Operation not permitted"
 
 Making ProRes media (Transcode, Consolidate, renders, a ProRes Video Resolution) failed on the owner's M1 Mac mini
 with "cannot open the prores_videotoolbox encoder: Generic error in an external library" (CI, 2026-11-14). FFmpeg's
 VideoToolbox encoders use the hardware encoder only unless their `allow_sw` option is set, and only the Pro, Max and
 Ultra chips (and later ones) have a ProRes engine. The writer (`MediaWriter`, `src/media/media.cpp`) now sets
 `allow_sw` on every `*_videotoolbox` encoder, so Macs without the engine use Apple's software encoder.
-`tst_media transcodeProRes` makes ProRes on the self-hosted M1, so it fails if this comes back.
+
+On the self-hosted runner (a launchd daemon with no window server) the encoder then opened but every frame failed
+with "Operation not permitted": VideoToolbox does not encode for such a process. So the ProRes encoder is now tried on
+a few frames at start-up (`encodesHere` in `src/media/managed.cpp`) before ProRes is offered: where VideoToolbox's
+does not work, FFmpeg's `prores_ks` is used in builds with `LUMENIS_PATENT_CODECS`, and otherwise ProRes is left out
+of the resolution menus, with the reason in the Console ("ProRes: prores_videotoolbox cannot encode here").
+`tst_media transcodeProRes` makes ProRes on the self-hosted M1, so it fails if ProRes is offered but cannot be made.
 
 ### "FFmpeg 6.0 or later was not found"
 

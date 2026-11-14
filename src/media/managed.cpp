@@ -1025,11 +1025,45 @@ QList<Resolution> allResolutions() {
     };
 }
 
-// The OS's ProRes encoder when FFmpeg has it (macOS), else FFmpeg's own where the build allows it; empty for none.
+// Whether the encoder makes frames here: a few into FFmpeg's null muxer. VideoToolbox's opens but may refuse to encode
+// where the process may not use it ("Operation not permitted": the owner's Mac runner, a launchd daemon without a
+// window server), and a Mac without a ProRes engine needs its software encoder (BUILDING.md).
+bool encodesHere(const QString& encoder, const QString& profile, const QString& pixel) {
+    WriterSettings s;
+    s.format = QStringLiteral("null");
+    s.videoCodec = encoder;
+    s.videoProfile = profile;
+    s.pixelFormat = pixel;
+    s.width = 256;
+    s.height = 144;
+    s.frameRate = Rational(25);
+    MediaWriter writer;
+    QString error;
+    bool ok = writer.open(QStringLiteral("-"), s, &error);
+    QImage frame(s.width, s.height, QImage::Format_RGBA8888);
+    frame.fill(QColor(128, 128, 128));
+    for (int i = 0; ok && i < 3; ++i) ok = writer.writeVideo(frame);
+    if (ok) ok = writer.finish(&error);
+    if (!ok) {
+        // Console only: said once at start-up, when the resolution menus leave the encoder out.
+        qWarning("ProRes: %s cannot encode here (%s)", qPrintable(encoder),
+                 qPrintable(error.isEmpty() ? writer.lastError() : error));
+    }
+    return ok;
+}
+
+// The OS's ProRes encoder when FFmpeg has it (macOS) and it encodes here, else FFmpeg's own where the build allows it
+// and it encodes; empty for none.
 QString proresEncoder() {
     static const QString encoder = [] {
-        if (encoderAvailable(QStringLiteral("prores_videotoolbox"))) return QStringLiteral("prores_videotoolbox");
-        if (encoderAvailable(QStringLiteral("prores_ks"))) return QStringLiteral("prores_ks");
+        if (encoderAvailable(QStringLiteral("prores_videotoolbox")) &&
+            encodesHere(QStringLiteral("prores_videotoolbox"), QStringLiteral("hq"), QStringLiteral("yuv422p10le"))) {
+            return QStringLiteral("prores_videotoolbox");
+        }
+        if (encoderAvailable(QStringLiteral("prores_ks")) &&
+            encodesHere(QStringLiteral("prores_ks"), QStringLiteral("hq"), QStringLiteral("yuv422p10le"))) {
+            return QStringLiteral("prores_ks");
+        }
         return QString();
     }();
     return encoder;
