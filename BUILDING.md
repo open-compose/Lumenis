@@ -539,11 +539,13 @@ VideoToolbox encoders use the hardware encoder only unless their `allow_sw` opti
 Ultra chips (and later ones) have a ProRes engine. The writer (`MediaWriter`, `src/media/media.cpp`) now sets
 `allow_sw` on every `*_videotoolbox` encoder, so Macs without the engine use Apple's software encoder.
 
-On the self-hosted runner (a launchd daemon with no window server) the encoder then opened but every frame failed
-with "Operation not permitted": VideoToolbox does not encode for such a process. So the ProRes encoder is now tried on
-a few frames at start-up (`encodesHere` in `src/media/managed.cpp`) before ProRes is offered: where VideoToolbox's
-does not work, FFmpeg's `prores_ks` is used in builds with `LUMENIS_PATENT_CODECS`, and otherwise ProRes is left out
-of the resolution menus, with the reason in the Console ("ProRes: prores_videotoolbox cannot encode here").
+Then every transcode failed with "Operation not permitted". That was not a permission: FFmpeg's MXF muxer returns -1
+(EPERM) when it cannot tell the ProRes profile, which it reads from the stream's parameters, and VideoToolbox's encoder
+keeps the profile in its own option only (FFmpeg's `prores_ks` sets both). The writer now puts the profile in the
+stream itself. And the ProRes encoder is tried once at start-up on a few frames into MXF OP-Atom, as managed media is
+written (`encodesHere` in `src/media/managed.cpp`): where VideoToolbox's still fails, FFmpeg's `prores_ks` is used in
+builds with `LUMENIS_PATENT_CODECS`, and otherwise ProRes is left out of the resolution menus, with the reason in the
+Console ("ProRes: prores_videotoolbox cannot encode here").
 `tst_media transcodeProRes` makes ProRes on the self-hosted M1, so it fails if ProRes is offered but cannot be made.
 
 ### "FFmpeg 6.0 or later was not found"

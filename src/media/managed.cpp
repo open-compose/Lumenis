@@ -17,6 +17,7 @@
 #include <QPainter>
 #include <QRegularExpression>
 #include <QStorageInfo>
+#include <QTemporaryDir>
 #include <QUuid>
 
 #include <algorithm>
@@ -1025,12 +1026,14 @@ QList<Resolution> allResolutions() {
     };
 }
 
-// Whether the encoder makes frames here: a few into FFmpeg's null muxer. VideoToolbox's opens but may refuse to encode
-// where the process may not use it ("Operation not permitted": the owner's Mac runner, a launchd daemon without a
-// window server), and a Mac without a ProRes engine needs its software encoder (BUILDING.md).
+// Whether the encoder makes media here: a few frames into MXF OP-Atom, as managed media is written, in a temporary
+// folder. An encoder may open and still fail on the frames or in the muxer (VideoToolbox's ProRes without its profile
+// in the stream, BUILDING.md); then it is not offered.
 bool encodesHere(const QString& encoder, const QString& profile, const QString& pixel) {
+    QTemporaryDir dir;
+    if (!dir.isValid()) return false;
     WriterSettings s;
-    s.format = QStringLiteral("null");
+    s.format = QStringLiteral("mxf_opatom");
     s.videoCodec = encoder;
     s.videoProfile = profile;
     s.pixelFormat = pixel;
@@ -1039,7 +1042,7 @@ bool encodesHere(const QString& encoder, const QString& profile, const QString& 
     s.frameRate = Rational(25);
     MediaWriter writer;
     QString error;
-    bool ok = writer.open(QStringLiteral("-"), s, &error);
+    bool ok = writer.open(dir.filePath(QStringLiteral("probe.mxf")), s, &error);
     QImage frame(s.width, s.height, QImage::Format_RGBA8888);
     frame.fill(QColor(128, 128, 128));
     for (int i = 0; ok && i < 3; ++i) ok = writer.writeVideo(frame);

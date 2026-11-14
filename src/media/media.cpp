@@ -1464,6 +1464,14 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (rc < 0) return failed(QStringLiteral("cannot open the %1 encoder: %2").arg(s.videoCodec, errorText(rc)));
         d.vst = avformat_new_stream(d.out, nullptr);
         avcodec_parameters_from_context(d.vst->codecpar, d.venc);
+        // The ProRes profile in the stream's parameters, which the MXF muxer labels the essence by (and fails with -1,
+        // "Operation not permitted", without): FFmpeg's encoder sets it, VideoToolbox's keeps it in its own option only.
+        if (codec->id == AV_CODEC_ID_PRORES && d.vst->codecpar->profile < 0) {
+            static const char* const kProres[] = {"proxy", "lt", "standard", "hq", "4444", "xq"};
+            for (int i = 0; i < 6; ++i) {
+                if (s.videoProfile == QLatin1String(kProres[i])) d.vst->codecpar->profile = i; // AV_PROFILE_PRORES_*
+            }
+        }
         d.vst->time_base = d.venc->time_base;
         d.vst->avg_frame_rate = d.venc->framerate;
         if (!s.startTimecode.isEmpty()) av_dict_set(&d.vst->metadata, "timecode", s.startTimecode.toUtf8().constData(), 0);
