@@ -2854,9 +2854,13 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 ### Resolutions (p.1240–1256)
 * Avid DNx LB, SQ, HQ, HQX and 444 (RGB only, p.1241), through FFmpeg's
   DNxHR encoder at the project's raster.
+* Apple ProRes 422 Proxy, LT, 422, HQ, 4444 and 4444 XQ (p.1240, "macOS
+  only"): through VideoToolbox on macOS, and elsewhere through FFmpeg's
+  encoder in builds with `LUMENIS_PATENT_CODECS` (ours: Media Composer makes
+  ProRes only on macOS). Listed only where it can be made (ROADMAP 11.1a).
 * At least 256x120 (p.355).
-* Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, ProRes, XAVC,
-  AVC-Intra, DV, XDCAM, MXF OP1a and OMF.
+* Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, XAVC, AVC-Intra, DV,
+  XDCAM, MXF OP1a and OMF (ROADMAP 11.1).
 
 ### Media Creation setting (p.134–136, p.1206–1209)
 * A project setting, from File > Media > Media Creation Settings (Ctrl+5)

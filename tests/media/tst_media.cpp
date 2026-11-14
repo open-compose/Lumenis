@@ -469,6 +469,62 @@ private slots:
         QVERIFY(std::abs(a.samples(20000, 1)[0] - 0.3f) < 2e-3f);
     }
 
+    // Apple ProRes as managed media (p.1240): made where an encoder may be used (VideoToolbox on macOS, FFmpeg's in builds
+    // with LUMENIS_PATENT_CODECS), in MXF OP-Atom labelled clip-wrapped as it is written (fixOpAtom), and ranked
+    // beside the comparable DNx level when relinking by quality.
+    void transcodeProRes() {
+        // The ranks hold whether or not this build can make ProRes.
+        QCOMPARE(resolutionOfProbed(QStringLiteral("prores"), QStringLiteral("HQ"))->quality,
+                 knownResolution(QStringLiteral("dnx_hqx"))->quality);
+        QCOMPARE(knownResolution(QStringLiteral("Apple ProRes 422 Proxy"))->quality,
+                 knownResolution(QStringLiteral("Avid DNx LB"))->quality);
+        QVERIFY(knownResolution(QStringLiteral("prores_4444xq"))->quality > knownResolution(QStringLiteral("dnx_444"))->quality);
+        const Resolution* hq = findResolution(QStringLiteral("prores_hq"));
+        if (!hq) QSKIP("No ProRes encoder may be used in this build (docs/EXTENSIONS.md)");
+        QVERIFY(!resolutionEncoder(*hq).isEmpty());
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Harbor Wide.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 10));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(256, 144);
+        c.resolution = *hq;
+        c.videoDrive = dir.path();
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("Apple ProRes 422 HQ"));
+        const auto link = linkOf(*made);
+        QVERIFY(link && link->isManaged());
+        const auto v1 = probe(link->path);
+        QVERIFY(v1 && v1->firstVideo());
+        QCOMPARE(v1->format, QStringLiteral("mxf"));
+        QCOMPARE(v1->firstVideo()->codec, QStringLiteral("prores"));
+        QCOMPARE(v1->firstVideo()->profile, QStringLiteral("HQ"));
+        QCOMPARE(v1->firstVideo()->length, 10);
+        // The essence container label says clip-wrapped (RDD 44: ProRes 1c, mapping 02), as the essence is.
+        QFile f(link->path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray bytes = f.readAll();
+        QVERIFY(bytes.contains(QByteArray::fromHex("060e2b340401010d0d010301021c0200")));
+        QVERIFY(!bytes.contains(QByteArray::fromHex("060e2b340401010d0d010301021c0100")));
+        // It plays: the picture comes back.
+        FrameCache cache;
+        QVERIFY(near(cache.frame(*made, 4), colourOf(4), 14));
+        // Copied frame for frame, as DNx media is (Consolidate).
+        QVERIFY(canConsolidate(*made));
+    }
+
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the
     // new media and the new clip and segments have none; off, the new clip keeps the encoding.
     void transcodeColorEncoding() {

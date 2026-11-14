@@ -1818,6 +1818,29 @@ The items:
     third-party authors' credits).
   * Delete the old workflow runs (and the `ci-screenshots/*` branches): their logs name the owner's machines.
 
+### Phase 11 — Left-over features
+
+The audit of 2026-11-14 checked every "later" note in the specs, the dimmed commands and the settings options marked
+`"later"` against the code. What needs hardware (7.3c) or Avid's services stays out; the rest, the owner's order:
+
+* 11.1, managed media in more codecs (p.1240-1256), first of all ProRes.
+  * 11.1a, Apple ProRes 422 Proxy, LT, 422, HQ, 4444 and 4444 XQ (done: `media::resolutions()` lists them where an
+    encoder may be used, VideoToolbox's on macOS (the guide's "macOS only") and FFmpeg's `prores_ks` elsewhere in
+    builds with `LUMENIS_PATENT_CODECS` (ours); `resolutionEncoder`/`resolutionProfile`, MXF OP-Atom labelled
+    clip-wrapped by `fixOpAtom`, relinking by quality through `Resolution::quality`, the settings' Video Resolution
+    menus through `"choicesFrom": "resolutions"`; test `tst_media transcodeProRes`).
+  * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1c, DV and XDCAM (MPEG-2, FFmpeg);
+    11.1d, DNxUncompressed and the DNxHD bit-rate names.
+* 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-857) on a time-stretch engine of
+  our own: overlap-add (WSOLA, waveform-similarity overlap-add, for speech and music alike), pitch as a stretch and a
+  resample.
+* 11.3, the smaller items: Show Adapters > Spatial and Color, AudioSuite's Nested Level Selection, import gain, the
+  Import setting's OMFI/AAF tab, Media Creation's Apply to All and drives, Motion Effects Render Using.
+* 11.4, the medium ones: Consolidate/Transcode and Relink options, export from a monitor and by drag and drop, the
+  List Tool's lists, the Shot Log tab, extended Punch-In, surround pan automation, the Background Queue's Resume and
+  job groups, the settings options marked `"later"`.
+* 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
+
 ## 6. Immediate next steps
 
 1. Decide §2.2 (module exception and/or CLA) before accepting outside

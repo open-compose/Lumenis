@@ -72,9 +72,10 @@ creates. Cutthulhu's creation targets, in priority order:
 
 1. **Avid DNx** (DNxHD, DNxHR LB/SQ/HQ/HQX/444, DNxUncompressed) in MXF
    OP-Atom: FFmpeg's VC-3 encoder † with bmx for MXF.
-2. **ProRes** (Proxy, LT, 422, HQ, 4444, 4444 XQ). On macOS through
-   VideoToolbox, as the guide says media creation for ProRes is "macOS only"
-   (p.1240). Elsewhere it waits for licensing.
+2. **ProRes** (Proxy, LT, 422, HQ, 4444, 4444 XQ), done (ROADMAP 11.1a). On
+   macOS through VideoToolbox, as the guide says media creation for ProRes is
+   "macOS only" (p.1240). Elsewhere through FFmpeg's `prores_ks` in builds with
+   `LUMENIS_PATENT_CODECS` only (development and tests), until legal review.
 3. **XAVC, AVC-Intra and other H.264 families:** OS encoders, where the OS
    offers them †.
 4. **JPEG 2000:** OpenJPEG.

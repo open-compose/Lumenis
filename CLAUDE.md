@@ -1099,6 +1099,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   10.3d's automated half (contrast through `contrastRatio`/`focusRingColor`, rows growing with larger fonts through
   `rowHeightFor` in theme.h) is done; the screen-reader check by hand waits on the owner
   (docs/checklists/screen-readers.md). Size a new item view's rows with `rowHeightFor`.
+  Phase 11 (left-over features, ROADMAP; the audit of 2026-11-14) has started. 11.1a, managed media in Apple ProRes
+  (`media::resolutions()` with `Resolution::codec`/`quality`, `resolutionEncoder`/`resolutionProfile`: VideoToolbox on
+  macOS, `prores_ks` with `LUMENIS_PATENT_CODECS`; `fixOpAtom` for ProRes; `"choicesFrom": "resolutions"` in
+  settings.json; test `tst_media transcodeProRes`), is done. 10.6 is an update check that only tells the user (no
+  automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them

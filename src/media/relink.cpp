@@ -160,14 +160,17 @@ bool sameName(const QString& a, const QString& b, const RelinkOptions& options) 
 }
 
 int qualityOf(const QString& resolution) {
-    // A copied DNxHR picture is named for its profile: "DNxHR HQ".
-    const QString name = resolution.startsWith(QLatin1String("DNxHR ")) ? QStringLiteral("Avid DNx ") + resolution.mid(6)
-                                                                         : resolution;
-    const QList<Resolution>& all = resolutions();
-    for (qsizetype i = 0; i < all.size(); ++i) {
-        if (all.at(i).id == name || all.at(i).name == name) return static_cast<int>(i);
+    // A copied picture is named for its codec and profile (videoName()): "DNxHR HQ", "ProRes HQ". Comparable DNx and
+    // ProRes levels rank the same (Resolution::quality).
+    const Resolution* r = nullptr;
+    if (resolution.startsWith(QLatin1String("DNxHR "))) {
+        r = resolutionOfProbed(QStringLiteral("dnxhd"), QStringLiteral("DNXHR ") + resolution.mid(6));
+    } else if (resolution.startsWith(QLatin1String("ProRes "))) {
+        r = resolutionOfProbed(QStringLiteral("prores"), resolution.mid(7));
+    } else {
+        r = knownResolution(resolution);
     }
-    return -1;
+    return r ? r->quality : -1;
 }
 
 // Goes through every media set in the database, keeps those on the chosen drives (and project) with

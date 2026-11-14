@@ -223,13 +223,13 @@ public:
         return creation_.progress(std::min(1.0, static_cast<double>(done_) / static_cast<double>(total_)));
     }
 
-    // V1 re-encoded as DNxHR at the creation's resolution and raster.
+    // V1 re-encoded in the creation's resolution (DNxHR or ProRes, resolutionEncoder()) and raster.
     bool transcodeVideo(const QString& path, QString* error) {
         VideoReader reader;
         if (!reader.open(link_.path, link_.videoStream, error)) return false;
         WriterSettings s = settingsFor(QStringLiteral("V1"));
-        s.videoCodec = QStringLiteral("dnxhd");
-        s.videoProfile = creation_.resolution.profile;
+        s.videoCodec = resolutionEncoder(creation_.resolution);
+        s.videoProfile = resolutionProfile(creation_.resolution);
         s.pixelFormat = creation_.resolution.pixelFormat;
         s.width = creation_.raster.width();
         s.height = creation_.raster.height();
@@ -274,8 +274,8 @@ public:
     // `keep`, a cancel ends the file at the frames written so far (`written`) instead of failing.
     bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error, bool keep, std::int64_t& written) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
-        s.videoCodec = QStringLiteral("dnxhd");
-        s.videoProfile = creation_.resolution.profile;
+        s.videoCodec = resolutionEncoder(creation_.resolution);
+        s.videoProfile = resolutionProfile(creation_.resolution);
         s.pixelFormat = creation_.resolution.pixelFormat;
         s.width = creation_.raster.width();
         s.height = creation_.raster.height();
@@ -826,21 +826,106 @@ bool isImportRate(int rate) {
     return rate == 32000 || rate == 44100 || rate == 48000 || rate == 88200 || rate == 96000;
 }
 
-const QList<Resolution>& resolutions() {
-    // The quality levels p.1240 names, in order of quality.
-    static const QList<Resolution> list{
-        {QStringLiteral("dnx_lb"), QStringLiteral("Avid DNx LB"), QStringLiteral("dnxhr_lb"), QStringLiteral("yuv422p"),
-         false},
-        {QStringLiteral("dnx_sq"), QStringLiteral("Avid DNx SQ"), QStringLiteral("dnxhr_sq"), QStringLiteral("yuv422p"),
-         false},
-        {QStringLiteral("dnx_hq"), QStringLiteral("Avid DNx HQ"), QStringLiteral("dnxhr_hq"), QStringLiteral("yuv422p"),
-         false},
-        {QStringLiteral("dnx_hqx"), QStringLiteral("Avid DNx HQX"), QStringLiteral("dnxhr_hqx"),
-         QStringLiteral("yuv422p10le"), false},
-        {QStringLiteral("dnx_444"), QStringLiteral("Avid DNx 444"), QStringLiteral("dnxhr_444"),
-         QStringLiteral("gbrp10le"), true},
+namespace {
+
+// Every resolution we know, whether or not this build can make it: Avid DNx, then Apple ProRes. The ranks put
+// comparable levels side by side (by data rate and depth): LB ~ Proxy, SQ ~ LT, HQ ~ 422, HQX ~ 422 HQ, 444 ~ 4444.
+QList<Resolution> allResolutions() {
+    auto dnx = [](const char* id, const char* name, const char* profile, const char* pixel, bool rgb, const char* probed,
+                  int quality) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.profile = QString::fromLatin1(profile);
+        r.pixelFormat = QString::fromLatin1(pixel);
+        r.rgb = rgb;
+        r.probed = QString::fromLatin1(probed);
+        r.quality = quality;
+        return r;
     };
+    // ProRes: prores_ks's profile names, VideoToolbox's where they differ, and the profile FFmpeg reads back.
+    auto prores = [](const char* id, const char* name, const char* profile, const char* osProfile, const char* pixel,
+                     const char* probed, int quality) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.profile = QString::fromLatin1(profile);
+        r.osProfile = QString::fromLatin1(osProfile);
+        r.pixelFormat = QString::fromLatin1(pixel);
+        r.codec = QStringLiteral("prores");
+        r.probed = QString::fromLatin1(probed);
+        r.quality = quality;
+        return r;
+    };
+    return {
+        // The quality levels p.1240 names, in order of quality.
+        dnx("dnx_lb", "Avid DNx LB", "dnxhr_lb", "yuv422p", false, "DNXHR LB", 1),
+        dnx("dnx_sq", "Avid DNx SQ", "dnxhr_sq", "yuv422p", false, "DNXHR SQ", 2),
+        dnx("dnx_hq", "Avid DNx HQ", "dnxhr_hq", "yuv422p", false, "DNXHR HQ", 3),
+        dnx("dnx_hqx", "Avid DNx HQX", "dnxhr_hqx", "yuv422p10le", false, "DNXHR HQX", 4),
+        dnx("dnx_444", "Avid DNx 444", "dnxhr_444", "gbrp10le", true, "DNXHR 444", 5),
+        // ProRes, 10-bit 4:2:2 and 4:4:4 (p.1240).
+        prores("prores_proxy", "Apple ProRes 422 Proxy", "proxy", "proxy", "yuv422p10le", "Proxy", 1),
+        prores("prores_lt", "Apple ProRes 422 LT", "lt", "lt", "yuv422p10le", "LT", 2),
+        prores("prores_422", "Apple ProRes 422", "standard", "standard", "yuv422p10le", "Standard", 3),
+        prores("prores_hq", "Apple ProRes 422 HQ", "hq", "hq", "yuv422p10le", "HQ", 4),
+        prores("prores_4444", "Apple ProRes 4444", "4444", "4444", "yuv444p10le", "4444", 5),
+        prores("prores_4444xq", "Apple ProRes 4444 XQ", "4444xq", "xq", "yuv444p10le", "XQ", 6),
+    };
+}
+
+// The OS's ProRes encoder when FFmpeg has it (macOS), else FFmpeg's own where the build allows it; empty for none.
+QString proresEncoder() {
+    static const QString encoder = [] {
+        if (encoderAvailable(QStringLiteral("prores_videotoolbox"))) return QStringLiteral("prores_videotoolbox");
+        if (encoderAvailable(QStringLiteral("prores_ks"))) return QStringLiteral("prores_ks");
+        return QString();
+    }();
+    return encoder;
+}
+
+} // namespace
+
+const QList<Resolution>& resolutions() {
+    // DNx always (its availability is checked when media is made, as before); ProRes only where it can be made.
+    static const QList<Resolution> list = [] {
+        QList<Resolution> out;
+        for (const Resolution& r : allResolutions()) {
+            if (r.codec == QLatin1String("prores") && proresEncoder().isEmpty()) continue;
+            out << r;
+        }
+        return out;
+    }();
     return list;
+}
+
+QString resolutionEncoder(const Resolution& resolution) {
+    if (resolution.codec == QLatin1String("prores")) return proresEncoder();
+    return QStringLiteral("dnxhd");
+}
+
+QString resolutionProfile(const Resolution& resolution) {
+    if (resolution.codec == QLatin1String("prores") && proresEncoder() == QLatin1String("prores_videotoolbox")) {
+        return resolution.osProfile;
+    }
+    return resolution.profile;
+}
+
+const Resolution* resolutionOfProbed(const QString& codec, const QString& profile) {
+    static const QList<Resolution> all = allResolutions();
+    const QString family = codec.startsWith(QLatin1String("prores")) ? QStringLiteral("prores") : codec;
+    for (const Resolution& r : all) {
+        if (r.codec == family && r.probed.compare(profile, Qt::CaseInsensitive) == 0) return &r;
+    }
+    return nullptr;
+}
+
+const Resolution* knownResolution(const QString& idOrName) {
+    static const QList<Resolution> all = allResolutions();
+    for (const Resolution& r : all) {
+        if (r.id == idOrName || r.name == idOrName) return &r;
+    }
+    return nullptr;
 }
 
 const Resolution* findResolution(const QString& idOrName) {
@@ -1005,7 +1090,8 @@ bool canConsolidate(const model::BinItem& clip) {
     const auto info = probe(link->path);
     if (!info) return false;
     for (const StreamInfo& s : info->streams) {
-        if (s.index == link->videoStream) return s.codec == QLatin1String("dnxhd");
+        // The codecs managed media is made in (resolutions()): DNx, and ProRes.
+        if (s.index == link->videoStream) return s.codec == QLatin1String("dnxhd") || s.codec == QLatin1String("prores");
     }
     return false;
 }

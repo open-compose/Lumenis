@@ -28,15 +28,34 @@ namespace lumenis::media {
 
 // A video resolution media is made in (Media Creation, p.134; the
 // resolutions of p.1240-1256): Avid DNx at the guide's quality levels,
-// through FFmpeg's DNxHR encoder, which takes any raster.
+// through FFmpeg's DNxHR encoder, which takes any raster; and Apple ProRes
+// (Proxy to 4444 XQ, p.1240) where an encoder may be used: the operating
+// system's on macOS (VideoToolbox, Apple's licensed encoder; the guide's
+// "macOS only"), FFmpeg's elsewhere in builds with LUMENIS_PATENT_CODECS
+// (ours; docs/EXTENSIONS.md, docs/spec/media-formats.md).
 struct Resolution {
-    QString id;          // kept in settings: "dnx_hq"
-    QString name;        // "Avid DNx HQ"
-    QString profile;     // FFmpeg's: "dnxhr_hq"
+    QString id;          // kept in settings: "dnx_hq", "prores_hq"
+    QString name;        // "Avid DNx HQ", "Apple ProRes 422 HQ"
+    QString profile;     // FFmpeg's encoder profile: "dnxhr_hq"; "hq" (prores_ks)
     QString pixelFormat; // "yuv422p", "yuv422p10le", "yuv444p10le"
     bool rgb = false;    // Avid DNx 444 is RGB only (p.1241)
+    QString codec = QStringLiteral("dnxhd"); // the codec: "dnxhd" or "prores"
+    QString osProfile;   // the profile for the OS's encoder (VideoToolbox: "standard", "xq"), where it differs
+    QString probed;      // the profile FFmpeg reports when it reads the media: "DNXHR HQ", "HQ"
+    int quality = 0;     // for picking the better of two: comparable DNx and ProRes levels rank the same
 };
+// The resolutions media can be made in, by this build on this computer: Avid DNx, then Apple ProRes where an
+// encoder may be used (resolutionEncoder()).
 const QList<Resolution>& resolutions();
+// The FFmpeg encoder that makes a resolution's media here ("dnxhd", "prores_videotoolbox", "prores_ks"), and its
+// profile; empty when there is none.
+QString resolutionEncoder(const Resolution& resolution);
+QString resolutionProfile(const Resolution& resolution);
+// The resolution media copied or probed as `codec` with FFmpeg's `profile` is in (for relinking by quality); nullptr
+// when it is none of ours.
+const Resolution* resolutionOfProbed(const QString& codec, const QString& profile);
+// Any resolution we know by id or name, whether or not this build can make it (media made elsewhere); nullptr if none.
+const Resolution* knownResolution(const QString& idOrName);
 // By id or name; nullptr if there is none.
 const Resolution* findResolution(const QString& idOrName);
 const Resolution& defaultResolution(); // Avid DNx HQ

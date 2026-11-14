@@ -394,6 +394,10 @@ bool codecAllowed(const QString& codec) {
     return patentCodecsAllowed() || !isPatentCodec(codec);
 }
 
+bool encoderAvailable(const QString& name) {
+    return codecAllowed(name) && avcodec_find_encoder_by_name(name.toUtf8().constData()) != nullptr;
+}
+
 // ---------------------------------------------------------------- probe
 
 const StreamInfo* MediaInfo::firstVideo() const {
@@ -1112,6 +1116,27 @@ AVPixelFormat firstPixelFormat(const AVCodec* codec) {
 #endif
 }
 
+// The pixel format asked for when the encoder takes it, else the one it takes that loses least of it
+// (avcodec_find_best_pix_fmt_of_list: depth and chroma first). VideoToolbox's ProRes, for one, takes
+// its own 10-bit 4:2:2 layout (p210) rather than yuv422p10le.
+AVPixelFormat closestPixelFormat(const AVCodec* codec, AVPixelFormat wanted) {
+    const AVPixelFormat* list = nullptr;
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    const void* supported = nullptr;
+    int n = 0;
+    if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0, &supported, &n) >= 0) {
+        list = static_cast<const AVPixelFormat*>(supported);
+    }
+#else
+    list = codec->pix_fmts;
+#endif
+    if (!list || wanted == AV_PIX_FMT_NONE) return wanted;
+    for (const AVPixelFormat* f = list; *f != AV_PIX_FMT_NONE; ++f) {
+        if (*f == wanted) return wanted;
+    }
+    return avcodec_find_best_pix_fmt_of_list(list, wanted, 0, nullptr);
+}
+
 // Likewise, the encoder's first sample format.
 AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
@@ -1244,8 +1269,8 @@ qint64 berLength(const QByteArray& b, qsizetype& at) {
 // and the header metadata after it (the random index pack at the end lists
 // the partitions); the essence is not touched.
 // * It clip-wraps the essence (one KLV for the whole of it, as Avid's media
-//   is) but labels VC-3 (DNx) and BWF essence containers frame-wrapped
-//   (SMPTE ST 2019-4 and 382: byte 15, 01 frame, 02 clip). Readers that go
+//   is) but labels VC-3 (DNx), ProRes and BWF essence containers frame-wrapped
+//   (SMPTE ST 2019-4, RDD 44 and 382: byte 15, 01 frame, 02 clip). Readers that go
 //   by the label, such as bmx (ROADMAP Phase 2 gate 2), then cannot read
 //   the essence.
 // * Its package UMIDs are random in every file: one stem, the material
@@ -1313,11 +1338,11 @@ bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& f
                 }
             }
         }
-        // The essence container labels: 06 0e 2b 34 04 01 01 .. 0d 01 03 01 02, then 11 (VC-3) or 06 (BWF),
+        // The essence container labels: 06 0e 2b 34 04 01 01 .. 0d 01 03 01 02, then 11 (VC-3), 1c (ProRes) or 06 (BWF),
         // mapping byte 01 (frame-wrapped) and 00; the mapping byte becomes 02 (clip-wrapped).
         for (qsizetype i = region.indexOf(kPrefix); i >= 0 && i + 16 <= region.size(); i = region.indexOf(kPrefix, i + 1)) {
             const auto kind = static_cast<std::uint8_t>(region.at(i + 13));
-            if (region.mid(i + 8, 5) == kMiddle && (kind == 0x11 || kind == 0x06) && region.at(i + 14) == 0x01 &&
+            if (region.mid(i + 8, 5) == kMiddle && (kind == 0x11 || kind == 0x1c || kind == 0x06) && region.at(i + 14) == 0x01 &&
                 region.at(i + 15) == 0x00) {
                 region[i + 14] = 0x02;
                 changed = true;
@@ -1377,8 +1402,9 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->height = s.height;
             d.venc->time_base = inverse(toAv(s.frameRate));
             d.venc->framerate = toAv(s.frameRate);
-            d.venc->pix_fmt = s.pixelFormat.isEmpty() ? firstPixelFormat(codec)
-                                                      : av_get_pix_fmt(s.pixelFormat.toUtf8().constData());
+            d.venc->pix_fmt = s.pixelFormat.isEmpty()
+                                  ? firstPixelFormat(codec)
+                                  : closestPixelFormat(codec, av_get_pix_fmt(s.pixelFormat.toUtf8().constData()));
             d.venc->sample_aspect_ratio = AVRational{1, 1};
             // Rec. 709 for HD and larger, and for DNx, which declares 709 at any
             // size; Rec. 601 otherwise. The stream says which, so readers agree.

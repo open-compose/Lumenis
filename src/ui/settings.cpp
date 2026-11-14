@@ -1,4 +1,5 @@
 #include "lumenis/ui/settings.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/ui/translation.h"
 
 #include <algorithm>
@@ -91,6 +92,17 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 // Choices from a list kept elsewhere: "languages", the interface languages built in (translation.h, 10.4).
                 if (oo.value(QStringLiteral("choicesFrom")).toString() == QLatin1String("languages")) {
                     for (const Language& l : availableLanguages()) option.choices << SettingChoice{l.code, l.name, false};
+                }
+                // "resolutions" and "resolutionNames": the resolutions media can be made in here (media::resolutions(),
+                // Apple ProRes where this build and computer can make it) after those listed, by id or by name.
+                const QString from = oo.value(QStringLiteral("choicesFrom")).toString();
+                if (from == QLatin1String("resolutions") || from == QLatin1String("resolutionNames")) {
+                    for (const media::Resolution& r : media::resolutions()) {
+                        const QString value = from == QLatin1String("resolutions") ? r.id : r.name;
+                        const bool listed = std::any_of(option.choices.begin(), option.choices.end(),
+                                                        [&](const SettingChoice& c) { return c.value == value; });
+                        if (!listed) option.choices << SettingChoice{value, r.name, false};
+                    }
                 }
                 tab.options << option;
             }

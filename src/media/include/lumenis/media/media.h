@@ -35,6 +35,9 @@ bool isPatentCodec(const QString& codec);
 bool patentCodecsAllowed();
 // Whether a codec may be decoded or encoded in this build.
 bool codecAllowed(const QString& codec);
+// Whether FFmpeg has the encoder `name` ("prores_videotoolbox", "prores_ks") and this build may use it
+// (codecAllowed; an operating system's encoder, such as VideoToolbox's, is licensed with the system).
+bool encoderAvailable(const QString& name);
 
 // What a stream carries, as FFmpeg's media type says.
 enum class StreamKind { Video, Audio, Data, Other };
