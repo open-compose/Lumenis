@@ -389,6 +389,9 @@ MainWindow::~MainWindow() {
     // window connected with other context objects (the Source Browser's bin list).
     if (binContainer_) {
         binContainer_->saveAll();
+        // The Sidebar's Transcription column asks this window; the container refreshes its list once more when it
+        // is deleted, after this destructor.
+        binContainer_->setTranscriptionStatus({});
         disconnect(binContainer_, nullptr, this, nullptr);
         if (sourceBrowser_) disconnect(binContainer_, nullptr, sourceBrowser_.data(), nullptr);
     }

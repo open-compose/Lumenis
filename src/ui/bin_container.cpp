@@ -87,7 +87,18 @@ protected:
     // The columns' widths: the Name column first, with at least 60% of the Sidebar, then Size, then the Transcription
     // column (p.447) as wide as its text in what is left, eliding beyond that. Left to Qt, the stretched Name column was
     // squeezed out of sight once a longer language's "Transcription On" (Irish's is half as long again) did not fit.
+    // Asked for on every change, done once when the event loop next runs: measuring the column reads the model's
+    // data, which must not happen while the window around it is being taken down (the container refreshes its list
+    // from its destructor).
     void fitColumns() {
+        if (transcriptionColumn < 0 || fitPending_) return;
+        fitPending_ = true;
+        QTimer::singleShot(0, this, [this] {
+            fitPending_ = false;
+            fitColumnsNow();
+        });
+    }
+    void fitColumnsNow() {
         if (transcriptionColumn < 0 || !model()) return;
         const int width = viewport()->width();
         const int size = header()->sectionSize(sizeColumn);
@@ -101,6 +112,9 @@ public:
     int nameColumn = -1;
     int sizeColumn = -1;
     int transcriptionColumn = -1;
+
+private:
+    bool fitPending_ = false;
 
 protected:
     void resizeEvent(QResizeEvent* event) override {

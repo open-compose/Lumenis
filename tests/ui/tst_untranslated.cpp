@@ -217,6 +217,7 @@ private slots:
     // Longer texts must not squeeze user data out of sight: the Sidebar's bin names keep most of its width however
     // long the Transcription column's "Transcription On" is (it took the whole Sidebar in Irish).
     void longerTextsLeaveBinNamesRoom() {
+        QCoreApplication::processEvents(); // the Sidebar sizes its columns when the event loop runs
         const auto trees = window_->findChildren<QTreeView*>(QStringLiteral("binTree"));
         QVERIFY(!trees.isEmpty());
         for (QTreeView* tree : trees) {
