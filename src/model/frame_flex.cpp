@@ -86,6 +86,23 @@ FrameFlex FrameFlex::fromJson(const QJsonObject& json) {
     return f;
 }
 
+double pixelAspectOf(const BinItem& item) {
+    bool ok = false;
+    const double v = item.fields.value(QStringLiteral("Pixel Aspect Ratio")).toDouble(&ok);
+    return ok && v > 0 ? v : 1.0;
+}
+
+SpatialAdapter withPixelAspect(SpatialAdapter adapter, const BinItem& item) {
+    const double pixel = pixelAspectOf(item);
+    if (std::abs(pixel - 1.0) < 1e-3) return adapter;
+    FrameFlex flex = adapter.frameFlex.value_or(FrameFlex{});
+    if (std::abs(flex.pixelAspect - 1.0) < 1e-9 && flex.imageAspect <= 0.0) {
+        flex.pixelAspect = pixel;
+        adapter.frameFlex = flex;
+    }
+    return adapter;
+}
+
 std::optional<FrameFlex> frameFlexOf(const BinItem& item) {
     const QJsonValue v = item.sourceSettings.value(kFrameFlexKey);
     if (!v.isObject()) return std::nullopt;

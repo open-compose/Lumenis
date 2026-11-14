@@ -594,6 +594,119 @@ private slots:
         setProjectFormat({}, Rational(), false);
     }
 
+    // DV, DVCPRO HD and XDCAM HD 35 as managed media (p.1252-1274; 11.1c2): offered in the formats the tables give, by
+    // scan too; stored in their own rasters (DVCPRO HD's 1280 x 1080 at 1080i/59.94, DV's 480 lines for NTSC) with the
+    // pixels' shape in the stream and the clip, labelled clip-wrapped, and shown filling the project frame.
+    void transcodeDv() {
+        if (!findResolution(QStringLiteral("dvcpro_hd"))) QSKIP("No DV encoder in this FFmpeg");
+        auto offered = [](const QString& id) {
+            const QList<Resolution> list = resolutions();
+            return std::any_of(list.begin(), list.end(), [&](const Resolution& r) { return r.id == id; });
+        };
+        const Rational ntsc(30000, 1001);
+        setProjectFormat(QSize(1920, 1080), ntsc, true, Rational(16, 9));
+        QVERIFY(offered(QStringLiteral("dvcpro_hd")));
+        QVERIFY(!offered(QStringLiteral("dv25_411")));
+        QVERIFY(!offered(QStringLiteral("xdcam_hd35")));
+        setProjectFormat(QSize(1920, 1080), ntsc, false, Rational(16, 9));
+        QVERIFY(!offered(QStringLiteral("dvcpro_hd"))); // 1080p 29.97 is not DVCPRO HD's
+        setProjectFormat(QSize(720, 576), Rational(25), false, Rational(4, 3));
+        QVERIFY(offered(QStringLiteral("dv25_420")));
+        QVERIFY(offered(QStringLiteral("dv50")));
+        setProjectFormat(QSize(1440, 1080), Rational(25), true, Rational(16, 9));
+        QVERIFY(offered(QStringLiteral("xdcam_hd35")));
+        QVERIFY(offered(QStringLiteral("dvcpro_hd")));
+        QVERIFY(!offered(QStringLiteral("xdcam_hd50")));
+        QCOMPARE(resolutionRaster(*findResolution(QStringLiteral("dvcpro_hd")), QSize(1920, 1080), Rational(25)), QSize(1440, 1080));
+
+        QTemporaryDir dir;
+        auto sourceAt = [&](const QString& name, Rational rate) {
+            const QString path = dir.filePath(name);
+            WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("ffv1");
+            s.pixelFormat = QStringLiteral("bgr0");
+            s.width = 64;
+            s.height = 36;
+            s.frameRate = rate;
+            if (!writeVideo(path, s, 15)) return std::optional<model::BinItem>();
+            LinkOptions o;
+            o.editRate = rate;
+            return linkClip(*probe(path), o);
+        };
+        auto clipWrapped = [](const QString& path) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly)) return false;
+            const QByteArray bytes = f.readAll();
+            const QByteArray dv = QByteArray::fromHex("060e2b34040101010d0103010202");
+            const qsizetype at = bytes.indexOf(dv);
+            return at >= 0 && bytes.at(at + 15) == 0x02 && !bytes.contains(dv + bytes.mid(at + 14, 1) + char(0x01));
+        };
+        QString error;
+        // DVCPRO HD in a 1080i/59.94 project: 1280 x 1080, pixels 3:2.
+        setProjectFormat(QSize(1920, 1080), ntsc, true, Rational(16, 9));
+        const auto hd = sourceAt(QStringLiteral("Harbour.mov"), ntsc);
+        QVERIFY(hd);
+        MediaCreation c;
+        c.raster = QSize(1920, 1080);
+        c.resolution = *findResolution(QStringLiteral("dvcpro_hd"));
+        c.videoDrive = dir.path();
+        const auto made = transcodeClip(*hd, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("DVCPro HD"));
+        QCOMPARE(made->fields.value(QStringLiteral("Pixel Aspect Ratio")), QStringLiteral("1.5"));
+        const auto link = linkOf(*made);
+        QVERIFY(link);
+        const auto v1 = probe(link->path);
+        QVERIFY(v1 && v1->firstVideo());
+        QCOMPARE(v1->firstVideo()->codec, QStringLiteral("dvvideo"));
+        QCOMPARE(QSize(v1->firstVideo()->width, v1->firstVideo()->height), QSize(1280, 1080));
+        QCOMPARE(v1->firstVideo()->aspect, Rational(16, 9));
+        QVERIFY(clipWrapped(link->path));
+        FrameCache cache;
+        QCOMPARE(cache.frame(*made, 7).size(), QSize(1280, 1080)); // as stored
+        const QImage shown = cache.frame(*made, 7, QSize(1920, 1080));
+        QCOMPARE(shown.size(), QSize(1920, 1080));
+        // Filling the frame: no pillars at its edges.
+        QVERIFY(near(shown.copy(8, 540, 1, 1), colourOf(7), 20));
+        QVERIFY(near(shown.copy(1910, 540, 1, 1), colourOf(7), 20));
+
+        // DV25 in an NTSC project: 720 x 480, the frame's 5th to 484th lines.
+        setProjectFormat(QSize(720, 486), ntsc, true, Rational(4, 3));
+        c.raster = QSize(720, 486);
+        c.resolution = *findResolution(QStringLiteral("dv25_411"));
+        const auto sd = transcodeClip(*hd, 0, -1, c, &error);
+        QVERIFY2(sd, qPrintable(error));
+        const auto sdProbe = probe(linkOf(*sd)->path);
+        QVERIFY(sdProbe && sdProbe->firstVideo());
+        QCOMPARE(QSize(sdProbe->firstVideo()->width, sdProbe->firstVideo()->height), QSize(720, 480));
+        QCOMPARE(sdProbe->firstVideo()->pixelFormat, QStringLiteral("yuv411p"));
+        QVERIFY(clipWrapped(linkOf(*sd)->path));
+        const QImage ntscFrame = cache.frame(*sd, 7, QSize(720, 486));
+        QCOMPARE(ntscFrame.size(), QSize(720, 486));
+        QCOMPARE(qGray(ntscFrame.pixel(360, 1)), 0); // the four lines DV has not
+        QVERIFY(near(ntscFrame.copy(360, 243, 1, 1), colourOf(7), 24));
+        // DV25 4:2:0 is PAL's alone.
+        c.resolution = *findResolution(QStringLiteral("dv25_420"));
+        QVERIFY(!transcodeClip(*hd, 0, -1, c, &error));
+        QVERIFY(error.contains(QStringLiteral("DV25 420")));
+
+        // XDCAM HD 35 in a 1440 x 1080 1080i/50 project.
+        setProjectFormat(QSize(1440, 1080), Rational(25), true, Rational(16, 9));
+        const auto pal = sourceAt(QStringLiteral("Quay.mov"), Rational(25));
+        QVERIFY(pal);
+        c.raster = QSize(1440, 1080);
+        c.resolution = *findResolution(QStringLiteral("xdcam_hd35"));
+        const auto xd = transcodeClip(*pal, 0, -1, c, &error);
+        QVERIFY2(xd, qPrintable(error));
+        const auto xdProbe = probe(linkOf(*xd)->path);
+        QVERIFY(xdProbe && xdProbe->firstVideo());
+        QCOMPARE(xdProbe->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(QSize(xdProbe->firstVideo()->width, xdProbe->firstVideo()->height), QSize(1440, 1080));
+        QCOMPARE(xdProbe->firstVideo()->pixelFormat, QStringLiteral("yuv420p"));
+        setProjectFormat({}, Rational(), false);
+    }
+
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the
     // new media and the new clip and segments have none; off, the new clip keeps the encoding.
     void transcodeColorEncoding() {

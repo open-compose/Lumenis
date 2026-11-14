@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <optional>
 
 // Managed media (ROADMAP Phase 2.4a/b): media the application writes itself, as MXF OP-Atom files,
 // one per track, in "<drive>/Avid MediaFiles/MXF/<n>/". This file holds:
@@ -43,6 +44,8 @@ namespace {
 // Defined with the resolutions, below.
 QList<QPair<QString, QString>> xdcamOptions(const Resolution& r, Rational rate);
 bool projectInterlaced();
+// The project's scan, or nothing before a project's format is known (setProjectFormat()).
+std::optional<bool> projectScan();
 } // namespace
 
 namespace {
@@ -129,6 +132,21 @@ QString trackList(bool video, int channels) {
     if (channels == 1) parts << QStringLiteral("A1");
     if (channels > 1) parts << QStringLiteral("A1-%1").arg(channels);
     return parts.join(QLatin1Char(' '));
+}
+
+// How wide the pixels of media stored at `stored` for a project of `raster` are: the project's picture in fewer
+// pixels, each wider (DVCPRO HD's 1280 x 1080 for 1920 x 1080: 3:2); DV's 480 lines of NTSC's 486 are lines of the same
+// height (toStoredRaster()). The project's pixels are its picture's aspect ratio (projectAspect()) over its raster's.
+double storedPixelAspect(QSize raster, QSize stored) {
+    if (raster.isEmpty() || stored.isEmpty()) return 1.0;
+    const Rational aspect = projectAspect();
+    const double frame = aspect.num() > 0 && aspect.den() > 0 ? aspect.toDouble()
+                                                                : static_cast<double>(raster.width()) / raster.height();
+    const double projectPixel = frame * raster.height() / raster.width();
+    const bool cropped = raster.height() == 486 && stored.height() == 480;
+    const double sx = static_cast<double>(raster.width()) / stored.width();
+    const double sy = cropped ? 1.0 : static_cast<double>(raster.height()) / stored.height();
+    return projectPixel * sx / sy;
 }
 
 // Writes one track's media; the files made so far are removed on failure.
@@ -231,11 +249,15 @@ public:
         return creation_.progress(std::min(1.0, static_cast<double>(done_) / static_cast<double>(total_)));
     }
 
-    // The picture's encoder settings for the creation's resolution: encoder, profile, pixel format, and XDCAM's rate,
-    // GOP and fields. False, with the reason, when the resolution is not made for the project's format (p.1252-1272).
+    // The raster the media is stored in: the project's, or the resolution's own (DV's, DVCPRO HD's; resolutionRaster()).
+    QSize stored() const { return resolutionRaster(creation_.resolution, creation_.raster, clip_.editRate); }
+
+    // The picture's encoder settings for the creation's resolution: encoder, profile, pixel format, the stored raster and
+    // its pixels' shape, and XDCAM's rate, GOP and fields. False, with the reason, when the resolution is not made for
+    // the project's format (p.1252-1274).
     bool videoSettings(WriterSettings& s, QString* error) const {
         const Resolution& r = creation_.resolution;
-        if (!resolutionFits(r, creation_.raster, clip_.editRate)) {
+        if (!resolutionFits(r, creation_.raster, clip_.editRate, projectScan())) {
             if (error) {
                 *error = QObject::tr("%1 is not made in %2 x %3 projects at %4 fps.")
                              .arg(r.name)
@@ -248,6 +270,13 @@ public:
         s.videoCodec = resolutionEncoder(r);
         s.videoProfile = resolutionProfile(r);
         s.pixelFormat = r.pixelFormat;
+        const QSize at = stored();
+        s.width = at.width();
+        s.height = at.height();
+        if (at != creation_.raster) {
+            // The stream says how wide its pixels are, and readers fit it (fitPicture()).
+            s.pixelAspect = storedPixelAspect(creation_.raster, at);
+        }
         if (r.codec == QLatin1String("mpeg2video")) {
             s.videoOptions << xdcamOptions(r, clip_.editRate);
             s.bitRate = r.bitRate;
@@ -257,26 +286,27 @@ public:
         return true;
     }
 
-    // V1 re-encoded in the creation's resolution (DNxHR or ProRes, resolutionEncoder()) and raster.
+    // V1 re-encoded in the creation's resolution (resolutionEncoder()) and raster.
     bool transcodeVideo(const QString& path, QString* error) {
         VideoReader reader;
         if (!reader.open(link_.path, link_.videoStream, error)) return false;
         WriterSettings s = settingsFor(QStringLiteral("V1"));
         if (!videoSettings(s, error)) return false;
-        s.width = creation_.raster.width();
-        s.height = creation_.raster.height();
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
-        // Fitted into the raster keeping its shape, on black, straight from
-        // the decoded picture: no 8-bit step between (10-bit DNx keeps its
-        // depth; ROADMAP Phase 2 gate 5).
-        const QSize picture = QSize(reader.info().width, reader.info().height).scaled(creation_.raster, Qt::KeepAspectRatio);
-        const QRect target(QPoint((creation_.raster.width() - picture.width()) / 2,
-                                  (creation_.raster.height() - picture.height()) / 2),
-                           picture);
+        // Fitted into the raster by the shape it is shown at (fitPictureRect()), on black. Straight from the decoded
+        // picture, no 8-bit step between (10-bit DNx keeps its depth; ROADMAP Phase 2 gate 5), when the media is stored
+        // at the project's raster; DV's and DVCPRO HD's own rasters (8-bit) go through a picture of the project's.
+        const StreamInfo& info = reader.info();
+        const double sourcePixel = info.aspect.num() > 0 && info.width > 0 && info.height > 0
+                                       ? info.aspect.toDouble() * info.height / info.width
+                                       : 1.0;
+        const QRectF placed = fitPictureRect(QSize(info.width, info.height), sourcePixel, creation_.raster);
+        const QRect target = placed.toAlignedRect().intersected(QRect(QPoint(0, 0), creation_.raster));
+        const bool direct = creation_.colorTransformations.isEmpty() && stored() == creation_.raster;
         for (std::int64_t f = in_; f < out_; ++f) {
             bool ok = false;
-            if (creation_.colorTransformations.isEmpty()) {
+            if (direct) {
                 ok = writer.writeVideoFrom(reader, link_.fileFrame(f, clip_.editRate), target);
             } else {
                 // The clip's colour adapter applied (p.544): through an 8-bit picture, the transformations' domain.
@@ -286,13 +316,15 @@ public:
                     shown.fill(Qt::black);
                     QPainter p(&shown);
                     p.setRenderHint(QPainter::SmoothPixmapTransform);
-                    p.drawImage(QRectF(target), applyColorTransformations(frame, creation_.colorTransformations));
+                    p.drawImage(placed, creation_.colorTransformations.isEmpty()
+                                            ? frame
+                                            : applyColorTransformations(frame, creation_.colorTransformations));
                     p.end();
-                    ok = writer.writeVideo(shown);
+                    ok = writer.writeVideo(toStoredRaster(shown, stored()));
                 }
             }
             // A frame that cannot be read is black.
-            if (!ok && writer.lastError().isEmpty()) ok = writer.writeVideo(fitted(QImage(), creation_.raster));
+            if (!ok && writer.lastError().isEmpty()) ok = writer.writeVideo(fitted(QImage(), stored()));
             if (!ok) {
                 if (error) *error = writer.lastError();
                 return false;
@@ -307,13 +339,11 @@ public:
     bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error, bool keep, std::int64_t& written) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
         if (!videoSettings(s, error)) return false;
-        s.width = creation_.raster.width();
-        s.height = creation_.raster.height();
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
         written = 0;
         for (std::int64_t f = in_; f < out_; ++f) {
-            if (!writer.writeVideo(fitted(render(f), creation_.raster))) {
+            if (!writer.writeVideo(toStoredRaster(fitted(render(f), creation_.raster), stored()))) {
                 if (error) *error = writer.lastError();
                 return false;
             }
@@ -624,6 +654,10 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
             set("Format", QStringLiteral("%1p/%2").arg(creation.raster.height()).arg(fpsText(fps)));
             set("Color Space", creation.resolution.rgb ? QStringLiteral("RGB 709") : QStringLiteral("YCbCr 709"));
             set("Image Aspect Ratio", clip.fields.value(QStringLiteral("Image Aspect Ratio")));
+            // DV's and DVCPRO HD's own rasters (p.1252-1274): the pixels' shape, as linking says it (link.cpp).
+            if (const QSize at = resolutionRaster(creation.resolution, creation.raster, clip.editRate); at != creation.raster) {
+                set("Pixel Aspect Ratio", fpsText(storedPixelAspect(creation.raster, at)));
+            }
         }
         set("Drive", driveName(videoFolder));
     } else {
@@ -894,7 +928,7 @@ QList<Resolution> allResolutions() {
         int height;
         QList<Rational> rates;
     };
-    auto xdcam = [](const char* id, const char* name, const char* pixel, int mbps, bool constant, const char* probed,
+    auto xdcam = [](const char* id, const char* name, const char* pixel, int kbps, bool constant, const char* probed,
                     int quality, const QList<Rasters>& rasters) {
         Resolution r;
         r.id = QString::fromLatin1(id);
@@ -903,17 +937,56 @@ QList<Resolution> allResolutions() {
         r.codec = QStringLiteral("mpeg2video");
         r.probed = QString::fromLatin1(probed);
         r.quality = quality;
-        r.bitRate = static_cast<std::int64_t>(mbps) * 1000000;
-        const QString rate = QString::number(mbps) + QLatin1Char('M');
+        // A variable rate's average below its peak (ours: three quarters): MPEG-2's rate control cannot keep an average
+        // equal to the most it may spend.
+        r.bitRate = static_cast<std::int64_t>(constant ? kbps : kbps * 3 / 4) * 1000;
+        const QString rate = QString::number(kbps) + QLatin1Char('k');
         r.options = {{QStringLiteral("bf"), QStringLiteral("2")},
                      {QStringLiteral("intra_vlc"), QStringLiteral("1")},
                      {QStringLiteral("maxrate"), rate},
                      {QStringLiteral("bufsize"), QStringLiteral("17825792")}};
         if (constant) r.options << QPair<QString, QString>{QStringLiteral("minrate"), rate};
         for (const Rasters& f : rasters) {
-            for (const Rational& fps : f.rates) r.formats << QPair<QSize, Rational>{QSize(f.width, f.height), fps};
+            for (const Rational& fps : f.rates) r.formats << ResolutionFormat{QSize(f.width, f.height), fps};
         }
         return r;
+    };
+    // DV (SMPTE 314M; DVCPRO HD 370M) through FFmpeg's DV encoder, which takes the profile from the stored raster, rate
+    // and pixel format. Its formats are listed in full: a stored raster of its own and the scan.
+    auto dv = [](const char* id, const char* name, const char* pixel, const char* probed, int quality,
+                 const QList<ResolutionFormat>& formats) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.pixelFormat = QString::fromLatin1(pixel);
+        r.codec = QStringLiteral("dvvideo");
+        r.probed = QString::fromLatin1(probed);
+        r.quality = quality;
+        r.formats = formats;
+        return r;
+    };
+    using Scan = ResolutionFormat::Scan;
+    const Rational ntsc(30000, 1001);
+    const Rational pal(25);
+    // SD (p.1272-1274): NTSC 30i, stored in DV's 480 lines, and PAL 25i; DV25P and DV50P at PAL's 25p. Ours: not at
+    // 23.976 and 24 fps, which DV carries as 2:3 pulldown in a 30i stream (FFmpeg's encoder makes DV's own rates only).
+    const ResolutionFormat ntsc30i{QSize(720, 486), ntsc, Scan::Interlaced, QSize(720, 480)};
+    const ResolutionFormat ntscDv30i{QSize(720, 480), ntsc, Scan::Interlaced};
+    const ResolutionFormat pal25i{QSize(720, 576), pal, Scan::Interlaced};
+    const ResolutionFormat pal25p{QSize(720, 576), pal, Scan::Progressive};
+    // DVCPRO HD (p.1252-1270): 1080i at 59.94 stored 1280 x 1080 and at 50 stored 1440 x 1080, 720p at 50 and 59.94
+    // stored 960 x 720, in the full rasters and the reduced ones. Ours: not at 720p 23.976, 25 and 29.97, which it
+    // carries in 50 and 59.94 streams.
+    const QList<ResolutionFormat> dvcproHd{
+        {QSize(1920, 1080), ntsc, Scan::Interlaced, QSize(1280, 1080)},
+        {QSize(1440, 1080), ntsc, Scan::Interlaced, QSize(1280, 1080)},
+        {QSize(1280, 1080), ntsc, Scan::Interlaced},
+        {QSize(1920, 1080), pal, Scan::Interlaced, QSize(1440, 1080)},
+        {QSize(1440, 1080), pal, Scan::Interlaced},
+        {QSize(1280, 720), Rational(50), Scan::Any, QSize(960, 720)},
+        {QSize(1280, 720), Rational(60000, 1001), Scan::Any, QSize(960, 720)},
+        {QSize(960, 720), Rational(50)},
+        {QSize(960, 720), Rational(60000, 1001)},
     };
     return {
         // The quality levels p.1240 names, in order of quality.
@@ -931,12 +1004,24 @@ QList<Resolution> allResolutions() {
         prores("prores_4444xq", "Apple ProRes 4444 XQ", "4444xq", "xq", "yuv444p10le", "XQ", 6),
         // XDCAM (p.1252-1269): MPEG-2 long GOP, at the project's raster. XDCAM HD 50 is 4:2:2 at a constant 50 Mb/s,
         // XDCAM EX 35 4:2:0 up to 35 Mb/s; the GOP is set from the rate when the media is made (xdcamOptions()).
-        xdcam("xdcam_hd50", "XDCAM HD 50Mbits", "yuv422p", 50, true, "4:2:2", 3,
+        xdcam("xdcam_hd50", "XDCAM HD 50Mbits", "yuv422p", 50000, true, "4:2:2", 3,
               {{1920, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}},
                {1280, 720, {Rational(25), Rational(30000, 1001), Rational(50), Rational(60000, 1001)}}}),
-        xdcam("xdcam_ex35", "XDCAM EX 35 Mbits", "yuv420p", 35, false, "Main", 2,
+        xdcam("xdcam_ex35", "XDCAM EX 35 Mbits", "yuv420p", 35000, false, "Main", 2,
               {{1920, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}},
                {1280, 720, {Rational(24000, 1001), Rational(25), Rational(30000, 1001), Rational(50), Rational(60000, 1001)}}}),
+        // XDCAM HD 35 and 17.5 Mbits (p.1253-1258): MPEG-2 4:2:0 in the 1440 x 1080 raster, 1080i at 50 and 59.94 and
+        // 1080p at 23.976, up to 35 or 17.5 Mb/s.
+        xdcam("xdcam_hd35", "XDCAM HD 35 Mbits", "yuv420p", 35000, false, "Main", 2,
+              {{1440, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}}}),
+        xdcam("xdcam_hd17", "XDCAM HD 17.5 Mbits", "yuv420p", 17500, false, "Main", 1,
+              {{1440, 1080, {Rational(24000, 1001), Rational(25), Rational(30000, 1001)}}}),
+        // DV (p.1272-1274; the DV family p.1244): DV25 4:1:1 (NTSC's, and DVCPRO's in PAL), DV25 4:2:0 (PAL's), DV50
+        // 4:2:2, and DVCPRO HD.
+        dv("dv25_411", "DV25 411", "yuv411p", "", 1, {ntsc30i, ntscDv30i, pal25i, pal25p}),
+        dv("dv25_420", "DV25 420", "yuv420p", "", 1, {pal25i, pal25p}),
+        dv("dv50", "DV50", "yuv422p", "", 2, {ntsc30i, ntscDv30i, pal25i, pal25p}),
+        dv("dvcpro_hd", "DVCPro HD", "yuv422p", "", 2, dvcproHd),
     };
 }
 
@@ -959,6 +1044,7 @@ struct ProjectFormatNow {
     QSize raster;
     Rational rate;
     bool interlaced = false;
+    Rational aspect; // the picture's; invalid: square pixels
 };
 std::mutex& projectFormatLock() {
     static std::mutex lock;
@@ -982,7 +1068,7 @@ const QList<Resolution>& stableResolutions() {
 // Whether this build, on this computer, has an encoder it may use for the resolution.
 bool canMake(const Resolution& r) {
     if (r.codec == QLatin1String("prores")) return !proresEncoder().isEmpty();
-    if (r.codec == QLatin1String("mpeg2video")) return encoderAvailable(QStringLiteral("mpeg2video"));
+    if (r.codec == QLatin1String("mpeg2video") || r.codec == QLatin1String("dvvideo")) return encoderAvailable(r.codec);
     return true; // DNx: checked when the media is made, as before
 }
 
@@ -999,18 +1085,96 @@ bool projectInterlaced() {
     return currentProjectFormat().interlaced;
 }
 
-} // namespace
-
-void setProjectFormat(QSize raster, Rational rate, bool interlaced) {
-    const std::lock_guard<std::mutex> hold(projectFormatLock());
-    projectFormatNow() = {raster, rate, interlaced};
+std::optional<bool> projectScan() {
+    const ProjectFormatNow now = currentProjectFormat();
+    if (now.raster.isEmpty()) return std::nullopt;
+    return now.interlaced;
 }
 
-bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate) {
-    if (resolution.formats.isEmpty()) return true;
-    return std::any_of(resolution.formats.begin(), resolution.formats.end(), [&](const QPair<QSize, Rational>& f) {
-        return f.first == raster && f.second == rate;
-    });
+} // namespace
+
+void setProjectFormat(QSize raster, Rational rate, bool interlaced, Rational aspect) {
+    const std::lock_guard<std::mutex> hold(projectFormatLock());
+    projectFormatNow() = {raster, rate, interlaced, aspect};
+}
+
+Rational projectAspect() {
+    return currentProjectFormat().aspect;
+}
+
+namespace {
+
+const ResolutionFormat* formatFor(const Resolution& resolution, QSize raster, Rational rate, std::optional<bool> interlaced) {
+    for (const ResolutionFormat& f : resolution.formats) {
+        if (f.raster != raster || !(f.rate == rate)) continue;
+        if (interlaced && f.scan != ResolutionFormat::Scan::Any &&
+            (f.scan == ResolutionFormat::Scan::Interlaced) != *interlaced) {
+            continue;
+        }
+        return &f;
+    }
+    return nullptr;
+}
+
+} // namespace
+
+bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate, std::optional<bool> interlaced) {
+    return resolution.formats.isEmpty() || formatFor(resolution, raster, rate, interlaced) != nullptr;
+}
+
+QSize resolutionRaster(const Resolution& resolution, QSize raster, Rational rate) {
+    const ResolutionFormat* f = formatFor(resolution, raster, rate, std::nullopt);
+    return f && !f->stored.isEmpty() ? f->stored : raster;
+}
+
+QImage toStoredRaster(const QImage& picture, QSize stored) {
+    if (picture.isNull() || picture.size() == stored) return picture;
+    if (picture.height() == 486 && stored.height() == 480) {
+        // NTSC to DV: the top four lines and the bottom two go (p.1195).
+        return picture.copy(0, 4, picture.width(), 480).scaled(stored, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+    return picture.scaled(stored, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+QRectF fitPictureRect(QSize image, double pixelAspect, QSize size) {
+    const QRectF whole(QPointF(0, 0), QSizeF(size));
+    if (image.isEmpty() || size.isEmpty()) return whole;
+    if (std::abs(pixelAspect - 1.0) < 1e-3 || pixelAspect <= 0) {
+        // Square pixels: by their pixels, as before.
+        const QSizeF fit = QSizeF(image).scaled(QSizeF(size), Qt::KeepAspectRatio);
+        return QRectF(QPointF((size.width() - fit.width()) / 2, (size.height() - fit.height()) / 2), fit);
+    }
+    const ProjectFormatNow format = currentProjectFormat();
+    if (image.height() == 480 && format.raster.height() == 486) {
+        // DV in an NTSC frame: its 480 lines are the frame's 5th to 484th.
+        const double line = static_cast<double>(size.height()) / 486.0;
+        return QRectF(0, 4 * line, size.width(), 480 * line);
+    }
+    // The frame's shape as shown, and the picture's.
+    const double frame = format.aspect.num() > 0 && format.aspect.den() > 0
+                             ? format.aspect.toDouble()
+                             : static_cast<double>(size.width()) / size.height();
+    const double shown = pixelAspect * image.width() / image.height();
+    if (std::abs(shown / frame - 1.0) < 0.03) return whole;
+    if (shown > frame) {
+        const double h = size.height() * frame / shown;
+        return QRectF(0, (size.height() - h) / 2, size.width(), h);
+    }
+    const double w = size.width() * shown / frame;
+    return QRectF((size.width() - w) / 2, 0, w, size.height());
+}
+
+QImage fitPicture(const QImage& image, double pixelAspect, QSize size) {
+    if (image.isNull() || !size.isValid() || image.size() == size) return image;
+    if (std::abs(pixelAspect - 1.0) < 1e-3 || pixelAspect <= 0) {
+        return image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    QImage out(size, QImage::Format_RGB32);
+    out.fill(Qt::black);
+    QPainter p(&out);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.drawImage(fitPictureRect(image.size(), pixelAspect, size), image);
+    return out;
 }
 
 QList<Resolution> resolutions() {
@@ -1018,7 +1182,7 @@ QList<Resolution> resolutions() {
     QList<Resolution> out;
     for (const Resolution& r : stableResolutions()) {
         if (!canMake(r)) continue;
-        if (!format.raster.isEmpty() && !resolutionFits(r, format.raster, format.rate)) continue;
+        if (!format.raster.isEmpty() && !resolutionFits(r, format.raster, format.rate, format.interlaced)) continue;
         out << r;
     }
     return out;
@@ -1026,7 +1190,7 @@ QList<Resolution> resolutions() {
 
 QString resolutionEncoder(const Resolution& resolution) {
     if (resolution.codec == QLatin1String("prores")) return proresEncoder();
-    if (resolution.codec == QLatin1String("mpeg2video")) return QStringLiteral("mpeg2video");
+    if (resolution.codec == QLatin1String("mpeg2video") || resolution.codec == QLatin1String("dvvideo")) return resolution.codec;
     return QStringLiteral("dnxhd");
 }
 

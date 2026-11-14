@@ -1106,7 +1106,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   settings.json; test `tst_media transcodeProRes`), is done. 11.1c1, XDCAM HD 50 and EX 35 (`Resolution::formats` with
   `media::setProjectFormat` from `MainWindow::tellMediaTheFormat`, so resolution menus offer what the project's format
   takes; `WriterSettings::interlaced`; encoder options through `AV_OPT_SEARCH_CHILDREN`; `fixOpAtom` for MPEG; test
-  `tst_media transcodeXdcam`), is done. 10.6 is an update check that only tells the user (no
+  `tst_media transcodeXdcam`), is done. 11.1c2, DV25, DV50, DVCPro HD and XDCAM HD 35/17.5 in their own rasters (`ResolutionFormat`
+  with the stored raster and scan, `media::resolutionRaster`/`toStoredRaster`, the pixels' shape through
+  `WriterSettings::pixelAspect` and the Pixel Aspect Ratio column, frames fitted by their shown shape through
+  `media::fitPicture` and `model::withPixelAspect`; test `tst_media transcodeDv`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

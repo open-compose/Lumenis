@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/fields.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/model/color_adapter.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/motion_adapter.h"
@@ -785,6 +786,8 @@ struct FrameCache::Reader {
     VideoReader video;
     bool ok = false;
     std::int64_t lastUsed = 0; // steady clock, ms
+    // The width of the file's pixels over their height (its sample aspect ratio; DVCPRO HD's 1280 x 1080: 1.5).
+    double pixelAspect = 1.0;
 };
 
 namespace {
@@ -825,6 +828,9 @@ std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
     r->stream = link.videoStream;
     r->ok = link.videoStream >= 0 && r->video.open(link.path, link.videoStream);
     if (!r->ok) return r;
+    if (const StreamInfo& info = r->video.info(); info.aspect.num() > 0 && info.width > 0 && info.height > 0) {
+        r->pixelAspect = info.aspect.toDouble() * info.height / info.width;
+    }
     readers_.push_front(r);
     while (static_cast<int>(readers_.size()) > openFiles_) readers_.pop_back();
     return r;
@@ -882,9 +888,8 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
         p.setOpacity(blend);
         p.drawImage(0, 0, next);
     }
-    if (size.isValid() && image.size() != size) {
-        image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    }
+    // By the shape it is shown at: DVCPRO HD's and HDV's anamorphic pixels fill the frame (fitPicture()).
+    if (size.isValid() && image.size() != size) image = fitPicture(image, r->pixelAspect, size);
     std::unique_lock lock(mutex_);
     images_.insert(key, image);
     imageOrder_.removeAll(key);
@@ -956,7 +961,7 @@ QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, 
     const FrameGetter fromFirst = [&](std::int64_t n) { return frameAt(link.first + n); };
     QImage image = media::convertedFrame(fromFirst, [&](double t) { return t * ratio; }, static_cast<double>(clipFrame), conv);
     if (image.isNull()) return {};
-    if (size.isValid() && image.size() != size) image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (size.isValid() && image.size() != size) image = fitPicture(image, r->pixelAspect, size);
     std::unique_lock lock(mutex_);
     images_.insert(key, image);
     imageOrder_.removeAll(key);

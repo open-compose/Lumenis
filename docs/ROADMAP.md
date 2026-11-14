@@ -1837,8 +1837,13 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
     upper field first in interlaced projects (`WriterSettings::interlaced`); `fixOpAtom` labels the MPEG essence
     clip-wrapped. The writer's encoder options now reach FFmpeg's codec context (`AV_OPT_SEARCH_CHILDREN`): movie
     export's XDCAM had lost its GOP and rate; test `tst_media transcodeXdcam`). 11.1c2, DV25 411/420, DV50 and DVCPro
-    HD, and XDCAM HD 35 and 17.5 Mbits: their own rasters (720 x 480, 1280 or 1440 x 1080, 960 x 720) and non-square
-    pixels, kept as the clip's pixel aspect for display. 11.1c3, MPEG IMX 30, 40 and 50.
+    HD, and XDCAM HD 35 and 17.5 Mbits (done: `ResolutionFormat` with the scan and the stored raster,
+    `media::resolutionRaster`/`toStoredRaster`, DV's 480 lines cropped from and padded into NTSC's 486 (p.1195); the
+    pixels' shape in the stream (`WriterSettings::pixelAspect`) and the clip's Pixel Aspect Ratio; frames fitted by the
+    shape they are shown at (`media::fitPicture` in the frame cache, `model::withPixelAspect` for spatial adapters), so
+    anamorphic media, HDV's linked 1440 x 1080 too, fills the frame; `fixOpAtom` labels DV clip-wrapped; test `tst_media
+    transcodeDv`. Ours: not at the rates DV carries as pulldown, 24p DV and 720p DVCPro HD below 50). 11.1c3, MPEG IMX
+    30, 40 and 50.
   * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1d, DNxUncompressed and the DNxHD
     bit-rate names.
 * 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-857) on a time-stretch engine of

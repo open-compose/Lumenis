@@ -1269,9 +1269,9 @@ qint64 berLength(const QByteArray& b, qsizetype& at) {
 // and the header metadata after it (the random index pack at the end lists
 // the partitions); the essence is not touched.
 // * It clip-wraps the essence (one KLV for the whole of it, as Avid's media
-//   is) but labels VC-3 (DNx), ProRes, MPEG-2 (XDCAM) and BWF essence containers
+//   is) but labels VC-3 (DNx), ProRes, MPEG-2 (XDCAM), DV and BWF essence containers
 //   frame-wrapped (SMPTE ST 2019-4, RDD 44 and 382: byte 15, 01 frame, 02 clip;
-//   ST 381's MPEG: byte 16). Readers that go
+//   ST 381's MPEG and ST 383's DV: byte 16). Readers that go
 //   by the label, such as bmx (ROADMAP Phase 2 gate 2), then cannot read
 //   the essence.
 // * Its package UMIDs are random in every file: one stem, the material
@@ -1350,6 +1350,11 @@ bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& f
             }
             // MPEG elementary streams (XDCAM; SMPTE ST 381): 04, the stream id 60-6f, then the wrapping last, 01 frame
             // and 02 clip.
+            // DV (SMPTE ST 383): 02, the DV kind, then the wrapping last, 01 frame and 02 clip.
+            if (region.mid(i + 8, 5) == kMiddle && kind == 0x02 && region.at(i + 15) == 0x01) {
+                region[i + 15] = 0x02;
+                changed = true;
+            }
             const auto stream = static_cast<std::uint8_t>(region.at(i + 14));
             if (region.mid(i + 8, 5) == kMiddle && kind == 0x04 && (stream & 0xf0) == 0x60 && region.at(i + 15) == 0x01) {
                 region[i + 15] = 0x02;
@@ -1414,6 +1419,9 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
                                   ? firstPixelFormat(codec)
                                   : closestPixelFormat(codec, av_get_pix_fmt(s.pixelFormat.toUtf8().constData()));
             d.venc->sample_aspect_ratio = AVRational{1, 1};
+            if (std::abs(s.pixelAspect - 1.0) > 1e-6 && s.pixelAspect > 0) {
+                d.venc->sample_aspect_ratio = av_d2q(s.pixelAspect, 1000);
+            }
             // Rec. 709 for HD and larger, and for DNx, which declares 709 at any
             // size; Rec. 601 otherwise. The stream says which, so readers agree.
             d.rec709 = s.height > 576 || s.videoCodec == QLatin1String("dnxhd");
@@ -1432,6 +1440,8 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             // FFmpeg's VideoToolbox encoders ask for the hardware encoder alone unless allow_sw is set; a Mac without a
             // ProRes engine (the M1, M2 and M3 without Pro or Max) then fails to open them ("Generic error in an
             // external library"). Apple's software encoder is the OS's too.
+            // DV sites its chroma top-left (IEC 61834, SMPTE 314M) and says so to the encoder, which warns otherwise.
+            if (codec->id == AV_CODEC_ID_DVVIDEO) d.venc->chroma_sample_location = AVCHROMA_LOC_TOPLEFT;
             if (QByteArray(codec->name).endsWith("_videotoolbox")) av_opt_set(d.venc->priv_data, "allow_sw", "1", 0);
             // On the context and its encoder both: "g", "bf", "maxrate", "minrate" and "bufsize" are the context's,
             // "intra_vlc" or OpenEXR's "format" the encoder's own (set on priv_data alone, the context's were lost:

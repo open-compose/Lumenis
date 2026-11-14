@@ -215,6 +215,9 @@ struct WriterSettings {
     // Interlaced, upper field first: encoded with interlaced DCT and motion estimation where the encoder has them
     // (MPEG-2: XDCAM in interlaced projects), and the stream says so.
     bool interlaced = false;
+    // The width of a pixel over its height (the stream's sample aspect ratio): 1 for square pixels, DVCPRO HD's 3:2
+    // for 1280 x 1080 (ROADMAP 11.1c2).
+    double pixelAspect = 1.0;
     // Audio; empty codec for none.
     QString audioCodec;  // "pcm_s16le", "pcm_s24le", ...
     int sampleRate = 48000;

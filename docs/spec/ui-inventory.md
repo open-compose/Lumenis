@@ -2861,9 +2861,19 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * XDCAM HD 50Mbits and XDCAM EX 35 Mbits (MPEG-2 long GOP, FFmpeg) in the
   project formats the tables list them for (p.1252-1269): the resolution menus
   offer what the project's format takes (ROADMAP 11.1c1).
+* XDCAM HD 35 and 17.5 Mbits in 1440 x 1080 projects; DV25 411, DV25 420
+  (PAL), DV50 and DVCPro HD (FFmpeg's DV encoder) in the formats of the SD
+  and HD tables (p.1252-1274), stored in their own rasters: DVCPro HD's
+  1280 x 1080 (1080i 59.94), 1440 x 1080 (1080i 50) and 960 x 720, DV's 720 x
+  480 in NTSC's 486-line projects, cropped and padded as the Import setting's
+  Crop/Pad does (p.1195). Their pixels' shape goes in the stream and the
+  clip's Pixel Aspect Ratio, and they fill the project frame when shown
+  (ROADMAP 11.1c2). Ours: not DV25P/DV50P at 23.976 and 24 fps, nor DVCPro
+  HD at 720p 23.976, 25 and 29.97, which DV carries as pulldown in a stream of
+  another rate.
 * At least 256x120 (p.355).
-* Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, XAVC, AVC-Intra, DV,
-  DVCPro HD, XDCAM HD 35 and 17.5, MPEG IMX, MXF OP1a and OMF (ROADMAP 11.1).
+* Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, XAVC, AVC-Intra,
+  MPEG IMX, MXF OP1a and OMF (ROADMAP 11.1).
 
 ### Media Creation setting (p.134–136, p.1206–1209)
 * A project setting, from File > Media > Media Creation Settings (Ctrl+5)

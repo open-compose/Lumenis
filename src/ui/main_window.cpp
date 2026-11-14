@@ -3429,7 +3429,7 @@ QImage MainWindow::monoFrame(const model::BinItem& source, std::int64_t frame, Q
     if (!spatial || !project_) return media::applyColorTransformations(frames_->frame(clip, frame, want), transformations);
     const QImage full = media::applyColorTransformations(frames_->frame(clip, frame, QSize()), transformations);
     const QSize raster(project_->settings.format.width, project_->settings.format.height);
-    return media::spatialAdaptedImage(full, *spatial, raster, want.isValid() ? want : raster);
+    return media::spatialAdaptedImage(full, model::withPixelAspect(*spatial, clip), raster, want.isValid() ? want : raster);
 }
 
 // Source Settings (8.5b1; p.527-535): the clips selected in the active bin, or the Source monitor's clip, in the dialog;
@@ -3578,7 +3578,7 @@ bool MainWindow::setProxyMode(int mode) {
 void MainWindow::tellMediaTheFormat() const {
     if (!project_) return;
     const ProjectFormat& f = project_->settings.format;
-    media::setProjectFormat(QSize(f.width, f.height), f.editRate, f.scan == ScanMode::Interlaced);
+    media::setProjectFormat(QSize(f.width, f.height), f.editRate, f.scan == ScanMode::Interlaced, project_->settings.aspect);
 }
 
 bool MainWindow::setProjectFormat(const ProjectFormat& format) {

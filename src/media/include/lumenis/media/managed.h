@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QList>
+#include <QRectF>
 #include <QSet>
 #include <QSize>
 #include <QString>
@@ -33,27 +34,58 @@ namespace lumenis::media {
 // system's on macOS (VideoToolbox, Apple's licensed encoder; the guide's
 // "macOS only"), FFmpeg's elsewhere in builds with LUMENIS_PATENT_CODECS
 // (ours; docs/EXTENSIONS.md, docs/spec/media-formats.md).
+// A project format a resolution is made for (p.1252-1274): the project's raster and edit rate (1080i/59.94 is 29.97),
+// the scan, and the raster the media is stored in when it is not the project's.
+struct ResolutionFormat {
+    enum class Scan { Any, Interlaced, Progressive };
+    ResolutionFormat(QSize raster_, Rational rate_, Scan scan_ = Scan::Any, QSize stored_ = QSize())
+        : raster(raster_), rate(rate_), scan(scan_), stored(stored_) {}
+    QSize raster;
+    Rational rate;
+    Scan scan = Scan::Any;
+    QSize stored; // empty: the project's raster
+};
+
 struct Resolution {
     QString id;          // kept in settings: "dnx_hq", "prores_hq"
     QString name;        // "Avid DNx HQ", "Apple ProRes 422 HQ"
     QString profile;     // FFmpeg's encoder profile: "dnxhr_hq"; "hq" (prores_ks)
     QString pixelFormat; // "yuv422p", "yuv422p10le", "yuv444p10le"
     bool rgb = false;    // Avid DNx 444 is RGB only (p.1241)
-    QString codec = QStringLiteral("dnxhd"); // the codec: "dnxhd" or "prores"
+    QString codec = QStringLiteral("dnxhd"); // the codec: "dnxhd", "prores", "mpeg2video" or "dvvideo"
     QString osProfile;   // the profile for the OS's encoder (VideoToolbox: "standard", "xq"), where it differs
     QString probed;      // the profile FFmpeg reports when it reads the media: "DNXHR HQ", "HQ"
     int quality = 0;     // for picking the better of two: comparable DNx and ProRes levels rank the same
     // The encoder's own options and bit rate (XDCAM's MPEG-2: rate, GOP; ROADMAP 11.1c).
     QList<QPair<QString, QString>> options;
     std::int64_t bitRate = 0;
-    // The project formats it is made for, as raster and frame rate pairs (p.1252-1272); empty: any (DNx, ProRes).
-    QList<QPair<QSize, Rational>> formats;
+    // The project formats it is made for (p.1252-1274); empty: any (DNx, ProRes).
+    QList<ResolutionFormat> formats;
 };
-// The project's format, for the resolutions offered (resolutions()) and how interlaced media is encoded; set by the
-// main window when a project opens or its format changes. Until then, every format.
-void setProjectFormat(QSize raster, Rational rate, bool interlaced);
-// Whether the resolution is made for a project of that raster and rate.
-bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate);
+// The project's format, for the resolutions offered (resolutions()), how interlaced media is encoded and how pictures
+// of other pixel shapes fit it (fitPicture()); set by the main window when a project opens or its format changes. Until
+// then, every format, and square pixels. `aspect` is the picture's (16:9; an SD project's 4:3 or 16:9).
+void setProjectFormat(QSize raster, Rational rate, bool interlaced, Rational aspect = Rational());
+// The project picture's aspect ratio (setProjectFormat()); invalid (0) for none.
+Rational projectAspect();
+// Whether the resolution is made for a project of that raster and rate, interlaced or progressive (nothing: either).
+bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate, std::optional<bool> interlaced = std::nullopt);
+// The raster the resolution's media is stored in for that project raster and rate: the format's own (DVCPro HD's
+// 1280 x 1080 in 1920 x 1080 projects at 29.97, DV's 720 x 480 in NTSC's 720 x 486), else the project's.
+QSize resolutionRaster(const Resolution& resolution, QSize raster, Rational rate);
+// A project-raster picture made the size the media is stored in (resolutionRaster()): NTSC's 486 lines lose the top four
+// and the bottom two for DV's 480 ("crops the top four and bottom two scan lines", p.1195); other sizes are the same
+// picture scaled, their pixels another shape.
+QImage toStoredRaster(const QImage& picture, QSize stored);
+// A decoded picture, whose pixels are `pixelAspect` wide (1: square; FFmpeg's sample aspect ratio), fitted into `size`, a
+// picture of the project frame (setProjectFormat()'s aspect; square pixels without one), on black: by the shape it is
+// shown at, so DVCPro HD's 1280 x 1080 fills a 1920 x 1080 frame and HDV's 1440 x 1080 too. A picture within 3% of the
+// frame's shape fills it (SD's Rec. 601 pixels against 4:3; ours); DV's 720 x 480 in a 486-line frame goes four lines
+// down ("pads the frame out by six lines", p.1195). Square pixels fit by their pixels, as before (ours: such a picture
+// is taken as drawn for the project's pixels).
+QImage fitPicture(const QImage& image, double pixelAspect, QSize size);
+// Where fitPicture() puts the picture in `size`.
+QRectF fitPictureRect(QSize image, double pixelAspect, QSize size);
 // The resolutions media can be made in, by this build on this computer, for the project's format (setProjectFormat()):
 // Avid DNx, Apple ProRes where an encoder may be used (resolutionEncoder()), then XDCAM where the format takes it.
 QList<Resolution> resolutions();

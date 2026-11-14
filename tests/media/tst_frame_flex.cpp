@@ -112,6 +112,27 @@ private slots:
         QVERIFY(near(out.pixel(10, 50), kBlack));
     }
 
+    // An anamorphic clip's pixels (its Pixel Aspect Ratio column; ROADMAP 11.1c2): a 2 x 1-pixel picture of 2:1 pixels is
+    // square as shown, so Pillarbox/Letterbox leaves no bars in a square frame (without it, pillars); a box set to another
+    // shape keeps it.
+    void anamorphicPixels() {
+        const QImage source = halves().scaled(50, 100);
+        model::BinItem clip;
+        clip.fields.insert(QStringLiteral("Pixel Aspect Ratio"), QStringLiteral("2"));
+        QCOMPARE(pixelAspectOf(clip), 2.0);
+        SpatialAdapter a;
+        a.reformat = Reformat::Letterbox;
+        const QImage out = media::spatialAdaptedImage(source, withPixelAspect(a, clip), QSize(100, 100), QSize(100, 100));
+        QVERIFY(near(out.pixel(5, 50), kRed) && near(out.pixel(95, 50), kBlue)); // no bars
+        const QImage square = media::spatialAdaptedImage(source, a, QSize(100, 100), QSize(100, 100));
+        QVERIFY(near(square.pixel(5, 50), kBlack));
+        FrameFlex own;
+        own.pixelAspect = 1.5;
+        a.frameFlex = own;
+        QCOMPARE(withPixelAspect(a, clip).frameFlex->pixelAspect, 1.5);
+        QCOMPARE(pixelAspectOf(model::BinItem{}), 1.0);
+    }
+
     // A box over the right half shows only blue; turned a quarter, the red half comes in above or below (p.529-532).
     void framingBox() {
         const QImage source = halves();

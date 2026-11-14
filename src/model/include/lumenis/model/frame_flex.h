@@ -58,6 +58,10 @@ struct FrameFlex {
     bool operator==(const FrameFlex&) const = default;
 };
 
+// The width of the clip's pixels over their height, from its Pixel Aspect Ratio column (linking and managed media fill
+// it: DVCPRO HD's 1280 x 1080 is 1.5); 1 when it is empty or not a number.
+double pixelAspectOf(const BinItem& item);
+
 // The clip's FrameFlex box, kept in its Source Settings (BinItem::sourceSettings "frameFlex"); nothing when it has none.
 std::optional<FrameFlex> frameFlexOf(const BinItem& item);
 // Sets (or, with nothing, removes) the clip's box.
@@ -85,6 +89,9 @@ struct SpatialAdapter {
 
 // The adapter a segment from the clip takes: none when the clip has neither a Reformat attribute nor a box.
 std::optional<SpatialAdapter> spatialAdapterOf(const BinItem& item);
+// The adapter as it draws the clip's frames: a box that leaves the pixel aspect ratio square takes the clip's, so an
+// anamorphic picture keeps its shape (ROADMAP 11.1c2); one set to another shape in Source Settings keeps that.
+SpatialAdapter withPixelAspect(SpatialAdapter adapter, const BinItem& item);
 
 // ---- Panning a shot (p.533-534; 8.5b3)
 // The FrameFlex effect: category kFramingCategory, name kFramingName, its parameters in the parameter category
