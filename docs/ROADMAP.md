@@ -1770,9 +1770,11 @@ The items:
     for the release builds and a script to read a Linux report (done: the Linux debug file and the macOS dSYM kept
     beside each self-hosted package, the Windows PDB in the packages, `scripts/symbolize-crash.py`), so 10.5 is done but
     sending reports, which waits on the owner's collection decision.
-  * 10.6, auto-update. Check a signed update feed at start-up, and from Help with a setting to turn it off. Install
-    with Sparkle on macOS and WinSparkle on Windows (both MIT); on Linux, use AppImageUpdate's zsync data (MIT) or
-    only tell the user. Waits on update hosting and signing.
+  * 10.6, the update check (the owner's decision, 2026-11-14: no automatic updates; editors talking to the owner do not
+    want an update during an important session). At start-up, and from Help, ask GitHub for the latest release; when it
+    is newer than the one running, say so and link to its page, and the user decides whether and when to download and
+    install it. Nothing is downloaded or installed by the application, and a setting turns the check off. Sparkle,
+    WinSparkle and AppImageUpdate are not used.
   * 10.7, code signing and the release pipeline. Release builds use Qt 6.8 LTS with `LUMENIS_PATENT_CODECS` off.
     Sign and notarise on macOS (Developer ID, the existing script in CI). Use Authenticode on Windows (.msi and
     .exe), and a GPG signature and checksums for the AppImage, .deb and .tar.gz. Keep the certificates as CI
@@ -1792,8 +1794,8 @@ The items:
     `LUMENIS_PATENT_CODECS=ON` and an FFmpeg with those codecs). The releases use the operating system's licensed H.264 and HEVC
     (VideoToolbox on macOS, Media Foundation on Windows) through FFmpeg, as the licensed-technology rule allows
     (owner's decision, 2026-11-12); the AppImage uses the distribution's FFmpeg, leaving the choice to it.
-  * Update hosting: GitHub. Releases are GitHub Releases. The update check reads the latest release and its feed
-    (Sparkle and WinSparkle verify an EdDSA signature, a free key kept as a GitHub secret, not a certificate).
+  * Update hosting: GitHub. Releases are GitHub Releases. The update check reads the latest release and only tells
+    the user (2026-11-14: no automatic updates; see 10.6).
   * Crash reports: GitHub. Minidumps stay on the user's machine; after a crash the next start offers to open a new
     GitHub issue from a crash template, filled in with the version, OS and stack, and the user decides whether to
     attach the dump. Symbols are kept with each release.
