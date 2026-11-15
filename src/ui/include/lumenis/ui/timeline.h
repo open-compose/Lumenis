@@ -1279,6 +1279,17 @@ public:
     // the position ("between keyframes"), or the only one; else a first keyframe at the position.
     // They move by the same amount, so the value at the position becomes `value`. One undo step.
     bool setAutomationValue(const QString& track, model::AutomationParam param, double value);
+    // The Audio Mixer's Pan grids in Auto mode (p.706, p.716-717; docs/spec/automation.md "Surround pans"): the surround
+    // pans of `track`'s channels at the Record position as they play (model::surroundPanAt); empty without a mono or
+    // stereo segment there.
+    QList<model::SurroundPan> surroundPansAt(const QString& track) const;
+    // Channel `channel`'s pan, and with `other` the other channel's, set as automation at the Record position: each
+    // member that changes, as setAutomationValue sets one, in one undo step.
+    bool setSurroundAutomation(const QString& track, int channel, const model::SurroundPan& pan,
+                               const std::optional<model::SurroundPan>& other);
+    // While recording (writeAutomation): the members of the channels' pans `pans` (channel 0, 1) at the position, those
+    // whose bit (1 << SurroundAxis) is set in the channel's `members`.
+    void writeSurroundAutomation(const QString& track, const QList<model::SurroundPan>& pans, const QList<int>& members);
     // Recording automation (p.717-719): between begin and end, writeAutomation() puts a keyframe at
     // the Record position (frame-accurate, p.721) without an undo step each; ending keeps it all
     // as one undo step, or with `cancel` puts the sequence back.
@@ -1558,6 +1569,8 @@ private:
     QStringList selectedAudioTracks(const model::Sequence& seq) const;
     // The marked range of the Record monitor as the Fast menu commands use it (p.719).
     std::pair<double, double> markedRange(const model::Sequence& seq) const;
+    // setAutomationValue's change, made in `seq` without an undo step; false, with a message, without material there.
+    bool putAutomationValue(model::Sequence& seq, const QString& track, model::AutomationParam param, double value);
     // Ctrl+C's keyframe half: true if it copied keyframes and the segments should not be copied.
     bool copyKeyframes();
     // Edit > Paste Audio Keyframes: asks which (pasteKeysAsk_ or a dialog), then pastes.

@@ -169,6 +169,47 @@ private slots:
         QCOMPARE(rig.timeline.automationAt(QStringLiteral("A2"), model::AutomationParam::RearR), 100.0);
     }
 
+    // Auto mode on the Pan grids (p.706, p.716-717): a move sets surround pan automation at the position as one undo
+    // step; while recording, the members moved are written as the position moves; Remove Pan on Track takes them away.
+    void autoModeGrids() {
+        Rig rig;
+        rig.mixer.setMode(AudioMixer::Mode::Auto);
+        rig.mixer.show();
+        MixerStrip* mono = rig.mixer.strip(QStringLiteral("A1"));
+        QVERIFY(mono && mono->panGrid(0) && mono->panGrid(0)->isEnabled());
+        rig.composer.moveTo(MonitorId::Record, 5);
+        const int steps = static_cast<int>(rig.timeline.history().undoCount());
+        rig.mixer.setSurroundPan(QStringLiteral("A1"), 0, SurroundPan::at(30, -40), true);
+        QCOMPARE(static_cast<int>(rig.timeline.history().undoCount()), steps + 1);
+        QCOMPARE(rig.timeline.surroundPansAt(QStringLiteral("A1")).first(), SurroundPan::at(30, -40));
+        model::Segment seg = rig.shown().track(QStringLiteral("A1"))->segments.first();
+        QCOMPARE(seg.surroundKeys.size(), 1);
+        QCOMPARE(seg.surroundKeys.first().frontRear, (QList<model::AudioKey>{{5, -40}}));
+        QVERIFY(seg.surroundKeys.first().center.isEmpty()); // unchanged members get none
+        QVERIFY(seg.surround.isEmpty());                    // the clip pan stays as it was
+        // Recording: a move to the left at frame 10, held through 12.
+        rig.composer.moveTo(MonitorId::Record, 10);
+        rig.mixer.startRecording(false);
+        rig.mixer.setSurroundPan(QStringLiteral("A1"), 0, SurroundPan::at(-50, -40), false);
+        rig.composer.moveTo(MonitorId::Record, 11);
+        rig.composer.moveTo(MonitorId::Record, 12);
+        rig.mixer.stopRecording(false);
+        seg = rig.shown().track(QStringLiteral("A1"))->segments.first();
+        QCOMPARE(seg.surroundKeys.first().front, (QList<model::AudioKey>{{5, 30}, {10, -50}, {11, -50}, {12, -50}}));
+        QCOMPARE(seg.surroundKeys.first().frontRear, (QList<model::AudioKey>{{5, -40}})); // not moved, not written
+        QCOMPARE(static_cast<int>(rig.timeline.history().undoCount()), steps + 2);
+        // A stereo track's other channel follows the link.
+        rig.mixer.setStereoLink(model::StereoLink::Linked);
+        rig.mixer.setSurroundPan(QStringLiteral("A2"), 0, SurroundPan::at(-100, 0), true);
+        const QList<SurroundPan> pans = rig.timeline.surroundPansAt(QStringLiteral("A2"));
+        QCOMPARE(pans.size(), 2);
+        QCOMPARE(pans.at(1).frontRear, 0);
+        // Remove Pan on Track in a 5.1 sequence takes the surround pan keyframes too.
+        QVERIFY2(rig.timeline.editAutomation(Timeline::AutomationEdit::Remove, model::AutomationParam::Pan),
+                 qPrintable(rig.timeline.lastMessage()));
+        QVERIFY(rig.shown().track(QStringLiteral("A1"))->segments.first().surroundKeys.isEmpty());
+    }
+
     // A finished drag stores the pan as one undo step; Stereo Link moves the other channel.
     void storingPans() {
         Rig rig;

@@ -18624,6 +18624,10 @@ Les fichiers média ne sont pas supprimés.</translation>
         <source>Center %</source>
         <translation type="unfinished">Centre %</translation>
     </message>
+    <message>
+        <source>Surround Pan Automation</source>
+        <translation type="unfinished">Automation du panoramique surround</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

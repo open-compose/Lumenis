@@ -18624,6 +18624,10 @@ I file media non vengono eliminati.</translation>
         <source>Center %</source>
         <translation type="unfinished">Centro %</translation>
     </message>
+    <message>
+        <source>Surround Pan Automation</source>
+        <translation type="unfinished">Automazione pan surround</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

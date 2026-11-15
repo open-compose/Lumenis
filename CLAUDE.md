@@ -1141,7 +1141,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `52-extended-punch-in.json`), is done. 11.4d2a, surround pan keyframes and the Timeline's Pan L/R > [speaker layout]
   graphs (docs/spec/automation.md "Surround pans": `Segment::surroundKeys`, `AutomationParam` FrontL ... CenterR,
   `model::surroundPanAt`, `AudioPiece::surroundAt`; tests `tst_automation surroundPans`, `tst_surround
-  automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario `53-surround-pan-automation.json`), is done. 10.6 is an update check that only tells the user (no
+  automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario `53-surround-pan-automation.json`), is done.
+  11.4d2b, the Audio Mixer's Auto mode on the Pan grids (`Timeline::setSurroundAutomation`/`writeSurroundAutomation`,
+  `AudioMixer::autoSurroundPan`; test `tst_surround_ui autoModeGrids`), is done, so 11.4d is. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

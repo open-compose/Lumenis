@@ -156,8 +156,15 @@ of p.679:
   out every 32 samples. An inactive track plays without them (p.602).
 * Kept in Timeline views and per track settings by `model::automationKey` ("L.front", "R.center" ...;
   `Track::showSurround`).
-* **Not yet (11.4d2b):** the Audio Mixer's Auto mode on the Pan grids (recording surround pans and the Fast menu's pan
-  commands for them), Live mode, and copying and pasting surround keyframes.
+* **The Audio Mixer's Auto mode (11.4d2b):** the Pan grids and the Advanced Panner are no longer dimmed. They show the
+  pans at the Record position (`Timeline::surroundPansAt`). A finished move sets each member that changed as automation
+  there, as a fader does (p.716; `Timeline::setSurroundAutomation`, one undo step "Surround Pan Automation"), with a
+  stereo track's other channel as Stereo Link or Mirror says. While recording (p.717-719) every move is written at
+  the position, and the members moved (only those) are written again as the position moves
+  (`Timeline::writeSurroundAutomation` from `AudioMixer::recordTick`).
+* **The Fast menu:** in a 5.1 or 7.1 sequence, Filter, Remove and Remove Hidden Pan on Track take the surround pans'
+  keyframes too (ours); Adjust Pan on Track stays on the stereo pan.
+* **Not yet:** Live mode on surround pans, and copying and pasting surround keyframes.
 
 ## Checks
 
@@ -165,7 +172,8 @@ of p.679:
   through splices, Add Edit and saving, moves, deletes, and the Fast menu
   commands, hidden keyframes, and copy and paste; `surroundPans` the surround parameters.
 * `tst_surround automatedPlayback` plays a pan moved from the left front to the left rear;
-  `tst_surround_ui timelineSurroundGraphs` the Clip Volume/Pan menu's Pan L and Pan R and Add Keyframe on them.
+  `tst_surround_ui timelineSurroundGraphs` the Clip Volume/Pan menu's Pan L and Pan R and Add Keyframe on them;
+  `tst_surround_ui autoModeGrids` the mixer's Auto mode, recording and Remove Pan on Track.
 * `tst_automation_ui` covers the Timeline and the mixer:
   * Add Keyframe and Audio Data;
   * the mouse (hit test, drag, Ctrl+Shift+click);
@@ -187,7 +195,7 @@ of p.679:
   waveforms and Enlarge/Reduce Track.
 * Lassoing keyframes (p.722).
 * Delete Hidden Left/Right on a transition's right-click menu (p.723).
-* Surround pans in the Audio Mixer's Auto and Live modes (11.4d2b).
+* Surround pans in Live mode, and copied and pasted.
 * Live Mix mode's Set Live Mix to Automation / as Automation (p.725-726).
 * Avid controllers and fader hardware (p.718).
 * Keyframes in AAF, OTIO, FCP XML and `.avb` interchange. They are not

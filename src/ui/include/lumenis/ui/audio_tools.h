@@ -281,7 +281,10 @@ public:
     void setStereoLink(model::StereoLink link);
     QToolButton* stereoLinkButton() const { return stereoLinkButton_; }
     // A strip's pan grid moved: in Clip mode the segment under the position takes it when `done`
-    // (Timeline::setSurroundPan), with the other channel of a stereo track as the link says.
+    // (Timeline::setSurroundPan), with the other channel of a stereo track as the link says. In Auto mode it is
+    // surround pan automation (docs/spec/automation.md "Surround pans"): when `done`, at the position
+    // (Timeline::setSurroundAutomation); while recording, every move, and the members moved are written as the
+    // position moves (recordTick).
     void setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan, bool done);
     // The Advanced Panner for a track (one at a time; it follows the position). Null if the track
     // cannot be surround-panned.
@@ -448,6 +451,12 @@ private:
     std::int64_t lastWritten_ = -1;         // the Record position last written
     QSet<QString> touchedGain_;             // strips moved while recording
     QSet<QString> touchedPan_;
+    // Pan grids moved while recording: each track's pans as moved, and per channel the members moved (1 << SurroundAxis).
+    QHash<QString, QList<model::SurroundPan>> touchedSurround_;
+    QHash<QString, QList<int>> surroundMembers_;
+    // Auto mode's side of setSurroundPan, also for the Advanced Panner, with the other channel already worked out.
+    void autoSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                         const std::optional<model::SurroundPan>& other, bool done);
     AdjustAsk adjustAsk_;
     QToolButton* loop_ = nullptr;
     QToolButton* render_ = nullptr;

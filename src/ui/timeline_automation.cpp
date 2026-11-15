@@ -1,4 +1,5 @@
 #include "lumenis/model/automation.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/timeline.h"
 
@@ -366,6 +367,14 @@ bool Timeline::editAutomation(AutomationEdit edit, std::optional<AutomationParam
     QList<AutomationParam> params;
     if (param) {
         params << *param;
+        // In a 5.1 or 7.1 sequence the Fast menu's Filter, Remove and Remove Hidden Pan on Track take the surround pans'
+        // keyframes too (ours; Adjust's amount is a stereo pan's, so it stays on Pan).
+        const bool surround = seq.mixFormat() == model::AudioFormat::Surround51 || seq.mixFormat() == model::AudioFormat::Surround71;
+        if (*param == AutomationParam::Pan && surround && edit != AutomationEdit::Adjust) {
+            for (int k = static_cast<int>(AutomationParam::FrontL); k <= static_cast<int>(AutomationParam::CenterR); ++k) {
+                params << static_cast<AutomationParam>(k);
+            }
+        }
     } else {
         // Every parameter: volume, the pan and the surround pans' members.
         for (int k = 0; k <= static_cast<int>(AutomationParam::CenterR); ++k) params << static_cast<AutomationParam>(k);
@@ -414,6 +423,14 @@ bool Timeline::setAutomationValue(const QString& track, AutomationParam param, d
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
     model::Sequence seq = model::Sequence::fromItem(rec->item);
+    if (!putAutomationValue(seq, track, param, value)) return false;
+    const QString description = param == AutomationParam::Volume ? tr("Volume Automation")
+                                : param == AutomationParam::Pan  ? tr("Pan Automation")
+                                                                 : tr("Surround Pan Automation");
+    return commitSequence(description, seq);
+}
+
+bool Timeline::putAutomationValue(model::Sequence& seq, const QString& track, AutomationParam param, double value) {
     const model::Track* t = seq.track(track);
     const std::int64_t position = composer_.state(MonitorId::Record).position();
     std::int64_t start = 0;
@@ -424,11 +441,10 @@ bool Timeline::setAutomationValue(const QString& track, AutomationParam param, d
     const double sourceHere = static_cast<double>(s.sourceIn + (position - start));
     const double current = model::automationValue(s, param, sourceHere, model::sidePan(t->number, alternatingPan_), t->format);
     const double by = value - current;
-    const QString description = param == AutomationParam::Volume ? tr("Volume Automation") : tr("Pan Automation");
     // The keyframe at the position.
     if (!model::keyframesIn(seq, {track}, here, here + 1e-3, param).isEmpty()) {
         model::setKeyframes(seq, {KeyRef{track, here}}, param, value);
-        return commitSequence(description, seq);
+        return true;
     }
     // Every keyframe in the marked region, moved together (p.716).
     const model::MonitorState& record = composer_.state(MonitorId::Record);
@@ -437,7 +453,7 @@ bool Timeline::setAutomationValue(const QString& track, AutomationParam param, d
         const QList<KeyRef> inRange = model::keyframesIn(seq, {track}, from, to, param);
         if (here >= from && here < to && !inRange.isEmpty()) {
             model::moveKeyframes(seq, inRange, param, 0, by);
-            return commitSequence(description, seq);
+            return true;
         }
     }
     // The keyframes either side (all of the segment's keyframes count, hidden ones too).
@@ -454,12 +470,72 @@ bool Timeline::setAutomationValue(const QString& track, AutomationParam param, d
     if (after) around << *after;
     if (!around.isEmpty()) {
         model::moveKeyframes(seq, around, param, 0, by);
-        return commitSequence(description, seq);
+        return true;
     }
     // None yet: a first keyframe at the position, which sets the whole segment (p.716).
     model::addKeyframes(seq, {track}, here, param, alternatingPan_);
     model::setKeyframes(seq, {KeyRef{track, here}}, param, value);
-    return commitSequence(description, seq);
+    return true;
+}
+
+namespace {
+
+// The members of a pan that surround automation sets, with their axes.
+QList<std::pair<model::SurroundAxis, int>> members(const model::SurroundPan& p) {
+    return {{model::SurroundAxis::Front, p.front},
+            {model::SurroundAxis::Rear, p.rear},
+            {model::SurroundAxis::FrontRear, p.frontRear},
+            {model::SurroundAxis::Center, p.center}};
+}
+
+} // namespace
+
+QList<model::SurroundPan> Timeline::surroundPansAt(const QString& track) const {
+    const model::Sequence seq = recordSeq(composer_);
+    const model::Track* t = seq.track(track);
+    if (!t || t->kind != model::TrackKind::Audio || model::channelCount(t->format) > 2) return {};
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    std::int64_t start = 0;
+    const int i = t->segmentAt(position, &start);
+    if (i < 0 || t->segments.at(i).isFiller()) return {};
+    const model::Segment& s = t->segments.at(i);
+    const double frame = static_cast<double>(s.sourceIn + (position - start));
+    const int stereoPan = s.panOr(model::sidePan(t->number, alternatingPan_));
+    QList<model::SurroundPan> out;
+    for (int k = 0; k < model::channelCount(t->format); ++k) out << model::surroundPanAt(s, t->format, stereoPan, k, frame);
+    return out;
+}
+
+bool Timeline::setSurroundAutomation(const QString& track, int channel, const model::SurroundPan& pan,
+                                     const std::optional<model::SurroundPan>& other) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const QList<model::SurroundPan> now = surroundPansAt(track);
+    if (channel < 0 || channel >= now.size()) return fail(tr("There is no audio segment there to adjust."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    bool changed = false;
+    for (int k = 0; k < now.size(); ++k) {
+        const std::optional<model::SurroundPan> want = k == channel ? std::optional(pan) : other;
+        if (!want) continue;
+        const QList<std::pair<model::SurroundAxis, int>> was = members(now.at(k));
+        const QList<std::pair<model::SurroundAxis, int>> to = members(*want);
+        for (qsizetype m = 0; m < to.size(); ++m) {
+            if (to.at(m).second == was.at(m).second) continue;
+            if (!putAutomationValue(seq, track, model::surroundParam(k, to.at(m).first), to.at(m).second)) return false;
+            changed = true;
+        }
+    }
+    if (!changed) return true;
+    return commitSequence(tr("Surround Pan Automation"), seq);
+}
+
+void Timeline::writeSurroundAutomation(const QString& track, const QList<model::SurroundPan>& pans, const QList<int>& written) {
+    for (qsizetype k = 0; k < pans.size() && k < 2 && k < written.size(); ++k) {
+        for (const auto& [axis, value] : members(pans.at(k))) {
+            if (written.at(k) & (1 << static_cast<int>(axis))) writeAutomation(track, model::surroundParam(static_cast<int>(k), axis), value);
+        }
+    }
 }
 
 bool Timeline::beginAutomationRecording() {

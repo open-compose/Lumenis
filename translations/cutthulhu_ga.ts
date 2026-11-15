@@ -18671,6 +18671,10 @@ Ní scriostar comhaid mheán.</translation>
         <source>Center %</source>
         <translation type="unfinished">Lár %</translation>
     </message>
+    <message>
+        <source>Surround Pan Automation</source>
+        <translation type="unfinished">Uathoibriú Panála Timpeallach</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

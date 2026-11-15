@@ -18624,6 +18624,10 @@ Mediendateien werden nicht gelöscht.</translation>
         <source>Center %</source>
         <translation type="unfinished">Center %</translation>
     </message>
+    <message>
+        <source>Surround Pan Automation</source>
+        <translation type="unfinished">Surround-Pan-Automation</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

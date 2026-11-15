@@ -1903,7 +1903,10 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `Segment::surroundKeys`, `AutomationParam` FrontL ... CenterR, `model::surroundPanAt`, `AudioPiece::surroundAt`,
   `Timeline::trackAudioDataMenu`; docs/spec/automation.md "Surround pans"; tests `tst_automation surroundPans`,
   `tst_surround automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario
-  `53-surround-pan-automation.json`); 11.4d2b, the Audio Mixer's Auto mode and Live mode on the Pan grids.
+  `53-surround-pan-automation.json`); 11.4d2b, the Audio Mixer's Auto mode on the Pan grids (done:
+  `Timeline::surroundPansAt`/`setSurroundAutomation`/`writeSurroundAutomation`, `AudioMixer::autoSurroundPan`, the Fast
+  menu's Pan on Track commands on surround pans; test `tst_surround_ui autoModeGrids`), so 11.4d is. Live mode on
+  surround pans stays for later.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

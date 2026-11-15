@@ -829,8 +829,8 @@ void AudioMixer::syncValues() {
         MixerStrip* s = strips_.value(t);
         if (!s) continue;
         s->trackButton()->setChecked(timeline_.patch().isRecordSelected(t));
-        // Surround panning: mono and stereo tracks of a 5.1 or 7.1 sequence (p.706), in Clip mode
-        // (ours: surround pans are not automated yet).
+        // Surround panning: mono and stereo tracks of a 5.1 or 7.1 sequence (p.706), in Clip and Auto mode (Live
+        // mode does not apply to surround pans yet, ours). In Auto mode the grids show the automation at the position.
         if (const model::Track* track = seq.track(t)) {
             const int channels = model::channelCount(track->format);
             const bool surround = seq.mixFormat() != model::AudioFormat::Stereo && channels <= 2;
@@ -839,16 +839,18 @@ void AudioMixer::syncValues() {
             if (surround) {
                 const auto seg = timeline_.audioSegmentAt(t);
                 const int side = timeline_.alternatingPan() ? (track->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
-                s->showSurroundPans(seg ? model::surroundPansOf(*seg, track->format, seg->panOr(side))
-                                        : model::surroundPansOf(model::Segment{}, track->format, side));
+                const bool automation = mode_ == Mode::Auto;
+                QList<model::SurroundPan> pans = seg ? model::surroundPansOf(*seg, track->format, seg->panOr(side))
+                                                     : model::surroundPansOf(model::Segment{}, track->format, side);
+                if (automation && seg) pans = touchedSurround_.value(t, timeline_.surroundPansAt(t));
+                s->showSurroundPans(pans);
+                const bool editable = seg.has_value() && (mode_ == Mode::Clip || automation);
                 for (int k = 0; k < channels; ++k) {
-                    if (PanGrid* g = s->panGrid(k)) g->setEnabled(seg.has_value() && mode_ == Mode::Clip);
+                    if (PanGrid* g = s->panGrid(k)) g->setEnabled(editable);
                 }
-                s->advancedPannerButton()->setEnabled(seg.has_value() && mode_ == Mode::Clip);
+                s->advancedPannerButton()->setEnabled(editable);
                 AdvancedPanner* open = panner_.data();
-                if (open && open->track() == t && seg) {
-                    open->setPans(model::surroundPansOf(*seg, track->format, seg->panOr(side)));
-                }
+                if (open && open->track() == t && seg) open->setPans(pans);
             }
         }
         QString letters;
@@ -904,6 +906,19 @@ void AudioMixer::setStereoLink(model::StereoLink link) {
 
 // Only finished moves are stored; a stereo track's other channel follows the link.
 void AudioMixer::setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan, bool done) {
+    if (mode_ == Mode::Auto) {
+        // The other channel follows the link from the pans at the position (or those being recorded).
+        const QList<model::SurroundPan> pans = touchedSurround_.value(track, timeline_.surroundPansAt(track));
+        std::optional<model::SurroundPan> other;
+        if (pans.size() == 2 && stereoLink_ != model::StereoLink::Unlinked && channel >= 0 && channel < 2) {
+            other = model::linkedPan(pans.at(1 - channel), pans.at(channel), pan, stereoLink_);
+            if (MixerStrip* s = strips_.value(track)) {
+                if (PanGrid* g = s->panGrid(1 - channel)) g->setPan(*other);
+            }
+        }
+        autoSurroundPan(track, channel, pan, other, done);
+        return;
+    }
     if (mode_ != Mode::Clip) return;
     const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
     if (!rec) return;
@@ -921,6 +936,31 @@ void AudioMixer::setSurroundPan(const QString& track, int channel, const model::
         }
     }
     if (done) timeline_.setSurroundPan(track, channel, pan, other);
+}
+
+void AudioMixer::autoSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                                 const std::optional<model::SurroundPan>& other, bool done) {
+    if (!recording_) {
+        if (done) timeline_.setSurroundAutomation(track, channel, pan, other);
+        return;
+    }
+    QList<model::SurroundPan> pans = touchedSurround_.value(track, timeline_.surroundPansAt(track));
+    if (channel < 0 || channel >= pans.size()) return;
+    QList<int>& moved = surroundMembers_[track];
+    while (moved.size() < pans.size()) moved << 0;
+    // The members that differ from before are written from now on.
+    auto mark = [&](int k, const model::SurroundPan& now) {
+        const model::SurroundPan& was = pans.at(k);
+        if (now.front != was.front) moved[k] |= 1 << static_cast<int>(model::SurroundAxis::Front);
+        if (now.rear != was.rear) moved[k] |= 1 << static_cast<int>(model::SurroundAxis::Rear);
+        if (now.frontRear != was.frontRear) moved[k] |= 1 << static_cast<int>(model::SurroundAxis::FrontRear);
+        if (now.center != was.center) moved[k] |= 1 << static_cast<int>(model::SurroundAxis::Center);
+        pans[k] = now;
+    };
+    mark(channel, pan);
+    if (other && pans.size() == 2) mark(1 - channel, *other);
+    touchedSurround_.insert(track, pans);
+    if (inRecordRange()) timeline_.writeSurroundAutomation(track, pans, moved);
 }
 
 AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
@@ -947,6 +987,7 @@ AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
                     }
                 }
                 if (done && mode_ == Mode::Clip) timeline_.setSurroundPan(track, channel, pan, other);
+                if (mode_ == Mode::Auto) autoSurroundPan(track, channel, pan, other, done);
             });
     // The panner's link buttons set the mixer's.
     connect(panner->linkButton(), &QToolButton::clicked, this, [this] {
@@ -1054,6 +1095,8 @@ void AudioMixer::startRecording(bool play) {
     record_->setChecked(true);
     touchedGain_.clear();
     touchedPan_.clear();
+    touchedSurround_.clear();
+    surroundMembers_.clear();
     Composer& composer = timeline_.composer();
     const model::MonitorState& record = composer.state(MonitorId::Record);
     const std::int64_t fps = std::max(timeline_.format().nominalFps, 1);
@@ -1079,6 +1122,8 @@ void AudioMixer::stopRecording(bool cancel) {
     recordPlaying_ = false;
     touchedGain_.clear();
     touchedPan_.clear();
+    touchedSurround_.clear();
+    surroundMembers_.clear();
     timeline_.endAutomationRecording(cancel);
     syncValues();
 }
@@ -1097,6 +1142,9 @@ void AudioMixer::recordTick() {
             }
             for (const QString& t : std::as_const(touchedPan_)) {
                 if (const MixerStrip* s = strips_.value(t)) timeline_.writeAutomation(t, model::AutomationParam::Pan, s->pan());
+            }
+            for (auto it = touchedSurround_.cbegin(); it != touchedSurround_.cend(); ++it) {
+                timeline_.writeSurroundAutomation(it.key(), it.value(), surroundMembers_.value(it.key()));
             }
         }
     }
