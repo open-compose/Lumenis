@@ -1,5 +1,7 @@
 # The release pipeline (ROADMAP 10.7, Phase 12.2b; BUILDING.md "Releases"). Run by hand: Actions > Release > Run
-# workflow, on the commit to release, with the version cmake/Branding.cmake names. It builds every package on
+# workflow, on main. The version is worked out here (docs/spec/versioning.md): YEAR.N, this year and one more than the
+# highest release number of the year among the releases there are, drafts included (2026.1 first, then 2026.2 ...;
+# 2027.1 the next year), passed to every build as -DPRODUCT_VERSION. It builds every package on
 # GitHub's hosted runners with Qt 6.8 LTS and the release codec policy (LUMENIS_PATENT_CODECS off,
 # docs/spec/release-codecs.md), tests each build, and puts the packages, their SHA-256 checksums and the debug symbols
 # in a draft GitHub Release for the owner to read and publish. Nothing is signed (the owner's answer: no
@@ -14,8 +16,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: The version to release, as cmake/Branding.cmake's PRODUCT_VERSION (e.g. 0.2.0)
-        required: true
+        description: Leave empty for the next YEAR.N; or a YEAR.N to use instead (a release made again)
+        required: false
         type: string
 
 concurrency:
@@ -24,46 +26,65 @@ concurrency:
 
 env:
   QT_VERSION: '6.8.3'
-  TAG: v${{ inputs.version }}
 
 permissions:
   contents: write
 
 jobs:
   prepare:
-    name: Check the version and make the draft release
+    name: Work out the version and make the draft release
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: The version is the one the build names
+      - name: The version (YEAR.N)
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANTED: ${{ inputs.version }}
         run: |
-          branded=$(sed -n 's/^set(PRODUCT_VERSION *"\([^"]*\)").*/\1/p' cmake/Branding.cmake)
-          if [ "$branded" != "${{ inputs.version }}" ]; then
-            echo "::error::cmake/Branding.cmake says $branded, not ${{ inputs.version }}: change PRODUCT_VERSION first"
+          if [ -n "$WANTED" ]; then
+            version="$WANTED"
+          else
+            year=$(date -u +%Y)
+            # The highest N of this year's releases, drafts included (their tags exist only once published).
+            last=$(gh release list --limit 1000 --json tagName --jq '.[].tagName' \
+                     | sed -n "s/^v$year\.\([0-9][0-9]*\)$/\1/p" | sort -n | tail -1)
+            version="$year.$(( ${last:-0} + 1 ))"
+          fi
+          if ! echo "$version" | grep -Eq '^[0-9]{4}\.[0-9]+$'; then
+            echo "::error::$version is not YEAR.N (docs/spec/versioning.md)"
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.version.outputs.version }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::A release $TAG exists already; delete the draft or choose another version"
             exit 1
           fi
           {
-            echo "Cutthulhu ${{ inputs.version }}."
+            echo "Cutthulhu ${{ steps.version.outputs.version }}."
             echo
             echo "The packages are not signed: [INSTALL.md](https://github.com/${{ github.repository }}/blob/$GITHUB_SHA/INSTALL.md)"
             echo "says how to let each operating system run them. SHA256SUMS.txt holds every file's checksum."
             echo "H.264 and HEVC go through the operating system's codecs (docs/spec/release-codecs.md)."
           } > notes.md
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Cutthulhu ${{ inputs.version }}" \
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Cutthulhu ${{ steps.version.outputs.version }}" \
             --notes-file notes.md --generate-notes
 
   macos:
     name: macOS arm64 (.dmg)
     needs: prepare
     runs-on: macos-14
+    env:
+      TAG: v${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
@@ -79,7 +100,7 @@ jobs:
       - name: FFmpeg (LGPL, ours)
         run: scripts/build-release-ffmpeg.sh "$HOME/ffmpeg-release"
       - name: Configure
-        run: cmake --preset dist-macos -DFFMPEG_ROOT="$HOME/ffmpeg-release"
+        run: cmake --preset dist-macos -DFFMPEG_ROOT="$HOME/ffmpeg-release" -DPRODUCT_VERSION="$VERSION"
       - name: Build
         run: cmake --build --preset dist-macos
       - name: Test
@@ -106,7 +127,7 @@ jobs:
       - name: Debug symbols (dSYM)
         run: |
           xcrun dsymutil build/dist-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu -o build/dist-macos/Cutthulhu.dSYM
-          ditto -c -k --keepParent build/dist-macos/Cutthulhu.dSYM "build/dist-macos/cutthulhu-${{ inputs.version }}-macos-arm64-dSYM.zip"
+          ditto -c -k --keepParent build/dist-macos/Cutthulhu.dSYM "build/dist-macos/cutthulhu-${{ needs.prepare.outputs.version }}-macos-arm64-dSYM.zip"
       - name: Upload to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,6 +140,9 @@ jobs:
     name: Windows x64 (.msi, .zip)
     needs: prepare
     runs-on: windows-2022
+    env:
+      TAG: v${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
@@ -140,7 +164,7 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1 -Variant lgpl
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Configure
-        run: cmake --preset dist
+        run: cmake --preset dist -DPRODUCT_VERSION="${{ env.VERSION }}"
       - name: Build
         run: cmake --build --preset dist
       - name: Test
@@ -189,6 +213,9 @@ jobs:
     name: Linux x64 (AppImage)
     needs: prepare
     runs-on: ubuntu-24.04
+    env:
+      TAG: v${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
@@ -207,7 +234,7 @@ jobs:
       - name: FFmpeg (LGPL, ours)
         run: scripts/build-release-ffmpeg.sh "$HOME/ffmpeg-release"
       - name: Configure
-        run: cmake --preset dist -DFFMPEG_ROOT="$HOME/ffmpeg-release"
+        run: cmake --preset dist -DFFMPEG_ROOT="$HOME/ffmpeg-release" -DPRODUCT_VERSION="$VERSION"
       - name: Build
         run: cmake --build --preset dist
       - name: Test
@@ -232,7 +259,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd build/dist
-          version="${{ inputs.version }}"
+          version="${{ needs.prepare.outputs.version }}"
           mv *.AppImage "Cutthulhu-$version-x86_64.AppImage"
           objcopy --only-keep-debug bin/cutthulhu "cutthulhu-$version-linux-x86_64.debug"
           gzip -f "cutthulhu-$version-linux-x86_64.debug"
@@ -243,12 +270,15 @@ jobs:
     name: Linux x64 (.deb, .tar.gz)
     needs: prepare
     runs-on: ubuntu-24.04
+    env:
+      TAG: v${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies (the distribution's Qt and FFmpeg)
         run: scripts/bootstrap-linux.sh
       - name: Configure
-        run: cmake --preset dist
+        run: cmake --preset dist -DPRODUCT_VERSION="$VERSION"
       - name: Build
         run: cmake --build --preset dist
       - name: Test
@@ -274,8 +304,11 @@ jobs:
 
   checksums:
     name: Check the uploads and write SHA256SUMS.txt
-    needs: [macos, windows, linux-appimage, linux-packages]
+    needs: [prepare, macos, windows, linux-appimage, linux-packages]
     runs-on: ubuntu-24.04
+    env:
+      TAG: v${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Download, check, sum
         env:

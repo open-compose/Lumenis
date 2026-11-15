@@ -1458,9 +1458,9 @@ answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
 
 ## Releases
 
-A release is made by hand (ROADMAP 10.7, Phase 12.2b): set `PRODUCT_VERSION` in `cmake/Branding.cmake`, push, then run
-**Actions > Release > Run workflow** on that commit with the same version (or `gh workflow run release.yml --ref
-<branch> -f version=<version>`). The workflow (`.github/workflows/release.yml`) runs on GitHub's hosted runners
+A release is made by hand (ROADMAP 10.7, Phase 12.2b): run **Actions > Release > Run workflow** on `main` (or `gh
+workflow run release.yml --ref main`). The version is worked out for you, YEAR.N: this year and the next release
+number of the year (2026.1, 2026.2 ...; docs/spec/versioning.md); nothing is edited for a release. The workflow (`.github/workflows/release.yml`) runs on GitHub's hosted runners
 (macOS's minutes cost ten times: run it when a release is due):
 
 * each package is built with Qt 6.8 LTS and the `dist` or `dist-macos` preset (`LUMENIS_PATENT_CODECS` off,

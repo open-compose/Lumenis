@@ -1,0 +1,7 @@
+# Per-generator CPack options (cmake/Packaging.cmake; docs/spec/versioning.md), read by cpack for each generator.
+if(CPACK_GENERATOR STREQUAL "WIX")
+    # The .msi's own version, which Windows Installer limits to 255.255.65535: YEAR.N as (YEAR - 2000).N.0. The file
+    # keeps the version people see.
+    set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_SYSTEM_NAME}")
+    set(CPACK_PACKAGE_VERSION "@LUMENIS_MSI_VERSION@")
+endif()

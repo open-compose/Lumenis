@@ -14123,7 +14123,7 @@ MCA-Sprache: %2</translation>
     </message>
     <message>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid and Media Composer are trademarks of Avid Technology, Inc. This product is not affiliated with or endorsed by Avid.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Lizenziert unter der GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 Erweiterungsanbieter registriert.&lt;/p&gt;&lt;p&gt;Die Oberflächenschrift ist Inter, unter der SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid und Media Composer sind Marken der Avid Technology, Inc. Dieses Produkt steht in keiner Verbindung zu Avid und wird von Avid weder unterstützt noch empfohlen.&lt;/p&gt;</translation>
+        <translation type="obsolete">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Lizenziert unter der GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 Erweiterungsanbieter registriert.&lt;/p&gt;&lt;p&gt;Die Oberflächenschrift ist Inter, unter der SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid und Media Composer sind Marken der Avid Technology, Inc. Dieses Produkt steht in keiner Verbindung zu Avid und wird von Avid weder unterstützt noch empfohlen.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>Configuration</source>
@@ -14986,6 +14986,10 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
     <message>
         <source>Update check: %1</source>
         <translation type="unfinished">Update-Prüfung: %1</translation>
+    </message>
+    <message>
+        <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;</source>
+        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Lizenziert unter der GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 Erweiterungsanbieter registriert.&lt;/p&gt;&lt;p&gt;Die Oberflächenschrift ist Inter, unter der SIL Open Font License 1.1.&lt;/p&gt;</translation>
     </message>
 </context>
 <context>

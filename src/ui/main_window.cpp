@@ -9975,8 +9975,8 @@ void MainWindow::restoreCurrentToDefault() {
     if (answer == QMessageBox::Ok) workspaces_->restoreCurrentToDefault();
 }
 
-// The text names the product, version, licence, extension count and font licence, and disclaims any
-// tie to Avid.
+// The text names the product, version, licence, extension count and font licence. Other companies' names stay out of
+// it (the owner's decision, 2026-11-15); README.md keeps the trademark notice.
 QMessageBox* MainWindow::createAboutBox() {
     const QString name = QString::fromUtf8(branding::kProductName);
     auto* box = new QMessageBox(this);
@@ -9986,9 +9986,7 @@ QMessageBox* MainWindow::createAboutBox() {
     box->setText(tr("<h3>%1 %2</h3><p>%3</p>"
                     "<p>Licensed under the GNU General Public License v3.</p>"
                     "<p>%4 extension providers registered.</p>"
-                    "<p>The interface font is Inter, under the SIL Open Font License 1.1.</p>"
-                    "<p>Avid and Media Composer are trademarks of Avid Technology, Inc. "
-                    "This product is not affiliated with or endorsed by Avid.</p>")
+                    "<p>The interface font is Inter, under the SIL Open Font License 1.1.</p>")
                      .arg(name, QString::fromUtf8(branding::kVersion), QString::fromUtf8(branding::kDescription))
                      .arg(providers_.all().size()));
     // The application's picture, drawn from the 512 px image so it stays

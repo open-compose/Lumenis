@@ -1986,7 +1986,8 @@ owner's soak and screen-reader runs carry on as before.
   allow.
 * 12.3, the release gate, 10.8 (done: docs/checklists/release-gate.md with the release run on each platform, Phase 10's
   steps and what is left of each, the gates the phases left open with their reasons, and the owner's try of a release
-  candidate on each OS; ticking it is the owner's). So Phase 12's steps are done: what is left is the first release
+  candidate on each OS; ticking it is the owner's). Versions are YEAR.N (the owner's decision, 2026-11-15;
+  docs/spec/versioning.md), worked out by the release workflow from the year's releases. So Phase 12's steps are done: what is left is the first release
   run, the owner's checks, 10.0's steps that are theirs, and 10.1b/c.
 
 ## 6. Immediate next steps

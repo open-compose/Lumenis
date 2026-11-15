@@ -14123,7 +14123,7 @@ Langue MCA : %2</translation>
     </message>
     <message>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid and Media Composer are trademarks of Avid Technology, Inc. This product is not affiliated with or endorsed by Avid.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Sous licence GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 fournisseurs d&apos;extensions enregistrés.&lt;/p&gt;&lt;p&gt;La police de l&apos;interface est Inter, sous licence SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid et Media Composer sont des marques d&apos;Avid Technology, Inc. Ce produit n&apos;est ni affilié à Avid ni approuvé par Avid.&lt;/p&gt;</translation>
+        <translation type="obsolete">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Sous licence GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 fournisseurs d&apos;extensions enregistrés.&lt;/p&gt;&lt;p&gt;La police de l&apos;interface est Inter, sous licence SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid et Media Composer sont des marques d&apos;Avid Technology, Inc. Ce produit n&apos;est ni affilié à Avid ni approuvé par Avid.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>Configuration</source>
@@ -14986,6 +14986,10 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>Update check: %1</source>
         <translation type="unfinished">Recherche de mises à jour : %1</translation>
+    </message>
+    <message>
+        <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;</source>
+        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Sous licence GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 fournisseurs d&apos;extensions enregistrés.&lt;/p&gt;&lt;p&gt;La police de l&apos;interface est Inter, sous licence SIL Open Font License 1.1.&lt;/p&gt;</translation>
     </message>
 </context>
 <context>

@@ -117,4 +117,15 @@ else()
     set(CPACK_RPM_PACKAGE_SUGGESTS "qt6-qtwayland")
 endif()
 
+# Windows Installer takes versions of at most 255.255.65535, so the .msi carries YEAR.N as (YEAR - 2000).N.0 (2026.1
+# is 26.1.0; later years and releases still sort later, which upgrades need); its file name keeps YEAR.N
+# (cmake/CPackOptions.cmake.in, run by cpack for each generator; docs/spec/versioning.md).
+string(REPLACE "." ";" _lumenis_version_parts "${PROJECT_VERSION}")
+list(GET _lumenis_version_parts 0 _lumenis_year)
+list(GET _lumenis_version_parts 1 _lumenis_release)
+math(EXPR _lumenis_msi_major "${_lumenis_year} - 2000")
+set(LUMENIS_MSI_VERSION "${_lumenis_msi_major}.${_lumenis_release}.0")
+configure_file(${PROJECT_SOURCE_DIR}/cmake/CPackOptions.cmake.in ${PROJECT_BINARY_DIR}/CPackOptions.cmake @ONLY)
+set(CPACK_PROJECT_CONFIG_FILE "${PROJECT_BINARY_DIR}/CPackOptions.cmake")
+
 include(CPack)

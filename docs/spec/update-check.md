@@ -11,7 +11,7 @@ or installed by the application. Sparkle, WinSparkle and AppImageUpdate are not 
 * One HTTPS GET of GitHub's REST API, `https://api.github.com/repos/<owner>/<repo>/releases/latest`, the project
   being the branding's homepage (`PRODUCT_HOMEPAGE` in cmake/Branding.cmake, `latestReleaseUrl`). No account and
   nothing about the user are sent: the headers are the API's media type and a User-Agent of the product and version
-  ("Cutthulhu/0.1.0"), as GitHub asks of clients.
+  ("Cutthulhu/2026.1"), as GitHub asks of clients.
 * `releases/latest` is the newest release that is neither a draft nor a pre-release. Its `tag_name` ("v0.2.0", a
   leading "v" dropped) is compared with the version running (`compareVersions`: numbers by number, so 0.10 is after
   0.9; a release after its candidates, "0.2.0-rc1" before "0.2.0"). Its `html_url` must be https to be offered.

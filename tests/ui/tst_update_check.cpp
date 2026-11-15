@@ -74,7 +74,7 @@ private slots:
         window.resize(1000, 700);
         window.show();
         QList<QUrl> asked;
-        QByteArray answer = release("v99.0.0");
+        QByteArray answer = release("v9999.1");
         int status = 200;
         window.setUpdateFetcher([&](const QUrl& url, const std::function<void(int, QByteArray, QString)>& reply) {
             asked << url;
@@ -92,7 +92,7 @@ private slots:
         QCOMPARE(said.size(), 1);
         QCOMPARE(said.first().first, UpdateResult::State::Newer);
         QVERIFY(said.first().second);
-        QCOMPARE(window.lastUpdatePage().toString(), QStringLiteral("https://github.com/open-compose/lumenis/releases/tag/v99.0.0"));
+        QCOMPARE(window.lastUpdatePage().toString(), QStringLiteral("https://github.com/open-compose/lumenis/releases/tag/v9999.1"));
         // At start-up, the same check (not from the menu).
         answer = release(branding::kVersion);
         window.checkForUpdates(false);
@@ -100,14 +100,14 @@ private slots:
 
         // Without the hook: a newer release opens a notice that does not block, with Open Release Page and Later.
         window.setUpdateNoticeHook({});
-        answer = release("v99.0.0");
+        answer = release("v9999.1");
         window.checkForUpdates(false);
         QMessageBox* box = nullptr;
         for (QWidget* w : QApplication::topLevelWidgets()) {
             if (auto* b = qobject_cast<QMessageBox*>(w); b && b->isVisible()) box = b;
         }
         QVERIFY(box);
-        QVERIFY(box->text().contains(QStringLiteral("99.0.0")));
+        QVERIFY(box->text().contains(QStringLiteral("9999.1")));
         QVERIFY(!box->isModal() || box->windowModality() != Qt::ApplicationModal);
         QStringList buttons;
         for (QAbstractButton* b : box->buttons()) buttons << b->text();

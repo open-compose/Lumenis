@@ -14158,7 +14158,7 @@ Teanga MCA: %2</translation>
     </message>
     <message>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Avid and Media Composer are trademarks of Avid Technology, Inc. This product is not affiliated with or endorsed by Avid.&lt;/p&gt;</source>
-        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Ceadúnaithe faoin GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 soláthraí síneadh cláraithe.&lt;/p&gt;&lt;p&gt;Is é Inter cló na comhéadaine, faoin SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Is trádmharcanna de chuid Avid Technology, Inc. iad Avid agus Media Composer. Níl baint ag an táirge seo le Avid ná níl sé formhuinithe ag Avid.&lt;/p&gt;</translation>
+        <translation type="obsolete">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Ceadúnaithe faoin GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 soláthraí síneadh cláraithe.&lt;/p&gt;&lt;p&gt;Is é Inter cló na comhéadaine, faoin SIL Open Font License 1.1.&lt;/p&gt;&lt;p&gt;Is trádmharcanna de chuid Avid Technology, Inc. iad Avid agus Media Composer. Níl baint ag an táirge seo le Avid ná níl sé formhuinithe ag Avid.&lt;/p&gt;</translation>
     </message>
     <message>
         <source>Configuration</source>
@@ -15031,6 +15031,10 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>Update check: %1</source>
         <translation type="unfinished">Seiceáil nuashonruithe: %1</translation>
+    </message>
+    <message>
+        <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;</source>
+        <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Ceadúnaithe faoin GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 soláthraí síneadh cláraithe.&lt;/p&gt;&lt;p&gt;Is é Inter cló na comhéadaine, faoin SIL Open Font License 1.1.&lt;/p&gt;</translation>
     </message>
 </context>
 <context>
