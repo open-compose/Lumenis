@@ -103,8 +103,9 @@ private slots:
         QVERIFY(isPatentCodec(QStringLiteral("H264")));
         QVERIFY(!isPatentCodec(QStringLiteral("mpeg2video")));
         QVERIFY(codecAllowed(QStringLiteral("ffv1")));
-        QCOMPARE(patentCodecsAllowed(), bool(LUMENIS_PATENT_CODECS));
-        QCOMPARE(codecAllowed(QStringLiteral("prores")), bool(LUMENIS_PATENT_CODECS));
+        // The build's setting, unless LUMENIS_PATENT_CODECS_OFF gives the release policy (docs/spec/release-codecs.md).
+        QCOMPARE(patentCodecsAllowed(), bool(LUMENIS_PATENT_CODECS) && qEnvironmentVariableIntValue("LUMENIS_PATENT_CODECS_OFF") == 0);
+        QCOMPARE(codecAllowed(QStringLiteral("prores")), patentCodecsAllowed());
     }
 
     void losslessRoundTrip() {
@@ -225,7 +226,6 @@ private slots:
 
     void dnxhrInMxfOpAtom() {
         // Avid's own media: DNxHR in MXF OP-Atom (ROADMAP Phase 2).
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString path = dir.filePath(QStringLiteral("V01.mxf"));
         WriterSettings s;
@@ -263,7 +263,6 @@ private slots:
     void managedMedia() {
         // Import/Transcode and Consolidate into Avid MediaFiles (p.349-356):
         // MXF OP-Atom, a file per track.
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString source = dir.filePath(QStringLiteral("Dock Interview.mov"));
         WriterSettings s;
@@ -734,7 +733,10 @@ private slots:
                 QVERIFY(!frame.isNull());
                 QVERIFY(near(frame, colourOf(3), 24)); // decoded by the OS
             } else {
-                QVERIFY2(why.contains(QStringLiteral("operating system")), qPrintable(why));
+                // No OS decoder (the reason names it), or one that opens and cannot decode this stream (a runner's
+                // GPU-less D3D11VA): either way a reason, and never FFmpeg's own decoding.
+                QVERIFY(!why.isEmpty());
+                if (!decodingAvailable(QStringLiteral("h264"))) QVERIFY2(why.contains(QStringLiteral("operating system")), qPrintable(why));
             }
         }
         // Movie export's H.264 is the OS's encoder where there is one, or not offered.
@@ -1077,7 +1079,6 @@ private slots:
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the clip's colour adapter goes into the
     // new media and the new clip and segments have none; off, the new clip keeps the encoding.
     void transcodeColorEncoding() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString source = dir.filePath(QStringLiteral("Graded.mov"));
         WriterSettings s;
@@ -1145,7 +1146,6 @@ private slots:
     // clips to target drive before skipping, Convert to Project Frame Rate, Framing (Frame Flex) and Convert Audio Sample
     // Rate.
     void consolidateOptions() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         // A 25 fps clip with sound at 44.1 kHz, its left half red and its right half blue.
         const QString source = dir.filePath(QStringLiteral("Halves.mov"));
@@ -1283,7 +1283,6 @@ private slots:
     // every angle with the option, over the group frames used with handles; a new group plays the new clips and the
     // segment uses it, the same pictures at the same frames.
     void consolidateGroupEdits() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         // Two angles in managed DNx (Consolidate copies DNx), B's frames numbered from 100.
         auto angleClip = [&](const QString& name, int base) -> std::optional<model::BinItem> {
@@ -1537,7 +1536,6 @@ private slots:
     void consolidateSequences() {
         // A sequence keeps only the parts of its clips it uses, with handles,
         // in new ".new.01" master clips; its segments use them (p.349).
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString source = dir.filePath(QStringLiteral("Wide.mov"));
         WriterSettings s;
@@ -1645,7 +1643,6 @@ private slots:
     void relinkManagedMedia() {
         // Relink > Managed Media (p.361-364): clips find media of the same
         // source and timecode, by the relink method.
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString source = dir.filePath(QStringLiteral("Dock.mov"));
         WriterSettings s;
@@ -1810,7 +1807,6 @@ private slots:
     void transcodeRoundTrips() {
         // ROADMAP Phase 2 gate 5: transcoding keeps the picture to each
         // resolution's expected PSNR in Y'CbCr, and the timecode and tape.
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         // A lossless 10-bit Y'CbCr source with detail: gradients, edges,
         // circles and fine noise.

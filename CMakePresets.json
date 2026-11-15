@@ -80,6 +80,26 @@
       }
     },
     {
+      "name": "dist",
+      "displayName": "Release package (patent codecs off, docs/spec/release-codecs.md)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LUMENIS_WARNINGS_AS_ERRORS": "ON",
+        "LUMENIS_PATENT_CODECS": "OFF"
+      }
+    },
+    {
+      "name": "dist-macos",
+      "displayName": "Release package macOS arm64 (patent codecs off)",
+      "inherits": "macos-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "LUMENIS_WARNINGS_AS_ERRORS": "ON",
+        "LUMENIS_PATENT_CODECS": "OFF"
+      }
+    },
+    {
       "name": "asan",
       "displayName": "AddressSanitizer and UBSan (Linux and macOS, GCC or Clang)",
       "inherits": "base",
@@ -149,6 +169,14 @@
       "configurePreset": "ci-macos"
     },
     {
+      "name": "dist",
+      "configurePreset": "dist"
+    },
+    {
+      "name": "dist-macos",
+      "configurePreset": "dist-macos"
+    },
+    {
       "name": "asan",
       "configurePreset": "asan"
     },
@@ -159,7 +187,15 @@
     {
       "name": "fuzz",
       "configurePreset": "fuzz",
-      "targets": ["fuzz_cfb", "fuzz_aaf", "fuzz_avb", "fuzz_avb_rewrite", "fuzz_otio", "fuzz_fcpxml", "lumenis_fuzz_replay"]
+      "targets": [
+        "fuzz_cfb",
+        "fuzz_aaf",
+        "fuzz_avb",
+        "fuzz_avb_rewrite",
+        "fuzz_otio",
+        "fuzz_fcpxml",
+        "lumenis_fuzz_replay"
+      ]
     }
   ],
   "testPresets": [
@@ -207,6 +243,16 @@
       "name": "ci-macos",
       "inherits": "base",
       "configurePreset": "ci-macos"
+    },
+    {
+      "name": "dist",
+      "inherits": "base",
+      "configurePreset": "dist"
+    },
+    {
+      "name": "dist-macos",
+      "inherits": "base",
+      "configurePreset": "dist-macos"
     },
     {
       "name": "asan",

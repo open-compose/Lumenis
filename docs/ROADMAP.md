@@ -1975,11 +1975,15 @@ owner's soak and screen-reader runs carry on as before.
   by their encoders, FFmpeg's own never (done: docs/spec/release-codecs.md; `media::isOsCodec`, `osEncoderFor`,
   `decodingAvailable`, `movieEncoder`, the hardware path in `openDecoder` with `takeFromDevice`;
   `LUMENIS_PATENT_CODECS_OFF` for the release policy at run time; test `tst_media releaseCodecPolicy`).
-* 12.2b, the release pipeline without signing, 10.7 (the owner's answer: no certificates): a release workflow run by
-  hand that builds with Qt 6.8 LTS and `LUMENIS_PATENT_CODECS` off on the hosted runners, makes the .dmg (ad-hoc
-  signed), .msi and .zip, AppImage, .deb and .tar.gz, writes SHA-256 checksums, and makes a draft GitHub Release with
-  them and the symbols; INSTALL.md with each OS's steps for unsigned binaries and turning patent codecs on where the law
-  allows; an installer gate that checks the checksums.
+* 12.2b, the release pipeline without signing, 10.7 (the owner's answer: no certificates; done:
+  `.github/workflows/release.yml` run by hand, building every package on the hosted runners with Qt 6.8 LTS and the
+  `dist`/`dist-macos` presets, testing each, an installer gate per package checking for no GPL x264/x265, a draft
+  GitHub Release with the packages, their checksums, the symbols and SHA256SUMS.txt checked against each runner's;
+  FFmpeg per the owner's decision of 2026-11-15: `scripts/build-release-ffmpeg.sh` (LGPL, the encoders awaiting review
+  left out) on macOS and in the AppImage, BtbN's LGPL build on Windows, the distribution's in the .deb and .tar.gz;
+  INSTALL.md's unsigned packages, checksums and codecs; BUILDING.md "Releases"; the tests run under the release
+  policy, with `LUMENIS_PATENT_CODECS_OFF=1` locally). Not yet run: the first run is the owner's, once hosted minutes
+  allow.
 * 12.3, the release gate, 10.8: a checklist (docs/checklists/release-gate.md) of 10.1-10.7 on each platform, the
   phases' deferred gates with their reasons, and the owner's tries of a release candidate on each OS.
 

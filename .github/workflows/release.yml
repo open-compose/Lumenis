@@ -1,0 +1,292 @@
+# The release pipeline (ROADMAP 10.7, Phase 12.2b; BUILDING.md "Releases"). Run by hand: Actions > Release > Run
+# workflow, on the commit to release, with the version cmake/Branding.cmake names. It builds every package on
+# GitHub's hosted runners with Qt 6.8 LTS and the release codec policy (LUMENIS_PATENT_CODECS off,
+# docs/spec/release-codecs.md), tests each build, and puts the packages, their SHA-256 checksums and the debug symbols
+# in a draft GitHub Release for the owner to read and publish. Nothing is signed (the owner's answer: no
+# certificates); INSTALL.md says how each OS lets an unsigned program run.
+#
+# FFmpeg (the owner's decision, 2026-11-15): macOS and the AppImage carry our LGPL build without the encoders awaiting
+# review (scripts/build-release-ffmpeg.sh); Windows carries BtbN's LGPL build (scripts/get-ffmpeg.ps1 -Variant lgpl);
+# the .deb and .tar.gz use the distribution's.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release, as cmake/Branding.cmake's PRODUCT_VERSION (e.g. 0.2.0)
+        required: true
+        type: string
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  QT_VERSION: '6.8.3'
+  TAG: v${{ inputs.version }}
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Check the version and make the draft release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The version is the one the build names
+        run: |
+          branded=$(sed -n 's/^set(PRODUCT_VERSION *"\([^"]*\)").*/\1/p' cmake/Branding.cmake)
+          if [ "$branded" != "${{ inputs.version }}" ]; then
+            echo "::error::cmake/Branding.cmake says $branded, not ${{ inputs.version }}: change PRODUCT_VERSION first"
+            exit 1
+          fi
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::A release $TAG exists already; delete the draft or choose another version"
+            exit 1
+          fi
+          {
+            echo "Cutthulhu ${{ inputs.version }}."
+            echo
+            echo "The packages are not signed: [INSTALL.md](https://github.com/${{ github.repository }}/blob/$GITHUB_SHA/INSTALL.md)"
+            echo "says how to let each operating system run them. SHA256SUMS.txt holds every file's checksum."
+            echo "H.264 and HEVC go through the operating system's codecs (docs/spec/release-codecs.md)."
+          } > notes.md
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Cutthulhu ${{ inputs.version }}" \
+            --notes-file notes.md --generate-notes
+
+  macos:
+    name: macOS arm64 (.dmg)
+    needs: prepare
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+      - name: Install build tools
+        run: brew install ninja pkg-config nasm dav1d svt-av1 opus openjpeg
+      - name: FFmpeg (LGPL, ours)
+        run: scripts/build-release-ffmpeg.sh "$HOME/ffmpeg-release"
+      - name: Configure
+        run: cmake --preset dist-macos -DFFMPEG_ROOT="$HOME/ffmpeg-release"
+      - name: Build
+        run: cmake --build --preset dist-macos
+      - name: Test
+        run: ctest --preset dist-macos
+      - name: Logs of failed tests
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/dist-macos/test-logs/*.txt 2>/dev/null | xargs -r cat
+      - name: Package (.dmg)
+        run: cd build/dist-macos && cpack
+      - name: Installer gate (mount, launch, check the codecs)
+        run: |
+          dmg=$(ls build/dist-macos/*.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach "$dmg" -mountpoint "$mnt" -nobrowse
+          app="$mnt/Cutthulhu.app"
+          lipo -archs "$app/Contents/MacOS/Cutthulhu" | grep -q arm64
+          codesign --verify --deep "$app" # ad-hoc signed
+          # Our FFmpeg, not Homebrew's: no x264 or x265 inside.
+          ! find "$app" -name 'libx26*' | grep -q .
+          ls "$app"/Contents/Frameworks/libavcodec*.dylib
+          "$app/Contents/MacOS/Cutthulhu" --version
+          "$app/Contents/MacOS/Cutthulhu" --smoke-test
+          hdiutil detach "$mnt"
+      - name: Debug symbols (dSYM)
+        run: |
+          xcrun dsymutil build/dist-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu -o build/dist-macos/Cutthulhu.dSYM
+          ditto -c -k --keepParent build/dist-macos/Cutthulhu.dSYM "build/dist-macos/cutthulhu-${{ inputs.version }}-macos-arm64-dSYM.zip"
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd build/dist-macos
+          for f in *.dmg *-dSYM.zip; do shasum -a 256 "$f" > "$f.sha256"; done
+          gh release upload "$TAG" *.dmg *-dSYM.zip *.sha256 --clobber
+
+  windows:
+    name: Windows x64 (.msi, .zip)
+    needs: prepare
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install build tools
+        run: choco install ninja -y --no-progress
+      - name: FFmpeg (BtbN's LGPL build)
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1 -Variant lgpl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Configure
+        run: cmake --preset dist
+      - name: Build
+        run: cmake --build --preset dist
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          ctest --preset dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Logs of failed tests
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem build\dist\test-logs\*.txt -ErrorAction SilentlyContinue |
+            Where-Object { Select-String -Path $_.FullName -Pattern '^(FAIL!|QFATAL)' -Quiet } |
+            ForEach-Object { Write-Host "==== $($_.Name)"; Get-Content $_.FullName }
+      - name: Package (.msi, .zip)
+        run: cd build/dist && cpack
+      - name: Installer gate (install, launch, check the codecs, uninstall)
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem build/dist/*.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 50; exit 1 }
+          $dir = "$env:ProgramFiles\Cutthulhu\bin"
+          if (Get-ChildItem $dir -Filter 'libx26*' -ErrorAction SilentlyContinue) { Write-Error 'a GPL x264/x265 is in the package'; exit 1 }
+          $out = & "$dir\cutthulhu.exe" --smoke-test | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
+          $p = Start-Process msiexec -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit 1 }
+      - name: Upload to the draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Set-Location build/dist
+          $files = Get-ChildItem *.msi, *.zip
+          foreach ($f in $files) {
+            $hash = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+            Set-Content -NoNewline -Path "$($f.Name).sha256" -Value "$hash  $($f.Name)`n"
+          }
+          gh release upload $env:TAG @($files.Name) @(Get-ChildItem *.sha256 | ForEach-Object Name) --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  linux-appimage:
+    name: Linux x64 (AppImage)
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          scripts/bootstrap-linux.sh
+          sudo apt-get install -y --no-install-recommends nasm libva-dev libdav1d-dev libsvtav1enc-dev libopus-dev libopenjp2-7-dev
+      - name: Install Qt (6.8 LTS, bundled in the AppImage)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtwayland
+          cache: true
+      - name: FFmpeg (LGPL, ours)
+        run: scripts/build-release-ffmpeg.sh "$HOME/ffmpeg-release"
+      - name: Configure
+        run: cmake --preset dist -DFFMPEG_ROOT="$HOME/ffmpeg-release"
+      - name: Build
+        run: cmake --build --preset dist
+      - name: Test
+        run: LD_LIBRARY_PATH="$HOME/ffmpeg-release/lib" ctest --preset dist
+      - name: Logs of failed tests
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/dist/test-logs/*.txt 2>/dev/null | xargs -r cat
+      - name: Package (AppImage)
+        run: LD_LIBRARY_PATH="$HOME/ffmpeg-release/lib" packaging/linux/make-appimage.sh build/dist
+      - name: Installer gate (launch, check the codecs)
+        run: |
+          appimage=$(ls build/dist/*.AppImage)
+          (cd build/dist && "$appimage" --appimage-extract >/dev/null)
+          ls build/dist/squashfs-root/usr/lib/libavcodec.so*
+          ! ls build/dist/squashfs-root/usr/lib/ | grep -q 'libx26'
+          ls build/dist/squashfs-root/usr/plugins/tls/
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --smoke-test
+          sudo apt-get install -y --no-install-recommends weston
+          scripts/check-appimage-wayland.sh "$appimage"
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd build/dist
+          version="${{ inputs.version }}"
+          mv *.AppImage "Cutthulhu-$version-x86_64.AppImage"
+          objcopy --only-keep-debug bin/cutthulhu "cutthulhu-$version-linux-x86_64.debug"
+          gzip -f "cutthulhu-$version-linux-x86_64.debug"
+          for f in *.AppImage *.debug.gz; do sha256sum "$f" > "$f.sha256"; done
+          gh release upload "$TAG" *.AppImage *.debug.gz *.sha256 --clobber
+
+  linux-packages:
+    name: Linux x64 (.deb, .tar.gz)
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (the distribution's Qt and FFmpeg)
+        run: scripts/bootstrap-linux.sh
+      - name: Configure
+        run: cmake --preset dist
+      - name: Build
+        run: cmake --build --preset dist
+      - name: Test
+        run: ctest --preset dist
+      - name: Logs of failed tests
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/dist/test-logs/*.txt 2>/dev/null | xargs -r cat
+      - name: Package (.deb, .tar.gz)
+        run: cd build/dist && cpack
+      - name: Installer gate (install, launch, uninstall)
+        run: |
+          sudo apt-get install -y ./build/dist/*.deb
+          QT_QPA_PLATFORM=offscreen cutthulhu --smoke-test
+          sudo apt-get remove -y cutthulhu
+          test ! -e /usr/bin/cutthulhu
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd build/dist
+          for f in *.deb *.tar.gz; do sha256sum "$f" > "$f.sha256"; done
+          gh release upload "$TAG" *.deb *.tar.gz *.sha256 --clobber
+
+  checksums:
+    name: Check the uploads and write SHA256SUMS.txt
+    needs: [macos, windows, linux-appimage, linux-packages]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download, check, sum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir assets && cd assets
+          gh release download "$TAG" --repo "${{ github.repository }}"
+          # Each file as it was made: its runner's checksum against what the release holds.
+          for s in *.sha256; do sha256sum -c "$s"; done
+          ls *.dmg *.msi *.zip *.AppImage *.deb *.tar.gz
+          sha256sum $(ls | grep -v '\.sha256$') > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
+          echo "The draft release $TAG is ready: read it on GitHub's Releases page and publish it."

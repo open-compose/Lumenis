@@ -111,7 +111,10 @@ private slots:
     void makeProxies() {
         QCOMPARE(media::proxyRaster(QSize(1920, 1080)), QSize(960, 540));
         QCOMPARE(media::proxyRaster(QSize(40, 30)), QSize(256, 144));
-        if (!media::patentCodecsAllowed()) QSKIP("H.264 and DNx are left out of this build (docs/EXTENSIONS.md)");
+        // H.264 proxies: FFmpeg's encoder where the policy allows it, else the operating system's (docs/spec/release-codecs.md).
+        if (!media::patentCodecsAllowed() && media::osEncoderFor(QStringLiteral("h264")).isEmpty()) {
+            QSKIP("H.264 is left to the operating system, which has no encoder here (docs/spec/release-codecs.md)");
+        }
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         // A blue 25 fps clip, picture only.

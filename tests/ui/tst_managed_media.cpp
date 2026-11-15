@@ -285,7 +285,6 @@ private slots:
     }
 
     void importConsolidateAndTheMediaDatabase() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString source = dir.filePath(QStringLiteral("Card"));
         QVERIFY(QDir().mkpath(source));
@@ -433,7 +432,6 @@ private slots:
     // keeps its MobID, and the copy's files name it as their material
     // package; ".old.01" is a new clip with the media the clip had.
     void consolidateRelinksTheClip() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A001.mov"));
         QVERIFY(writeMovie(movie, 6));
@@ -492,7 +490,6 @@ private slots:
     // AAF imported into another bin (p.547): the clips come back with
     // their media online, found by MobID, and the sequence names them.
     void exportAndImportAaf() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A002.mov"));
         QVERIFY(writeMovie(movie, 10));
@@ -674,7 +671,6 @@ private slots:
     }
 
     void aafEmbeddedMedia() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A005.mov"));
         QVERIFY(writeMovie(movie, 10));
@@ -816,7 +812,6 @@ private slots:
     }
 
     void aafExportMethods() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A004.mov"));
         QVERIFY(writeMovie(movie, 10));
@@ -1006,7 +1001,6 @@ private slots:
     // Bin of that file (p.296) lists it under Other Bins with the clip online
     // (its managed media found by MobID) and the sequence naming it.
     void exportAsMediaComposerBin() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A003.mov"));
         QVERIFY(writeMovie(movie, 10));
@@ -1090,7 +1084,6 @@ private slots:
     }
 
     void relinkDeleteAndTheBackgroundQueue() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A001.mov"));
         QVERIFY(writeMovie(movie, 12));

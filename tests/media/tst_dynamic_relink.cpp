@@ -145,7 +145,6 @@ private slots:
     // clip sharing the source and timecode is associated; Delete offers only the clip's own (affinity) media; the Video
     // column follows the media linked to.
     void partialAndShared() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString source = dir.filePath(QStringLiteral("Shot.mov"));
@@ -211,7 +210,6 @@ private slots:
     // Transcode of a sequence without Create new clips (p.354-355, p.1118): the clip keeps the media of the range the
     // sequence uses, partly online; the sequence and its segments are left as they are.
     void sequenceWithoutNewClips() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString source = dir.filePath(QStringLiteral("Shot.mov"));
@@ -261,7 +259,6 @@ private slots:
 
     // A linked clip transcoded twice without Create new clips (p.354-355): three media, chosen by the rules.
     void multiRezClip() {
-        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString source = dir.filePath(QStringLiteral("Shot.mov"));

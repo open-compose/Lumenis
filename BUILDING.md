@@ -1456,6 +1456,26 @@ answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
 **`stalled`:** no cycle finished for ten minutes; the run ends with exit 1. Attach a debugger (or take a stack sample,
 "Profiling" above) before it ends to see where it waits.
 
+## Releases
+
+A release is made by hand (ROADMAP 10.7, Phase 12.2b): set `PRODUCT_VERSION` in `cmake/Branding.cmake`, push, then run
+**Actions > Release > Run workflow** on that commit with the same version (or `gh workflow run release.yml --ref
+<branch> -f version=<version>`). The workflow (`.github/workflows/release.yml`) runs on GitHub's hosted runners
+(macOS's minutes cost ten times: run it when a release is due):
+
+* each package is built with Qt 6.8 LTS and the `dist` or `dist-macos` preset (`LUMENIS_PATENT_CODECS` off,
+  docs/spec/release-codecs.md), tested with `ctest`, packaged and checked (installed or mounted, launched with
+  `--smoke-test`, no x264 or x265 inside);
+* FFmpeg: on macOS and in the AppImage our LGPL build without the encoders awaiting review
+  (`scripts/build-release-ffmpeg.sh`, FFmpeg's n7.1.1 tag checked against its commit), on Windows BtbN's LGPL build
+  (`scripts/get-ffmpeg.ps1 -Variant lgpl`), in the .deb and .tar.gz the distribution's;
+* everything goes into a **draft** GitHub Release (`v<version>`), with each file's checksum, the debug symbols
+  (the macOS dSYM, the Linux `.debug`; the Windows PDB is in its packages) and `SHA256SUMS.txt`, made after the
+  uploads are checked against their runners' checksums.
+
+Read the draft on the Releases page and publish it; the update check (below) then offers it to everyone on an older
+version. Nothing is signed (no certificates; INSTALL.md says how each OS lets the packages run).
+
 ## Update check
 
 Cutthulhu asks GitHub for its latest release at start-up and from Help > Check for Updates (ROADMAP 10.6;

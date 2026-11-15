@@ -617,7 +617,6 @@ private slots:
     // the loaded clip, Offline when nothing matches, back on the clip's own media when turned off; Transcode's Create
     // new clips offered only with the setting on (p.354-355).
     void dynamicRelink() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString movie = dir.filePath(QStringLiteral("red.mov"));
@@ -715,7 +714,6 @@ private slots:
     // The MultiRez button (p.1111-1116; 8.6b): its displays and colours, Resolution Tracking clip colours, Find Next
     // Mismatched or Unavailable Clip, Clip Text > Clip Resolution, and its menu's Dynamic Relink items.
     void multiRezButton() {
-        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString movie = dir.filePath(QStringLiteral("red.mov"));
@@ -1077,7 +1075,10 @@ private slots:
     // Proxy media (Editing Guide p.508-510; 8.7a): Create Proxies on the selected clip, its orange icon and proxy columns,
     // the Play button's proxy modes and what the monitor plays, and proxies made as a Background Queue job.
     void proxyMedia() {
-        if (!media::patentCodecsAllowed()) QSKIP("H.264 and DNx are left out of this build (docs/EXTENSIONS.md)");
+        // H.264 proxies: FFmpeg's encoder where the policy allows it, else the operating system's (docs/spec/release-codecs.md).
+        if (!media::patentCodecsAllowed() && media::osEncoderFor(QStringLiteral("h264")).isEmpty()) {
+            QSKIP("H.264 is left to the operating system, which has no encoder here (docs/spec/release-codecs.md)");
+        }
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString first = dir.filePath(QStringLiteral("one.mov"));

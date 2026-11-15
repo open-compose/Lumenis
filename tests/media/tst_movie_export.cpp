@@ -19,13 +19,13 @@ using namespace lumenis::media;
 namespace {
 
 // Ten frames of 64 x 36, a red left half and a blue right half, and a 1 kHz tone in every channel.
-MovieSource source(std::int64_t frames = 10) {
+MovieSource source(std::int64_t frames = 10, QSize size = QSize(64, 36)) {
     MovieSource s;
     s.frames = frames;
     s.frameRate = Rational(25, 1);
-    s.raster = QSize(64, 36);
-    s.picture = [](std::int64_t) {
-        QImage image(64, 36, QImage::Format_RGB32);
+    s.raster = size;
+    s.picture = [size](std::int64_t) {
+        QImage image(size, QImage::Format_RGB32);
         image.fill(Qt::blue);
         for (int y = 0; y < 36; ++y) {
             for (int x = 0; x < 32; ++x) image.setPixel(x, y, qRgb(255, 0, 0));
@@ -100,8 +100,13 @@ private slots:
         const MovieCompression* hevc = findMovieCompression(QStringLiteral("hevc_main10"));
         QCOMPARE(hevc->depth, 10);
         QVERIFY(movieCompressionFits(*hevc, MovieContainer::Mp4));
-        // A codec awaiting legal review is available exactly when the build allows those codecs.
-        if (movieCompressionAvailable(*dnx)) QVERIFY(patentCodecsAllowed());
+        // DNxHR in every build (docs/spec/release-codecs.md); a codec awaiting legal review through FFmpeg's own encoder
+        // only where the policy allows it, else through the operating system's.
+        QVERIFY(movieCompressionAvailable(*dnx));
+        const MovieCompression* prores = findMovieCompression(QStringLiteral("prores_hq"));
+        QVERIFY(prores);
+        if (movieEncoder(*prores) == QLatin1String("prores_ks")) QVERIFY(patentCodecsAllowed());
+        if (!movieEncoder(*prores).isEmpty() && !patentCodecsAllowed()) QVERIFY(isOsCodec(movieEncoder(*prores)));
         QVERIFY(movieCompressionAvailable(*findMovieCompression(QStringLiteral("png"))));
     }
 
@@ -316,11 +321,17 @@ private slots:
         const MovieCompression* h264 = findMovieCompression(QStringLiteral("h264"));
         o.compression = movieCompressionAvailable(*h264) ? QStringLiteral("h264") : QStringLiteral("av1");
         if (!movieCompressionAvailable(*findMovieCompression(o.compression))) QSKIP("no H.264 or AV1 encoder");
-        QVERIFY2(exportMovie(path, source(), o, {}, &error), qPrintable(error));
+        // SVT-AV1 takes pictures of 64 pixels or more each way (the release policy on Linux, without an OS H.264), and
+        // the operating systems' H.264 encoders may want more than 64 x 36 (the release policy on macOS and Windows).
+        const bool osEncoder = isOsCodec(movieEncoder(*findMovieCompression(o.compression)));
+        const QSize size = osEncoder ? QSize(320, 180) : o.compression == QLatin1String("av1") ? QSize(128, 72) : QSize(64, 36);
+        QVERIFY2(exportMovie(path, source(10, size), o, {}, &error), qPrintable(error));
         const auto info = probe(path);
         QCOMPARE(info->firstVideo()->codec, o.compression == QLatin1String("h264") ? QStringLiteral("h264") : QStringLiteral("av1"));
         QCOMPARE(info->firstVideo()->length, 10);
-        QCOMPARE(info->audio().front()->codec, patentCodecsAllowed() ? QStringLiteral("aac") : QStringLiteral("opus"));
+        // AAC: FFmpeg's where the policy allows it, else the operating system's (AudioToolbox, Media Foundation), else Opus.
+        const bool aac = patentCodecsAllowed() || !osEncoderFor(QStringLiteral("aac")).isEmpty();
+        QCOMPARE(info->audio().front()->codec, aac ? QStringLiteral("aac") : QStringLiteral("opus"));
     }
 
     void fullRange() {

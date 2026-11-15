@@ -191,7 +191,12 @@ def main():
                 skipped += 1
                 continue
             if got is None:
-                # A codec this build leaves out (LUMENIS_PATENT_CODECS off).
+                # A codec the policy leaves to the operating system, which has no decoder for it here
+                # (LUMENIS_PATENT_CODECS off, docs/spec/release-codecs.md): not ours to compare.
+                if why and ("operating system" in why or "not available in this build" in why):
+                    report.append({"file": stem, "result": "left to the operating system", "why": why})
+                    skipped += 1
+                    continue
                 report.append({"file": stem, "result": "not read", "why": why})
                 failed += 1
                 continue
