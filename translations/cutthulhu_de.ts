@@ -8639,6 +8639,14 @@ Erstellungsdatum: %4</translation>
         <source>Invisible</source>
         <translation type="unfinished">Unsichtbar</translation>
     </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished">Ausgabe</translation>
+    </message>
+    <message>
+        <source>Export to File</source>
+        <translation type="unfinished">In Datei exportieren</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BrushPreview</name>
@@ -12895,7 +12903,7 @@ Erstellungsdatum: %4</translation>
     </message>
     <message>
         <source>Export to File: select the clips or sequences to export in a bin.</source>
-        <translation type="unfinished">In Datei exportieren: Wählen Sie die zu exportierenden Clips oder Sequenzen in einer Bin aus.</translation>
+        <translation type="obsolete">In Datei exportieren: Wählen Sie die zu exportierenden Clips oder Sequenzen in einer Bin aus.</translation>
     </message>
     <message>
         <source>Media Composer bins (*.avb)</source>
@@ -14384,6 +14392,22 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
             <numerusform>Konsolidieren/Transkodieren: %n Original-Mediendatei gelöscht.</numerusform>
             <numerusform>Konsolidieren/Transkodieren: %n Original-Mediendateien gelöscht.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Export to File: select the clips or sequences to export in a bin, or click the monitor that shows one.</source>
+        <translation type="unfinished">In Datei exportieren: Wählen Sie die zu exportierenden Clips oder Sequenzen in einem Bin aus oder klicken Sie auf den Monitor, der einen davon zeigt.</translation>
+    </message>
+    <message>
+        <source>Export to File: ALE, tab-delimited and sequential files cannot be exported by dragging; use Export to File.</source>
+        <translation type="unfinished">In Datei exportieren: ALE-, tabulatorgetrennte und sequenzielle Dateien können nicht durch Ziehen exportiert werden; verwenden Sie „In Datei exportieren“.</translation>
+    </message>
+    <message>
+        <source>Export to File: the temporary folder %1 cannot be made.</source>
+        <translation type="unfinished">In Datei exportieren: Der temporäre Ordner %1 kann nicht erstellt werden.</translation>
+    </message>
+    <message>
+        <source>Export to File: nothing was exported.</source>
+        <translation type="unfinished">In Datei exportieren: Es wurde nichts exportiert.</translation>
     </message>
 </context>
 <context>

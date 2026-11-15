@@ -3119,8 +3119,27 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   active Export setting. The folder last used is offered next time.
 * The file name's extension is the format's (p.869): `.aaf`, or `.avb`
   for Media Composer Bin, also when the setting is changed in the dialog.
-* Later: exporting from a monitor (p.869 step 2), drag-and-drop export
-  (p.869), and every format but AAF and Media Composer Bin.
+* 11.4b (ROADMAP):
+  * From a monitor (p.869, step 2: "Click the monitor that displays the
+    clip or sequence you want to export"): when a monitor's picture was
+    clicked since the active bin's selection last changed, or no bin has a
+    selection, Export to File takes the active monitor's clip or sequence,
+    with its marks when Use Marks is on (`MainWindow::exportSelection`,
+    `Composer::monitorClicked`).
+  * The bin's right-click menu has Output > Export to File (p.869).
+  * Drag and drop (p.868-869): "Click the clip or sequence from which you
+    want to export and drag it to the location (folder or drive) where you
+    want to store the file", with the Export setting in use. A bin's drag
+    offers the exported files as a URL list made only when something
+    outside the application asks for it at the drop
+    (`ExportDragData` in `src/ui/export_drag.*`); drops on our own windows
+    export nothing. The export goes into a new folder under the General
+    setting's Temporary File Directory (p.868, p.1192; the system's
+    temporary folder when unset, ours), which the file manager copies
+    from. "You cannot use the drag-and-drop method to export ALE,
+    tab-delimited, or sequential files" (p.868): refused with a message.
+  * Embedded in AAF's media is made under the Temporary File Directory too.
+* The formats are the Export setting's (below).
 
 ### Export setting (p.1173-1177)
 * Export As (p.1173-1174): every format the guide lists; AAF and Avid Log

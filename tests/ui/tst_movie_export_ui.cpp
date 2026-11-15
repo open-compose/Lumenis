@@ -18,6 +18,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/export_drag.h"
 #include "lumenis/ui/export_volume_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
@@ -81,6 +82,101 @@ private slots:
 
     // DCP (7.5, docs/spec/dcp.md): Export As DCP writes a package folder named for the file chosen, through
     // asdcp-wrap (a stand-in script here, POSIX shells only) and the DCP tab's choices.
+    // Export from a monitor and by drag and drop (p.868-869; 11.4b): with no bin selection, Export to File takes the
+    // active monitor's sequence and its marks; a bin drag, dropped outside the application, exports with the Export
+    // setting into the General setting's Temporary File Directory and hands over the files; ALE cannot be dragged.
+    void exportFromMonitorAndByDragging() {
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A006.mov"));
+        QVERIFY(writeMovie(movie));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Reel"));
+        project.settings.name = QStringLiteral("Reel");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.linkFiles(binId, {movie}).size(), 1);
+        const QString clipId = bin->bin().items.first().id;
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), bin->bin().items.first());
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const QString sequenceName = composer.state(MonitorId::Record).current()->item.name;
+        window.binContainer().saveAll();
+        Settings& settings = window.settings();
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("mov"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("movieCompression"), QStringLiteral("dnxhr_lb"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("useMarks"), true);
+
+        // From the Record monitor, its IN and OUT: frames 2 to 5.
+        window.binContainer().viewFor(bin)->selectIds({});
+        composer.setActiveMonitor(MonitorId::Record);
+        composer.state(MonitorId::Record).setPosition(2);
+        composer.state(MonitorId::Record).markIn();
+        composer.state(MonitorId::Record).setPosition(5);
+        composer.state(MonitorId::Record).markOut();
+        QString offered;
+        window.setExportHook([&](ExportAsDialog& dialog) {
+            offered = QFileInfo(dialog.path()).completeBaseName();
+            dialog.setPath(dir.filePath(QStringLiteral("FromMonitor.mov")));
+            return true;
+        });
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QCOMPARE(offered, sequenceName);
+        auto frames = [](const QString& path) -> std::int64_t {
+            const auto info = media::probe(path);
+            if (!info) return -1;
+            for (const media::StreamInfo& st : info->streams) {
+                if (st.width > 0) return st.length;
+            }
+            return -1;
+        };
+        QCOMPARE(frames(dir.filePath(QStringLiteral("FromMonitor.mov"))), std::int64_t{4});
+        // With a clip selected in the bin, clicking the monitor exports the monitor's sequence; a new bin selection after
+        // the click, the bin's.
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds({clipId});
+        emit composer.monitorClicked(MonitorId::Record);
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QCOMPARE(offered, sequenceName);
+        const QString second = dir.filePath(QStringLiteral("A007.mov"));
+        QVERIFY(writeMovie(second));
+        const QStringList secondIds = window.linkFiles(binId, {second});
+        QCOMPARE(secondIds.size(), 1);
+        view->selectIds(secondIds);
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QCOMPARE(offered, bin->bin().item(secondIds.first())->name);
+
+        // Dragged from the bin and dropped on a folder: the clip, whole (no marks of its own), in the temporary folder.
+        const QString temp = dir.filePath(QStringLiteral("Temp"));
+        settings.setValue(QStringLiteral("General"), QStringLiteral("tempDirectory"), temp);
+        ExportDragData drag(binId, {clipId});
+        QVERIFY(drag.hasFormat(QStringLiteral("text/uri-list")));
+        const QList<QUrl> files = drag.exportedFiles();
+        QCOMPARE(files.size(), 1);
+        const QString made = files.first().toLocalFile();
+        QVERIFY2(made.startsWith(QDir(temp).absolutePath()), qPrintable(made));
+        QCOMPARE(QFileInfo(made).suffix(), QStringLiteral("mov"));
+        QCOMPARE(frames(made), std::int64_t{10});
+        QCOMPARE(drag.exportedFiles(), files); // made once
+
+        // "You cannot use the drag-and-drop method to export ALE" (p.868).
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("ale"));
+        ExportDragData log(binId, {clipId});
+        QVERIFY(log.exportedFiles().isEmpty());
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("aaf"));
+    }
+
     void exportDcp() {
 #ifdef Q_OS_WIN
         QSKIP("the stand-in asdcp-wrap is a POSIX shell script");

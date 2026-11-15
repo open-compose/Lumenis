@@ -140,7 +140,8 @@ headers in `include/lumenis/<library>/`.
   described in docs/spec/native-model.md. In the UI, `list_tool.*` is Tools > List Tool and
   `interchange_dialogs.*` the Import EDL and Export Bin As dialogs. File > Output > Export to File runs through
   `MainWindow::writeExport` (movies, stills and sound in `src/media/movie_export.*`, docs/spec/movie-export.md; AAF's
-  Export Methods in `MainWindow::prepareAafMedia`); Send To templates are `src/model/send_to.*` with
+  Export Methods in `MainWindow::prepareAafMedia`); bins' drags export what is dropped outside the application through
+  `src/ui/export_drag.*` (`MainWindow::exportDropped`); Send To templates are `src/model/send_to.*` with
   `src/ui/send_to_dialog.*` (docs/spec/send-to.md); the Simplified AAF's spans are `src/model/simplify_export.*`; Export to Device goes through `ext::ExportDeviceProvider`
   (`src/ext/include/lumenis/ext/export_device.h`, `src/media/xdcam_disk.*`, `src/ui/export_device_dialog.*`); AS-11 and AS-02 are bmxtranswrap rewraps (`src/media/as11.*`), Export Volumes
   `src/model/export_volume.*` and `src/ui/export_volume_dialog.*`; the Digital Cut tool `src/ui/digital_cut_tool.*` records

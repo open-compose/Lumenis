@@ -710,7 +710,7 @@
           "name": "",
           "options": [
             {"key": "projectFormat", "type": "info", "label": "Project Format", "page": 1192},
-            {"key": "tempDirectory", "type": "text", "label": "Temporary File Directory:", "default": "", "page": 1192, "later": true},
+            {"key": "tempDirectory", "type": "text", "label": "Temporary File Directory:", "default": "", "page": 1192},
             {"key": "defaultStartTc", "type": "timecode", "label": "Default Starting TC:", "default": "01:00:00:00", "page": 1192},
             {"key": "defaultStartEc", "type": "text", "label": "Default Starting EC:", "default": "", "page": 1192, "later": true},
             {"key": "effectApertures", "type": "choice", "style": "radio", "label": "Effect Apertures", "default": "itu601", "page": 1192, "later": true,

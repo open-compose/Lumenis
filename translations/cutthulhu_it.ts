@@ -8639,6 +8639,14 @@ Data creazione: %4</translation>
         <source>Invisible</source>
         <translation type="unfinished">Invisibile</translation>
     </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished">Uscita</translation>
+    </message>
+    <message>
+        <source>Export to File</source>
+        <translation type="unfinished">Esporta su file</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BrushPreview</name>
@@ -12895,7 +12903,7 @@ Data creazione: %4</translation>
     </message>
     <message>
         <source>Export to File: select the clips or sequences to export in a bin.</source>
-        <translation type="unfinished">Esporta su file: selezionare in un bin le clip o le sequenze da esportare.</translation>
+        <translation type="obsolete">Esporta su file: selezionare in un bin le clip o le sequenze da esportare.</translation>
     </message>
     <message>
         <source>Media Composer bins (*.avb)</source>
@@ -14384,6 +14392,22 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
             <numerusform>Consolida/Transcodifica: %n file media originale eliminato.</numerusform>
             <numerusform>Consolida/Transcodifica: %n file media originali eliminati.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Export to File: select the clips or sequences to export in a bin, or click the monitor that shows one.</source>
+        <translation type="unfinished">Esporta su file: seleziona in un contenitore le clip o le sequenze da esportare, oppure fai clic sul monitor che ne mostra una.</translation>
+    </message>
+    <message>
+        <source>Export to File: ALE, tab-delimited and sequential files cannot be exported by dragging; use Export to File.</source>
+        <translation type="unfinished">Esporta su file: i file ALE, delimitati da tabulazioni e sequenziali non possono essere esportati trascinandoli; usa Esporta su file.</translation>
+    </message>
+    <message>
+        <source>Export to File: the temporary folder %1 cannot be made.</source>
+        <translation type="unfinished">Esporta su file: impossibile creare la cartella temporanea %1.</translation>
+    </message>
+    <message>
+        <source>Export to File: nothing was exported.</source>
+        <translation type="unfinished">Esporta su file: non è stato esportato nulla.</translation>
     </message>
 </context>
 <context>

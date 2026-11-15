@@ -35,6 +35,7 @@
 #include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
+#include <QUrl>
 #include <QJsonValue>
 #include <QList>
 #include <QMap>
@@ -497,7 +498,16 @@ public:
         QHash<QString, QString> binOf;
         const BinDocument* doc = nullptr;
     };
+    // The active monitor's item (when it was clicked since the bin's selection changed, or no bin has a selection) or the
+    // active bin's selection (p.869).
     std::optional<ExportSelection> exportSelection();
+    // The given items of a bin, with the clips their sequences use; nothing when the bin is not open or holds none.
+    std::optional<ExportSelection> exportSelectionOf(const QString& binId, const QStringList& itemIds);
+    // Drag and drop export (p.868-869; export_drag.h): the items exported into a new folder under temporaryFolder();
+    // the files made, or nothing (said in a message) when the format cannot be dragged or the export failed.
+    std::optional<QList<QUrl>> exportDropped(const QString& binId, const QStringList& itemIds);
+    // The General setting's Temporary File Directory (p.1192), else the system's temporary folder.
+    QString temporaryFolder() const;
     // Writes `chosen` to `path` as the Export setting (or exportOverride_, Send To's template) says; the path's
     // extension is made the format's. False, with the Console told, when nothing was written.
     bool writeExport(const ExportSelection& chosen, QString path);
@@ -1566,6 +1576,9 @@ private:
     std::function<bool(SettingsDialog&)> exportOptionsHook_;
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
     EmbeddedResolutionHook embeddedResolutionHook_;
+    // A monitor's picture was clicked, and the active bin's selection then (exportSelection, p.869).
+    bool monitorClicked_ = false;
+    QStringList monitorClickedSelection_;
     std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
     std::function<bool(ExportVolumeDialog&)> exportVolumeHook_;
     std::function<QString(bool)> subcapFileHook_;

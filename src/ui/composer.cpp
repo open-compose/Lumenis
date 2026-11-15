@@ -1150,6 +1150,7 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
     }
     composer_.setActiveMonitor(monitor_);
     composer_.setFocus();
+    emit composer_.monitorClicked(monitor_);
     // Clicking the oval of a marker opens Edit Marker (p.416).
     const model::MonitorState& s = composer_.state(monitor_);
     const QRect pic = pictureRect();

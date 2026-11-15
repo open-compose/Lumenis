@@ -80,6 +80,7 @@ add_library(lumenis_ui STATIC
     main_window_batch_import.cpp
     main_window_graphics.cpp
     main_window_embedded.cpp
+    export_drag.cpp
     main_window_report.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp
@@ -154,6 +155,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/multi_mix_dialog.h
     include/lumenis/ui/modify_dialog.h
     include/lumenis/ui/export_dialog.h
+    include/lumenis/ui/export_drag.h
     include/lumenis/ui/send_to_dialog.h
     include/lumenis/ui/export_device_dialog.h
     include/lumenis/ui/export_volume_dialog.h

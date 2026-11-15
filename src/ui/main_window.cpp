@@ -100,6 +100,7 @@
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/export_drag.h"
 #include "lumenis/ui/group_clips_dialog.h"
 #include "lumenis/ui/sync_clips_dialog.h"
 #include "lumenis/ui/digital_cut_tool.h"
@@ -242,6 +243,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     : QMainWindow(parent), commands_(commands), providers_(providers) {
     setObjectName(QStringLiteral("MainWindow"));
     setWindowTitle(QString::fromUtf8(branding::kProductName));
+    // Bins' drags export what is dropped outside the application (p.868-869; export_drag.h).
+    setExportDragHandler([this](const QString& binId, const QStringList& ids) { return exportDropped(binId, ids); });
     // Screen readers: every control without a name of its own is named from what it shows (10.3).
     if (auto* app = qobject_cast<QApplication*>(QCoreApplication::instance())) installAccessibleNames(*app);
     resize(1280, 800);
@@ -372,6 +375,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
 }
 
 MainWindow::~MainWindow() {
+    setExportDragHandler({});
     BinAppearance::mediaTint() = nullptr;
     BinAppearance::multiRezCell() = nullptr;
     BinAppearance::proxyCell() = nullptr;
@@ -1162,6 +1166,11 @@ void MainWindow::createPanels() {
     });
     // The Timeline takes its own commands from the Composer; the rest are
     // menu commands.
+    connect(composer_, &Composer::monitorClicked, this, [this](MonitorId) {
+        monitorClicked_ = true;
+        BinView* view = binContainer_ ? binContainer_->activeView() : nullptr;
+        monitorClickedSelection_ = view ? view->selectedIds() : QStringList();
+    });
     connect(composer_, &Composer::commandRequested, this, [this](const QString& id) {
         if (Timeline::handles(id)) return;
         if (QAction* a = commands_.action(id)) a->trigger();
@@ -4580,20 +4589,39 @@ QJsonValue MainWindow::exportSetting(const QString& key) const {
     return settings_->value(QStringLiteral("Export"), key);
 }
 
+// "Click the monitor that displays the clip or sequence you want to export" or "Click the clip or sequence in a bin"
+// (p.869; 11.4b): the active monitor's item when the monitors are the active panel, or when no bin has a selection;
+// else the active bin's selection.
 std::optional<MainWindow::ExportSelection> MainWindow::exportSelection() {
     BinView* view = binContainer_->activeView();
+    // A monitor clicked since the bin's selection last changed (monitorClickedSelection_ is the selection then).
+    const QStringList selection = view ? view->selectedIds() : QStringList();
+    const bool clicked = monitorClicked_ && selection == monitorClickedSelection_;
+    const model::LoadedClip* shown = composer_->state(composer_->activeMonitor()).current();
+    if (shown && (clicked || selection.isEmpty())) {
+        if (BinDocument* doc = binContainer_->document(shown->binId); doc && doc->bin().item(shown->item.id)) {
+            return exportSelectionOf(shown->binId, {shown->item.id});
+        }
+    }
     if (!view || view->selectedIds().isEmpty()) {
-        reportFailure(this, tr("Export to File: select the clips or sequences to export in a bin."));
+        reportFailure(this, tr("Export to File: select the clips or sequences to export in a bin, or click the monitor that shows one."));
         return std::nullopt;
     }
-    const BinDocument& doc = view->document();
+    return exportSelectionOf(view->document().nodeId(), view->selectedIds());
+}
+
+std::optional<MainWindow::ExportSelection> MainWindow::exportSelectionOf(const QString& binId, const QStringList& itemIds) {
+    BinDocument* found = binContainer_->document(binId);
+    if (!found) return std::nullopt;
+    const BinDocument& doc = *found;
     QList<model::BinItem> selected;
     QStringList ids;
     for (const model::BinItem& item : doc.bin().items) {
-        if (!view->selectedIds().contains(item.id)) continue;
+        if (!itemIds.contains(item.id)) continue;
         selected << item;
         ids << item.id;
     }
+    if (selected.isEmpty()) return std::nullopt;
     // A sequence's clips go with it, so that it is not offline where it is read: in AAF as items of
     // their own, in a bin as reference clips (found through the resolver below).
     QList<model::BinItem> clips;
@@ -4613,6 +4641,51 @@ std::optional<MainWindow::ExportSelection> MainWindow::exportSelection() {
         }
     }
     return ExportSelection{selected, clips, binOf, &doc};
+}
+
+// The General setting's Temporary File Directory (p.1192): "Media Composer saves an intermediate file in a temporary
+// folder as part of the export process" (p.868). Unset or missing, the system's temporary folder (ours: the guide's
+// default is Media Composer's own folder).
+QString MainWindow::temporaryFolder() const {
+    const QString chosen = settings_->text(QStringLiteral("General"), QStringLiteral("tempDirectory"));
+    if (!chosen.isEmpty() && QDir().mkpath(chosen)) return chosen;
+    return QDir::tempPath();
+}
+
+// Drag and drop export (p.868-869): the items written with the Export setting in use into a new folder under the
+// temporary folder, then handed to the drop target, which copies them. "You cannot use the drag-and-drop method to
+// export ALE, tab-delimited, or sequential files" (p.868).
+std::optional<QList<QUrl>> MainWindow::exportDropped(const QString& binId, const QStringList& itemIds) {
+    const QString format = exportValue(QStringLiteral("exportAs"));
+    if (format == QLatin1String("ale") || format == QLatin1String("tabDelimited") ||
+        ((format == QLatin1String("graphic") || format == QLatin1String("dpx") || format == QLatin1String("openexr")) &&
+         exportFlag(QStringLiteral("sequentialFiles")))) {
+        reportFailure(this, tr("Export to File: ALE, tab-delimited and sequential files cannot be exported by dragging; use Export to File."));
+        return std::nullopt;
+    }
+    const auto picked = exportSelectionOf(binId, itemIds);
+    if (!picked) return std::nullopt;
+    const QString folder = QDir(temporaryFolder())
+                               .filePath(QStringLiteral("Cutthulhu Export %1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmsszzz"))));
+    if (!QDir().mkpath(folder)) {
+        reportFailure(this, tr("Export to File: the temporary folder %1 cannot be made.").arg(QDir::toNativeSeparators(folder)));
+        return std::nullopt;
+    }
+    QString base = picked->selected.first().name;
+    base.replace(QRegularExpression(QStringLiteral("[\\/:*?\"<>|]")), QStringLiteral("_"));
+    const QString path = QDir(folder).filePath(base + QLatin1Char('.') + exportSuffix(format));
+    const qsizetype before = ConsoleLog::instance().lines().size();
+    if (!writeExport(*picked, path)) {
+        QStringList why = ConsoleLog::instance().lines().mid(before);
+        reportFailure(this, why.isEmpty() ? tr("Export to File: nothing was exported.") : why.join(QLatin1Char('\n')));
+        return std::nullopt;
+    }
+    // Every file and folder the export made (a movie each item, a DCP's folder ...).
+    QList<QUrl> urls;
+    for (const QFileInfo& f : QDir(folder).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+        urls << QUrl::fromLocalFile(f.absoluteFilePath());
+    }
+    return urls;
 }
 
 // The file type of an Export As choice: its extension and its name in the save dialog.
@@ -5793,7 +5866,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         // Media Destinations' Embedded in AAF (p.871): the media the export methods make goes into a folder of its own,
         // then into the AAF file (essenceToEmbed); the folder goes when the export is done.
         const bool embed = exportValue(QStringLiteral("mediaDestination")) == QLatin1String("embedded");
-        QTemporaryDir embedDir;
+        QTemporaryDir embedDir(QDir(temporaryFolder()).filePath(QStringLiteral("cutthulhu-embed-XXXXXX")));
         if (embed && !embedDir.isValid()) {
             written = false;
             error = tr("There is no temporary folder for the embedded media.");

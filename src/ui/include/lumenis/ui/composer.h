@@ -745,6 +745,9 @@ public:
     QMenu* contextMenu(MonitorId monitor);
 
 signals:
+    // A monitor's picture was clicked (it became the active monitor): "Click the monitor that displays the clip or
+    // sequence you want to export" (p.869; MainWindow::exportSelection).
+    void monitorClicked(MonitorId monitor);
     // Anything shown changed: what is loaded, positions, marks.
     void changed();
     // A button or key for a command that is not the Composer's own

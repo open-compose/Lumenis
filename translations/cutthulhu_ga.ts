@@ -8641,6 +8641,14 @@ Dáta Cruthaithe: %4</translation>
         <source>Invisible</source>
         <translation type="unfinished">Dofheicthe</translation>
     </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished">Aschur</translation>
+    </message>
+    <message>
+        <source>Export to File</source>
+        <translation type="unfinished">Easpórtáil go Comhad</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BrushPreview</name>
@@ -12914,7 +12922,7 @@ Dáta Cruthaithe: %4</translation>
     </message>
     <message>
         <source>Export to File: select the clips or sequences to export in a bin.</source>
-        <translation type="unfinished">Easpórtáil go Comhad: roghnaigh na gearrthóga nó na seichimh le heaspórtáil in araid.</translation>
+        <translation type="obsolete">Easpórtáil go Comhad: roghnaigh na gearrthóga nó na seichimh le heaspórtáil in araid.</translation>
     </message>
     <message>
         <source>Media Composer bins (*.avb)</source>
@@ -14427,6 +14435,22 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
             <numerusform>Comhdhlúthaigh/Traschódaigh: scriosadh %n chomhad meán bunaidh.</numerusform>
             <numerusform>Comhdhlúthaigh/Traschódaigh: scriosadh %n comhad meán bunaidh.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Export to File: select the clips or sequences to export in a bin, or click the monitor that shows one.</source>
+        <translation type="unfinished">Easpórtáil go Comhad: roghnaigh na gearrthóga nó na seichimh le heaspórtáil i mbosca, nó cliceáil ar an monatóir a thaispeánann ceann acu.</translation>
+    </message>
+    <message>
+        <source>Export to File: ALE, tab-delimited and sequential files cannot be exported by dragging; use Export to File.</source>
+        <translation type="unfinished">Easpórtáil go Comhad: ní féidir comhaid ALE, comhaid teormharcáilte le cluaisín ná comhaid sheicheamhacha a easpórtáil trí tharraingt; úsáid Easpórtáil go Comhad.</translation>
+    </message>
+    <message>
+        <source>Export to File: the temporary folder %1 cannot be made.</source>
+        <translation type="unfinished">Easpórtáil go Comhad: ní féidir an fillteán sealadach %1 a chruthú.</translation>
+    </message>
+    <message>
+        <source>Export to File: nothing was exported.</source>
+        <translation type="unfinished">Easpórtáil go Comhad: níor easpórtáladh aon rud.</translation>
     </message>
 </context>
 <context>

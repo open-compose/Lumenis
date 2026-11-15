@@ -8639,6 +8639,14 @@ Date de création: %4</translation>
         <source>Invisible</source>
         <translation type="unfinished">Invisible</translation>
     </message>
+    <message>
+        <source>Output</source>
+        <translation type="unfinished">Sortie</translation>
+    </message>
+    <message>
+        <source>Export to File</source>
+        <translation type="unfinished">Exporter vers un fichier</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BrushPreview</name>
@@ -12895,7 +12903,7 @@ Date de création: %4</translation>
     </message>
     <message>
         <source>Export to File: select the clips or sequences to export in a bin.</source>
-        <translation type="unfinished">Exporter vers un fichier: sélectionnez dans un chutier les plans ou séquences à exporter.</translation>
+        <translation type="obsolete">Exporter vers un fichier: sélectionnez dans un chutier les plans ou séquences à exporter.</translation>
     </message>
     <message>
         <source>Media Composer bins (*.avb)</source>
@@ -14384,6 +14392,22 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
             <numerusform>Consolider/Transcoder : %n fichier de médias original supprimé.</numerusform>
             <numerusform>Consolider/Transcoder : %n fichiers de médias originaux supprimés.</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Export to File: select the clips or sequences to export in a bin, or click the monitor that shows one.</source>
+        <translation type="unfinished">Exporter vers un fichier : sélectionnez dans un chutier les clips ou séquences à exporter, ou cliquez sur le moniteur qui en affiche un.</translation>
+    </message>
+    <message>
+        <source>Export to File: ALE, tab-delimited and sequential files cannot be exported by dragging; use Export to File.</source>
+        <translation type="unfinished">Exporter vers un fichier : les fichiers ALE, délimités par des tabulations et séquentiels ne peuvent pas être exportés par glisser-déposer ; utilisez Exporter vers un fichier.</translation>
+    </message>
+    <message>
+        <source>Export to File: the temporary folder %1 cannot be made.</source>
+        <translation type="unfinished">Exporter vers un fichier : le dossier temporaire %1 ne peut pas être créé.</translation>
+    </message>
+    <message>
+        <source>Export to File: nothing was exported.</source>
+        <translation type="unfinished">Exporter vers un fichier : rien n&apos;a été exporté.</translation>
     </message>
 </context>
 <context>

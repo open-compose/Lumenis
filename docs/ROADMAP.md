@@ -1886,7 +1886,10 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   options (done: Aux TC and Sound Timecode, the Camroll, Labroll and Disk Label columns, Relink to's formats, Allow
   relinking to offline items and Tracks to Relink through `RelinkOptions::timecode`/`By::Column`/`format`/
   `offlineItems`/`relinkVideo`/`relinkAudio`; tests `tst_media relinkOptions`, `tst_managed_media relinkDialogOptions`),
-  so 11.4a is.
+  so 11.4a is. 11.4b, export from a monitor and by drag and drop (done: `MainWindow::exportSelection`/`exportSelectionOf`
+  taking the active monitor's item, the bin's Output > Export to File, `ExportDragData` in `src/ui/export_drag.*` with
+  `MainWindow::exportDropped` into the General setting's Temporary File Directory `MainWindow::temporaryFolder`; test
+  `tst_movie_export_ui exportFromMonitorAndByDragging`).
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

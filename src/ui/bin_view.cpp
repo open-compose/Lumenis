@@ -1,4 +1,6 @@
 #include "lumenis/ui/bin_view.h"
+
+#include "lumenis/ui/export_drag.h"
 #include "lumenis/ui/translation.h"
 
 #include "lumenis/model/matte_key_clip.h"
@@ -791,7 +793,8 @@ QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
         const QString id = data(i, kIdRole).toString();
         if (!id.isEmpty() && !lines.contains(id)) lines << id;
     }
-    auto* mime = new QMimeData;
+    // Dropped outside the application, the items are exported (p.868-869; export_drag.h).
+    auto* mime = new ExportDragData(document_.nodeId(), lines.mid(1));
     mime->setData(binItemsMime(), lines.join(QLatin1Char('\n')).toUtf8());
     return mime;
 }
@@ -1560,7 +1563,7 @@ bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
         }
         if (ids.isEmpty()) ids << pressId_;
         pressId_.clear();
-        auto* mime = new QMimeData;
+        auto* mime = new ExportDragData(document_.nodeId(), ids);
         mime->setData(binItemsMime(), (QStringList{document_.nodeId()} + ids).join(QLatin1Char('\n')).toUtf8());
         auto* drag = new QDrag(this);
         drag->setMimeData(mime);
@@ -2579,6 +2582,14 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             promote->setObjectName(QStringLiteral("promoteEffects"));
             promote->setEnabled(!document_.isReadOnly());
         }
+    }
+    // "Right-click the clip or sequence, and then select Output > Export to File" (p.869; 11.4b).
+    if (!selectedIds().isEmpty()) {
+        QMenu* output = menu->addMenu(tr("Output"));
+        output->setObjectName(QStringLiteral("outputMenu"));
+        QAction* exportFile =
+            output->addAction(tr("Export to File"), this, [this] { emit commandRequested(QStringLiteral("file.output.export_to_file")); });
+        exportFile->setObjectName(QStringLiteral("exportToFile"));
     }
     // "From a bin, right-click a sequence and select Sequence Report" (p.369; 9.2c).
     {
