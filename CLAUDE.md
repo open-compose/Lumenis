@@ -1153,7 +1153,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_project_store lastProject`), is done. 11.4f3, Export As Tab Delimited (`interop::ale::ExportOptions::tabDelimited`;
   tests `tst_ale exportChoices`, `tst_interchange shotLogs`), is done. 11.4f4, the Link setting's AIS Metadata tab
   (`media::applyAisColumns` from `MainWindow::linkFiles` for DPX files; test `tst_background_services
-  linkSettingAisColumns`), is done, so 11.4f and 11.4 are (what stays "later" is listed in ROADMAP 11.4f). 10.6 is an update check that only tells the user (no
+  linkSettingAisColumns`), is done, so 11.4f and 11.4 are (what stays "later" is listed in ROADMAP 11.4f). 11.5, the
+  large ones, is in parts (ROADMAP). 11.5a, Data Mixdown and Extract DNxHD Data (docs/spec/closed-captions.md:
+  `src/ui/main_window_data.cpp`, `media::VideoReader::captionPair`, `MediaWriter::setNextCaption`; test
+  `tst_closed_captions_ui dataTrackCommands`), is done. 11.5b, Show Track > Film and Show Every Frame
+  (`src/ui/timeline_film.cpp`; test `tst_timeline_views filmTrack`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

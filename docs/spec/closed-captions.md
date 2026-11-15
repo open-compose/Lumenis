@@ -72,10 +72,35 @@ selected:
   media time from the sequence's first frame; white monospaced text on black in a
   region over the middle 80%, aligned to its bottom (ours).
 
+## Data Mixdown (11.5a; `MainWindow::dataMixdown`)
+
+Timeline > Mixdown > Data: "a data mixdown lets you combine several clips into one new master clip ... your end result
+is a new master clip made up of all the data clips on the data track. That track becomes one clip" (p.982). The Record
+sequence's D1 data between the marks, or all of it without marks, becomes a D-track only master clip named "<sequence>
+Data Mixdown" (ours) starting at the range's timecode, in the target bin chosen (the bin choice of
+`MainWindow::setBinChoiceHook`). **Ours:** the data stays with the clip in the bin, as an imported caption clip's does,
+so there is no target drive to choose. D1 need not be monitored: the sequence has one Data track.
+
+## Extract DNxHD Data (11.5a; `MainWindow::extractDnxhdData`)
+
+Clip > Extract DNxHD Data, or the bin's right-click menu (p.974-975): after "The Confirm dialog box appears ... Click
+Continue or Cancel", each selected master clip gains D1 ("The clip in the bin displays D1 in the Track column") holding
+the CEA-608 field 1 pairs its media's frames carry. The guide's requirements are checked: "The clip must be a master
+clip; The clip should not have a Data track associated with it already; ... The media needs to be online"; a clip that
+fails one is named in the message and the Console.
+
+**Ours:** "The media needs to be DNxHD format" is not checked. How the Legacy method embedded ancillary data in DNxHD
+media is not published, so ours reads what the media carries as ATSC A/53 caption data, which FFmpeg's MPEG-2 and
+H.264 decoders give as each frame's side data (`media::VideoReader::captionPair`); a clip whose media carries none is
+refused with that reason. The writer can carry such data too (`media::MediaWriter::setNextCaption`, A/53 side data the
+MPEG-2 and H.264 encoders put in their caption user data), which the tests use.
+
 Not yet: searching caption text with the Timeline Quick Find (p.985, through
-p.645), which waits for the Quick Find itself (7.4b2); the Legacy embedded method,
-Extract DNxHD Data, AFD and output through hardware (p.973-981; 7.3c).
+p.645), which waits for the Quick Find itself (7.4b2); the Legacy embedded method's own
+media, AFD and output through hardware (p.973-981; 7.3c); linking MXF files with SMPTE 436M ancillary data (p.333,
+p.977).
 
 Tests: `tst_closed_captions` (SCC, decoding, our encoder, sequences, TTML),
-`tst_closed_captions_ui` (import, Show Captions, D1, a broken caption, export);
+`tst_closed_captions_ui` (import, Show Captions, D1, a broken caption, export; `dataTrackCommands`: Data Mixdown and
+Extract DNxHD Data from an MPEG-2 movie with A/53 captions);
 fuzz target `scc`.

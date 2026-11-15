@@ -80,6 +80,7 @@ add_library(lumenis_ui STATIC
     main_window_batch_import.cpp
     main_window_graphics.cpp
     main_window_embedded.cpp
+    main_window_data.cpp
     export_drag.cpp
     main_window_report.cpp
     main_window_proxy.cpp
@@ -117,6 +118,7 @@ add_library(lumenis_ui STATIC
     timeline.cpp
     timeline_automation.cpp
     timeline_captions.cpp
+    timeline_film.cpp
     timeline_find.cpp
     timeline_multirez.cpp
     timeline_correction.cpp

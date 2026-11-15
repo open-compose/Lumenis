@@ -20,6 +20,9 @@
 #include <QTest>
 #include <QToolButton>
 
+#include <cmath>
+#include <memory>
+
 using namespace lumenis;
 using namespace lumenis::ui;
 
@@ -105,6 +108,55 @@ class TestTimelineViews : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+
+    // Show Track > Film and Zoom > Show Every Frame (p.593, p.642; 11.5b): a row of the sequence's frames at the top of
+    // the Timeline, kept with Timeline views; Show Every Frame needs it and zooms to a film frame a frame.
+    void filmTrack() {
+        Fixture f;
+        Timeline& timeline = f.window->timeline();
+        // Every frame's picture its own colour, as the monitor shows it.
+        f.window->composer().setPictureResolver([](MonitorId, std::int64_t frame, QSize size, bool*) {
+            QImage image(size.isValid() ? size : QSize(16, 9), QImage::Format_RGB32);
+            image.fill(QColor::fromHsv(static_cast<int>(frame * 6 % 360), 200, 220));
+            return image;
+        });
+        QVERIFY(!timeline.showEveryFrame()); // without the film track
+        QMenu* menu = timeline.fastMenu(); // the Timeline's own, rebuilt each time
+        QAction* film = menuItem(menu, QStringLiteral("Film"));
+        QAction* every = menuItem(menu, QStringLiteral("Show Every Frame"));
+        QVERIFY(film && every);
+        QVERIFY(film->isCheckable() && !film->isChecked());
+        QVERIFY(!every->isEnabled());
+        film->trigger();
+        QVERIFY(timeline.display().filmTrack);
+        QVERIFY(timeline.filmTrackShown());
+        menu = timeline.fastMenu();
+        QVERIFY(menuItem(menu, QStringLiteral("Show Every Frame"))->isEnabled());
+        // Kept with Timeline views.
+        QVERIFY(Timeline::displayFromJson(Timeline::displayToJson(timeline.display())).filmTrack);
+        // Show Every Frame: one film frame for each frame.
+        QVERIFY(timeline.showEveryFrame());
+        QCOMPARE(timeline.scale(), timeline.filmFrameWidth());
+        // The row is at the top, under the ruler, with the frames drawn in it.
+        timeline.setFirstFrame(0);
+        settle();
+        QWidget* view = timeline.findChild<QWidget*>(QStringLiteral("timelineView"));
+        QVERIFY(view);
+        const QImage shot = view->grab().toImage();
+        const QColor expected = QColor::fromHsv(6, 200, 220);
+        bool found = false;
+        for (int x = 0; x < shot.width() && !found; ++x) {
+            for (int y = 0; y < 80 && !found; ++y) {
+                const QColor c = shot.pixelColor(x, y);
+                found = std::abs(c.red() - expected.red()) < 8 && std::abs(c.green() - expected.green()) < 8 &&
+                        std::abs(c.blue() - expected.blue()) < 8;
+            }
+        }
+        QVERIFY2(found, "frame 1's picture in the film track");
+        // Off again: no row, Show Every Frame does nothing.
+        timeline.setFilmTrack(false);
+        QVERIFY(!timeline.showEveryFrame());
+    }
 
     // "the system cuts all tracks to the same edit point" (p.638).
     void spans() {

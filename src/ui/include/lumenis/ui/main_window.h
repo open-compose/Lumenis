@@ -458,6 +458,16 @@ public:
     // dialog box (the hook stands in for it in tests) into a D-track only master clip of its caption data.
     QStringList importScc(const QString& binId, const QStringList& paths);
     void setAncDataImportHook(std::function<bool(AncDataImportDialog&)> hook) { ancDataImportHook_ = std::move(hook); }
+    // Timeline > Mixdown > Data (p.982; 11.5a, docs/spec/closed-captions.md "Data Mixdown"): the Record sequence's D1
+    // between the marks (all of it without marks) as one new D-track only master clip in the bin chosen (the bin
+    // choice, setBinChoiceHook). Returns the new clip, or nothing with a message.
+    std::optional<model::BinItem> dataMixdown();
+    // Clip > Extract DNxHD Data (p.974-975; 11.5a): the active bin's selected master clips get a D1 track of the
+    // CEA-608 captions their media carries, after the Confirm dialog box (the hook answers it in tests: true for
+    // Continue). A clip that is not a master clip, has a data track, is offline or carries no caption data is refused
+    // with the reason in the Console and a message. Returns how many clips gained D1.
+    int extractDnxhdData();
+    void setExtractDataHook(std::function<bool(const QStringList& clips)> hook) { extractDataHook_ = std::move(hook); }
     // The caption data of the clip a segment comes from (empty without one): what the Timeline and Show Captions read.
     QByteArray captionClipData(const model::Segment& segment) const;
     // The caption on a monitor's frame: the Record monitor's sequence's D1, or a caption clip's own data.
@@ -1522,6 +1532,7 @@ private:
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(VideoMixdownDialog&)> videoMixdownHook_;
+    std::function<bool(const QStringList& clips)> extractDataHook_;
     std::function<bool(RenderEffectDialog&)> renderHook_;
     std::function<bool()> renderInterruptHook_;
     std::function<void(const QString&)> renderSoundHook_;

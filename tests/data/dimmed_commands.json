@@ -19,12 +19,10 @@
     {"id": "tools.restrictions", "reason": "Restrictions come from Avid's asset management service."},
     {"id": "tools.nrcs_tool", "reason": "The NRCS Tool talks to a newsroom computer system (no protocol documented)."},
     {"id": "tools.imf_window", "reason": "IMF packages are not made yet (ROADMAP)."},
-    {"id": "clip.extract_dnxhd_data", "reason": "Extract DNxHD Data needs DNxHD media with embedded data, not made yet."},
     {"id": "file.open_settings_file", "reason": "Settings files (.avs) wait for 3.5 (no prior art, samples or seat)."},
     {"id": "edit.enlarge_headframes", "reason": "HeadFrames are not made yet."},
     {"id": "edit.reduce_headframes", "reason": "HeadFrames are not made yet."},
     {"id": "clip.modify.modify_pulldown_phase", "reason": "Pulldown phase is for clips captured from NTSC tape (7.3c)."},
-    {"id": "clip.refresh_sequence.stereo_correction_effects", "reason": "Stereo correction effects are not made yet (8.6d3)."},
-    {"id": "timeline.mixdown.data", "reason": "Data tracks (ancillary data mixdown) are not made yet."}
+    {"id": "clip.refresh_sequence.stereo_correction_effects", "reason": "Stereo correction effects are not made yet (8.6d3)."}
   ]
 }

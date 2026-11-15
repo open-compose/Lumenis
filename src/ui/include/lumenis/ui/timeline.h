@@ -17,6 +17,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
 
+#include <QCache>
 #include <QColor>
 #include <QElapsedTimer>
 #include <QHash>
@@ -169,6 +170,10 @@ private:
     // Closed captions over the D1 row (timeline_captions.cpp; Editing Guide p.984): the captions' text, the loading
     // phases as black brackets, the playing phases as grey lines and orange triangles where a cut breaks one.
     void paintCaptions(QPainter& p, const Row& r) const;
+    // The film track (timeline_film.cpp; p.642): frames of the shown sequence or clip side by side, each the picture
+    // at its first frame, cached by item and frame.
+    void paintFilmTrack(QPainter& p, const Row& r, std::int64_t firstVisible, std::int64_t lastVisible) const;
+    mutable QCache<QString, QImage> filmFrames_{400};
     void paintControls(QPainter& p, const Row& r, const model::Track& t) const;
     void paintHeads(QPainter& p);
     // A segment's waveform (p.677-680) in `box`: a band per channel of the track, in Display Channel
@@ -1328,6 +1333,16 @@ public:
     // Scrolls horizontally; ignored when the whole sequence fits.
     void setFirstFrame(double frame);
     void showEntireSequence();
+    // Show Track > Film and Zoom > Show Every Frame (timeline_film.cpp; p.593, p.642): the film track at the top of the
+    // Timeline, for what is shown when it has picture; Show Every Frame zooms so each frame has a frame of the film
+    // track to itself (it needs the film track, else it does nothing and returns false).
+    void setFilmTrack(bool on);
+    bool filmTrackShown() const;
+    bool showEveryFrame();
+    // The width of a film-track frame in pixels: the row's height at the pictures' aspect (setPictureAspect).
+    double filmFrameWidth() const;
+    // The shape of the project's pictures, width over height (16:9 until set; MainWindow sets the project's).
+    void setPictureAspect(double aspect) { pictureAspect_ = aspect > 0 ? aspect : 16.0 / 9.0; }
     // The Focus button: 90 pixels per second around the position, and back
     // (p.608).
     void toggleFocus();
@@ -1363,6 +1378,8 @@ public:
         bool clipDurations = false;
         bool clipTracks = false;
         bool timecodeTrack = true; // Show Track > TC1 (p.598)
+        // Show Track > Film (p.642; 11.5b): "A row of film frames appears at the top of the Timeline", the "Film" row.
+        bool filmTrack = false;
         bool effectIcons = true;   // Effect Icons, Dissolve Icons (FX guide p.40)
         bool dissolveIcons = true;
         bool clipFrames = false;   // Clip Frames: each segment's start frame (p.592)
@@ -1655,6 +1672,7 @@ private:
     Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
+    double pictureAspect_ = 16.0 / 9.0;
     BackgroundIndicator* backgroundIndicator_ = nullptr;
     QList<Composer::PlaybackRange> indicators_;
     QList<model::RenderTarget> expert_;

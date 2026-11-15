@@ -1927,7 +1927,15 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   Hide Video and the pop-up monitors), Undo Only Record Events (with undoable marks), the Quality tab's preferences
   (with linking several resolutions of a source), DPX's highest scaling quality (with a Media Creation scaling option)
   and Use Windows compatible file names (p.1192, p.988), so 11.4 is done.
-* 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
+* 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown. In
+  parts: 11.5a, Timeline > Mixdown > Data and Clip > Extract DNxHD Data (done: `MainWindow::dataMixdown`/
+  `extractDnxhdData` in `src/ui/main_window_data.cpp`, the media's A/53 caption data through
+  `media::VideoReader::captionPair` and `MediaWriter::setNextCaption`; docs/spec/closed-captions.md; test
+  `tst_closed_captions_ui dataTrackCommands`. Ours: any media whose frames carry A/53 captions, the Legacy method's
+  DNxHD embedding being unpublished); 11.5b, Show Track > Film and Show Every Frame (done: `src/ui/timeline_film.cpp`,
+  `Timeline::setFilmTrack`/`showEveryFrame`/`setPictureAspect`; docs/spec/ui-inventory.md section 11; test
+  `tst_timeline_views filmTrack`); 11.5c, IMF: 11.5c1 linking IMF packages and the IMF
+  window, 11.5c2 creating IMF Originals and Supplementals.
 
 ## 6. Immediate next steps
 

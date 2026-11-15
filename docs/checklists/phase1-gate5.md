@@ -165,7 +165,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Batch Re-import |  | p.230 | works | ☐ | | |
 | Consolidate/Transcode |  | p.350 | works | ☐ | | |
 | Decompose |  | p.185 | *later* | ☐ | | |
-| Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
+| Extract DNxHD Data |  | p.975 | works | ☐ | | |
 | Group Clips | Ctrl+Shift+G | p.1124 | works | ☐ | | |
 | Group of Groups |  | p.1125 | works | ☐ | | |
 | Edit Group |  | p.1125 | works | ☐ | | |
@@ -210,7 +210,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Find Flash Frame |  | p.645 | works | ☐ | | |
 | Mixdown > Audio > To Sequence |  | p.732 | works | ☐ | | |
 | Mixdown > Audio > Multiple Mixes |  | p.732 | works | ☐ | | |
-| Mixdown > Data |  | p.982 | *later* | ☐ | | |
+| Mixdown > Data |  | p.982 | works | ☐ | | |
 | Mixdown > Video |  | p.228 | works | ☐ | | |
 | Remove Match Frame Edits |  | p.495 | works | ☐ | | |
 | Render > Smart Render In/Out |  | p.926 | works | ☐ | | |
@@ -335,6 +335,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 231 menu commands, 206 of them working with a project open; the
+* 231 menu commands, 208 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

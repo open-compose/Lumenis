@@ -14461,6 +14461,81 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
         <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
         <translation type="unfinished">Esporta su file: finora si possono esportare solo AAF, Avid Log Exchange, Delimitato da tabulazioni, bin Media Composer, Final Cut Pro 7 XML, MOV, MP4, audio, grafica, DPX e OpenEXR (Esporta come nell&apos;impostazione Esportazione).</translation>
     </message>
+    <message>
+        <source>Data Mixdown: load a sequence into the Record monitor first.</source>
+        <translation type="unfinished">Mixdown dati: carica prima una sequenza nel monitor Record.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: the sequence has no clips on its Data track.</source>
+        <translation type="unfinished">Mixdown dati: la sequenza non ha clip sulla traccia dati.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: there is nothing to mix down.</source>
+        <translation type="unfinished">Mixdown dati: non c&apos;è nulla da mixare.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: open a bin that can be changed.</source>
+        <translation type="unfinished">Mixdown dati: apri un bin modificabile.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown</source>
+        <translation type="unfinished">Mixdown dati</translation>
+    </message>
+    <message>
+        <source>Target bin:</source>
+        <translation type="unfinished">Bin di destinazione:</translation>
+    </message>
+    <message>
+        <source>%1 Data Mixdown</source>
+        <translation type="unfinished">%1 Mixdown dati</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: %1 in %2</source>
+        <translation type="unfinished">Mixdown dati: %1 in %2</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: select master clips in a bin first.</source>
+        <translation type="unfinished">Estrai dati DNxHD: seleziona prima dei master clip in un bin.</translation>
+    </message>
+    <message>
+        <source>%1 is not a master clip.</source>
+        <translation type="unfinished">%1 non è un master clip.</translation>
+    </message>
+    <message>
+        <source>%1 has a Data track already.</source>
+        <translation type="unfinished">%1 ha già una traccia dati.</translation>
+    </message>
+    <message>
+        <source>%1 is offline or has no picture.</source>
+        <translation type="unfinished">%1 è offline o non ha immagine.</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: %1</source>
+        <translation type="unfinished">Estrai dati DNxHD: %1</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation type="unfinished">Conferma</translation>
+    </message>
+    <message numerus="yes">
+        <source>Extract the ancillary data of %n clip(s) to a Data track?</source>
+        <translation type="unfinished">
+            <numerusform>Estrarre i dati ancillari di %n clip in una traccia dati?</numerusform>
+            <numerusform>Estrarre i dati ancillari di %n clip in una traccia dati?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">Continua</translation>
+    </message>
+    <message>
+        <source>Extracting ancillary data...</source>
+        <translation type="unfinished">Estrazione dei dati ancillari...</translation>
+    </message>
+    <message>
+        <source>%1 carries no ancillary data.</source>
+        <translation type="unfinished">%1 non contiene dati ancillari.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -18672,6 +18747,10 @@ I file media non vengono eliminati.</translation>
         <source>Surround Pan Automation</source>
         <translation type="unfinished">Automazione pan surround</translation>
     </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Pellicola</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>
@@ -18685,6 +18764,10 @@ I file media non vengono eliminati.</translation>
     <message>
         <source>Timeline</source>
         <translation type="unfinished">Timeline</translation>
+    </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Pellicola</translation>
     </message>
 </context>
 <context>

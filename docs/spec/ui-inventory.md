@@ -1878,7 +1878,15 @@ These are recorded now so they are not entered from memory later.
     Segment Selection, Mark IO Selection, Track Color, Show Markers, Show
     Adapters, Show Track, Track Control Panel and Zoom (Zoom In, Zoom Out,
     Show Entire Sequence, Zoom into Region, Zoom Back to Last View, Show
-    Every Frame). Waveform Options (Source Levels, Output Levels, Full
+    Every Frame). Show Track > Film (p.642; 11.5b, `src/ui/timeline_film.cpp`):
+    "A row of film frames appears at the top of the Timeline. The film track
+    displays as many representative frames as possible within the window",
+    the shown monitor's pictures, each standing for the frames up to the next
+    (ours: the picture at the first of them; the row 48 pixels high, frames at
+    the project's aspect). Zoom > Show Every Frame needs it ("To enable this
+    option, you must first select Show Track > Film", p.593) and zooms to a
+    film frame a frame, past the usual closest zoom if need be. Kept with
+    Timeline views ("filmTrack"). Waveform Options (Source Levels, Output Levels, Full
     Height) is also on it (p.679). Waveforms: docs/spec/waveforms.md. The
     Track Control panel, per track settings, Track Color, the selection
     colours, Show Markers and track heights: docs/spec/track-control.md.

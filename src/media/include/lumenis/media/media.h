@@ -150,6 +150,10 @@ public:
     // The frame as RGBA (8 bits per channel), scaled to `size` if given,
     // keeping it otherwise. Empty if the frame is past the end.
     QImage frame(std::int64_t number, QSize size = {});
+    // The CEA-608 field 1 byte pair the frame carries in its A/53 closed caption side data (MPEG-2's and H.264's
+    // caption user data, as FFmpeg's decoders give it; Extract DNxHD Data, 11.5a), with its parity; empty when the
+    // frame carries none, or past the end.
+    QByteArray captionPair(std::int64_t number);
     // The MD5 of the frame as decoded, before any conversion, as FFmpeg's
     // framemd5 gives it (the decode corpus, ROADMAP Phase 2 gate 1).
     QString frameMd5(std::int64_t number);
@@ -258,6 +262,9 @@ public:
     // picture at full depth (transcoding), scaled into `target` (the whole
     // raster if empty) on black. False if the frame cannot be read.
     bool writeVideoFrom(VideoReader& reader, std::int64_t frame, QRect target = {});
+    // A CEA-608 field 1 byte pair (with parity) for the next video frame, sent as its A/53 closed caption side data:
+    // MPEG-2's and H.264's encoders carry it as caption user data (tests, and media with captions). Empty: none.
+    void setNextCaption(const QByteArray& pair);
     // Interleaved float samples, `count` per channel.
     bool writeAudio(const float* samples, int count);
     // Flushes the encoders and writes the trailer.

@@ -3593,6 +3593,11 @@ void MainWindow::tellMediaTheFormat() const {
     if (!project_) return;
     const ProjectFormat& f = project_->settings.format;
     media::setProjectFormat(QSize(f.width, f.height), f.editRate, f.scan == ScanMode::Interlaced, project_->settings.aspect);
+    // The film track's frames are the project's shape (p.642).
+    if (timeline_) {
+        const Rational a = project_->settings.aspect;
+        timeline_->setPictureAspect(a.num() > 0 && a.den() > 0 ? a.toDouble() : static_cast<double>(f.width) / std::max(f.height, 1));
+    }
 }
 
 bool MainWindow::setProjectFormat(const ProjectFormat& format) {
@@ -9449,6 +9454,8 @@ void MainWindow::installPanelHandlers() {
     handle("clip.batch_re_import", [this] { batchImport(); });
     handle("timeline.mixdown.audio.to_sequence", [this] { audioMixdown(); });
     handle("timeline.mixdown.video", [this] { videoMixdown(); });
+    handle("timeline.mixdown.data", [this] { dataMixdown(); });
+    handle("clip.extract_dnxhd_data", [this] { extractDnxhdData(); });
     // Render (FX Guide p.58-61): Shift renders again what is rendered (p.61), Alt skips the dialog
     // with the last drive (p.58).
     auto renderWith = [this](bool atPosition) {

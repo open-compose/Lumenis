@@ -803,6 +803,21 @@ bool VideoReader::Impl::locate(std::int64_t number) {
     return false;
 }
 
+QByteArray VideoReader::captionPair(std::int64_t number) {
+    if (!d_ || !d_->locate(number)) return {};
+    const AVFrameSideData* side = av_frame_get_side_data(d_->frame, AV_FRAME_DATA_A53_CC);
+    if (!side) return {};
+    // cc_data triplets (ATSC A/53 Part 4): marker bits, cc_valid and cc_type in the first byte, then two bytes; type 0
+    // is NTSC field 1, which CEA-608's CC1 rides on.
+    for (std::size_t i = 0; i + 2 < side->size; i += 3) {
+        const std::uint8_t head = side->data[i];
+        if ((head & 0x04) && (head & 0x03) == 0) {
+            return QByteArray(reinterpret_cast<const char*>(side->data + i + 1), 2);
+        }
+    }
+    return {};
+}
+
 QImage VideoReader::frame(std::int64_t number, QSize size) {
     if (!d_ || !d_->locate(number)) return {};
     return d_->convert(size);
@@ -1159,6 +1174,7 @@ AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 // time base is 1/edit rate), apts samples (1/sample rate). Audio is buffered in `abuffer` until it
 // fills an encoder frame of aframeSize samples.
 struct MediaWriter::Impl {
+    QByteArray caption; // setNextCaption()'s pair for the next video frame
     AVFormatContext* out = nullptr;
     AVCodecContext* venc = nullptr;
     AVCodecContext* aenc = nullptr;
@@ -1214,6 +1230,20 @@ struct MediaWriter::Impl {
             const int w = av_interleaved_write_frame(out, packet);
             if (w < 0) return fail(errorText(w));
         }
+    }
+
+    // The video frame, with setNextCaption()'s pair as A/53 caption side data ("cc_data": a valid field 1 triplet).
+    bool encodeVideo() {
+        av_frame_remove_side_data(vframe, AV_FRAME_DATA_A53_CC);
+        if (caption.size() == 2) {
+            if (AVFrameSideData* side = av_frame_new_side_data(vframe, AV_FRAME_DATA_A53_CC, 3)) {
+                side->data[0] = 0xFC;
+                side->data[1] = static_cast<std::uint8_t>(caption.at(0));
+                side->data[2] = static_cast<std::uint8_t>(caption.at(1));
+            }
+            caption.clear();
+        }
+        return encode(venc, vst, vframe);
     }
 
     // Sends a frame (null: flush the encoder) and writes what comes out.
@@ -1548,6 +1578,10 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
 
 // Converts any QImage to RGBA and lets swscale scale it to the raster and convert it to the encoder's
 // pixel format, with the stream's matrix. Each frame is the next one: pts counts from 0.
+void MediaWriter::setNextCaption(const QByteArray& pair) {
+    d_->caption = pair.left(2);
+}
+
 bool MediaWriter::writeVideo(const QImage& image) {
     Impl& d = *d_;
     if (!d.venc) return d.fail(QStringLiteral("no video stream"));
@@ -1571,7 +1605,7 @@ bool MediaWriter::writeVideo(const QImage& image) {
     // A fixed quality is read from each frame.
     if (d.venc->flags & AV_CODEC_FLAG_QSCALE) d.vframe->quality = d.venc->global_quality;
     d.vframe->pts = d.vpts++;
-    return d.encode(d.venc, d.vst, d.vframe);
+    return d.encodeVideo();
 }
 
 
@@ -1678,7 +1712,7 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
     d.vframe->color_trc = d.venc->color_trc;
     d.vframe->color_range = rgbOut ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
     d.vframe->pts = d.vpts++;
-    return d.encode(d.venc, d.vst, d.vframe);
+    return d.encodeVideo();
 }
 
 // Buffers the samples and encodes every full encoder frame; the rest waits for more or for finish().

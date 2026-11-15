@@ -128,6 +128,7 @@ constexpr int kAudioRow = 26;
 constexpr int kAudioDataRow = 64; // ours: audio rows while Audio Data shows a graph or line
 constexpr int kDataRow = 20;
 constexpr int kTimecodeRow = 18;
+constexpr int kFilmRow = 48; // the film track's frames, ours
 constexpr int kSourceX = 4;
 constexpr int kSourceWidth = 30;
 constexpr int kRecordX = 38;
@@ -202,6 +203,7 @@ QColor clipTextColor(const QColor& fill, const QColor& bright, Timeline::Options
 // A row's height for a track name; anything that is not a known track gets the TC1 height.
 int rowHeight(const QString& track) {
     if (track == QLatin1String("TC1")) return kTimecodeRow;
+    if (track == QLatin1String("Film")) return kFilmRow;
     const auto ref = model::parseTrackName(track);
     if (!ref) return kTimecodeRow;
     switch (ref->kind) {
@@ -215,6 +217,7 @@ int rowHeight(const QString& track) {
 // Display order (p.607): D1, video from the top track down, TC1, audio.
 int rowOrder(const QString& track) {
     if (track == QLatin1String("TC1")) return 2000;
+    if (track == QLatin1String("Film")) return -1; // "at the top of the Timeline" (p.642)
     const auto ref = model::parseTrackName(track);
     if (!ref) return 5000;
     switch (ref->kind) {
@@ -486,6 +489,7 @@ QList<TimelineView::Row> TimelineView::rows() const {
     if (timeline_.hasShown()) {
         names = timeline_.shown().trackNames();
         if (timeline_.display().timecodeTrack && timeline_.shown().hasTimecodeTrack()) names << QStringLiteral("TC1");
+        if (timeline_.display().filmTrack && timeline_.filmTrackShown()) names << QStringLiteral("Film");
         // A source track patched to a track the sequence lacks shows where
         // the edit will put it (p.626).
         if (!timeline_.showsSource()) {
@@ -650,6 +654,10 @@ void TimelineView::paintEvent(QPaintEvent*) {
     for (const Row& r : rowList) {
         if (r.top + r.height < kRulerHeight || r.top > height()) continue;
         const QRect rowRect(header, r.top, width() - header, r.height);
+        if (r.track == QLatin1String("Film")) {
+            paintFilmTrack(p, r, firstVisible, lastVisible);
+            continue;
+        }
         if (r.track == QLatin1String("TC1")) {
             // TC1: the project's timecode (p.598).
             p.fillRect(rowRect, QColor(kTimecodeRowColor));
@@ -1078,6 +1086,11 @@ void TimelineView::paintEvent(QPaintEvent*) {
             p.drawText(box, Qt::AlignCenter, label);
         };
         for (const Row& r : rowList) {
+            if (r.track == QLatin1String("Film")) {
+                p.setPen(text);
+                p.drawText(QRect(0, r.top, header, r.height), Qt::AlignCenter, tr("Film"));
+                continue;
+            }
             if (r.track == QLatin1String("TC1")) {
                 button(recordButton(r), r.track, false, true, false);
                 // The sync icon next to TC1: Sync Lock All (p.493).
@@ -1952,12 +1965,16 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
         // tool of the Smart Tool goes off.
         if (timeline_.options().tcDisablesSmartTools) {
             const auto row = rowAt(pos);
-            if (pos.y() < kRulerHeight || (row && row->track == QLatin1String("TC1"))) timeline_.disableSmartTools();
+            if (pos.y() < kRulerHeight || (row && (row->track == QLatin1String("TC1") || row->track == QLatin1String("Film")))) {
+                timeline_.disableSmartTools();
+            }
         }
         // Clicking the ruler or TC1 leaves Trim mode (p.651).
         if (timeline_.isTrimMode()) {
             const auto row = rowAt(pos);
-            if (pos.y() < kRulerHeight || (row && row->track == QLatin1String("TC1"))) timeline_.exitTrimMode();
+            if (pos.y() < kRulerHeight || (row && (row->track == QLatin1String("TC1") || row->track == QLatin1String("Film")))) {
+                timeline_.exitTrimMode();
+            }
         }
         // Alt-drag in the tracks draws a lasso (p.611).
         if ((event->modifiers() & Qt::AltModifier) && pos.y() >= kRulerHeight && !timeline_.showsSource()) {
@@ -2839,7 +2856,9 @@ void Timeline::setScale(double pixelsPerFrame, std::optional<std::int64_t> ancho
         scale_ = 0;
         first_ = 0;
     } else {
-        scale_ = std::min(pixelsPerFrame, kMaxScale);
+        // Fully zoomed in, or a film-track frame a frame with the film track shown (Show Every Frame, p.593).
+        const double most = display_.filmTrack && filmTrackShown() ? std::max(kMaxScale, filmFrameWidth()) : kMaxScale;
+        scale_ = std::min(pixelsPerFrame, most);
         const int area = std::max(view_->width() - view_->headerWidth(), 1);
         const double x = oldX >= 0 && oldX <= area ? oldX : area / 2.0;
         first_ = std::max(static_cast<double>(at) - x / scale_, 0.0);
@@ -3122,6 +3141,7 @@ QMenu* Timeline::fastMenu() {
     check(adapters, tr("Color"), display_.colorAdapters, [this](bool v) { display_.colorAdapters = v; });
     QMenu* showTrack = m->addMenu(tr("Show Track"));
     check(showTrack, tr("TC1"), display_.timecodeTrack, [this](bool v) { display_.timecodeTrack = v; });
+    check(showTrack, tr("Film"), display_.filmTrack, [this](bool v) { setFilmTrack(v); });
     check(m, tr("Track Control Panel"), display_.trackControlPanel, [this](bool v) { setTrackControlPanel(v); });
     QMenu* zoom = m->addMenu(tr("Zoom"));
     connect(zoom->addAction(tr("Zoom In")), &QAction::triggered, this, [this] { view_->beginZoomSelection(); });
@@ -3134,7 +3154,12 @@ QMenu* Timeline::fastMenu() {
     QAction* back = zoom->addAction(tr("Zoom Back to Last View"));
     back->setEnabled(!zoomStack_.isEmpty());
     connect(back, &QAction::triggered, this, &Timeline::zoomBack);
-    zoom->addAction(tr("Show Every Frame"))->setEnabled(false);
+    // "Show Every Frame - Displays every frame in the Timeline. To enable this option, you must first select Show Track >
+    // Film" (p.593).
+    QAction* every = zoom->addAction(tr("Show Every Frame"));
+    every->setObjectName(QStringLiteral("showEveryFrame"));
+    every->setEnabled(display_.filmTrack && filmTrackShown());
+    connect(every, &QAction::triggered, this, &Timeline::showEveryFrame);
     return m;
 }
 
@@ -8048,6 +8073,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("clipDurations"), d.clipDurations},
         {QStringLiteral("clipTracks"), d.clipTracks},
         {QStringLiteral("timecodeTrack"), d.timecodeTrack},
+        {QStringLiteral("filmTrack"), d.filmTrack},
         {QStringLiteral("effectIcons"), d.effectIcons},
         {QStringLiteral("dissolveIcons"), d.dissolveIcons},
         {QStringLiteral("clipFrames"), d.clipFrames},
@@ -8110,6 +8136,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("clipDurations", d.clipDurations);
     flag("clipTracks", d.clipTracks);
     flag("timecodeTrack", d.timecodeTrack);
+    flag("filmTrack", d.filmTrack);
     flag("effectIcons", d.effectIcons);
     flag("dissolveIcons", d.dissolveIcons);
     flag("clipFrames", d.clipFrames);

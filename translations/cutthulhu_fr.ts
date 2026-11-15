@@ -14461,6 +14461,81 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
         <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
         <translation type="unfinished">Exporter vers un fichier: seuls AAF, Avid Log Exchange, Délimité par tabulations, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
     </message>
+    <message>
+        <source>Data Mixdown: load a sequence into the Record monitor first.</source>
+        <translation type="unfinished">Mixage des données : chargez d&apos;abord une séquence dans le moniteur Record.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: the sequence has no clips on its Data track.</source>
+        <translation type="unfinished">Mixage des données : la séquence n&apos;a aucun clip sur sa piste de données.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: there is nothing to mix down.</source>
+        <translation type="unfinished">Mixage des données : il n&apos;y a rien à mixer.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: open a bin that can be changed.</source>
+        <translation type="unfinished">Mixage des données : ouvrez un chutier modifiable.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown</source>
+        <translation type="unfinished">Mixage des données</translation>
+    </message>
+    <message>
+        <source>Target bin:</source>
+        <translation type="unfinished">Chutier cible :</translation>
+    </message>
+    <message>
+        <source>%1 Data Mixdown</source>
+        <translation type="unfinished">%1 Mixage des données</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: %1 in %2</source>
+        <translation type="unfinished">Mixage des données : %1 dans %2</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: select master clips in a bin first.</source>
+        <translation type="unfinished">Extraire les données DNxHD : sélectionnez d&apos;abord des master clips dans un chutier.</translation>
+    </message>
+    <message>
+        <source>%1 is not a master clip.</source>
+        <translation type="unfinished">%1 n&apos;est pas un master clip.</translation>
+    </message>
+    <message>
+        <source>%1 has a Data track already.</source>
+        <translation type="unfinished">%1 a déjà une piste de données.</translation>
+    </message>
+    <message>
+        <source>%1 is offline or has no picture.</source>
+        <translation type="unfinished">%1 est hors ligne ou n&apos;a pas d&apos;image.</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: %1</source>
+        <translation type="unfinished">Extraire les données DNxHD : %1</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation type="unfinished">Confirmer</translation>
+    </message>
+    <message numerus="yes">
+        <source>Extract the ancillary data of %n clip(s) to a Data track?</source>
+        <translation type="unfinished">
+            <numerusform>Extraire les données auxiliaires de %n clip vers une piste de données ?</numerusform>
+            <numerusform>Extraire les données auxiliaires de %n clips vers une piste de données ?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">Continuer</translation>
+    </message>
+    <message>
+        <source>Extracting ancillary data...</source>
+        <translation type="unfinished">Extraction des données auxiliaires...</translation>
+    </message>
+    <message>
+        <source>%1 carries no ancillary data.</source>
+        <translation type="unfinished">%1 ne contient aucune donnée auxiliaire.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -18672,6 +18747,10 @@ Les fichiers média ne sont pas supprimés.</translation>
         <source>Surround Pan Automation</source>
         <translation type="unfinished">Automation du panoramique surround</translation>
     </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Film</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>
@@ -18685,6 +18764,10 @@ Les fichiers média ne sont pas supprimés.</translation>
     <message>
         <source>Timeline</source>
         <translation type="unfinished">Timeline</translation>
+    </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Film</translation>
     </message>
 </context>
 <context>

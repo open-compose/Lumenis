@@ -14504,6 +14504,82 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
         <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
         <translation type="unfinished">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, Teormharcáilte le Táib, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
     </message>
+    <message>
+        <source>Data Mixdown: load a sequence into the Record monitor first.</source>
+        <translation type="unfinished">Meascán Sonraí: lódáil seicheamh isteach sa mhonatóir Record ar dtús.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: the sequence has no clips on its Data track.</source>
+        <translation type="unfinished">Meascán Sonraí: níl gearrthóga ar bith ar rian sonraí an tseichimh.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: there is nothing to mix down.</source>
+        <translation type="unfinished">Meascán Sonraí: níl aon rud le meascadh.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: open a bin that can be changed.</source>
+        <translation type="unfinished">Meascán Sonraí: oscail araid is féidir a athrú.</translation>
+    </message>
+    <message>
+        <source>Data Mixdown</source>
+        <translation type="unfinished">Meascán Sonraí</translation>
+    </message>
+    <message>
+        <source>Target bin:</source>
+        <translation type="unfinished">Araid sprice:</translation>
+    </message>
+    <message>
+        <source>%1 Data Mixdown</source>
+        <translation type="unfinished">%1 Meascán Sonraí</translation>
+    </message>
+    <message>
+        <source>Data Mixdown: %1 in %2</source>
+        <translation type="unfinished">Meascán Sonraí: %1 in %2</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: select master clips in a bin first.</source>
+        <translation type="unfinished">Bain Sonraí DNxHD Amach: roghnaigh máistirghearrthóga in araid ar dtús.</translation>
+    </message>
+    <message>
+        <source>%1 is not a master clip.</source>
+        <translation type="unfinished">Ní máistirghearrthóg é %1.</translation>
+    </message>
+    <message>
+        <source>%1 has a Data track already.</source>
+        <translation type="unfinished">Tá rian sonraí ag %1 cheana.</translation>
+    </message>
+    <message>
+        <source>%1 is offline or has no picture.</source>
+        <translation type="unfinished">Tá %1 as líne nó níl pictiúr aige.</translation>
+    </message>
+    <message>
+        <source>Extract DNxHD Data: %1</source>
+        <translation type="unfinished">Bain Sonraí DNxHD Amach: %1</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation type="unfinished">Deimhnigh</translation>
+    </message>
+    <message numerus="yes">
+        <source>Extract the ancillary data of %n clip(s) to a Data track?</source>
+        <translation type="unfinished">
+            <numerusform>Sonraí coimhdeacha %n ghearrthóige a bhaint amach go rian sonraí?</numerusform>
+            <numerusform>Sonraí coimhdeacha %n ghearrthóg a bhaint amach go rian sonraí?</numerusform>
+            <numerusform>Sonraí coimhdeacha %n gearrthóg a bhaint amach go rian sonraí?</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">Lean ar aghaidh</translation>
+    </message>
+    <message>
+        <source>Extracting ancillary data...</source>
+        <translation type="unfinished">Sonraí coimhdeacha á mbaint amach...</translation>
+    </message>
+    <message>
+        <source>%1 carries no ancillary data.</source>
+        <translation type="unfinished">Níl sonraí coimhdeacha ar bith in %1.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -18719,6 +18795,10 @@ Ní scriostar comhaid mheán.</translation>
         <source>Surround Pan Automation</source>
         <translation type="unfinished">Uathoibriú Panála Timpeallach</translation>
     </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Scannán</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>
@@ -18732,6 +18812,10 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Timeline</source>
         <translation type="unfinished">Amlíne</translation>
+    </message>
+    <message>
+        <source>Film</source>
+        <translation type="unfinished">Scannán</translation>
     </message>
 </context>
 <context>

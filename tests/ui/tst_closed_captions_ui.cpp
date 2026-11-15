@@ -3,6 +3,7 @@
 // and Record monitors with Show Captions and in the Timeline's D1 row (with a broken caption's cut), then exported as
 // SCC and TTML.
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/media.h"
 #include "lumenis/model/closed_captions.h"
 #include "lumenis/ui/ancdata_import_dialog.h"
 #include "lumenis/ui/bin_container.h"
@@ -30,6 +31,105 @@ class TestClosedCaptionsUi : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+
+    // The Data track's commands (11.5a; p.974-975, p.982): Timeline > Mixdown > Data makes one D-track only clip of D1
+    // between the marks, in the bin chosen; Clip > Extract DNxHD Data gives a master clip whose frames carry A/53
+    // caption data a D1 track of it, after Confirm, and refuses clips it cannot.
+    void dataTrackCommands() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Data"));
+        project.settings.name = QStringLiteral("Data");
+        project.settings.format.editRate = Rational(30000, 1001);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+
+        // A caption clip of its own data, spliced into a new sequence's D1.
+        const QByteArray captions = model::popOnCaptionData({{10, 40, QStringLiteral("Hello")}, {50, 80, QStringLiteral("World")}}, 100);
+        model::BinItem clip;
+        clip.id = model::newItemId();
+        clip.mobId = MobId::generate();
+        clip.kind = model::BinItemKind::MasterClip;
+        clip.name = QStringLiteral("Captions");
+        clip.editRate = Rational(30000, 1001);
+        model::setClipCaptionData(clip, captions);
+        clip.fields.insert(QStringLiteral("Tracks"), QStringLiteral("D1"));
+        clip.fields.insert(QStringLiteral("Start"), QStringLiteral("00:00:00;00"));
+        bin->addItem(clip);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(clip.id));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        QVERIFY(composer.state(MonitorId::Record).current());
+
+        // Data Mixdown between marks at 20 and 59: 40 frames of D1's data, in the bin chosen.
+        model::MonitorState& record = composer.state(MonitorId::Record);
+        record.setPosition(20);
+        record.markIn();
+        record.setPosition(59);
+        record.markOut();
+        QStringList offered;
+        window.setBinChoiceHook([&](const QStringList& bins) {
+            offered = bins;
+            return 0;
+        });
+        const auto mixed = window.dataMixdown();
+        QVERIFY(mixed);
+        QCOMPARE(offered.size(), 1);
+        QCOMPARE(mixed->durationFrames, 40);
+        QCOMPARE(mixed->fields.value(QStringLiteral("Tracks")), QStringLiteral("D1"));
+        QCOMPARE(model::clipCaptionData(*mixed), captions.mid(40, 80));
+        QVERIFY(bin->bin().item(mixed->id));
+
+        // Extract DNxHD Data: an MPEG-2 movie whose frames carry the captions as A/53 caption data.
+        const QString movie = dir.filePath(QStringLiteral("Captioned.mov"));
+        {
+            media::WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("mpeg2video");
+            s.width = 64;
+            s.height = 36;
+            s.frameRate = Rational(30000, 1001);
+            media::MediaWriter w;
+            QVERIFY(w.open(movie, s));
+            QImage grey(64, 36, QImage::Format_RGB32);
+            grey.fill(Qt::gray);
+            for (int f = 0; f < 100; ++f) {
+                w.setNextCaption(captions.mid(2 * f, 2));
+                QVERIFY(w.writeVideo(grey));
+            }
+            QVERIFY(w.finish());
+        }
+        const QStringList linked = window.linkFiles(binId, {movie});
+        QCOMPARE(linked.size(), 1);
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({linked.first(), mixed->id});
+        QStringList asked;
+        window.setExtractDataHook([&](const QStringList& clips) {
+            asked = clips;
+            return true;
+        });
+        QCOMPARE(window.extractDnxhdData(), 1);
+        QCOMPARE(asked, QStringList{QStringLiteral("Captioned")}); // the mixdown has a data track already
+        const model::BinItem* extracted = bin->bin().item(linked.first());
+        QVERIFY(extracted);
+        QVERIFY(extracted->fields.value(QStringLiteral("Tracks")).endsWith(QStringLiteral("D1")));
+        QCOMPARE(model::clipCaptionData(*extracted), captions);
+        // Again: it has a Data track now.
+        view->selectIds({linked.first()});
+        QCOMPARE(window.extractDnxhdData(), 0);
+    }
 
     void captionsThroughTheApplication() {
         QTemporaryDir dir;
