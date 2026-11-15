@@ -1881,7 +1881,12 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   Convert Audio Sample Rate (done: `ConsolidateOptions::deleteOriginals`/`relinkBeforeSkipping`/`mediaOnTarget`/
   `convertToProjectRate`/`applyFraming`/`convertSampleRate`, `MediaCreation::spatial`, `ConsolidateResult::deleteFiles`;
   docs/spec/ui-inventory.md "Consolidate/Transcode"; tests `tst_media consolidateOptions`, `tst_managed_media
-  consolidateDialogOptions`); 11.4a2, Consolidate all clips in a group edit; 11.4a3, the Relink dialog's options.
+  consolidateDialogOptions`); 11.4a2, Consolidate all clips in a group edit (done: `ConsolidateOptions::groupEdits`, new
+  groups of the remade angles in `consolidate()`; test `tst_media consolidateGroupEdits`); 11.4a3, the Relink dialog's
+  options (done: Aux TC and Sound Timecode, the Camroll, Labroll and Disk Label columns, Relink to's formats, Allow
+  relinking to offline items and Tracks to Relink through `RelinkOptions::timecode`/`By::Column`/`format`/
+  `offlineItems`/`relinkVideo`/`relinkAudio`; tests `tst_media relinkOptions`, `tst_managed_media relinkDialogOptions`),
+  so 11.4a is.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

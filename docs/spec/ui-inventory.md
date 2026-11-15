@@ -2977,8 +2977,18 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * Consolidate copies the picture without converting it. That works for DNx
   (managed media, or linked DNx files at the project's rate). Other media
   is skipped with a note in the Console: transcode it.
-* Later: Consolidate all clips in a group edit (11.4a2); the audio format
-  (OMF WAVE and AIFF-C, p.352); Distributed Processing (p.356); subclips.
+* 11.4a2: Consolidate all clips in a group edit (p.351). A sequence's
+  group segments remake their group: every angle with the option, else
+  only the angles shown (the segments' own angle and the Group menu's
+  patched audio angles; ours), each over the group frames the sequence
+  uses with handles, taken through the segments' own offsets. A new group,
+  `<name>.new.01`, plays the new clips (`.new.01` too) with its offsets
+  moved by where each starts, angles not remade keeping their clips; the
+  segments use it, their own offsets moved likewise. A group selected in
+  the bin: every angle whole with the option, else its selected angle
+  (ours). Multigroups are skipped with a note: consolidate their groups.
+* Later: the audio format (OMF WAVE and AIFF-C, p.352); Distributed
+  Processing (p.356); subclips.
 
 ### Media database (p.358–359)
 * Read when a project opens. File > Media > Load Media Database and
@@ -3011,12 +3021,29 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
     the same material (p.361). With Create new sequences, the changes go in
     a copy named `<name>.relinked` (p.364).
   * Quality order: Avid DNx LB < SQ < HQ < HQX < 444.
-* Later:
-  * Timecode other than Start (Aux TC1–5, Sound Timecode);
-  * the other Source Name choices;
-  * Relink to (format) choices other than Any video format;
-  * Format; Tracks to Relink; Allow relinking to offline items;
-  * Relinking by Resolution and to Selected Clips (p.365–366).
+* 11.4a3 (ROADMAP):
+  * Relink by Timecode: Start, Aux TC1–TC5 or Sound Timecode (p.363),
+    the column a clip's material starts at (`RelinkOptions::timecode`).
+    Media files have their own start only, which a master clip's chosen
+    timecode is compared with.
+  * Source Name: Camroll, Labroll and Disk Label, the column's value
+    (`By::Column`). Only clips have columns: master clips are then matched
+    to media files by Tape Name or Source File Name. Tape Name or a Source
+    File ID stays dimmed (the guide does not say which column is the ID),
+    and Keynumber with film projects; More is not offered.
+  * Relink to: Video format of current project only (the project's raster
+    and rate), Any HD video format (720 lines and up), Any SD video format
+    (p.363); media files by their stored raster, clips by their Format
+    column. Sound passes.
+  * Allow relinking to offline items (p.362): sequences' segments may take
+    clips without media or whose files are on no drive; "All available
+    drives are searched regardless of the setting" for the others. Their
+    tracks come from the Tracks column.
+  * Tracks to Relink (p.364), our Video and Audio boxes under that title
+    (Data dimmed: data tracks are not relinked): a sequence's segments on
+    tracks left out keep their clips. Master clips relink whole.
+* Later: the Format menu (p.363); Relinking by Resolution and to Selected
+  Clips (p.365–366).
 
 ### Media Tool media files and Delete Media (p.344–348)
 * The Media Tool Display dialog lists the media drives and the projects with

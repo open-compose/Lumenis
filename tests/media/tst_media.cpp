@@ -9,6 +9,8 @@
 #include "lumenis/media/relink.h"
 #include "lumenis/model/color_adapter.h"
 #include "lumenis/model/frame_flex.h"
+#include "lumenis/model/group_clip.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -992,6 +994,261 @@ private slots:
         r = consolidate({*linked}, QStringLiteral("bin1"), none, {}, options);
         QVERIFY(r.deleteFiles.isEmpty());
         QVERIFY(QFileInfo::exists(source));
+    }
+
+    // Consolidate all clips in a group edit (p.351; 11.4a2): a sequence's group segment remakes the angle it shows, or
+    // every angle with the option, over the group frames used with handles; a new group plays the new clips and the
+    // segment uses it, the same pictures at the same frames.
+    void consolidateGroupEdits() {
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        // Two angles in managed DNx (Consolidate copies DNx), B's frames numbered from 100.
+        auto angleClip = [&](const QString& name, int base) -> std::optional<model::BinItem> {
+            const QString path = dir.filePath(name + QStringLiteral(".mov"));
+            WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("ffv1");
+            s.pixelFormat = QStringLiteral("bgr0");
+            s.width = 64;
+            s.height = 36;
+            s.frameRate = Rational(25);
+            MediaWriter w;
+            if (!w.open(path, s)) return std::nullopt;
+            for (int i = 0; i < 40; ++i) {
+                if (!w.writeVideo(picture(base + i, 64, 36))) return std::nullopt;
+            }
+            if (!w.finish()) return std::nullopt;
+            LinkOptions o;
+            o.editRate = Rational(25);
+            auto linked = linkClip(*probe(path), o);
+            if (!linked) return std::nullopt;
+            linked->name = name;
+            MediaCreation c;
+            c.raster = QSize(256, 144);
+            c.resolution = *findResolution(QStringLiteral("dnx_lb"));
+            c.videoDrive = dir.filePath(QStringLiteral("Media"));
+            QDir().mkpath(c.videoDrive);
+            return transcodeClip(*linked, 0, -1, c);
+        };
+        const auto a = angleClip(QStringLiteral("CamA"), 0);
+        const auto b = angleClip(QStringLiteral("CamB"), 100);
+        QVERIFY(a && b);
+        model::GroupClip group;
+        group.angles = {model::GroupAngle{QStringLiteral("bin1"), a->id, *a, 0}, model::GroupAngle{QStringLiteral("bin1"), b->id, *b, 5}};
+        model::BinItem groupItem;
+        groupItem.id = model::newItemId();
+        groupItem.mobId = MobId::generate();
+        groupItem.kind = model::BinItemKind::Group;
+        groupItem.name = QStringLiteral("Interview");
+        groupItem.editRate = Rational(25);
+        model::storeGroup(groupItem, group, 30);
+
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = groupItem.id;
+        seg.binId = QStringLiteral("bin1");
+        seg.sourceTrack = QStringLiteral("V1");
+        seg.sourceIn = 10;
+        seg.length = 5;
+        seg.groupAngle = 1;
+        sequence.track(QStringLiteral("V1"))->segments = {seg};
+        model::BinItem seqItem;
+        seqItem.id = model::newItemId();
+        seqItem.kind = model::BinItemKind::Sequence;
+        seqItem.name = QStringLiteral("Cut");
+        seqItem.editRate = Rational(25);
+        sequence.storeIn(seqItem);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == groupItem.id) return groupItem;
+            return std::nullopt;
+        };
+        auto shownAt = [](const model::BinItem& g, const model::Segment& s, std::int64_t frame) {
+            FrameCache cache;
+            return cache.frame(model::clipForSegment(g, s), frame);
+        };
+
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Consolidate;
+        options.handles = 2;
+        options.creation.raster = QSize(256, 144);
+        options.creation.videoDrive = dir.filePath(QStringLiteral("Target"));
+        QDir().mkpath(options.creation.videoDrive);
+
+        // Without the option: B alone (shown), frames 13 to 22 of it (group frames 8-17 with its offset of 5).
+        ConsolidateResult r = consolidate({seqItem}, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.added.size(), 2);
+        const model::BinItem newB = r.added.at(0);
+        const model::BinItem newGroup = r.added.at(1);
+        QCOMPARE(newB.name, QStringLiteral("CamB.new.01"));
+        QCOMPARE(newB.durationFrames, std::int64_t{9});
+        QCOMPARE(newGroup.name, QStringLiteral("Interview.new.01"));
+        QCOMPARE(newGroup.kind, model::BinItemKind::Group);
+        const auto remade = model::groupOf(newGroup);
+        QVERIFY(remade);
+        QCOMPARE(remade->angles.at(0).clipId, a->id);
+        QCOMPARE(remade->angles.at(1).clipId, newB.id);
+        QCOMPARE(remade->angles.at(1).offset, std::int64_t{5 - 13});
+        const model::Segment after = model::Sequence::fromItem(r.changed.first()).track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(after.clipId, newGroup.id);
+        QCOMPARE(after.sourceIn, std::int64_t{10});
+        for (const std::int64_t f : {10, 12, 14}) {
+            QVERIFY(near(shownAt(newGroup, after, f), colourOf(100 + 5 + static_cast<int>(f)), 14));
+            QVERIFY(near(shownAt(newGroup, after, f), shownAt(groupItem, seg, f).pixelColor(32, 18), 14));
+        }
+
+        // With it: A too, over the same group frames (8-17, its offset 0).
+        options.groupEdits = true;
+        r = consolidate({seqItem}, QStringLiteral("bin1"), lookup, {newB.name, newGroup.name}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.added.size(), 3);
+        const auto both = model::groupOf(r.added.at(2));
+        QVERIFY(both);
+        QCOMPARE(r.added.at(0).durationFrames, std::int64_t{9});
+        QCOMPARE(both->angles.at(0).offset, std::int64_t{-8});
+        model::Segment onA = model::Sequence::fromItem(r.changed.first()).track(QStringLiteral("V1"))->segments.first();
+        onA.groupAngle = 0;
+        QVERIFY(near(shownAt(r.added.at(2), onA, 12), colourOf(12), 14));
+
+        // A group selected in the bin: every angle whole with the option, else its selected angle.
+        r = consolidate({groupItem}, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.added.size(), 3);
+        QCOMPARE(r.added.at(0).durationFrames, std::int64_t{40});
+        QCOMPARE(model::groupOf(r.added.at(2))->angles.at(1).offset, std::int64_t{5});
+        options.groupEdits = false;
+        r = consolidate({groupItem}, QStringLiteral("bin1"), lookup, {}, options);
+        QCOMPARE(r.added.size(), 2);
+        QCOMPARE(model::groupOf(r.added.at(1))->angles.at(1).clipId, b->id);
+    }
+
+    // The Relink dialog's options of 11.4a3 (p.362-364): Relink by a column (Camroll), by Aux TC, Allow relinking to
+    // offline items, Relink to a video format, and Tracks to Relink, on a sequence's segments.
+    void relinkOptions() {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("R1.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.audioCodec = QStringLiteral("pcm_s16le");
+        s.channels = 1;
+        {
+            MediaWriter w;
+            QVERIFY(w.open(path, s));
+            const std::vector<float> sound(1920, 0.1f);
+            for (int i = 0; i < 30; ++i) QVERIFY(w.writeVideo(picture(i, 64, 36)) && w.writeAudio(sound.data(), 1920));
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto linked = linkClip(*probe(path), o);
+        QVERIFY(linked);
+        auto clipLike = [&](const QString& name, const QString& start) {
+            model::BinItem c = *linked;
+            c.id = model::newItemId();
+            c.mobId = MobId::generate();
+            c.name = name;
+            c.durationFrames = 30;
+            c.fields.insert(QStringLiteral("Start"), start);
+            c.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1"));
+            c.fields.insert(QStringLiteral("Format"), QStringLiteral("1080i/29.97"));
+            return c;
+        };
+        // The cut's clip: camroll R7, Start 01:00:00:00, Aux TC1 02:00:00:00; its segment uses frames 5-15 on V1 and A1.
+        model::BinItem used = clipLike(QStringLiteral("Take 1"), QStringLiteral("01:00:00:00"));
+        used.fields.insert(QStringLiteral("Camroll"), QStringLiteral("R7"));
+        used.fields.insert(QStringLiteral("Auxiliary TC1"), QStringLiteral("02:00:00:00"));
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = used.id;
+        seg.binId = QStringLiteral("b");
+        seg.sourceTrack = QStringLiteral("V1");
+        seg.sourceIn = 5;
+        seg.length = 10;
+        sequence.track(QStringLiteral("V1"))->segments = {seg};
+        seg.sourceTrack = QStringLiteral("A1");
+        sequence.ensureTrack(QStringLiteral("A1"))->segments = {seg};
+        model::BinItem cut;
+        cut.id = model::newItemId();
+        cut.kind = model::BinItemKind::Sequence;
+        cut.name = QStringLiteral("Cut");
+        cut.editRate = Rational(25);
+        sequence.storeIn(cut);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == used.id) return used;
+            return std::nullopt;
+        };
+        MediaDatabase db;
+        auto relinkedTo = [&](const RelinkOptions& r, const QList<model::BinItem>& candidates, const QString& track) {
+            QList<BinClip> c;
+            for (const model::BinItem& i : candidates) c.append({QStringLiteral("b"), i});
+            RelinkOptions options = r;
+            options.newSequences = false;
+            const RelinkResult result = relinkManaged({cut}, db, c, lookup, options, {});
+            if (result.changed.isEmpty()) return QString();
+            const QString id = model::Sequence::fromItem(result.changed.first()).track(track)->segments.first().clipId;
+            return id == used.id ? QStringLiteral("unchanged") : id;
+        };
+        // The track kept its clip: nothing relinked, or only another track.
+        auto stays = [&](const RelinkOptions& r, const QList<model::BinItem>& candidates, const QString& track) {
+            const QString id = relinkedTo(r, candidates, track);
+            return id.isEmpty() || id == QStringLiteral("unchanged");
+        };
+
+        // By Camroll: another name, the same roll and timecode.
+        model::BinItem roll = clipLike(QStringLiteral("Roll copy"), QStringLiteral("01:00:00:00"));
+        roll.fields.insert(QStringLiteral("Camroll"), QStringLiteral("R7"));
+        roll.fields.insert(QStringLiteral("Source File"), QStringLiteral("Other.mov"));
+        RelinkOptions r;
+        QVERIFY(stays(r, {roll}, QStringLiteral("V1"))); // by source name: no match
+        r.by = RelinkOptions::By::Column;
+        r.column = QStringLiteral("Camroll");
+        QCOMPARE(relinkedTo(r, {roll}, QStringLiteral("V1")), roll.id);
+        r = RelinkOptions{};
+
+        // By Aux TC1: the candidate's own Aux TC1 holds the material at 02:00:00:00, its Start elsewhere.
+        model::BinItem aux = clipLike(QStringLiteral("Take 1"), QStringLiteral("05:00:00:00"));
+        aux.fields.insert(QStringLiteral("Auxiliary TC1"), QStringLiteral("02:00:00:00"));
+        r.by = RelinkOptions::By::Name;
+        QVERIFY(stays(r, {aux}, QStringLiteral("V1")));
+        r.timecode = QStringLiteral("Auxiliary TC1");
+        QCOMPARE(relinkedTo(r, {aux}, QStringLiteral("V1")), aux.id);
+        r.timecode.clear();
+
+        // Allow relinking to offline items: a clip without media only then.
+        model::BinItem offline = clipLike(QStringLiteral("Take 1"), QStringLiteral("01:00:00:00"));
+        offline.link = {};
+        QVERIFY(stays(r, {offline}, QStringLiteral("V1")));
+        r.offlineItems = true;
+        QCOMPARE(relinkedTo(r, {offline}, QStringLiteral("V1")), offline.id);
+        r.offlineItems = false;
+
+        // Relink to: an HD clip is not an SD format; the project's format is its raster and rate.
+        model::BinItem hd = clipLike(QStringLiteral("Take 1"), QStringLiteral("01:00:00:00"));
+        r.format = RelinkOptions::Format::Sd;
+        QVERIFY(stays(r, {hd}, QStringLiteral("V1")));
+        r.format = RelinkOptions::Format::Hd;
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("V1")), hd.id);
+        r.format = RelinkOptions::Format::Project;
+        r.projectRaster = QSize(1920, 1080);
+        r.projectRate = Rational(25);
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("V1")), hd.id);
+        r.projectRate = Rational(30000, 1001);
+        QVERIFY(stays(r, {hd}, QStringLiteral("V1")));
+        r.format = RelinkOptions::Format::Any;
+
+        // Tracks to Relink: without audio, A1 keeps its clip while V1 moves.
+        r.relinkAudio = false;
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("V1")), hd.id);
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("A1")), QStringLiteral("unchanged"));
+        r.relinkAudio = true;
+        r.relinkVideo = false;
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("A1")), hd.id);
+        QCOMPARE(relinkedTo(r, {hd}, QStringLiteral("V1")), QStringLiteral("unchanged"));
     }
 
     void consolidateSequences() {

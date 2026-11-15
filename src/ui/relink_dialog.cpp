@@ -201,18 +201,28 @@ QCheckBox* checkBox(QWidget* parent, const QString& text, const QString& name, b
     return c;
 }
 
-// A menu whose entries after the first `working` wait for later.
-QComboBox* menuOf(QWidget* parent, const QString& name, const QStringList& items, int working) {
+// A menu whose entries in `later` wait for later.
+QComboBox* menuOf(QWidget* parent, const QString& name, const QStringList& items, const QList<int>& later = {}) {
     auto* m = new QComboBox(parent);
     m->setObjectName(name);
     m->addItems(items);
     if (auto* model = qobject_cast<QStandardItemModel*>(m->model())) {
-        for (int i = working; i < m->count(); ++i) {
+        for (const int i : later) {
             model->item(i)->setEnabled(false);
             model->item(i)->setToolTip(laterTip());
         }
     }
     return m;
+}
+
+// The Source Name menu's columns from its third entry on (p.363), "" for the ones not made: Tape Name or a Source File
+// ID (the guide does not say which column holds the ID) and Keynumber (film projects).
+const char* const kSourceColumns[] = {"", "", "Camroll", "Labroll", "Disk Label"};
+// The Timecode menu's columns (p.363): Start, Aux TC1-TC5 and Sound Timecode.
+QString timecodeColumn(int index) {
+    if (index >= 1 && index <= 5) return QStringLiteral("Auxiliary TC%1").arg(index);
+    if (index == 6) return QStringLiteral("Sound TC");
+    return {};
 }
 
 } // namespace
@@ -246,7 +256,7 @@ ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent
     tv->addWidget(checkBox(to, tr("Relink only to media from the current project"), QStringLiteral("currentProject"),
                            false));
     tv->addWidget(checkBox(to, tr("Selected items in ALL open bins"), QStringLiteral("allOpenBins"), false));
-    tv->addWidget(checkBox(to, tr("Allow relinking to offline items"), QStringLiteral("offlineItems"), false, true));
+    tv->addWidget(checkBox(to, tr("Allow relinking to offline items"), QStringLiteral("offlineItems"), false));
     layout->addWidget(to);
 
     // Relink by (p.363).
@@ -255,13 +265,12 @@ ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent
     bf->addRow(tr("Timecode:"),
                menuOf(by, QStringLiteral("relinkTimecode"),
                       {tr("Start"), tr("Aux TC1"), tr("Aux TC2"), tr("Aux TC3"), tr("Aux TC4"), tr("Aux TC5"),
-                       tr("Sound Timecode")},
-                      1));
+                       tr("Sound Timecode")}));
     bf->addRow(tr("Source Name:"),
                menuOf(by, QStringLiteral("relinkSourceName"),
                       {tr("Tape Name or Source File Name"), tr("Name"), tr("Tape Name or a Source File ID"),
                        tr("Keynumber"), tr("Camroll"), tr("Labroll"), tr("Disk Label")},
-                      2));
+                      {2, 3}));
     bf->addRow(checkBox(by, tr("Ignore extension"), QStringLiteral("ignoreExtension"), false));
     auto* ignoreRow = new QHBoxLayout;
     ignoreRow->addWidget(checkBox(by, tr("Ignore characters after last occurrence of"), QStringLiteral("ignoreAfterOn"),
@@ -279,14 +288,13 @@ ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent
     auto* vf = new QFormLayout(video);
     auto* relinkTo = menuOf(video, QStringLiteral("relinkTo"),
                             {tr("Any video format"), tr("Video format of current project only"),
-                             tr("Any HD video format"), tr("Any SD video format")},
-                            1);
+                             tr("Any HD video format"), tr("Any SD video format")});
     vf->addRow(tr("Relink to:"), relinkTo);
     method_ = menuOf(video, QStringLiteral("relinkMethod"),
-                     {tr("Highest Quality"), tr("Most Compressed"), tr("Specific Resolution")}, 3);
+                     {tr("Highest Quality"), tr("Most Compressed"), tr("Specific Resolution")});
     vf->addRow(tr("Relink method:"), method_);
     quality_ = menuOf(video, QStringLiteral("relinkQuality"),
-                      {tr("Is greater than or equal to"), tr("Is equal to"), tr("Is less than or equal to")}, 3);
+                      {tr("Is greater than or equal to"), tr("Is equal to"), tr("Is less than or equal to")});
     vf->addRow(tr("Relink if quality:"), quality_);
     resolution_ = new QComboBox(video);
     resolution_->setObjectName(QStringLiteral("relinkResolution"));
@@ -294,10 +302,17 @@ ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent
     resolution_->setCurrentIndex(resolution_->findData(media::defaultResolution().id));
     vf->addRow(tr("Resolution:"), resolution_);
     vf->addRow(tr("If no match is found:"),
-               menuOf(video, QStringLiteral("noMatch"), {tr("Use Existing Media"), tr("Unlink (Take Offline)")}, 2));
+               menuOf(video, QStringLiteral("noMatch"), {tr("Use Existing Media"), tr("Unlink (Take Offline)")}));
     layout->addWidget(video);
 
-    layout->addWidget(checkBox(this, tr("Tracks to Relink"), QStringLiteral("tracksToRelink"), true, true));
+    // Tracks to Relink (p.364): "include or exclude video, audio and/or data tracks"; data tracks are not relinked yet.
+    auto* tracks = new QGroupBox(tr("Tracks to Relink"), this);
+    auto* tracksRow = new QHBoxLayout(tracks);
+    tracksRow->addWidget(checkBox(tracks, tr("Video"), QStringLiteral("relinkVideo"), true));
+    tracksRow->addWidget(checkBox(tracks, tr("Audio"), QStringLiteral("relinkAudio"), true));
+    tracksRow->addWidget(checkBox(tracks, tr("Data"), QStringLiteral("relinkData"), true, true));
+    tracksRow->addStretch();
+    layout->addWidget(tracks);
     layout->addWidget(checkBox(this, tr("Create new sequences"), QStringLiteral("newSequences"), true));
     layout->addWidget(checkBox(this, tr("Allow relink across rates"), QStringLiteral("acrossRates"), false));
 
@@ -339,8 +354,19 @@ media::RelinkOptions ManagedRelinkDialog::options() const {
     o.otherItems = check(QStringLiteral("otherItems"))->isChecked();
     o.currentProjectOnly = check(QStringLiteral("currentProject"))->isChecked();
     o.project = project_;
-    o.by = menu(QStringLiteral("relinkSourceName"))->currentIndex() == 1 ? media::RelinkOptions::By::Name
-                                                                         : media::RelinkOptions::By::SourceName;
+    o.offlineItems = check(QStringLiteral("offlineItems"))->isChecked();
+    const int source = menu(QStringLiteral("relinkSourceName"))->currentIndex();
+    o.by = source == 1 ? media::RelinkOptions::By::Name : media::RelinkOptions::By::SourceName;
+    if (source >= 4 && source <= 6) {
+        o.by = media::RelinkOptions::By::Column;
+        o.column = QString::fromLatin1(kSourceColumns[source - 2]);
+    }
+    o.timecode = timecodeColumn(menu(QStringLiteral("relinkTimecode"))->currentIndex());
+    o.format = static_cast<media::RelinkOptions::Format>(menu(QStringLiteral("relinkTo"))->currentIndex());
+    o.projectRaster = projectRaster_;
+    o.projectRate = projectRate_;
+    o.relinkVideo = check(QStringLiteral("relinkVideo"))->isChecked();
+    o.relinkAudio = check(QStringLiteral("relinkAudio"))->isChecked();
     o.ignoreExtension = check(QStringLiteral("ignoreExtension"))->isChecked();
     if (check(QStringLiteral("ignoreAfterOn"))->isChecked()) o.ignoreAfter = ignoreAfter_->text();
     o.matchCase = check(QStringLiteral("matchCase"))->isChecked();

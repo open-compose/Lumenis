@@ -3903,6 +3903,7 @@ void MainWindow::relinkLinkedMedia() {
 void MainWindow::relinkManagedMedia() {
     if (!project_) return;
     ManagedRelinkDialog dialog(project_->settings.name, this);
+    dialog.setProjectFormat(QSize(project_->settings.format.width, project_->settings.format.height), project_->settings.format.editRate);
     const bool ok = managedRelinkHook_ ? managedRelinkHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok) return;
     const media::RelinkOptions options = dialog.options();

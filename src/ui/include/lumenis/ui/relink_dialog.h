@@ -99,6 +99,11 @@ public:
     QCheckBox* check(const QString& objectName) const;
     QComboBox* menu(const QString& objectName) const;
     QRadioButton* allDrives() const { return allDrives_; }
+    // The project's raster and rate, for Relink to: Video format of current project only (p.363).
+    void setProjectFormat(QSize raster, const Rational& rate) {
+        projectRaster_ = raster;
+        projectRate_ = rate;
+    }
 
 private:
     // Enables the drive menu for "Media on drive", and the quality and resolution for
@@ -113,6 +118,8 @@ private:
     QComboBox* quality_ = nullptr;
     QComboBox* resolution_ = nullptr;
     QLineEdit* ignoreAfter_ = nullptr;
+    QSize projectRaster_;
+    Rational projectRate_{25, 1};
 };
 
 } // namespace lumenis::ui

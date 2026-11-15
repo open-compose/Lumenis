@@ -37,6 +37,7 @@
 #include <QPushButton>
 #include <QRadioButton>
 #include <QSpinBox>
+#include <QStandardItemModel>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
@@ -593,6 +594,44 @@ private slots:
     // pictures and sound.
     // The Consolidate/Transcode dialog's options of 11.4a1 (p.351-356) map onto media::ConsolidateOptions; Relink before
     // skipping appears with Skip media files, and the sample rate menu follows Convert Audio Sample Rate.
+    // The Relink dialog's options of 11.4a3 (p.362-364): every Timecode entry, the Source Name columns but the two not
+    // made, Relink to's formats, Allow relinking to offline items and Tracks to Relink map onto media::RelinkOptions.
+    void relinkDialogOptions() {
+        ManagedRelinkDialog dialog(QStringLiteral("Harbor"));
+        dialog.setProjectFormat(QSize(1920, 1080), Rational(25));
+        auto enabled = [](QComboBox* menu, int i) {
+            auto* model = qobject_cast<QStandardItemModel*>(menu->model());
+            return model && model->item(i)->isEnabled();
+        };
+        QComboBox* timecode = dialog.menu(QStringLiteral("relinkTimecode"));
+        QComboBox* source = dialog.menu(QStringLiteral("relinkSourceName"));
+        QComboBox* to = dialog.menu(QStringLiteral("relinkTo"));
+        QVERIFY(timecode && source && to);
+        for (int i = 0; i < timecode->count(); ++i) QVERIFY(enabled(timecode, i));
+        for (int i = 0; i < to->count(); ++i) QVERIFY(enabled(to, i));
+        QVERIFY(!enabled(source, 2) && !enabled(source, 3)); // Source File ID and Keynumber
+        QVERIFY(enabled(source, 4) && enabled(source, 6));
+        QVERIFY(dialog.check(QStringLiteral("offlineItems"))->isEnabled());
+
+        timecode->setCurrentIndex(3);
+        source->setCurrentIndex(5);
+        to->setCurrentIndex(1);
+        dialog.check(QStringLiteral("offlineItems"))->setChecked(true);
+        dialog.check(QStringLiteral("relinkAudio"))->setChecked(false);
+        media::RelinkOptions o = dialog.options();
+        QCOMPARE(o.timecode, QStringLiteral("Auxiliary TC3"));
+        QCOMPARE(o.by, media::RelinkOptions::By::Column);
+        QCOMPARE(o.column, QStringLiteral("Labroll"));
+        QCOMPARE(o.format, media::RelinkOptions::Format::Project);
+        QCOMPARE(o.projectRaster, QSize(1920, 1080));
+        QVERIFY(o.offlineItems && o.relinkVideo && !o.relinkAudio);
+        timecode->setCurrentIndex(6);
+        source->setCurrentIndex(1);
+        o = dialog.options();
+        QCOMPARE(o.timecode, QStringLiteral("Sound TC"));
+        QCOMPARE(o.by, media::RelinkOptions::By::Name);
+    }
+
     void consolidateDialogOptions() {
         ConsolidateDialog dialog(Rational(25), true);
         dialog.show();
@@ -606,8 +645,11 @@ private slots:
         QVERIFY(relinkFirst->isVisible());
         relinkFirst->setChecked(true);
         deleteOriginals->setChecked(true);
+        auto* groups = dialog.findChild<QCheckBox*>(QStringLiteral("groupEdits"));
+        QVERIFY(groups && groups->isEnabled());
+        groups->setChecked(true);
         media::ConsolidateOptions o = dialog.options();
-        QVERIFY(o.skipOnTarget && o.relinkBeforeSkipping && o.deleteOriginals);
+        QVERIFY(o.skipOnTarget && o.relinkBeforeSkipping && o.deleteOriginals && o.groupEdits);
         QVERIFY(!o.convertToProjectRate && !o.applyFraming);
 
         dialog.setTranscode(true);
@@ -625,7 +667,7 @@ private slots:
         QVERIFY(o.convertToProjectRate && o.applyFraming && o.convertSampleRate);
         QCOMPARE(o.creation.sampleRate, 44100);
         // Consolidate's own options do not reach a transcode.
-        QVERIFY(!o.deleteOriginals && !o.skipOnTarget);
+        QVERIFY(!o.deleteOriginals && !o.skipOnTarget && !o.groupEdits);
         convertRate->setChecked(false);
         QVERIFY(!rate->isEnabled());
         QVERIFY(!dialog.options().convertSampleRate);

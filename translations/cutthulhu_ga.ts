@@ -1454,6 +1454,10 @@
         <source>%1 was relinked to its media on the target drive.</source>
         <translation type="unfinished">Athnascadh %1 lena mheáin ar an tiomántán sprice.</translation>
     </message>
+    <message>
+        <source>%1: the media of a group of groups is not made new; consolidate its groups.</source>
+        <translation type="unfinished">%1: ní dhéantar meáin Ghrúpa Grúpaí as an nua; comhdhlúthaigh a ghrúpaí.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -14677,6 +14681,18 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>Allow relink across rates</source>
         <translation type="unfinished">Ceadaigh athnascadh thar rátaí</translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished">Fís</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished">Fuaim</translation>
+    </message>
+    <message>
+        <source>Data</source>
+        <translation type="unfinished">Sonraí</translation>
     </message>
 </context>
 <context>

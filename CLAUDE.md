@@ -1125,7 +1125,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   11.4, the medium left-over items, is in six parts (ROADMAP). 11.4a1, the Consolidate/Transcode options (Delete
   original media files, Relink before skipping, Convert to Project Frame Rate, Framing, Convert Audio Sample Rate:
   `ConsolidateOptions`, `MediaCreation::spatial`, `ConsolidateResult::deleteFiles`; tests `tst_media
-  consolidateOptions`, `tst_managed_media consolidateDialogOptions`), is done. 10.6 is an update check that only tells the user (no
+  consolidateOptions`, `tst_managed_media consolidateDialogOptions`), is done. 11.4a2, Consolidate all clips in a group
+  edit (`ConsolidateOptions::groupEdits`, new groups of the remade angles; test `tst_media consolidateGroupEdits`), is
+  done. 11.4a3, the Relink dialog's options (`RelinkOptions::timecode`/`By::Column`/`format`/`offlineItems`/
+  `relinkVideo`/`relinkAudio`; tests `tst_media relinkOptions`, `tst_managed_media relinkDialogOptions`), is done, so
+  11.4a is. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

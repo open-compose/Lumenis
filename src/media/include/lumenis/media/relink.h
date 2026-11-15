@@ -6,6 +6,7 @@
 #include "lumenis/model/bin.h"
 
 #include <QList>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 
@@ -26,10 +27,31 @@ struct RelinkOptions {
     // Relink only to media from the current project (`project`).
     bool currentProjectOnly = false;
     QString project;
+    // Allow relinking to offline items (p.362; 11.4a3): sequences' segments may take clips that are offline (their media
+    // is not on any drive); "All available drives are searched regardless of the setting" for the online ones.
+    bool offlineItems = false;
     // Relink by Source Name: Tape Name or Source File Name, else Name
-    // (p.363).
-    enum class By { SourceName, Name };
+    // (p.363); or a column's value (11.4a3: Camroll, Labroll, Disk Label), which only clips have: master clips are
+    // matched to media files by Tape Name or Source File Name then.
+    enum class By { SourceName, Name, Column };
     By by = By::SourceName;
+    QString column;
+    // Relink by Timecode (p.363; 11.4a3): the column a clip's material starts at, empty for Start; "Auxiliary TC1" to
+    // "Auxiliary TC5" or "Sound TC". Media files have their own start only, which a master clip's chosen timecode is
+    // compared with.
+    QString timecode;
+    // Video Relink Parameters' Relink to (p.363; 11.4a3): any video format, the current project's only (its raster and
+    // rate), or any HD (720 lines and up) or SD format. Sound-only media passes.
+    enum class Format { Any, Project, Hd, Sd };
+    Format format = Format::Any;
+    QSize projectRaster;
+    Rational projectRate{25, 1};
+    // Tracks to Relink (p.364; 11.4a3): "include or exclude video, audio and/or data tracks", for sequences' segments
+    // ("relink your sequence to a higher resolution video without having to relink the audio"). Master clips relink
+    // whole.
+    bool relinkVideo = true;
+    bool relinkAudio = true;
+    bool relinkData = true;
     bool ignoreExtension = false;
     QString ignoreAfter; // Ignore characters after last occurrence
     bool matchCase = false;
@@ -57,10 +79,11 @@ struct Material {
     std::int64_t frames = 0;
     Rational rate{25, 1};
 };
-// A clip's material from its Tape (else Source File) column, Start and duration; Relink by Name uses
-// its name. A media file's from its tape (else source) and starting timecode.
-Material materialOf(const model::BinItem& clip, RelinkOptions::By by);
-Material materialOf(const MediaFileInfo& file, RelinkOptions::By by);
+// A clip's material from its Tape (else Source File) column, its Start (or the options' timecode column) and duration;
+// Relink by Name uses its name, by Column that column. A media file's from its tape (else source) and starting
+// timecode.
+Material materialOf(const model::BinItem& clip, const RelinkOptions& options);
+Material materialOf(const MediaFileInfo& file, const RelinkOptions& options);
 // The names compared, with the options' Ignore and Match case applied.
 bool sameName(const QString& a, const QString& b, const RelinkOptions& options);
 

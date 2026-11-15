@@ -60,6 +60,32 @@ bool onDrives(const QString& path, const QStringList& drives) {
     });
 }
 
+// Relink to (p.363): whether a picture of `size` at `rate` is of the format asked for; an unknown size passes.
+bool formatPasses(QSize size, const Rational& rate, const RelinkOptions& o) {
+    if (o.format == RelinkOptions::Format::Any || size.height() <= 0) return true;
+    switch (o.format) {
+    case RelinkOptions::Format::Project: return size == o.projectRaster && rate == o.projectRate;
+    case RelinkOptions::Format::Hd: return size.height() >= 720;
+    case RelinkOptions::Format::Sd: return size.height() < 720;
+    case RelinkOptions::Format::Any: break;
+    }
+    return true;
+}
+
+// A clip's picture size from its Format column ("1080i/29.97", "720p/59.94", "486i/29.97"): its lines and the width of
+// that height's usual raster (the widths only tell Project apart; ours).
+QSize formatSizeOf(const model::BinItem& clip) {
+    const QString format = clip.fields.value(QStringLiteral("Format"));
+    int lines = 0;
+    for (const QChar c : format) {
+        if (!c.isDigit()) break;
+        lines = lines * 10 + c.digitValue();
+    }
+    if (lines <= 0) return {};
+    const int width = lines >= 2160 ? 3840 : lines >= 1080 ? 1920 : lines >= 720 ? 1280 : 720;
+    return QSize(width, lines);
+}
+
 // Whether a candidate's quality passes the relink method, and which of two
 // is better by it.
 bool passes(int quality, const RelinkOptions& o) {
@@ -117,24 +143,30 @@ bool covers(const Material& outer, const Material& inner, const RelinkOptions& o
 
 } // namespace
 
-// Tape, else Source File, else the clip's name (with Relink by Name, the name only).
-Material materialOf(const model::BinItem& clip, RelinkOptions::By by) {
+// Tape, else Source File, else the clip's name (with Relink by Name, the name only; by Column, that column's value,
+// empty when the clip has none, so it matches nothing).
+Material materialOf(const model::BinItem& clip, const RelinkOptions& options) {
     Material m;
-    if (by == RelinkOptions::By::SourceName) {
+    if (options.by == RelinkOptions::By::SourceName) {
         m.name = clip.fields.value(QStringLiteral("Tape"));
         if (m.name.isEmpty()) m.name = clip.fields.value(QStringLiteral("Source File"));
     }
-    if (m.name.isEmpty()) m.name = clip.name;
+    if (options.by == RelinkOptions::By::Column) {
+        m.name = clip.fields.value(options.column);
+    } else if (m.name.isEmpty()) {
+        m.name = clip.name;
+    }
     m.rate = clip.editRate;
-    m.start = framesOf(clip.fields.value(QStringLiteral("Start")), clip.editRate);
+    m.start = framesOf(clip.fields.value(options.timecode.isEmpty() ? QStringLiteral("Start") : options.timecode), clip.editRate);
     m.frames = clip.durationFrames;
     return m;
 }
 
-// The same for a media file: its tape, else its source, else its clip name.
-Material materialOf(const MediaFileInfo& file, RelinkOptions::By by) {
+// The same for a media file: its tape, else its source, else its clip name. Files have no columns, so by Column they
+// are named as by Source Name.
+Material materialOf(const MediaFileInfo& file, const RelinkOptions& options) {
     Material m;
-    if (by == RelinkOptions::By::SourceName) m.name = file.tape.isEmpty() ? file.source : file.tape;
+    if (options.by != RelinkOptions::By::Name) m.name = file.tape.isEmpty() ? file.source : file.tape;
     if (m.name.isEmpty()) m.name = file.clipName;
     m.rate = file.rate;
     m.start = framesOf(file.start, file.rate);
@@ -176,8 +208,11 @@ int qualityOf(const QString& resolution) {
 // Goes through every media set in the database, keeps those on the chosen drives (and project) with
 // the clip's tracks, its name and its whole range, and takes the best by the relink method. The link
 // starts at the clip's first frame within the set and keeps only the clip's tracks.
-std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& db, const RelinkOptions& options) {
-    const Material want = materialOf(clip, options.by);
+std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& db, const RelinkOptions& given) {
+    // Files have no columns: by Column, a master clip is matched by Tape Name or Source File Name.
+    RelinkOptions options = given;
+    if (options.by == RelinkOptions::By::Column) options.by = RelinkOptions::By::SourceName;
+    const Material want = materialOf(clip, options);
     const auto [video, audio] = tracksOf(clip);
     std::optional<MediaSet> best;
     int bestQuality = 0;
@@ -186,8 +221,12 @@ std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& d
         if (!onDrives(f.path, options.drives)) continue;
         if (options.currentProjectOnly && f.project != options.project) continue;
         if ((video && !set.hasVideo()) || set.audioTracks() < audio) continue;
-        const Material have = materialOf(f, options.by);
+        const Material have = materialOf(f, options);
         if (!sameName(have.name, want.name, options) || !covers(have, want, options)) continue;
+        if (set.hasVideo()) {
+            const MediaFileInfo& v = set.track(QStringLiteral("V1"));
+            if (!formatPasses(QSize(v.width, v.height), v.rate, options)) continue;
+        }
         const int quality = qualityOf(set.hasVideo() ? set.track(QStringLiteral("V1")).resolution : f.resolution);
         if (!passes(quality, options)) continue;
         if (!best || better(quality, bestQuality, options)) {
@@ -197,7 +236,7 @@ std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& d
     }
     if (!best) return std::nullopt;
     // The clip's first frame in the set's frames (its rate may differ: acrossRates).
-    Link link = best->link(offsetIn(materialOf(best->any(), options.by), want));
+    Link link = best->link(offsetIn(materialOf(best->any(), options), want));
     // Only the clip's tracks: a set may hold more channels.
     if (!video) {
         link.videoStream = -1;
@@ -254,7 +293,12 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
         bool missed = false;
         for (const QString& name : sequence.trackNames()) {
             model::Track* track = sequence.track(name);
-            if (!track || track->kind == model::TrackKind::Data) continue;
+            if (!track) continue;
+            // Tracks to Relink (p.364).
+            if ((track->kind == model::TrackKind::Video && !options.relinkVideo) ||
+                (track->kind == model::TrackKind::Audio && !options.relinkAudio) || track->kind == model::TrackKind::Data) {
+                continue;
+            }
             for (model::Segment& s : track->segments) {
                 if (s.isFiller()) continue;
                 const auto clip = lookup ? lookup(s.binId, s.clipId) : std::nullopt;
@@ -263,7 +307,7 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                     continue;
                 }
                 // The material the segment uses: its clip's, from the segment's source in, for its length.
-                Material used = materialOf(*clip, options.by);
+                Material used = materialOf(*clip, options);
                 used.start += s.sourceIn;
                 used.frames = s.length;
                 const auto ref = model::parseTrackName(s.sourceTrack);
@@ -272,17 +316,23 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                 for (const BinClip& c : candidates) {
                     if (!isMaster(c.item)) continue;
                     const auto link = linkOf(c.item);
-                    if (!link || link->unlinked) continue;
+                    // Allow relinking to offline items (p.362): a clip without media, or whose files are not on any
+                    // drive, may be taken; its tracks are read from its Tracks column.
+                    const bool offline = !link || link->unlinked || (link->isManaged() && !QFileInfo::exists(link->path));
+                    if (offline && !options.offlineItems) continue;
                     if (ref) {
-                        if (ref->kind == model::TrackKind::Video && link->videoStream < 0) continue;
-                        if (ref->kind == model::TrackKind::Audio && link->channels < ref->number) continue;
+                        const auto [video, audio] = tracksOf(c.item);
+                        if (ref->kind == model::TrackKind::Video && !video) continue;
+                        if (ref->kind == model::TrackKind::Audio && audio < ref->number) continue;
                     }
-                    if (options.currentProjectOnly && link->isManaged()) {
+                    if (!offline && options.currentProjectOnly && link->isManaged()) {
                         const auto set = db.set(link->mediaId);
                         if (set && set->any().project != options.project) continue;
                     }
-                    if (link->isManaged() && !onDrives(link->path, options.drives)) continue;
-                    const Material have = materialOf(c.item, options.by);
+                    // "All available drives are searched regardless of the setting" with offline items allowed.
+                    if (!offline && !options.offlineItems && link->isManaged() && !onDrives(link->path, options.drives)) continue;
+                    if (ref && ref->kind == model::TrackKind::Video && !formatPasses(formatSizeOf(c.item), c.item.editRate, options)) continue;
+                    const Material have = materialOf(c.item, options);
                     if (!sameName(have.name, used.name, options) || !covers(have, used, options)) continue;
                     const int quality = qualityOf(c.item.fields.value(QStringLiteral("Video")));
                     if (!passes(quality, options)) continue;
@@ -296,7 +346,7 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                     continue;
                 }
                 // In the new clip's frames (its rate may differ: acrossRates).
-                const std::int64_t sourceIn = offsetIn(materialOf(best->item, options.by), used);
+                const std::int64_t sourceIn = offsetIn(materialOf(best->item, options), used);
                 if (best->item.id == s.clipId && sourceIn == s.sourceIn) continue;
                 s.clipId = best->item.id;
                 s.sourceMob = best->item.mobId;

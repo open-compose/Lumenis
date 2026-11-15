@@ -6,6 +6,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/color_adapter.h"
 #include "lumenis/model/frame_flex.h"
+#include "lumenis/model/group_clip.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -162,8 +163,72 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         return made;
     };
 
+    // A group clip remade (p.351, "Consolidate all clips in a group edit"; 11.4a2): each angle in `ranges` (the angle's
+    // clip frames [first, end), end -1 for all of it) gets new media and a new master clip; the new group, "<name>.new.nn",
+    // plays them, its offsets moved by where each new clip starts (`shifts`, for the segments' own offsets). Angles not
+    // in `ranges` keep their clips. Nothing, with `error` set or a reason in result.skipped, when it was not made.
+    auto remakeGroup = [&](const model::BinItem& groupItem, const std::map<int, std::pair<std::int64_t, std::int64_t>>& ranges,
+                           std::map<int, std::int64_t>& shifts, QString* error) -> std::optional<model::BinItem> {
+        auto group = model::groupOf(groupItem);
+        if (!group || model::isMultigroup(groupItem)) {
+            result.skipped << QObject::tr("%1: the media of a group of groups is not made new; consolidate its groups.").arg(groupItem.name);
+            return std::nullopt;
+        }
+        bool any = false;
+        for (const auto& [angle, range] : ranges) {
+            if (angle < 0 || angle >= group->angles.size()) continue;
+            model::GroupAngle& a = group->angles[angle];
+            if (const QString why = refuse(a.clip); !why.isEmpty()) {
+                result.skipped << why;
+                continue;
+            }
+            const std::int64_t from = std::clamp<std::int64_t>(range.first, 0, a.clip.durationFrames);
+            const std::int64_t to = range.second < 0 ? -1 : std::clamp<std::int64_t>(range.second, from, a.clip.durationFrames);
+            if (to >= 0 && to <= from) continue; // the angle has no material there
+            auto made = make(a.clip, from, to, error);
+            if (!made) return std::nullopt;
+            if (copy && options.deleteOriginals) result.deleteFiles << managedFiles(a.clip);
+            made->name = numberedName(a.clip.name, QStringLiteral(".new"), names);
+            names << made->name;
+            result.added << *made;
+            a.binId = binId;
+            a.clipId = made->id;
+            a.clip = *made;
+            a.offset -= from;
+            shifts[angle] = from;
+            any = true;
+        }
+        if (!any) return std::nullopt;
+        model::BinItem out = groupItem;
+        out.id = model::newItemId();
+        out.mobId = MobId::generate();
+        out.name = numberedName(groupItem.name, QStringLiteral(".new"), names);
+        names << out.name;
+        out.created = out.modified = QDateTime::currentDateTimeUtc();
+        model::storeGroup(out, *group, groupItem.durationFrames);
+        return out;
+    };
+
     for (const model::BinItem& item : selection) {
         if (!result.error.isEmpty()) break;
+        // A group clip in the bin: all its angles whole with Consolidate all clips in a group edit, else the angle it
+        // shows (ours).
+        if (item.kind == model::BinItemKind::Group) {
+            const auto group = model::groupOf(item);
+            std::map<int, std::pair<std::int64_t, std::int64_t>> ranges;
+            for (int a = 0; group && a < group->angles.size(); ++a) {
+                if (options.groupEdits || a == group->selected) ranges[a] = {0, -1};
+            }
+            std::map<int, std::int64_t> shifts;
+            QString error;
+            const auto made = remakeGroup(item, ranges, shifts, &error);
+            if (!error.isEmpty()) {
+                result.error = error;
+                break;
+            }
+            if (made) result.added << *made;
+            continue;
+        }
         if (isClip(item)) {
             // Relink before skipping (p.352): media of the clip's own on the target drive, which it does not play yet.
             if (options.skipOnTarget && options.relinkBeforeSkipping && options.mediaOnTarget) {
@@ -244,12 +309,15 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             QString binId;
             std::int64_t first = 0;
             std::int64_t end = 0;
+            // A group's segments: each angle's clip frames used, by angle (the shown ones, or every angle with
+            // groupEdits), from the segments' own offsets.
+            std::map<int, std::pair<std::int64_t, std::int64_t>> angles;
         };
         std::map<QString, Use> uses; // by clip id; in order, so results are stable
         for (const model::Track& track : sequence.tracks()) {
             for (const model::Segment& s : track.segments) {
                 if (s.isFiller()) continue;
-                auto [it, fresh] = uses.try_emplace(s.clipId, Use{s.binId, s.sourceIn, s.sourceIn + s.length});
+                auto [it, fresh] = uses.try_emplace(s.clipId, Use{s.binId, s.sourceIn, s.sourceIn + s.length, {}});
                 if (!fresh) {
                     it->second.first = std::min(it->second.first, s.sourceIn);
                     it->second.end = std::max(it->second.end, s.sourceIn + s.length);
@@ -260,6 +328,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             QString id;
             MobId mobId;
             std::int64_t from = 0;
+            std::map<int, std::int64_t> shifts; // a remade group's angles: where each new clip starts in the old
         };
         QHash<QString, Made> remap;
         // Each clip used gets new media for its used range plus handles, clamped to the clip.
@@ -267,6 +336,42 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             const auto clip = clips ? clips(use.binId, clipId) : std::nullopt;
             if (!clip) {
                 result.skipped << QObject::tr("%1: a clip it uses is not in an open bin.").arg(item.name);
+                continue;
+            }
+            // A group edit (p.351): the angles it shows (the segments' own angle and the Group menu's patched audio
+            // angles), or with Consolidate all clips in a group edit every angle, over the group frames used.
+            if (clip->kind == model::BinItemKind::Group) {
+                const auto group = model::groupOf(*clip);
+                std::map<int, std::pair<std::int64_t, std::int64_t>> ranges;
+                for (const model::Track& track : sequence.tracks()) {
+                    for (const model::Segment& seg : track.segments) {
+                        if (seg.isFiller() || seg.clipId != clipId || !group) continue;
+                        QSet<int> shown;
+                        for (int a = 0; a < group->angles.size(); ++a) {
+                            if (options.groupEdits) shown << a;
+                        }
+                        shown << seg.groupAngle.value_or(group->selected);
+                        for (const int a : group->trackAngles) shown << a;
+                        for (const int a : shown) {
+                            if (a < 0 || a >= group->angles.size()) continue;
+                            const std::int64_t offset = seg.groupOffsets.value(a, group->angles.at(a).offset);
+                            const std::int64_t first = seg.sourceIn + offset - options.handles;
+                            const std::int64_t end = seg.sourceIn + seg.length + offset + options.handles;
+                            auto [r, fresh] = ranges.try_emplace(a, first, end);
+                            if (!fresh) r->second = {std::min(r->second.first, first), std::max(r->second.second, end)};
+                        }
+                    }
+                }
+                std::map<int, std::int64_t> shifts;
+                QString error;
+                const auto made = remakeGroup(*clip, ranges, shifts, &error);
+                if (!error.isEmpty()) {
+                    result.error = error;
+                    break;
+                }
+                if (!made) continue;
+                remap.insert(clipId, {made->id, made->mobId, 0, shifts});
+                result.added << *made;
                 continue;
             }
             if (const QString why = refuse(*clip); !why.isEmpty()) {
@@ -296,7 +401,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             if (copy && options.deleteOriginals) result.deleteFiles << managedFiles(*clip);
             made->name = numberedName(clip->name, QStringLiteral(".new"), names);
             names << made->name;
-            remap.insert(clipId, {made->id, made->mobId, from});
+            remap.insert(clipId, {made->id, made->mobId, from, {}});
             result.added << *made;
         }
         if (!result.error.isEmpty()) break;
@@ -313,6 +418,10 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 s.sourceMob = it->mobId;
                 s.binId = binId;
                 s.sourceIn -= it->from;
+                // A remade group's segment keeps its own offsets, moved as the group's are.
+                for (const auto& [angle, shift] : it->shifts) {
+                    if (angle < s.groupOffsets.size()) s.groupOffsets[angle] -= shift;
+                }
                 // Colours transcoded into the media are not applied again (p.544).
                 if (!copy && options.applyColorEncoding) s.color.reset();
                 // So is the framing (p.355).

@@ -82,6 +82,7 @@ private:
     QCheckBox* skipOnTarget_ = nullptr;
     QCheckBox* deleteOriginals_ = nullptr;
     QCheckBox* relinkFirst_ = nullptr; // Relink selected clips to target drive before skipping (p.352)
+    QCheckBox* groupEdits_ = nullptr;  // Consolidate all clips in a group edit (p.351)
     QRadioButton* keepSourceRate_ = nullptr;
     QRadioButton* convertProjectRate_ = nullptr;
     QCheckBox* applyFraming_ = nullptr;

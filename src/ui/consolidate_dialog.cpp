@@ -135,9 +135,9 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     relinkFirst_->setObjectName(QStringLiteral("relinkBeforeSkipping"));
     cv->addWidget(relinkFirst_);
     connect(skipOnTarget_, &QCheckBox::toggled, this, [this] { update(); });
-    auto* groups = new QCheckBox(tr("Consolidate all clips in a group edit"), consolidateBox_);
-    later(groups);
-    cv->addWidget(groups);
+    groupEdits_ = new QCheckBox(tr("Consolidate all clips in a group edit"), consolidateBox_);
+    groupEdits_->setObjectName(QStringLiteral("groupEdits"));
+    cv->addWidget(groupEdits_);
     layout->addWidget(consolidateBox_);
 
     // Transcode: the resolution and raster (p.354-355).
@@ -345,6 +345,7 @@ media::ConsolidateOptions ConsolidateDialog::options() const {
     o.skipOnTarget = !transcode_->isChecked() && skipOnTarget_->isChecked();
     o.relinkBeforeSkipping = o.skipOnTarget && relinkFirst_->isChecked();
     o.deleteOriginals = !transcode_->isChecked() && deleteOriginals_->isChecked();
+    o.groupEdits = !transcode_->isChecked() && groupEdits_->isChecked();
     o.convertToProjectRate = transcode_->isChecked() && convertProjectRate_->isChecked();
     o.applyFraming = transcode_->isChecked() && applyFraming_->isChecked();
     o.convertSampleRate = convertSampleRate_->isChecked();

@@ -1453,6 +1453,10 @@
         <source>%1 was relinked to its media on the target drive.</source>
         <translation type="unfinished">%1 a été relié à ses médias sur le lecteur cible.</translation>
     </message>
+    <message>
+        <source>%1: the media of a group of groups is not made new; consolidate its groups.</source>
+        <translation type="unfinished">%1 : les médias d&apos;un groupe de groupes ne sont pas recréés ; consolidez ses groupes.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -14634,6 +14638,18 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>Allow relink across rates</source>
         <translation type="unfinished">Autoriser la reliaison entre cadences</translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished">Vidéo</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished">Audio</translation>
+    </message>
+    <message>
+        <source>Data</source>
+        <translation type="unfinished">Données</translation>
     </message>
 </context>
 <context>

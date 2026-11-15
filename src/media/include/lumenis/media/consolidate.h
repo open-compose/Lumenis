@@ -41,6 +41,12 @@ struct ConsolidateOptions {
     // is gone) and the managed files they played are listed in ConsolidateResult::deleteFiles for the caller to delete
     // (deleteMediaFiles()). Linked files, the user's own, are never deleted (ours). Consolidate only.
     bool deleteOriginals = false;
+    // "Consolidate all clips in a group edit. Select to copy media for all clips in a group edit, for consolidating a
+    // group clip or a sequence that contains group clips" (p.351; 11.4a2): every angle of a group is made new, over the
+    // group frames a sequence uses (with handles) or whole for a group selected in the bin. Off, only the angles shown:
+    // the segments' angles and the Group menu's patched audio angles, or a selected group's selected angle (ours). Either
+    // way a new group, "<name>.new.nn", plays the new clips and the sequence's segments use it.
+    bool groupEdits = false;
     // The Copying Media Files dialog (p.352): master clips keep their media
     // and new ones (".new") take the copies; or they take the copies and
     // new ones (".old") keep the old media (p.349).

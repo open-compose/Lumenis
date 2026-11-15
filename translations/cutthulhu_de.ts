@@ -1453,6 +1453,10 @@
         <source>%1 was relinked to its media on the target drive.</source>
         <translation type="unfinished">%1 wurde mit seinen Medien auf dem Ziellaufwerk neu verknüpft.</translation>
     </message>
+    <message>
+        <source>%1: the media of a group of groups is not made new; consolidate its groups.</source>
+        <translation type="unfinished">%1: Die Medien einer Gruppe aus Gruppen werden nicht neu erstellt; konsolidieren Sie ihre Gruppen.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -14634,6 +14638,18 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
     <message>
         <source>Allow relink across rates</source>
         <translation type="unfinished">Neuverknüpfen über Bildraten hinweg erlauben</translation>
+    </message>
+    <message>
+        <source>Video</source>
+        <translation type="unfinished">Video</translation>
+    </message>
+    <message>
+        <source>Audio</source>
+        <translation type="unfinished">Audio</translation>
+    </message>
+    <message>
+        <source>Data</source>
+        <translation type="unfinished">Daten</translation>
     </message>
 </context>
 <context>
