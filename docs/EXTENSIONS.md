@@ -75,7 +75,7 @@ an official build.
 | HEVC / H.265 | — | VideoToolbox, Media Foundation (HEVC extension), VA-API | Licensed codec pack |
 | ProRes | Decode via FFmpeg † | VideoToolbox (Apple-licensed encode + decode on macOS) | Apple ProRes licence for Windows/Linux encode |
 | ProRes RAW, BRAW, R3D, ARRIRAW | — | Vendor runtime installed by the user (Blackmagic RAW, RED SDK, ARRI) where the vendor's terms allow dynamic loading | Vendor SDK modules |
-| DNxHD / DNxHR (SMPTE VC-3) | FFmpeg encode + decode † | — | — |
+| DNxHD / DNxHR (SMPTE VC-3) | FFmpeg encode + decode (allowed in releases: the owner's decision, 2026-11-15) | — | — |
 | XDCAM / IMX (MPEG-2), DV, MJPEG | FFmpeg (MPEG-2 patents have expired) | — | — |
 | AVC-Intra, XAVC | — † (H.264 profiles) | As H.264 | As H.264 |
 | JPEG 2000 | OpenJPEG (BSD) | — | Kakadu (commercial, faster) |
@@ -103,11 +103,19 @@ FFmpeg rules:
 * The build option `LUMENIS_PATENT_CODECS` decides whether the dagger codecs
   are used (`src/media`, `isPatentCodec`). It is on for development and test
   builds (the owner's decision, 2026-10-17) and off for official releases
-  until counsel signs off. When it is off, those streams are still probed,
-  but not decoded or encoded.
+  until counsel signs off. When it is off, FFmpeg's own implementations of
+  them are not used: the operating system's or a driver's codecs decode and
+  encode those streams where there are some (hardware decoders through
+  FFmpeg's hwaccels, VideoToolbox, AudioToolbox, Media Foundation), and the
+  rest are probed but not decoded or encoded (the owner's decision,
+  2026-11-15; docs/spec/release-codecs.md). `LUMENIS_PATENT_CODECS_OFF=1`
+  gives that policy at run time.
 * Official builds link FFmpeg dynamically.
 * FFmpeg is configured LGPL-only (`--disable-gpl --disable-nonfree`), with the
-  decoders and encoders marked † left out until counsel signs off.
+  encoders marked † left out until counsel signs off. The † decoders stay
+  compiled in, because FFmpeg's hardware decoding (VideoToolbox, D3D11VA,
+  VA-API) goes through them, and the policy refuses their software decoding
+  (docs/spec/release-codecs.md, "Watch").
 * A `system-ffmpeg` provider can load a libavcodec the user installed
   themselves, as Linux distributions and RPM Fusion ship it. That user's
   rights then cover the codecs it contains.

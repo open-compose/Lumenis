@@ -11,6 +11,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QHash>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QStringList>
@@ -19,6 +20,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
@@ -27,6 +29,8 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <cstdint>
+#include <mutex>
 #include <exception>
 #include <cmath>
 #include <cstring>
@@ -319,7 +323,7 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
             s.length = av_rescale_q(fmt->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, par->sample_rate});
         }
     }
-    s.decodable = avcodec_find_decoder(par->codec_id) != nullptr && codecAllowed(s.codec);
+    s.decodable = avcodec_find_decoder(par->codec_id) != nullptr && decodingAvailable(s.codec);
     return s;
 }
 
@@ -342,6 +346,27 @@ int firstStream(const AVFormatContext* fmt, AVMediaType type) {
     return -1;
 }
 
+// The operating systems' decoders (the policy section below).
+QList<AVHWDeviceType> osDeviceTypes();
+AVPixelFormat hardwareFormat(const AVCodec* codec, AVHWDeviceType type);
+const AVCodec* osAudioDecoder(const QString& codec);
+AVPixelFormat hardwareOnly(AVCodecContext* ctx, const AVPixelFormat* offered);
+
+// A frame decoded on a hardware device copied into memory in its place, so every reader goes on as with FFmpeg's
+// own decoders (NV12 or P010 from VideoToolbox, D3D11VA and VA-API, which swscale takes).
+bool takeFromDevice(AVFrame* frame) {
+    AVFrame* copy = av_frame_alloc();
+    if (!copy) return false;
+    if (av_hwframe_transfer_data(copy, frame, 0) < 0 || av_frame_copy_props(copy, frame) < 0) {
+        av_frame_free(&copy);
+        return false;
+    }
+    av_frame_unref(frame);
+    av_frame_move_ref(frame, copy);
+    av_frame_free(&copy);
+    return true;
+}
+
 // A decoder for one stream, with FFmpeg's own frame threading.
 AVCodecContext* openDecoder(const AVStream* st, QString* error) {
     const AVCodec* codec = avcodec_find_decoder(st->codecpar->codec_id);
@@ -351,12 +376,35 @@ AVCodecContext* openDecoder(const AVStream* st, QString* error) {
     }
     const AVCodecDescriptor* desc = avcodec_descriptor_get(st->codecpar->codec_id);
     const QString name = desc ? QString::fromUtf8(desc->name) : QString::fromUtf8(codec->name);
+    AVBufferRef* device = nullptr;
+    AVPixelFormat hardware = AV_PIX_FMT_NONE;
     if (!codecAllowed(name)) {
-        setError(error, QStringLiteral("%1 is not available in this build (docs/EXTENSIONS.md)").arg(name));
-        return nullptr;
+        // The release policy (docs/spec/release-codecs.md): the operating system decodes it, or nobody does.
+        if (const AVCodec* os = st->codecpar->codec_type == AVMEDIA_TYPE_AUDIO ? osAudioDecoder(name) : nullptr) {
+            codec = os;
+        } else if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            for (AVHWDeviceType type : osDeviceTypes()) {
+                const AVPixelFormat format = hardwareFormat(codec, type);
+                if (format == AV_PIX_FMT_NONE || av_hwdevice_ctx_create(&device, type, nullptr, nullptr, 0) < 0) continue;
+                hardware = format;
+                break;
+            }
+        }
+        if (codec->id == st->codecpar->codec_id && !isOsCodec(QString::fromUtf8(codec->name)) && !device) {
+            setError(error, QStringLiteral("%1 is decoded by the operating system in this build, and this computer has no "
+                                           "decoder for it (docs/spec/release-codecs.md)")
+                                .arg(name));
+            return nullptr;
+        }
     }
     AVCodecContext* ctx = avcodec_alloc_context3(codec);
     avcodec_parameters_to_context(ctx, st->codecpar);
+    if (device) {
+        // Frames come back on the device and are copied to memory as they are received (takeFromDevice()).
+        ctx->hw_device_ctx = device;
+        ctx->opaque = reinterpret_cast<void*>(static_cast<std::intptr_t>(hardware));
+        ctx->get_format = hardwareOnly;
+    }
     ctx->pkt_timebase = st->time_base;
     ctx->thread_count = 0; // automatic
     const int rc = avcodec_open2(ctx, codec, nullptr);
@@ -381,10 +429,11 @@ QString ffmpegVersion() {
 }
 
 bool isPatentCodec(const QString& codec) {
-    // docs/EXTENSIONS.md: entries marked with a dagger.
+    // docs/EXTENSIONS.md: entries marked with a dagger. DNxHD/DNxHR are allowed in releases (the owner's decision,
+    // 2026-11-15; SMPTE VC-3), so they are not here.
     static const QStringList names{
         QStringLiteral("h264"),   QStringLiteral("hevc"),     QStringLiteral("prores"),   QStringLiteral("prores_ks"),
-        QStringLiteral("prores_aw"), QStringLiteral("prores_raw"), QStringLiteral("dnxhd"), QStringLiteral("dnxhr"),
+        QStringLiteral("prores_aw"), QStringLiteral("prores_raw"), QStringLiteral("libx264"), QStringLiteral("libx265"),
         QStringLiteral("aac"),    QStringLiteral("ac3"),      QStringLiteral("eac3"),     QStringLiteral("mpeg4"),
         QStringLiteral("vc1"),
     };
@@ -393,7 +442,7 @@ bool isPatentCodec(const QString& codec) {
 
 bool patentCodecsAllowed() {
 #if LUMENIS_PATENT_CODECS
-    return true;
+    return qEnvironmentVariableIntValue("LUMENIS_PATENT_CODECS_OFF") == 0;
 #else
     return false;
 #endif
@@ -403,8 +452,106 @@ bool codecAllowed(const QString& codec) {
     return patentCodecsAllowed() || !isPatentCodec(codec);
 }
 
+bool isOsCodec(const QString& implementation) {
+    static const QStringList suffixes{QStringLiteral("_videotoolbox"), QStringLiteral("_at"),  QStringLiteral("_mf"),
+                                      QStringLiteral("_vaapi"),        QStringLiteral("_qsv"), QStringLiteral("_nvenc"),
+                                      QStringLiteral("_cuvid"),        QStringLiteral("_amf")};
+    const QString name = implementation.toLower();
+    return std::any_of(suffixes.begin(), suffixes.end(), [&](const QString& s) { return name.endsWith(s); });
+}
+
+namespace {
+
+// Whether this build may use the encoder: an OS one, or FFmpeg's own for an allowed codec.
+bool encoderAllowed(const AVCodec* codec) {
+    if (!codec) return false;
+    const QString name = QString::fromUtf8(codec->name);
+    return isOsCodec(name) || (codecAllowed(name) && codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id))));
+}
+
+// The hardware device types of the operating system's video decoders, in the order tried.
+QList<AVHWDeviceType> osDeviceTypes() {
+#if defined(Q_OS_MACOS)
+    return {AV_HWDEVICE_TYPE_VIDEOTOOLBOX};
+#elif defined(Q_OS_WIN)
+    return {AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2};
+#else
+    return {AV_HWDEVICE_TYPE_VAAPI};
+#endif
+}
+
+// The pixel format a decoder gives on a device type through a device context; NONE when it has no such method.
+AVPixelFormat hardwareFormat(const AVCodec* codec, AVHWDeviceType type) {
+    for (int i = 0;; ++i) {
+        const AVCodecHWConfig* config = avcodec_get_hw_config(codec, i);
+        if (!config) return AV_PIX_FMT_NONE;
+        if (config->device_type == type && (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX)) return config->pix_fmt;
+    }
+}
+
+// The OS's audio decoder for a codec FFmpeg's own may not decode (AudioToolbox's "aac_at" on macOS); null for none.
+const AVCodec* osAudioDecoder(const QString& codec) {
+#if defined(Q_OS_MACOS)
+    return avcodec_find_decoder_by_name((codec.toLower() + QStringLiteral("_at")).toUtf8().constData());
+#else
+    (void)codec;
+    return nullptr;
+#endif
+}
+
+// Whether a device of this type can be made here (a GPU and its driver): tried once, the answer kept.
+bool deviceAvailable(AVHWDeviceType type) {
+    static std::mutex lock;
+    static QHash<int, bool> known;
+    const std::lock_guard<std::mutex> hold(lock);
+    const auto it = known.constFind(static_cast<int>(type));
+    if (it != known.constEnd()) return *it;
+    AVBufferRef* device = nullptr;
+    const bool ok = av_hwdevice_ctx_create(&device, type, nullptr, nullptr, 0) >= 0;
+    av_buffer_unref(&device);
+    known.insert(static_cast<int>(type), ok);
+    return ok;
+}
+
+// get_format for a decoder that must stay on the OS's hardware: the hardware format, or none (no fall back to
+// FFmpeg's own decoding, which the policy does not allow). The wanted format is kept in the context's opaque.
+AVPixelFormat hardwareOnly(AVCodecContext* ctx, const AVPixelFormat* offered) {
+    const auto wanted = static_cast<AVPixelFormat>(reinterpret_cast<std::intptr_t>(ctx->opaque));
+    for (const AVPixelFormat* f = offered; *f != AV_PIX_FMT_NONE; ++f) {
+        if (*f == wanted) return *f;
+    }
+    return AV_PIX_FMT_NONE;
+}
+
+} // namespace
+
 bool encoderAvailable(const QString& name) {
-    return codecAllowed(name) && avcodec_find_encoder_by_name(name.toUtf8().constData()) != nullptr;
+    return encoderAllowed(avcodec_find_encoder_by_name(name.toUtf8().constData()));
+}
+
+QString osEncoderFor(const QString& codec) {
+#if defined(Q_OS_MACOS)
+    const QString name = codec.toLower() + (codec.compare(QLatin1String("aac"), Qt::CaseInsensitive) == 0 ? QStringLiteral("_at")
+                                                                                                         : QStringLiteral("_videotoolbox"));
+#elif defined(Q_OS_WIN)
+    const QString name = codec.toLower() + QStringLiteral("_mf");
+#else
+    (void)codec;
+    const QString name; // VA-API's encoders take frames on the device: not used (ours)
+#endif
+    return !name.isEmpty() && avcodec_find_encoder_by_name(name.toUtf8().constData()) ? name : QString();
+}
+
+bool decodingAvailable(const QString& codec) {
+    if (codecAllowed(codec)) return true;
+    const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(codec.toUtf8().constData());
+    const AVCodec* decoder = desc ? avcodec_find_decoder(desc->id) : nullptr;
+    if (!decoder) return false;
+    if (decoder->type == AVMEDIA_TYPE_AUDIO) return osAudioDecoder(codec) != nullptr;
+    for (AVHWDeviceType type : osDeviceTypes()) {
+        if (hardwareFormat(decoder, type) != AV_PIX_FMT_NONE && deviceAvailable(type)) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------- probe
@@ -646,6 +793,7 @@ struct VideoReader::Impl {
             // packet of our stream (others are dropped), or, at the end of the file, a null packet that drains
             // what it still holds until it returns AVERROR_EOF.
             const int rc = avcodec_receive_frame(dec, frame);
+            if (rc == 0 && frame->hw_frames_ctx && !takeFromDevice(frame)) return false;
             if (rc == 0) {
                 // The frame's number from its timestamp; without one, the one after the last.
                 const std::int64_t pts = frame->best_effort_timestamp != kNoPts ? frame->best_effort_timestamp : frame->pts;

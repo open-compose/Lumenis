@@ -1969,7 +1969,13 @@ owner's soak and screen-reader runs carry on as before.
   releases/latest over Qt Network, `MainWindow::checkForUpdates` at start-up behind the Interface setting's Check for
   Updates at Startup and from Help > Check for Updates; the AppImage's TLS plug-ins; `LUMENIS_NO_UPDATE_CHECK` in every
   ctest; test `tst_update_check`).
-* 12.2, the release pipeline without signing, 10.7 (the owner's answer: no certificates): a release workflow run by
+* 12.2a, the release builds' codecs (the owner's decision, 2026-11-15, when 12.2 found that with
+  `LUMENIS_PATENT_CODECS` off releases could make no managed media and decode no H.264): DNxHD/DNxHR allowed in
+  releases; H.264 and HEVC decoded by the operating systems' hardware decoders through FFmpeg's hwaccels and encoded
+  by their encoders, FFmpeg's own never (done: docs/spec/release-codecs.md; `media::isOsCodec`, `osEncoderFor`,
+  `decodingAvailable`, `movieEncoder`, the hardware path in `openDecoder` with `takeFromDevice`;
+  `LUMENIS_PATENT_CODECS_OFF` for the release policy at run time; test `tst_media releaseCodecPolicy`).
+* 12.2b, the release pipeline without signing, 10.7 (the owner's answer: no certificates): a release workflow run by
   hand that builds with Qt 6.8 LTS and `LUMENIS_PATENT_CODECS` off on the hosted runners, makes the .dmg (ad-hoc
   signed), .msi and .zip, AppImage, .deb and .tar.gz, writes SHA-256 checksums, and makes a draft GitHub Release with
   them and the symbols; INSTALL.md with each OS's steps for unsigned binaries and turning patent codecs on where the law

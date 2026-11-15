@@ -57,6 +57,10 @@ struct MovieCompression {
 // Every compression we offer, in the menu's order.
 const QList<MovieCompression>& movieCompressions();
 const MovieCompression* findMovieCompression(const QString& id);
+// The encoder a compression is written with here: its own (libx264, prores_ks, dnxhd) where the codec policy allows
+// it, else the operating system's for the same codec (VideoToolbox or Media Foundation's H.264 and HEVC,
+// VideoToolbox's ProRes; docs/spec/release-codecs.md); empty when there is none.
+QString movieEncoder(const MovieCompression& c);
 // Whether this build can write it: FFmpeg has the encoder, and it is not a codec awaiting legal review in a build
 // without them (codecAllowed, docs/EXTENSIONS.md).
 bool movieCompressionAvailable(const MovieCompression& compression);

@@ -115,9 +115,22 @@ const MovieCompression* findMovieCompression(const QString& id) {
     return nullptr;
 }
 
+QString movieEncoder(const MovieCompression& c) {
+    if (encoderAvailable(c.encoder)) return c.encoder;
+    // The codec behind the encoder ("libx264" is H.264), by FFmpeg's id, or by the family when FFmpeg lacks it.
+    const AVCodec* own = avcodec_find_encoder_by_name(c.encoder.toUtf8().constData());
+    QString codec = own ? QString::fromUtf8(avcodec_get_name(own->id)) : QString();
+    if (codec.isEmpty()) {
+        codec = c.family == QLatin1String("H.264") ? QStringLiteral("h264")
+                : c.family == QLatin1String("HEVC") ? QStringLiteral("hevc")
+                : c.family == QLatin1String("Apple ProRes") ? QStringLiteral("prores")
+                                                             : QString();
+    }
+    return codec.isEmpty() ? QString() : osEncoderFor(codec);
+}
+
 bool movieCompressionAvailable(const MovieCompression& c) {
-    const AVCodec* codec = avcodec_find_encoder_by_name(c.encoder.toUtf8().constData());
-    return codec && codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id)));
+    return !movieEncoder(c).isEmpty();
 }
 
 bool movieCompressionFits(const MovieCompression& c, MovieContainer container) {
@@ -201,7 +214,7 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
         if (size.isEmpty()) return fail(QObject::tr("The picture has no size."));
         // Chroma subsampled formats need even sizes (ours: rounded up).
         size = QSize(size.width() + size.width() % 2, size.height() + size.height() % 2);
-        w.videoCodec = c->encoder;
+        w.videoCodec = movieEncoder(*c);
         w.videoProfile = c->profile;
         w.pixelFormat = c->pixelFormat;
         w.width = size.width();
@@ -219,6 +232,9 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
         if (o.container == MovieContainer::Mp4 || (o.aac && !mxf)) {
             if (codecAllowed(QStringLiteral("aac"))) {
                 w.audioCodec = QStringLiteral("aac");
+            } else if (const QString os = osEncoderFor(QStringLiteral("aac")); !os.isEmpty()) {
+                // The operating system's AAC (AudioToolbox, Media Foundation; docs/spec/release-codecs.md).
+                w.audioCodec = os;
             } else if (avcodec_find_encoder_by_name("libopus")) {
                 // Without the codecs awaiting legal review an MP4 carries Opus (ours), which is 48 kHz only.
                 w.audioCodec = QStringLiteral("libopus");

@@ -5,6 +5,7 @@
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/movie_export.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/media/relink.h"
 #include "lumenis/model/color_adapter.h"
@@ -16,6 +17,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QPainter>
 #include <QSet>
@@ -95,8 +97,9 @@ private slots:
 
     void codecPolicy() {
         // docs/EXTENSIONS.md: the dagger codecs wait for counsel in official
-        // builds; development builds allow them.
-        QVERIFY(isPatentCodec(QStringLiteral("dnxhd")));
+        // builds; development builds allow them. DNxHD/DNxHR are allowed in
+        // releases (the owner's decision, 2026-11-15).
+        QVERIFY(!isPatentCodec(QStringLiteral("dnxhd")));
         QVERIFY(isPatentCodec(QStringLiteral("H264")));
         QVERIFY(!isPatentCodec(QStringLiteral("mpeg2video")));
         QVERIFY(codecAllowed(QStringLiteral("ffv1")));
@@ -660,6 +663,87 @@ private slots:
         QVERIFY(!transcodeClip(*clip, 0, -1, c, &error));
         QVERIFY(error.contains(QStringLiteral("XDCAM HD 50Mbits")));
         setProjectFormat({}, Rational(), false);
+    }
+
+    // The release builds' codec policy (Phase 12.2a; docs/spec/release-codecs.md), through LUMENIS_PATENT_CODECS_OFF:
+    // DNx managed media as before, FFmpeg's own H.264 refused, H.264 decoded by the operating system where it has a
+    // decoder (VideoToolbox on the Mac runner) and refused with the reason where not, movie export through the OS's
+    // H.264 encoder where there is one.
+    void releaseCodecPolicy() {
+        QTemporaryDir dir;
+        // An H.264 movie made while FFmpeg's own encoder may still be used (where this FFmpeg has it).
+        const QString h264 = dir.filePath(QStringLiteral("h264.mov"));
+        bool haveH264 = false;
+        if (encoderAvailable(QStringLiteral("libx264"))) {
+            WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("libx264");
+            s.pixelFormat = QStringLiteral("yuv420p");
+            s.width = 64;
+            s.height = 36;
+            s.frameRate = Rational(25);
+            haveH264 = writeVideo(h264, s, 10);
+        }
+        qputenv("LUMENIS_PATENT_CODECS_OFF", "1");
+        const auto restore = qScopeGuard([] { qunsetenv("LUMENIS_PATENT_CODECS_OFF"); });
+        QVERIFY(!patentCodecsAllowed());
+        QVERIFY(codecAllowed(QStringLiteral("dnxhd"))); // the owner's decision, 2026-11-15
+        QVERIFY(!codecAllowed(QStringLiteral("h264")));
+        QVERIFY(!codecAllowed(QStringLiteral("aac")));
+        QVERIFY(!encoderAvailable(QStringLiteral("libx264")));
+        QVERIFY(!encoderAvailable(QStringLiteral("prores_ks")));
+        QVERIFY(encoderAvailable(QStringLiteral("dnxhd")));
+        QVERIFY(isOsCodec(QStringLiteral("h264_videotoolbox")) && isOsCodec(QStringLiteral("aac_at")) && isOsCodec(QStringLiteral("hevc_mf")));
+        QVERIFY(!isOsCodec(QStringLiteral("libx264")));
+        // No AVC-Intra (x264) in a release.
+        QVERIFY(!findResolution(QStringLiteral("avc_intra100")));
+
+        // DNx managed media is made and read as before.
+        const QString source = dir.filePath(QStringLiteral("Market.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 5));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(1920, 1080);
+        c.resolution = defaultResolution();
+        c.videoDrive = dir.path();
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        FrameCache cache;
+        QVERIFY(near(cache.frame(*made, 2), colourOf(2), 16));
+
+        // H.264: the operating system's decoder or none, never FFmpeg's own.
+        if (haveH264) {
+            const auto info = probe(h264);
+            QVERIFY(info && info->firstVideo());
+            QCOMPARE(info->firstVideo()->decodable, decodingAvailable(QStringLiteral("h264")));
+            VideoReader reader;
+            QString why;
+            if (reader.open(h264, -1, &why)) {
+                const QImage frame = reader.frame(3);
+                QVERIFY(!frame.isNull());
+                QVERIFY(near(frame, colourOf(3), 24)); // decoded by the OS
+            } else {
+                QVERIFY2(why.contains(QStringLiteral("operating system")), qPrintable(why));
+            }
+        }
+        // Movie export's H.264 is the OS's encoder where there is one, or not offered.
+        const MovieCompression* avc = findMovieCompression(QStringLiteral("h264"));
+        QVERIFY(avc);
+        const QString encoder = movieEncoder(*avc);
+        QVERIFY2(encoder.isEmpty() || isOsCodec(encoder), qPrintable(encoder));
+        QCOMPARE(movieCompressionAvailable(*avc), !encoder.isEmpty());
+        QCOMPARE(encoder, osEncoderFor(QStringLiteral("h264")));
     }
 
     // The DNxHD bit-rate resolutions (p.1121; 11.1d): named by their rate at the project's frame rate, offered in the

@@ -27,17 +27,31 @@ namespace lumenis::media {
 QString ffmpegVersion();
 
 // Codecs that wait for counsel's review (docs/EXTENSIONS.md, marked with a
-// dagger). With LUMENIS_PATENT_CODECS off they are probed but not decoded
-// or encoded.
+// dagger). With LUMENIS_PATENT_CODECS off (official releases) FFmpeg's own
+// implementations of them are not used: their streams are decoded and encoded
+// by the operating system's or a driver's codecs where there are some (the
+// owner's decision, 2026-11-15; docs/spec/release-codecs.md), and only probed
+// otherwise. DNxHD/DNxHR are not among them (same decision).
 // Whether FFmpeg's codec name (any case) is one of those.
 bool isPatentCodec(const QString& codec);
-// Whether this build was made with LUMENIS_PATENT_CODECS on.
+// Whether FFmpeg's own implementations of them may be used: the build's LUMENIS_PATENT_CODECS, unless
+// LUMENIS_PATENT_CODECS_OFF=1 gives the release policy at run time (tests, and anyone checking a release's behaviour).
 bool patentCodecsAllowed();
-// Whether a codec may be decoded or encoded in this build.
+// Whether a codec may be decoded or encoded by FFmpeg's own implementation in this build.
 bool codecAllowed(const QString& codec);
-// Whether FFmpeg has the encoder `name` ("prores_videotoolbox", "prores_ks") and this build may use it
-// (codecAllowed; an operating system's encoder, such as VideoToolbox's, is licensed with the system).
+// Whether an FFmpeg codec implementation is the operating system's or a driver's (VideoToolbox, AudioToolbox, Media
+// Foundation, VA-API, Quick Sync, NVENC/NVDEC, AMF: "h264_videotoolbox", "aac_at", "h264_mf"), which the system or the
+// driver licenses (docs/EXTENSIONS.md, licensed technology).
+bool isOsCodec(const QString& implementation);
+// Whether FFmpeg has the encoder `name` ("prores_videotoolbox", "prores_ks") and this build may use it: an OS
+// encoder, or FFmpeg's own for a codec codecAllowed() takes (libx264 is H.264).
 bool encoderAvailable(const QString& name);
+// The operating system's encoder for a codec ("h264", "hevc", "aac") that this FFmpeg has: VideoToolbox and
+// AudioToolbox on macOS, Media Foundation on Windows; empty for none.
+QString osEncoderFor(const QString& codec);
+// Whether a stream of this codec can be decoded here: by FFmpeg's own decoder where codecAllowed(), else through the
+// operating system (a hardware decoder: VideoToolbox, D3D11VA/DXVA2, VA-API; AudioToolbox's audio decoders).
+bool decodingAvailable(const QString& codec);
 
 // What a stream carries, as FFmpeg's media type says.
 enum class StreamKind { Video, Audio, Data, Other };

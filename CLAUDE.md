@@ -1173,7 +1173,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
   (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from
   `main_window_updates.cpp`, Help > Check for Updates, the Interface setting's Check for Updates at Startup, the
-  AppImage's TLS plug-ins; `LUMENIS_NO_UPDATE_CHECK=1` in every ctest; test `tst_update_check`), is done.
+  AppImage's TLS plug-ins; `LUMENIS_NO_UPDATE_CHECK=1` in every ctest; test `tst_update_check`), is done. 12.2a, the
+  release builds' codecs (docs/spec/release-codecs.md, the owner's decision 2026-11-15: DNxHD/DNxHR allowed, H.264 and
+  HEVC only through the operating systems' decoders and encoders, `media::isOsCodec`/`osEncoderFor`/`decodingAvailable`/
+  `movieEncoder`, the hwaccel path in `openDecoder`; `LUMENIS_PATENT_CODECS_OFF=1` gives the release policy at run
+  time; test `tst_media releaseCodecPolicy`), is done. Use `encoderAvailable`/`movieEncoder` for any new encoder.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
