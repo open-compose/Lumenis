@@ -2560,7 +2560,7 @@ p.610–640, ch. 13 p.432–434).**
 ### Audio Project setting (p.1148–1150)
 * **Main tab:** Sample Rate, Bit Depth (24 Bit by default), Convert Sample
   Rates When Playing, Show Mismatched Sample Rates as Different Color, and
-  Remove Extra Filler After Punchin (dimmed until Extended Audio Punch-In).
+  Remove Extra Filler After Punchin (11.4d1, docs/spec/punch-in.md).
   Details: docs/spec/audio-settings.md.
 * **Output tab:** Mix Mode Selection (Stereo or Mono). It is the same as the
   mixer's menu.

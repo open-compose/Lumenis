@@ -1895,7 +1895,11 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   names as numbers and Starting TC through `interop::edl::ExportOptions`; docs/spec/edl.md "List Options and
   Formatting"; test `tst_edl listOptions`); 11.4c2, the Import setting's Shot Log tab (done: `model::shotLogEvents` in
   `src/model/shot_log.*` from `MainWindow::importShotLogs`; docs/spec/ale.md "Combining and merging events"; tests
-  `tst_ale shotLogEvents`, `tst_interchange shotLogs`), so 11.4c is.
+  `tst_ale shotLogEvents`, `tst_interchange shotLogs`), so 11.4c is. 11.4d is in two parts: 11.4d1, Extended Audio
+  Punch-In past the end of the sequence and Remove Extra Filler After Punchin (done: `MonitorState::setExtension`,
+  `Timeline::punchIn`'s `extendTo`, `AudioPunchInTool::setRemoveExtraFiller`; docs/spec/punch-in.md; test
+  `tst_audio_punch_in pastTheEnd`, scenario `52-extended-punch-in.json`); 11.4d2, surround pan automation (the Pan L/R
+  > speaker layout displays of p.679-680, keyframes per channel, Auto mode on the Pan grids).
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

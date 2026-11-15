@@ -1,0 +1,18 @@
+[
+  {
+    "name": "an Extended Audio Punch-In past the end of the sequence keeps its target track filled to where recording stopped, one undo step with the punch-in",
+    "guide": "p.751-752, p.1149",
+    "clips": [{"name": "A"}, {"name": "VO", "tracks": "A1", "frames": 200}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"punch_in": {"clip": "VO", "targets": ["A2"], "punches": [[40, 30, 20]], "extend_to": 90}},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50]],
+      "A1": [["A", 0, 50]],
+      "A2": [["A", 0, 40], ["VO", 20, 30, "A1"]]},
+    "expect_duration": 90
+  }
+]

@@ -1135,7 +1135,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Formatting (docs/spec/edl.md "List Options and Formatting": `interop::edl::ExportOptions`' sort modes, Source TC, Reel
   ID Type, truncations, tape numbers, Starting TC and comment lines; test `tst_edl listOptions`), is done. 11.4c2, the
   Import setting's Shot Log tab (docs/spec/ale.md "Combining and merging events": `model::shotLogEvents` in
-  `src/model/shot_log.*`; tests `tst_ale shotLogEvents`, `tst_interchange shotLogs`), is done, so 11.4c is. 10.6 is an update check that only tells the user (no
+  `src/model/shot_log.*`; tests `tst_ale shotLogEvents`, `tst_interchange shotLogs`), is done, so 11.4c is. 11.4d1,
+  Extended Audio Punch-In past the end and Remove Extra Filler After Punchin (docs/spec/punch-in.md:
+  `MonitorState::setExtension`, `Timeline::punchIn`'s `extendTo`; test `tst_audio_punch_in pastTheEnd`, scenario
+  `52-extended-punch-in.json`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

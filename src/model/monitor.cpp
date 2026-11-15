@@ -140,12 +140,17 @@ void MonitorState::setPosition(std::int64_t frame) {
     if (LoadedClip* c = currentMutable()) c->position = std::clamp<std::int64_t>(frame, 0, lastPosition());
 }
 
+void MonitorState::setExtension(std::int64_t frames) {
+    extension_ = std::max<std::int64_t>(frames, 0);
+    setPosition(position());
+}
+
 std::int64_t MonitorState::lastPosition() const {
     const LoadedClip* c = current();
     if (!c) return 0;
     // A sequence's position can sit just past its last frame, where the next
     // edit goes (p.464).
-    if (c->item.kind == BinItemKind::Sequence) return duration();
+    if (c->item.kind == BinItemKind::Sequence) return duration() + extension_;
     return std::max<std::int64_t>(duration() - 1, 0);
 }
 

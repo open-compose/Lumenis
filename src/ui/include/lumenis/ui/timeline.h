@@ -1150,7 +1150,11 @@ public:
     // track k goes to targets[k]: a mono audio track that is not locked, or empty for a new audio
     // track, made with the first punch-in. Each punch-in overwrites its frames with the clip from
     // its source frame, as an undo step of its own ("the first undo removes the most recent
-    // punch-in", p.751). Returns the tracks used, or nothing with a message, before any change.
+    // punch-in", p.751). With `extendTo` past a target track's end, the last punch-in's undo step also fills that track
+    // with filler to `extendTo`: where an Extended Audio Punch-In's recording stopped (p.751-752), the "extra filler
+    // added during an audio punch-in recording" that the Audio Project setting's Remove Extra Filler After Punchin
+    // leaves out (p.1149; ours: the target tracks only). Returns the tracks used, or nothing with a message, before any
+    // change.
     struct PunchIn {
         std::int64_t at = 0;     // record frame
         std::int64_t length = 0; // frames
@@ -1158,7 +1162,7 @@ public:
         bool operator==(const PunchIn&) const = default;
     };
     std::optional<QStringList> punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,
-                                       const QList<PunchIn>& punches);
+                                       const QList<PunchIn>& punches, std::int64_t extendTo = 0);
     // ---- Audio Track Effects (p.790-795; docs/spec/track-effects.md)
     // The insert in slot `slot` (0-4: a-e) of an audio track of the record sequence.
     std::optional<model::TrackInsert> trackInsert(const QString& track, int slot) const;

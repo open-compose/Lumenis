@@ -84,8 +84,12 @@ public:
     // Position, 0 to lastPosition().
     std::int64_t duration() const;
     std::int64_t position() const;
-    // duration - 1 for clips; for sequences the end, after the last frame.
+    // duration - 1 for clips; for sequences the end, after the last frame, plus extension().
     std::int64_t lastPosition() const;
+    // Frames past a sequence's end its position may reach (black and silence there): Extended Audio Punch-In records
+    // past the end of the sequence (p.751-752; AudioPunchInTool). 0, the default, keeps positions inside.
+    void setExtension(std::int64_t frames);
+    std::int64_t extension() const { return extension_; }
     // Clamped to 0..lastPosition().
     void setPosition(std::int64_t frame);
     void step(std::int64_t frames);
@@ -135,6 +139,7 @@ private:
     QList<LoadedClip> loaded_; // in load order
     // Index into loaded_.
     int current_ = -1;         // -1: nothing shown
+    std::int64_t extension_ = 0;
 };
 
 } // namespace lumenis::model

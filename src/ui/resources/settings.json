@@ -16,7 +16,7 @@
             {"key": "convertSampleRates", "type": "choice", "style": "menu", "label": "Convert Sample Rates When Playing", "default": "always", "page": 1148,
              "choices": [{"value": "never", "label": "Never"}, {"value": "always", "label": "Always"}]},
             {"key": "showMismatchedRates", "type": "bool", "label": "Show Mismatched Sample Rates as Different Color", "default": false, "page": 1149},
-            {"key": "removeExtraFiller", "type": "bool", "label": "Remove Extra Filler After Punchin", "default": false, "page": 1149, "later": true}
+            {"key": "removeExtraFiller", "type": "bool", "label": "Remove Extra Filler After Punchin", "default": false, "page": 1149}
           ]
         },
         {

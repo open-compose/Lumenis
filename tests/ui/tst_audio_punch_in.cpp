@@ -408,6 +408,38 @@ private slots:
         QVERIFY(rig.tool.punches().first().length >= 15);
     }
 
+    // Extended Audio Punch-In past the end of the sequence (p.751-752): play and recording go on over the end; a punch-out
+    // past it edits the take in there. The Audio Project setting's Remove Extra Filler After Punchin (p.1149): off, the
+    // target track is filled to where play stopped; on, it ends with the punch-in.
+    void pastTheEnd() {
+        for (const bool remove : {false, true}) {
+            Rig rig(20);
+            rig.tool.setRemoveExtraFiller(remove);
+            rig.composer.moveTo(MonitorId::Record, 10);
+            rig.tool.stopAtEndBox()->setChecked(false);
+            rig.tool.record();
+            QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Recording);
+            QTRY_VERIFY_WITH_TIMEOUT(rig.position() >= 25, 4000);
+            QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Recording);
+            rig.tool.record(); // punch out, past the end
+            QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Playing);
+            QTRY_VERIFY_WITH_TIMEOUT(rig.position() >= 32, 4000);
+            const std::int64_t stopped = rig.position();
+            rig.tool.stopTake();
+            QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Idle);
+            QCOMPARE(rig.tool.punches().size(), 1);
+            const Timeline::PunchIn p = rig.tool.punches().first();
+            QCOMPARE(p.at, 10);
+            QVERIFY(p.at + p.length >= 25);
+            QVERIFY(p.at + p.length < stopped);
+            // The monitor's extension ends with the take.
+            QCOMPARE(rig.composer.state(MonitorId::Record).extension(), 0);
+            const std::int64_t length = rig.seq().duration();
+            if (remove) QCOMPARE(length, p.at + p.length);
+            else QVERIFY2(length >= stopped, qPrintable(QStringLiteral("%1 < %2").arg(length).arg(stopped)));
+        }
+    }
+
     // Play that runs to the end of the sequence ends the recording there and keeps the take.
     void toTheEnd() {
         Rig rig(20);

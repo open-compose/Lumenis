@@ -337,6 +337,10 @@ bool AudioPunchInTool::begin(std::int64_t from, bool loop) {
     startedAt_ = s.position();
     loopStart_ = from;
     loopEnd_ = s.out() ? *s.out() : lastFrame();
+    // Extended Audio Punch-In (p.751-752): "audio recording will continue, ignoring both the mark out point and the end
+    // of the sequence ... until playback is stopped": play may go an hour past the end (ours), over black and silence.
+    extended_ = !stopAtEnd_->isChecked();
+    if (extended_) composer.state(MonitorId::Record).setExtension(3600 * fps());
     setState(State::Playing);
     composer.setActiveMonitor(MonitorId::Record);
     composer.moveTo(MonitorId::Record, std::max<std::int64_t>(from - preroll_->value() * fps(), 0));
@@ -412,6 +416,7 @@ void AudioPunchInTool::goToIn() {
 // punch-ins are edited in. A punch-in still open ends at the position.
 void AudioPunchInTool::finish(bool keep) {
     if (state_ == State::Recording) punchOutAt(position());
+    const std::int64_t stoppedAt = position();
     finishing_ = true;
     timeline_.composer().stop();
     finishing_ = false;
@@ -429,6 +434,11 @@ void AudioPunchInTool::finish(bool keep) {
         }
     }
     input_->stop();
+    const bool extended = extended_;
+    if (extended_) {
+        extended_ = false;
+        timeline_.composer().state(MonitorId::Record).setExtension(0);
+    }
     const QList<Timeline::PunchIn> punches = punches_;
     const QStringList targets = takeTargets_;
     setState(State::Idle);
@@ -456,7 +466,8 @@ void AudioPunchInTool::finish(bool keep) {
         p.length = std::min(p.length, length - p.source);
         if (p.length > 0) fitted << p;
     }
-    if (!timeline_.punchIn(take.binId, *clip, targets, fitted)) fail(timeline_.lastMessage());
+    const std::int64_t extendTo = extended && !removeExtraFiller_ ? stoppedAt : 0;
+    if (!timeline_.punchIn(take.binId, *clip, targets, fitted, extendTo)) fail(timeline_.lastMessage());
     refresh();
 }
 
@@ -496,7 +507,7 @@ void AudioPunchInTool::playStopped() {
         return;
     }
     // Recording ends where play stopped: past the last frame when it ran to the end.
-    if (state_ == State::Recording) punchOutAt(position() >= lastFrame() ? lastFrame() + 1 : position());
+    if (state_ == State::Recording) punchOutAt(!extended_ && position() >= lastFrame() ? lastFrame() + 1 : position());
     finish(true);
 }
 

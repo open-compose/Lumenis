@@ -7169,7 +7169,7 @@ std::optional<int> Timeline::renderAudioSuite(const QStringList& tracks, std::in
 }
 
 std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,
-                                             const QList<PunchIn>& punches) {
+                                             const QList<PunchIn>& punches, std::int64_t extendTo) {
     message_.clear();
     if (!recordSequence()) return std::nullopt;
     if (targets.isEmpty() || punches.isEmpty()) {
@@ -7201,7 +7201,12 @@ std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::
     }
     QStringList used = targets;
     bool first = true;
-    for (const PunchIn& p : punches) {
+    qsizetype last = -1;
+    for (qsizetype i = 0; i < punches.size(); ++i) {
+        if (punches[i].length > 0) last = i;
+    }
+    for (qsizetype i = 0; i < punches.size(); ++i) {
+        const PunchIn& p = punches[i];
         if (p.length <= 0) continue;
         const bool ok = changeRecordSequence(tr("Audio Punch-In"), [&](model::Sequence& s) {
             for (qsizetype k = 0; k < used.size(); ++k) {
@@ -7220,6 +7225,10 @@ std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::
                 seg.sourceIn = p.source;
                 seg.length = p.length;
                 s.overwrite(used[k], p.at, {seg});
+                if (i == last && extendTo > 0) {
+                    model::Track* t = s.track(used[k]);
+                    if (t && t->length() < extendTo) t->segments << model::Segment::filler(extendTo - t->length());
+                }
             }
             return true;
         });

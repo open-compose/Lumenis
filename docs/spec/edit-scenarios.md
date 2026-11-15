@@ -75,8 +75,10 @@ Each file is a JSON list of scenarios:
     (p.671), and its `"gain"` and `"pan"` its Apply Gain and Center Pan
     (p.216, p.714);
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
-    "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
-    Punch-In take (p.749-751), an undo step per punch-in;
+    "punches": [[record frame, length, clip frame], ...], "extend_to": record
+    frame}}` edits in an Audio Punch-In take (p.749-751), an undo step per
+    punch-in; `extend_to` is where an Extended Audio Punch-In stopped
+    (p.751-752);
   * `{"correction": {path: value, ...}}` enters Color Correction mode and sets
     those controls (lumenis/model/color_correction.h) on the segment at the
     Record position, one undo step; `{"correction": {}}` is the mode's Remove
@@ -144,7 +146,8 @@ Each file is a JSON list of scenarios:
   name": [[frames with data points], reference frame]}}` (frames from the
   segment's first; FX Guide p.281-282), and one with a Motion Adapter
   `{"adapter": clip rate}`.
-  **expect_monitors:** a monitor's position, clip, and marks (`null`: no
+  **expect_duration:** the sequence's length in frames, trailing filler
+  included (11.4d1). **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark). **expect_formats** gives tracks' audio formats ("mono", "stereo",
   "5.1", "7.1") and **expect_channels** the channels a track's segments
   come from.

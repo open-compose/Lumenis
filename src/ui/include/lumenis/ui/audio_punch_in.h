@@ -64,6 +64,10 @@ public:
 
     void setClipMaker(ClipMaker maker) { clipMaker_ = std::move(maker); }
     void setInputStarter(InputStarter starter) { inputStarter_ = std::move(starter); }
+    // The Audio Project setting's Remove Extra Filler After Punchin (p.1149): off, a take recorded past the end of the
+    // sequence leaves its target tracks filled to where recording stopped; on, they end with the last punch-in.
+    void setRemoveExtraFiller(bool on) { removeExtraFiller_ = on; }
+    bool removeExtraFiller() const { return removeExtraFiller_; }
     // The Target Drive and Target Bin menus (p.749): the drives as (name, root) and the bins that can
     // be changed as (id, name), with the root and bin id to choose.
     void setTargets(const QList<QPair<QString, QString>>& drives, const QString& drive,
@@ -180,6 +184,8 @@ private:
     State state_ = State::Idle;
     bool loop_ = false;
     bool completed_ = false;  // a recording ended at the OUT: no more looping (p.748)
+    bool removeExtraFiller_ = false;
+    bool extended_ = false;   // the take records past the end (Stop at End off): the Record monitor's extension is set
     bool finishing_ = false;  // finish() is stopping play; its playStopped is ours
     std::int64_t loopStart_ = 0;
     std::int64_t loopEnd_ = 0; // the last frame of the range

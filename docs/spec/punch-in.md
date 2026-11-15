@@ -69,9 +69,15 @@ sequence while it plays (Editing Guide p.746-753).
 * **Stop at end or at mark out**, on by default: a recording ends after the
   OUT (or the last frame). The take goes on through the postroll or the
   handles, whichever is longer (p.749), and then ends.
-* **Unchecked:** recording goes on past the OUT (Extended Audio Punch-In,
-  p.751-752). It cannot go past the end of the sequence yet, since play
-  stops there.
+* **Unchecked:** recording goes on past the OUT and the end of the sequence
+  (Extended Audio Punch-In, p.751-752: "ignoring both the mark out point and
+  the end of the sequence ... until playback is stopped"). While the take
+  runs the Record monitor may play up to an hour past the end, over black and
+  silence (`MonitorState::setExtension`; ours: the hour). Punch-ins there are
+  edited in past the end. Where play stopped, the target tracks are filled
+  with filler, in the last punch-in's undo step, unless the Audio Project
+  setting's Remove Extra Filler After Punchin is on (p.1149;
+  `Timeline::punchIn`'s `extendTo`; ours: the target tracks only).
 * **Stop** (p.748) ends the take and keeps it, and any open punch-in ends
   at the position. **Cancel** throws the take away. Play that runs to the
   end of the sequence ends the take as Stop does.
@@ -112,18 +118,17 @@ entitlement. BUILDING.md, "Audio Punch-In records silence", has the steps.
   * the tool's controls and menus;
   * the scenarios played with the Composer: IN to OUT, several punch-ins
     with B, preroll and Cancel, loop play with the postroll, extended
-    recording, and play to the end;
+    recording, recording past the end with and without Remove Extra Filler
+    (`pastTheEnd`), and play to the end;
   * Tools > Audio Punch-In and the "Voice Over.n" clips written as managed
     media.
-* Edit scenarios: `tests/scenarios/09-audio-punch-in.json` uses the
-  `punch_in` step. The harness records the undo levels between that a
+* Edit scenarios: `tests/scenarios/09-audio-punch-in.json` and
+  `52-extended-punch-in.json` use the `punch_in` step. The harness records the undo levels between that a
   step with several undo steps makes.
 
 ## Later
 
 * Capture tool voice-over (p.746-747) comes with tape capture.
-* Recording past the end of the sequence (Extended Audio Punch-In), with the
-  Audio Project setting's Remove Extra Filler After Punchin (p.1149).
 * The Audio tool's meters showing the input with an orange I (p.751).
 * Peak Hold while recording (p.753).
 * GPI devices (p.776).

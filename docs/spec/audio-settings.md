@@ -57,9 +57,12 @@ shown dimmed.
   at the project's rate are drawn black, those of other rates white (p.680;
   docs/spec/waveforms.md). (5.7c3 first coloured the whole segment; p.680
   shows the plot, so U1a changed it.)
-* **Remove Extra Filler After Punchin** stays dimmed. The extra filler comes
-  from Extended Audio Punch-In past the end of the sequence, which is not
-  done yet (docs/spec/punch-in.md).
+* **Remove Extra Filler After Punchin** (11.4d1): "removes or keeps extra
+  filler added during an audio punch-in recording" (p.1149). Off, the
+  default, a take recorded past the end of the sequence leaves its target
+  tracks filled to where play stopped; on, they end with the last punch-in
+  (docs/spec/punch-in.md; ours: only the target tracks, the guide does not
+  say which).
 
 ## Import settings: Audio tab (p.1198-1199)
 

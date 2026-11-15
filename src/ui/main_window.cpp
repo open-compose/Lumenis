@@ -9216,6 +9216,7 @@ void MainWindow::applySettings() {
     composer_->setSourceRecordColors(s.flag(ui, QStringLiteral("composerColors")));
     timeline_->setSourceRecordColors(s.flag(ui, QStringLiteral("timelineColors")));
     timeline_->setMismatchedRates(s.flag(QStringLiteral("Audio Project"), QStringLiteral("showMismatchedRates")), projectSampleRate());
+    if (audioPunchIn_) audioPunchIn_->setRemoveExtraFiller(s.flag(QStringLiteral("Audio Project"), QStringLiteral("removeExtraFiller")));
     // The Timeline's Clip Color choices (p.594-597), kept with the Timeline setting.
     {
         // From the setting: not written back to it.

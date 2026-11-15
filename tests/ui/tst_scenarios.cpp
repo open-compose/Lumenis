@@ -729,7 +729,8 @@ struct Run {
         }
         if (o.contains(QStringLiteral("punch_in"))) {
             // A recorded take edited in by Audio Punch-In (p.749-751): {"clip": name, "targets": [track or
-            // "" for New Track, ...], "punches": [[record frame, length, clip frame], ...]}.
+            // "" for New Track, ...], "punches": [[record frame, length, clip frame], ...], "extend_to": record frame}, the
+            // last where an Extended Audio Punch-In stopped (p.751-752, p.1149).
             const QJsonObject p = o.value(QStringLiteral("punch_in")).toObject();
             const QString name = p.value(QStringLiteral("clip")).toString();
             if (!clips.contains(name)) return fail(QStringLiteral("no clip %1").arg(name));
@@ -740,7 +741,8 @@ struct Run {
                 const QJsonArray a = v.toArray();
                 punches << Timeline::PunchIn{a.at(0).toInteger(), a.at(1).toInteger(), a.at(2).toInteger()};
             }
-            const bool ok = timeline.punchIn(QStringLiteral("bin"), clips.value(name), targets, punches).has_value();
+            const bool ok = timeline.punchIn(QStringLiteral("bin"), clips.value(name), targets, punches,
+                                             p.value(QStringLiteral("extend_to")).toInteger()).has_value();
             if (ok == o.value(QStringLiteral("refused")).toBool()) {
                 return fail(ok ? QStringLiteral("the punch-in was not refused") : timeline.lastMessage());
             }
@@ -1048,6 +1050,11 @@ private slots:
                 QCOMPARE(m.out().has_value(), !out.isNull());
                 if (m.out()) QCOMPARE(*m.out(), out.toInteger());
             }
+        }
+        // The sequence's length, trailing filler included.
+        if (scenario.contains(QStringLiteral("expect_duration"))) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            QCOMPARE(s.duration(), scenario.value(QStringLiteral("expect_duration")).toInteger());
         }
         // Track formats ("mono", "stereo", "5.1", "7.1") and the channels the material comes from.
         const QJsonObject formats = scenario.value(QStringLiteral("expect_formats")).toObject();
