@@ -79,16 +79,47 @@ Tools > IMF Window (p.335):
   each asset's SHA-1 in base64, size and original file name, and ASSETMAP.xml. The track files' ids are ours, not
   read from the MXF files' packages.
 
+## Supplementals (11.5c3)
+
+* **New IMF > IMF Supplemental** (p.334) with a package on disk selected makes a draft supplementing it; so does a
+  sequence dragged onto a package on disk ("To add to an existing package ... drag the sequence to the root folder",
+  p.336), into that package's Supplemental draft. Ours: the Supplemental is a package of its own, beside its
+  Original, named "<Original>_SUPP" with the Original's Issuer and Creator to start with (`ImfWindow::newSupplemental`,
+  `supplementOf`); its root's pane names the Original.
+* **What it writes** (ours, `MainWindow::imfPictureRuns`): V1's segments that still play one of the Original's track
+  files as it is (a clip with its "IMF Track File" in the Original's asset map, no effect or transition, nothing on
+  another video track over it) are resources naming that track file at the clip's entry point, not listed in the
+  Supplemental's packing list or asset map; the spans between are new picture track files. The sound is always new.
+  Read back, it is a Supplemental (`Package::isSupplemental`), and the window adds its Original's track files.
+
+## MultiChannel Audio Mapping and MCA metadata (11.5c3)
+
+* **Rows** (p.338-339): each CPL has IMF audio tracks, at first one of All Active Tracks as Stereo. The left-hand menu
+  lists All Active Tracks, the sequence's audio tracks "as well as their format" ("A1 (Mono)") and the groups; the
+  right-hand menu the IMF track format (Mono, Stereo, 5.1, 7.1, ours); the plus and minus buttons add and remove rows.
+* **Audio Tracks Grouping** (p.338): a window to name a group of any of the sequence's tracks, with Include Master
+  Fader; groups belong to that CPL only ("these settings do not persist beyond the selected sequence"). A group without
+  the Master Fader is mixed without the Audio Mixer's master gain (`MainWindow::withoutMasterFader_`).
+* **The Multi-Channel Audio Metadata window** (p.340), from the edit button left of the plus: MCA Content Kind, MCA
+  Language (by each language's own name) and its regions ("Selecting an MCA Language will also populate the respective
+  regions"); the button's tooltip shows the values. Ours: Content Kind is the group of soundfield groups' label of ST
+  2067-8 (Main Program ggMPg, Descriptive Video Service ggDVS, Dialog Centric Mix ggDcm), the language and region an
+  RFC 5646 tag ("fr-CA"); the languages and regions offered are a short list (`media::imfLanguages`, `imfRegions`).
+* **Export:** each row is mixed from its tracks in its format and written as a track file of its own
+  (`media::writeImfSoundFile`), a MainAudioSequence each. raw2bmx gets a labels file (bmx's
+  `docs/mca_labels_format.md`) through `--track-mca-labels`: the channel labels in the mix's order (mono chM1; stereo
+  chL, chR; 5.1 chL, chC, chR, chLs, chRs, chLFE; 7.1 with chLss, chRss, chLrs, chRrs), the soundfield group (sgM,
+  sgST, sg51, sg71) and the group of groups with `lang=` (`media::imfMcaLabels`).
+
 ## Watch
 
 * Neither the track files nor the documents are validated against ST 2067-2/3/5 or by a checker (Photon): what we
   check is that our reader and FFmpeg's IMF reader (`ffprobe -f imf`) take them.
+* bmx documents `--track-mca-labels` and `--audio-layout` for its OP1a writer, so the sound is wrapped `-t op1a`
+  rather than `-t imf`; whether its `imf` clip type should be used instead is unchecked.
+* The guide does not list the MCA Content Kind menu's values or the IMF track formats; ours are above.
 * The guide lists "J2L IMF RGB 10 bit" once beside "J2K IMF RGB 10 bit"; we take the latter.
 
-## Later
-
-* 11.5c3: Supplementals (a sequence dragged onto an existing package), MultiChannel Audio Mapping and MCA descriptive
-  metadata (p.338-340), the supported formats table (p.340-341).
 
 ## Tests
 
@@ -96,4 +127,6 @@ Tools > IMF Window (p.335):
 track files), `tst_imf_ui` (Tools > IMF Window, Explore, the sidebar and its metadata, a CPL dragged and imported into a
 bin as linked clips and a sequence, removing a package), `tst_imf_ui formatsAndProfiles` and `newOriginalAndExport`
 (a draft from New IMF and a drop, its statuses and fields, Export, the package read back and by `ffprobe -f imf`, a
-second IMP with sound through a stand-in raw2bmx).
+second IMP with sound through a stand-in raw2bmx), `supplementalAndAudioMapping` (a sequence partly the Original's
+dropped on it, the Supplemental's picture runs, the audio mapping's rows, MCA metadata and group, the labels raw2bmx
+gets, the Supplemental read back and imported with its Original's frames).

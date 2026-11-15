@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QObject>
 #include <QProcess>
 #include <QStandardPaths>
@@ -69,6 +70,140 @@ QString raw2bmxPath() {
     return QStandardPaths::findExecutable(QStringLiteral("raw2bmx"));
 }
 
+int imfSoundChannels(const QString& format) {
+    if (format == QLatin1String("mono")) return 1;
+    if (format == QLatin1String("5.1")) return 6;
+    if (format == QLatin1String("7.1")) return 8;
+    return 2;
+}
+
+QString imfLanguageTag(const QString& language, const QString& region) {
+    if (language.isEmpty()) return {};
+    return region.isEmpty() ? language : QStringLiteral("%1-%2").arg(language, region);
+}
+
+QStringList imfLanguages() {
+    return {QStringLiteral("en"), QStringLiteral("fr"), QStringLiteral("de"), QStringLiteral("it"), QStringLiteral("es"),
+            QStringLiteral("pt"), QStringLiteral("nl"), QStringLiteral("sv"), QStringLiteral("da"), QStringLiteral("nb"),
+            QStringLiteral("fi"), QStringLiteral("pl"), QStringLiteral("cs"), QStringLiteral("hu"), QStringLiteral("tr"),
+            QStringLiteral("el"), QStringLiteral("ru"), QStringLiteral("ar"), QStringLiteral("he"), QStringLiteral("hi"),
+            QStringLiteral("ja"), QStringLiteral("ko"), QStringLiteral("zh"), QStringLiteral("th"), QStringLiteral("ga")};
+}
+
+QStringList imfRegions(const QString& language) {
+    // "Selecting an MCA Language will also populate the respective regions if available" (p.340): the regions where
+    // the language is commonly given its own version (ours).
+    static const QHash<QString, QStringList> regions{
+        {QStringLiteral("en"), {QStringLiteral("US"), QStringLiteral("GB"), QStringLiteral("CA"), QStringLiteral("AU"), QStringLiteral("IE")}},
+        {QStringLiteral("fr"), {QStringLiteral("FR"), QStringLiteral("CA"), QStringLiteral("BE"), QStringLiteral("CH")}},
+        {QStringLiteral("de"), {QStringLiteral("DE"), QStringLiteral("AT"), QStringLiteral("CH")}},
+        {QStringLiteral("it"), {QStringLiteral("IT"), QStringLiteral("CH")}},
+        {QStringLiteral("es"), {QStringLiteral("ES"), QStringLiteral("MX"), QStringLiteral("419")}},
+        {QStringLiteral("pt"), {QStringLiteral("PT"), QStringLiteral("BR")}},
+        {QStringLiteral("nl"), {QStringLiteral("NL"), QStringLiteral("BE")}},
+        {QStringLiteral("zh"), {QStringLiteral("CN"), QStringLiteral("TW"), QStringLiteral("HK")}},
+        {QStringLiteral("ar"), {QStringLiteral("SA"), QStringLiteral("EG"), QStringLiteral("AE")}},
+    };
+    return regions.value(language);
+}
+
+QString imfMcaLabels(const ImfSoundOptions& options) {
+    // One track (index 0), its channels in the mix's order (mixdown.h: 5.1 L C R Ls Rs LFE, 7.1 L C R Lss Rss Lrs Rrs
+    // LFE), the soundfield group, and the group of groups with the language.
+    QStringList channels;
+    QString group;
+    if (options.format == QLatin1String("mono")) {
+        channels = {QStringLiteral("chM1")};
+        group = QStringLiteral("sgM");
+    } else if (options.format == QLatin1String("5.1")) {
+        channels = {QStringLiteral("chL"), QStringLiteral("chC"), QStringLiteral("chR"), QStringLiteral("chLs"), QStringLiteral("chRs"),
+                    QStringLiteral("chLFE")};
+        group = QStringLiteral("sg51");
+    } else if (options.format == QLatin1String("7.1")) {
+        channels = {QStringLiteral("chL"), QStringLiteral("chC"), QStringLiteral("chR"), QStringLiteral("chLss"), QStringLiteral("chRss"),
+                    QStringLiteral("chLrs"), QStringLiteral("chRrs"), QStringLiteral("chLFE")};
+        group = QStringLiteral("sg71");
+    } else {
+        channels = {QStringLiteral("chL"), QStringLiteral("chR")};
+        group = QStringLiteral("sgST");
+    }
+    QString out = QStringLiteral("0\n");
+    for (int c = 0; c < channels.size(); ++c) out += QStringLiteral("%1, chan=%2\n").arg(channels.at(c)).arg(c);
+    out += group + QLatin1Char('\n');
+    const QString kind = options.contentKind == QLatin1String("dvs")      ? QStringLiteral("ggDVS")
+                         : options.contentKind == QLatin1String("dialog") ? QStringLiteral("ggDcm")
+                                                                          : QStringLiteral("ggMPg");
+    const QString tag = imfLanguageTag(options.language, options.region);
+    out += tag.isEmpty() ? kind + QLatin1Char('\n') : QStringLiteral("%1, lang=%2\n").arg(kind, tag);
+    return out;
+}
+
+bool writeImfSoundFile(const QString& root, const MovieSource& source, const ImfSoundOptions& options, ImfTrackFile* file,
+                       const std::function<bool(double)>& progress, QString* error) {
+    auto fail = [&](const QString& text) {
+        if (error) *error = text;
+        return false;
+    };
+    if (source.frames <= 0 || !source.sound) return fail(QObject::tr("There is no sound to export."));
+    const QString tool = options.wrapTool.isEmpty() ? raw2bmxPath() : options.wrapTool;
+    if (tool.isEmpty()) {
+        return fail(QObject::tr("IMF export of sound needs bmx's raw2bmx, which was not found (BUILDING.md, \"IMF export\")."));
+    }
+    // 24-bit 48 kHz WAVE of the mix, wrapped by raw2bmx as an MXF OP1a track file with all its channels in one track
+    // ("singlemca") and its MCA labels. raw2bmx writes into a scratch folder and the one MXF file it makes is moved into
+    // the package, so its naming of the output does not matter.
+    QTemporaryDir scratch;
+    if (!scratch.isValid()) return fail(QObject::tr("No temporary folder for the sound."));
+    const QString wav = scratch.filePath(QStringLiteral("sound.wav"));
+    AudioFileOptions a;
+    a.channels = imfSoundChannels(options.format);
+    a.sampleRate = 48000;
+    a.bitDepth = 24;
+    QString why;
+    if (!exportAudioFile(wav, source, a, progress, &why)) return fail(QObject::tr("The sound could not be written: %1").arg(why));
+    const QString labels = scratch.filePath(QStringLiteral("labels.txt"));
+    {
+        QFile f(labels);
+        const QByteArray text = imfMcaLabels(options).toUtf8();
+        if (!f.open(QIODevice::WriteOnly) || f.write(text) != text.size()) return fail(QObject::tr("No temporary folder for the sound."));
+    }
+    const QString outDir = scratch.filePath(QStringLiteral("out"));
+    QDir().mkpath(outDir);
+    const QString base = safeName(options.name);
+    // "-t op1a" with "--audio-layout imf" (the IMF MCA label framework) and "--track-mca-labels": bmx documents its MCA
+    // labels for the OP1a writer, not for "-t imf".
+    const QStringList args{QStringLiteral("-t"), QStringLiteral("op1a"),
+                           QStringLiteral("--audio-layout"), QStringLiteral("imf"),
+                           QStringLiteral("-f"), QStringLiteral("%1/%2").arg(source.frameRate.num()).arg(source.frameRate.den()),
+                           QStringLiteral("--track-map"), QStringLiteral("singlemca"),
+                           QStringLiteral("--track-mca-labels"), QStringLiteral("imf"), labels,
+                           QStringLiteral("--clip"), options.name.isEmpty() ? base : options.name,
+                           QStringLiteral("-o"), QDir(outDir).filePath(QStringLiteral("sound.mxf")),
+                           QStringLiteral("--wave"), wav};
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.start(tool, args);
+    if (!process.waitForStarted()) return fail(QObject::tr("raw2bmx could not be started."));
+    process.waitForFinished(-1);
+    const QStringList made = QDir(outDir).entryList({QStringLiteral("*.mxf")}, QDir::Files);
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0 || made.size() != 1) {
+        return fail(QObject::tr("raw2bmx failed: %1").arg(QString::fromUtf8(process.readAll()).trimmed().right(600)));
+    }
+    ImfTrackFile audio;
+    audio.id = QUuid::createUuid();
+    audio.path = QDir(root).filePath(QStringLiteral("%1_A_%2.mxf").arg(base, audio.id.toString(QUuid::WithoutBraces)));
+    audio.picture = false;
+    audio.editRate = Rational(48000);
+    // The samples of the frames: frames x 48000 / rate.
+    audio.duration = static_cast<std::int64_t>(std::llround(static_cast<double>(source.frames) * 48000.0 / source.frameRate.toDouble()));
+    if (!QFile::rename(QDir(outDir).filePath(made.first()), audio.path) &&
+        !QFile::copy(QDir(outDir).filePath(made.first()), audio.path)) {
+        return fail(QObject::tr("The sound's track file could not be moved into the package."));
+    }
+    if (file) *file = audio;
+    return true;
+}
+
 bool writeImfTrackFiles(const QString& root, const MovieSource& source, const ImfTrackOptions& options,
                         QList<ImfTrackFile>* files, const std::function<bool(double)>& progress, QString* error) {
     QList<ImfTrackFile> written;
@@ -117,50 +252,15 @@ bool writeImfTrackFiles(const QString& root, const MovieSource& source, const Im
         if (!writer.finish()) return fail(QObject::tr("The picture's track file could not be finished."));
     }
 
-    // The sound: 24-bit 48 kHz WAVE of the mix, wrapped by raw2bmx as an MXF OP1a track file with all its channels in one
-    // track ("singlemca"). raw2bmx writes into a scratch folder and the one MXF file it makes is moved into the package,
-    // so its naming of the output does not matter.
+    // The sound: the stereo mix as one track file (writeImfSoundFile).
     if (sound) {
-        QTemporaryDir scratch;
-        if (!scratch.isValid()) return fail(QObject::tr("No temporary folder for the sound."));
-        const QString wav = scratch.filePath(QStringLiteral("sound.wav"));
-        AudioFileOptions a;
-        a.channels = options.channels;
-        a.sampleRate = 48000;
-        a.bitDepth = 24;
-        QString why;
-        if (!exportAudioFile(wav, source, a, {}, &why)) return fail(QObject::tr("The sound could not be written: %1").arg(why));
-        const QString outDir = scratch.filePath(QStringLiteral("out"));
-        QDir().mkpath(outDir);
-        // "-t op1a" with "--audio-layout imf" (the IMF MCA label framework): bmx documents its MCA labels for the OP1a
-        // writer (11.5c3), not for "-t imf".
-        const QStringList args{QStringLiteral("-t"), QStringLiteral("op1a"),
-                               QStringLiteral("--audio-layout"), QStringLiteral("imf"),
-                               QStringLiteral("-f"), QStringLiteral("%1/%2").arg(source.frameRate.num()).arg(source.frameRate.den()),
-                               QStringLiteral("--track-map"), QStringLiteral("singlemca"),
-                               QStringLiteral("--clip"), options.name.isEmpty() ? base : options.name,
-                               QStringLiteral("-o"), QDir(outDir).filePath(QStringLiteral("sound.mxf")),
-                               QStringLiteral("--wave"), wav};
-        QProcess process;
-        process.setProcessChannelMode(QProcess::MergedChannels);
-        process.start(tool, args);
-        if (!process.waitForStarted()) return fail(QObject::tr("raw2bmx could not be started."));
-        process.waitForFinished(-1);
-        const QStringList made = QDir(outDir).entryList({QStringLiteral("*.mxf")}, QDir::Files);
-        if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0 || made.size() != 1) {
-            return fail(QObject::tr("raw2bmx failed: %1").arg(QString::fromUtf8(process.readAll()).trimmed().right(600)));
-        }
+        ImfSoundOptions so;
+        so.format = options.channels == 1 ? QStringLiteral("mono") : QStringLiteral("stereo");
+        so.name = options.name;
+        so.wrapTool = tool;
         ImfTrackFile audio;
-        audio.id = QUuid::createUuid();
-        audio.path = dir.filePath(QStringLiteral("%1_A_%2.mxf").arg(base, audio.id.toString(QUuid::WithoutBraces)));
-        audio.picture = false;
-        audio.editRate = Rational(48000);
-        // The samples of the frames: frames x 48000 / rate.
-        audio.duration = static_cast<std::int64_t>(std::llround(static_cast<double>(source.frames) * 48000.0 / source.frameRate.toDouble()));
-        if (!QFile::rename(QDir(outDir).filePath(made.first()), audio.path) &&
-            !QFile::copy(QDir(outDir).filePath(made.first()), audio.path)) {
-            return fail(QObject::tr("The sound's track file could not be moved into the package."));
-        }
+        QString why;
+        if (!writeImfSoundFile(root, source, so, &audio, {}, &why)) return fail(why);
         written << audio;
     }
     if (progress) progress(1.0);

@@ -26,17 +26,22 @@ QString fileHash(const QString& path);
 
 // ---------------------------------------------------------------- a new package (the IMF window's Export)
 
-// A track file written into the package's root: picture (one MainImageSequence) or sound (one MainAudioSequence,
-// counted in samples at 48000 1).
+// A resource of a composition: a track file written into the package's root, or one of the Original's (a
+// Supplemental, `external`: not hashed or listed, only named). Picture resources follow one another on the
+// MainImageSequence; each sound resource is a MainAudioSequence of its own (an IMF audio track), counted in samples at
+// 48000 1.
 struct TrackFile {
     QUuid id;
-    QString path;              // absolute, inside the root
+    QString path;              // absolute, inside the root; empty when external
     bool picture = true;
-    std::int64_t duration = 0; // in its edit rate: frames, or samples for sound
+    std::int64_t duration = 0; // the whole file, in its edit rate: frames, or samples for sound
     Rational editRate{24};
+    std::int64_t entryPoint = 0;
+    std::int64_t sourceDuration = -1; // -1: to the end
+    bool external = false;
 };
 // A composition to write: `playlist`'s metadata (id, Content Title, Content Kind, Issuer, Creator, Annotation, edit
-// rate; its segments are made from `files`, one segment holding each track file whole).
+// rate; its one segment is made from `files`).
 struct NewComposition {
     Composition playlist;
     QList<TrackFile> files;

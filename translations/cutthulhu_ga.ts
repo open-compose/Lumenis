@@ -1518,6 +1518,10 @@
         <source>IMF export of sound needs bmx&apos;s raw2bmx, which was not found (BUILDING.md, &quot;IMF export&quot;).</source>
         <translation type="unfinished">Tá raw2bmx ó bmx ag teastáil chun fuaim a easpórtáil mar IMF, agus níor aimsíodh é (BUILDING.md, &quot;IMF export&quot;).</translation>
     </message>
+    <message>
+        <source>There is no sound to export.</source>
+        <translation type="unfinished">Níl fuaim ann le heaspórtáil.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -11959,6 +11963,104 @@ Dáta Cruthaithe: %4</translation>
         <source>Promotion</source>
         <translation type="unfinished">Cur Chun Cinn</translation>
     </message>
+    <message>
+        <source>Select the IMF Original on disk that the Supplemental adds to.</source>
+        <translation type="unfinished">Roghnaigh an Bunleagan IMF ar an diosca a gcuireann an Forlíonadh leis.</translation>
+    </message>
+    <message>
+        <source>Supplemental of %1</source>
+        <translation type="unfinished">Forlíonadh de %1</translation>
+    </message>
+    <message>
+        <source>Descriptive Video Service</source>
+        <translation type="unfinished">Descriptive Video Service</translation>
+    </message>
+    <message>
+        <source>Dialog Centric Mix</source>
+        <translation type="unfinished">Dialog Centric Mix</translation>
+    </message>
+    <message>
+        <source>Main Program</source>
+        <translation type="unfinished">Príomhchlár</translation>
+    </message>
+    <message>
+        <source>MCA Content Kind: %1
+MCA Language: %2</source>
+        <translation type="unfinished">Cineál Ábhair MCA: %1
+Teanga MCA: %2</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished">Dada</translation>
+    </message>
+    <message>
+        <source>Supplemental of</source>
+        <translation type="unfinished">Forlíonadh de</translation>
+    </message>
+    <message>
+        <source>Audio Mapping</source>
+        <translation type="unfinished">Mapáil Fuaime</translation>
+    </message>
+    <message>
+        <source>All Active Tracks</source>
+        <translation type="unfinished">Gach Rian Gníomhach</translation>
+    </message>
+    <message>
+        <source>Mono</source>
+        <translation type="unfinished">Monafónach</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation type="unfinished">Steiréo</translation>
+    </message>
+    <message>
+        <source>5.1</source>
+        <translation type="unfinished">5.1</translation>
+    </message>
+    <message>
+        <source>7.1</source>
+        <translation type="unfinished">7.1</translation>
+    </message>
+    <message>
+        <source>Multi-Channel Audio Metadata</source>
+        <translation type="unfinished">Meiteashonraí Fuaime Ilchainéil</translation>
+    </message>
+    <message>
+        <source>Add IMF audio track</source>
+        <translation type="unfinished">Cuir rian fuaime IMF leis</translation>
+    </message>
+    <message>
+        <source>Remove IMF audio track</source>
+        <translation type="unfinished">Bain rian fuaime IMF</translation>
+    </message>
+    <message>
+        <source>IMF Audio Track %1</source>
+        <translation type="unfinished">Rian Fuaime IMF %1</translation>
+    </message>
+    <message>
+        <source>Audio Tracks Grouping</source>
+        <translation type="unfinished">Grúpáil Rianta Fuaime</translation>
+    </message>
+    <message>
+        <source>MCA Content Kind</source>
+        <translation type="unfinished">Cineál Ábhair MCA</translation>
+    </message>
+    <message>
+        <source>MCA Language</source>
+        <translation type="unfinished">Teanga MCA</translation>
+    </message>
+    <message>
+        <source>MCA Region</source>
+        <translation type="unfinished">Réigiún MCA</translation>
+    </message>
+    <message>
+        <source>Group %1</source>
+        <translation type="unfinished">Grúpa %1</translation>
+    </message>
+    <message>
+        <source>Include Master Fader</source>
+        <translation type="unfinished">Cuir an Máistirshleamhnán san Áireamh</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ImportEdlDialog</name>
@@ -14833,7 +14935,7 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     </message>
     <message>
         <source>IMF: a sequence added to a package on disk makes a Supplemental, which this version cannot write yet.</source>
-        <translation type="unfinished">IMF: déanann seicheamh a chuirtear le pacáiste ar an diosca Forlíonadh, nach féidir leis an leagan seo a scríobh fós.</translation>
+        <translation type="obsolete">IMF: déanann seicheamh a chuirtear le pacáiste ar an diosca Forlíonadh, nach féidir leis an leagan seo a scríobh fós.</translation>
     </message>
     <message>
         <source>IMF: only sequences go into an IMF package.</source>
@@ -14850,6 +14952,14 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>the sequence %1 is no longer in its bin.</source>
         <translation type="unfinished">níl an seicheamh %1 ina bhosca a thuilleadh.</translation>
+    </message>
+    <message>
+        <source>%1: there are no video tracks to export.</source>
+        <translation type="unfinished">%1: níl rianta físe ann le heaspórtáil.</translation>
+    </message>
+    <message>
+        <source>%1: an IMF audio track has no enabled tracks to mix.</source>
+        <translation type="unfinished">%1: níl aon rian cumasaithe le meascadh ag rian fuaime IMF.</translation>
     </message>
 </context>
 <context>

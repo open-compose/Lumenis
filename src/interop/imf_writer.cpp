@@ -190,24 +190,36 @@ bool writePackageDocuments(NewPackage& p, QString* error) {
         for (NewComposition& nc : imp.compositions) {
             Composition& c = nc.playlist;
             if (c.id.isNull()) c.id = QUuid::createUuid();
-            // One segment with each track file whole: the picture as the MainImageSequence, each sound file a
+            // One segment: the picture resources in order on the MainImageSequence, each sound file a
             // MainAudioSequence of its own (an IMF audio track).
             Segment s;
             s.id = QUuid::createUuid();
+            Sequence image;
+            image.kind = QStringLiteral("MainImageSequence");
+            image.id = QUuid::createUuid();
+            image.trackId = QUuid::createUuid();
+            QList<QUuid> listed;
             for (TrackFile& f : nc.files) {
                 if (f.id.isNull()) f.id = QUuid::createUuid();
-                Sequence q;
-                q.kind = f.picture ? QStringLiteral("MainImageSequence") : QStringLiteral("MainAudioSequence");
-                q.id = QUuid::createUuid();
-                q.trackId = QUuid::createUuid();
                 Resource r;
                 r.id = QUuid::createUuid();
                 r.trackFile = f.id;
                 r.editRate = f.editRate;
                 r.intrinsicDuration = f.duration;
-                r.sourceDuration = f.duration;
-                q.resources << r;
-                s.sequences << q;
+                r.entryPoint = f.entryPoint;
+                r.sourceDuration = f.sourceDuration < 0 ? f.duration - f.entryPoint : f.sourceDuration;
+                if (f.picture) {
+                    image.resources << r;
+                } else {
+                    Sequence q;
+                    q.kind = QStringLiteral("MainAudioSequence");
+                    q.id = QUuid::createUuid();
+                    q.trackId = QUuid::createUuid();
+                    q.resources << r;
+                    s.sequences << q;
+                }
+                if (f.external || listed.contains(f.id)) continue; // the Original's, or listed already
+                listed << f.id;
                 PackingList::Entry e;
                 if (!entryOf(f.id, f.path, QStringLiteral("application/mxf"), &e)) {
                     return fail(QObject::tr("%1 could not be read.").arg(QDir::toNativeSeparators(f.path)));
@@ -215,6 +227,7 @@ bool writePackageDocuments(NewPackage& p, QString* error) {
                 pkl.assets << e;
                 mapped << std::pair{f.id, root.relativeFilePath(f.path)};
             }
+            if (!image.resources.isEmpty()) s.sequences.prepend(image);
             c.segments = {s};
             const QString file = root.filePath(QStringLiteral("CPL_%1.xml").arg(c.id.toString(QUuid::WithoutBraces)));
             if (!writeFile(file, compositionXml(c, when))) return fail(QObject::tr("The composition playlist could not be written."));

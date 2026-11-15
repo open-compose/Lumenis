@@ -19,6 +19,8 @@
 #include "lumenis/ui/tool_windows.h"
 
 #include <QAction>
+#include <QComboBox>
+#include <QKeyEvent>
 #include <QDropEvent>
 #include <QLineEdit>
 #include <QMenu>
@@ -235,6 +237,229 @@ private slots:
         QVERIFY(!media::imfFormatSupported(QSize(4096, 2160), Rational(60), false, QStringLiteral("J2K IMF RGB 12 bit")));
         QVERIFY(!media::imfFormatSupported(QSize(1920, 1080), Rational(30000, 1001), true, QStringLiteral("J2K IMF YCrCb")));
         QVERIFY(!media::imfFormatSupported(QSize(1280, 720), Rational(24), false, QStringLiteral("J2K IMF YCrCb")));
+        // MCA labels (bmx's labels file): 5.1 in the mix's order, the language tag with its region.
+        media::ImfSoundOptions five;
+        five.format = QStringLiteral("5.1");
+        five.language = QStringLiteral("de");
+        five.region = QStringLiteral("AT");
+        QCOMPARE(media::imfMcaLabels(five), QStringLiteral("0\nchL, chan=0\nchC, chan=1\nchR, chan=2\nchLs, chan=3\nchRs, chan=4\n"
+                                                           "chLFE, chan=5\nsg51\nggMPg, lang=de-AT\n"));
+        QCOMPARE(media::imfSoundChannels(QStringLiteral("7.1")), 8);
+        QVERIFY(media::imfRegions(QStringLiteral("fr")).contains(QStringLiteral("CA")));
+        QCOMPARE(media::imfLanguageTag(QStringLiteral("en"), QString()), QStringLiteral("en"));
+    }
+
+    void supplementalAndAudioMapping() {
+        QTemporaryDir dir;
+        const QString originalRoot = dir.filePath(QStringLiteral("Source_IMF"));
+        const QString cpl = makePackage(originalRoot, QUuid::createUuid());
+#ifndef Q_OS_WIN
+        // The stand-in raw2bmx keeps each labels file it is given.
+        const QString tool = dir.filePath(QStringLiteral("raw2bmx"));
+        {
+            QFile f(tool);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("#!/bin/sh\n"
+                    "here=\"$(dirname \"$0\")\"\n"
+                    "out=''; wav=''\n"
+                    "while [ $# -gt 0 ]; do case \"$1\" in -o) out=\"$2\"; shift;; --wave) wav=\"$2\"; shift;;"
+                    " --track-mca-labels) cat \"$3\" >> \"$here/labels.txt\"; echo '--' >> \"$here/labels.txt\"; shift; shift;; esac; shift; done\n"
+                    "cp \"$wav\" \"$out\"\n");
+            f.close();
+            f.setPermissions(f.permissions() | QFileDevice::ExeOwner);
+        }
+        qputenv("LUMENIS_RAW2BMX", tool.toUtf8());
+#endif
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(24);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        commands.action(QStringLiteral("tools.imf_window"))->trigger();
+        ImfWindow* imf = window.imfWindow();
+        QVERIFY(imf);
+        QVERIFY(imf->addPackage(originalRoot));
+
+        // The Original's Promo in a bin, and a version whose frames 6-11 are another clip's.
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.importFiles(binId, {cpl});
+        QCOMPARE(ids.size(), 3);
+        const QString other = dir.filePath(QStringLiteral("other.mxf"));
+        {
+            media::WriterSettings w;
+            w.format = QStringLiteral("mxf");
+            w.videoCodec = QStringLiteral("dnxhd");
+            w.videoProfile = QStringLiteral("dnxhr_lb");
+            w.pixelFormat = QStringLiteral("yuv422p");
+            w.width = 256;
+            w.height = 144;
+            w.frameRate = Rational(24);
+            media::MediaWriter writer;
+            QVERIFY(writer.open(other, w));
+            QImage red(256, 144, QImage::Format_RGB32);
+            red.fill(Qt::red);
+            for (int f = 0; f < 8; ++f) writer.writeVideo(red);
+            writer.finish();
+        }
+        const QStringList otherIds = window.importFiles(binId, {other});
+        QCOMPARE(otherIds.size(), 1);
+        const model::BinItem* otherClip = bin->bin().item(otherIds.first());
+        QVERIFY(otherClip);
+        const model::BinItem* promo = bin->bin().item(ids.last());
+        QVERIFY(promo);
+        model::Sequence seq = model::Sequence::fromItem(*promo);
+        model::Segment replaced;
+        replaced.binId = binId;
+        replaced.clipId = otherClip->id;
+        replaced.sourceMob = otherClip->mobId;
+        replaced.name = otherClip->name;
+        replaced.sourceTrack = QStringLiteral("V1");
+        replaced.length = 6;
+        seq.overwrite(QStringLiteral("V1"), 6, {replaced});
+        model::BinItem version = model::newSequence(bin->bin(), Rational(24), QDateTime::currentDateTimeUtc(), QStringLiteral("01:00:00:00"));
+        version.name = QStringLiteral("Promo v2");
+        seq.storeIn(version);
+        bin->addItem(version);
+        // Its picture: frames 0-5 still the Original's video track file from its start, 6-11 to write.
+        const QList<MainWindow::ImfPictureRun> runs = window.imfPictureRuns(seq, QFileInfo(originalRoot).absoluteFilePath());
+        QCOMPARE(runs.size(), 2);
+        QCOMPARE(runs.at(0).length, std::int64_t{6});
+        QVERIFY(!runs.at(0).trackFile.isNull());
+        QCOMPARE(runs.at(0).entry, std::int64_t{0});
+        QCOMPARE(runs.at(0).intrinsic, std::int64_t{12});
+        QVERIFY(runs.at(1).trackFile.isNull());
+        QCOMPARE(runs.at(1).start, std::int64_t{6});
+
+        // Dropped on the package's root: a Supplemental of it, beside it, with its Issuer and Creator (p.336).
+        QTreeWidget* tree = imf->sidebar();
+        QTreeWidgetItem* rootItem = tree->topLevelItem(0);
+        QVERIFY(rootItem);
+        {
+            QMimeData mime;
+            mime.setData(binItemsMime(), QStringLiteral("%1\n%2").arg(binId, version.id).toUtf8());
+            const QPoint at = tree->visualItemRect(rootItem).center();
+            QDragEnterEvent enter(at, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(), &enter);
+            QDropEvent drop(QPointF(at), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(), &drop);
+        }
+        QCOMPARE(imf->drafts().size(), 1);
+        const ImfDraft& draft = imf->drafts().at(0);
+        QVERIFY(draft.isSupplemental());
+        QCOMPARE(draft.original, QFileInfo(originalRoot).absoluteFilePath());
+        QCOMPARE(draft.name, QStringLiteral("Source_IMF_SUPP"));
+        QCOMPARE(draft.issuer, QStringLiteral("Studio"));
+        QCOMPARE(imf->supplementOf(originalRoot), 0);
+        QCOMPARE(draft.imps.at(0).cpls.size(), 1);
+        // New IMF > IMF Supplemental with the Original selected makes a second one.
+        QVERIFY(imf->select(originalRoot));
+        QCOMPARE(imf->newSupplemental(), 1);
+        imf->select(originalRoot);
+        QKeyEvent del(QEvent::KeyPress, Qt::Key_Delete, Qt::NoModifier);
+        QVERIFY(imf->selectDraft(1));
+        QApplication::sendEvent(imf, &del);
+        QCOMPARE(imf->drafts().size(), 1);
+
+        // The audio mapping (p.338-340): one row of All Active Tracks as stereo, then A1 as mono with MCA metadata
+        // from its edit button, and a second row of a group of A1 and A2 without the Master Fader.
+        QCOMPARE(imf->drafts().at(0).imps.at(0).cpls.at(0).audio.size(), 1);
+        QVERIFY(imf->selectDraft(0, 0, 0));
+        auto* source = imf->findChild<QComboBox*>(QStringLiteral("imfAudioSource"));
+        QVERIFY(source);
+        QCOMPARE(source->count(), 3); // All Active Tracks, A1 (Mono), A2 (Mono)
+        QCOMPARE(source->itemText(1), QStringLiteral("A1 (Mono)"));
+        ImfAudioTrack mono;
+        mono.source = QStringLiteral("track:A1");
+        mono.format = QStringLiteral("mono");
+        imf->setAudioTrack(0, 0, 0, 0, mono);
+        imf->setMcaEditor([](const ImfAudioTrack& t) {
+            ImfAudioTrack out = t;
+            out.contentKind = QStringLiteral("dialog");
+            out.language = QStringLiteral("fr");
+            out.region = QStringLiteral("CA");
+            return std::optional<ImfAudioTrack>(out);
+        });
+        auto* mca = imf->findChild<QPushButton*>(QStringLiteral("imfAudioMca"));
+        QVERIFY(mca);
+        mca->click();
+        QCOMPARE(imf->drafts().at(0).imps.at(0).cpls.at(0).audio.at(0).language, QStringLiteral("fr"));
+        QVERIFY(mca->toolTip().contains(QStringLiteral("fr-CA")));
+        auto* plus = imf->findChild<QPushButton*>(QStringLiteral("imfAudioAdd"));
+        QVERIFY(plus);
+        plus->click();
+        QCoreApplication::processEvents(); // the pane is rebuilt after the click
+        QCOMPARE(imf->drafts().at(0).imps.at(0).cpls.at(0).audio.size(), 2);
+        QCOMPARE(imf->findChildren<QPushButton*>(QStringLiteral("imfAudioRemove")).size(), 2);
+        imf->setGroupEditor([](const QList<std::pair<QString, QString>>& tracks) {
+            ImfTrackGroup g;
+            g.name = QStringLiteral("Both");
+            for (const auto& t : tracks) g.tracks << t.first;
+            g.masterFader = false;
+            return std::optional<ImfTrackGroup>(g);
+        });
+        auto* grouping = imf->findChild<QPushButton*>(QStringLiteral("imfAudioGrouping"));
+        QVERIFY(grouping && grouping->isEnabled());
+        grouping->click();
+        QCoreApplication::processEvents();
+        QCOMPARE(imf->drafts().at(0).imps.at(0).cpls.at(0).groups.size(), 1);
+        ImfAudioTrack both;
+        both.source = QStringLiteral("group:Both");
+        imf->setAudioTrack(0, 0, 0, 1, both);
+        source = imf->findChildren<QComboBox*>(QStringLiteral("imfAudioSource")).value(1);
+        QVERIFY(source);
+        QCOMPARE(source->itemText(source->count() - 1), QStringLiteral("Both")); // "the group will appear in the tracks list at the bottom"
+        for (const QString& field : {QStringLiteral("issuer"), QStringLiteral("creator")}) imf->setDraftField(0, 0, 0, field, QStringLiteral("Studio"));
+        QVERIFY2(imf->draftReady(0), qPrintable(imf->missingFields(0).join(QLatin1Char(','))));
+#ifdef Q_OS_WIN
+        QSKIP("the stand-in raw2bmx is a POSIX shell script");
+#else
+        const QString written = window.exportImfDraft(0);
+        QVERIFY2(!written.isEmpty(), qPrintable(ConsoleLog::instance().lines().join(QLatin1Char('\n')).right(600)));
+        QCOMPARE(written, dir.filePath(QStringLiteral("Source_IMF_SUPP")));
+        QString error;
+        const auto supp = interop::imf::readPackage(written, &error);
+        QVERIFY2(supp, qPrintable(error));
+        QVERIFY(supp->isSupplemental());
+        QCOMPARE(supp->compositions.size(), 1);
+        const interop::imf::Composition& c = supp->compositions.at(0);
+        QCOMPARE(c.segments.size(), 1);
+        QCOMPARE(c.segments.at(0).sequences.size(), 3); // the picture and two IMF audio tracks
+        const interop::imf::Sequence& image = c.segments.at(0).sequences.at(0);
+        QVERIFY(image.isImage());
+        QCOMPARE(image.resources.size(), 2);
+        QCOMPARE(image.resources.at(0).trackFile, runs.at(0).trackFile); // the Original's
+        QCOMPARE(image.resources.at(0).sourceDuration, std::int64_t{6});
+        QCOMPARE(image.resources.at(1).sourceDuration, std::int64_t{6});
+        QVERIFY(supp->missingTrackFiles().contains(runs.at(0).trackFile));
+        QVERIFY(!supp->assets.contains(runs.at(0).trackFile)); // not in its own asset map
+        // The labels raw2bmx was given: the mono track's, then the group's stereo.
+        QFile labels(dir.filePath(QStringLiteral("labels.txt")));
+        QVERIFY(labels.open(QIODevice::ReadOnly));
+        const QString given = QString::fromUtf8(labels.readAll());
+        QVERIFY2(given.startsWith(QStringLiteral("0\nchM1, chan=0\nsgM\nggDcm, lang=fr-CA\n--\n0\nchL, chan=0\nchR, chan=1\nsgST\nggMPg\n")),
+                 qPrintable(given));
+        // Listed green; its CPL into a bin plays the Original's frames and its own (the Original's map is added).
+        QCOMPARE(imf->drafts().size(), 0);
+        QCOMPARE(imf->packages().size(), 2);
+        const QStringList back = window.importFiles(binId, {c.file});
+        QVERIFY(back.size() >= 3);
+        const model::Sequence imported = model::Sequence::fromItem(*bin->bin().item(back.last()));
+        QCOMPARE(imported.track(QStringLiteral("V1"))->length(), 12);
+        QCOMPARE(imported.track(QStringLiteral("V1"))->segments.size(), 2);
+        QVERIFY(imported.track(QStringLiteral("A1")));
+        qunsetenv("LUMENIS_RAW2BMX");
+#endif
     }
 
     void newOriginalAndExport() {
@@ -293,7 +518,9 @@ private slots:
         QVERIFY(imf->newImfButton()->menu());
         const QList<QAction*> choices = imf->newImfButton()->menu()->actions();
         QCOMPARE(choices.size(), 2);
-        QVERIFY(!choices.at(1)->isEnabled()); // IMF Supplemental, 11.5c3
+        // IMF Supplemental needs an Original on disk selected: none here, so no draft.
+        choices.at(1)->trigger();
+        QCOMPARE(imf->drafts().size(), 0);
         choices.at(0)->trigger();
         QCOMPARE(imf->drafts().size(), 1);
         QTreeWidget* tree = imf->sidebar();

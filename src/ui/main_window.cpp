@@ -3216,7 +3216,7 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     }
     // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces), and the Audio Project
     // setting's Output Gain, "the volume of global audio output" (p.920, p.1150).
-    const double master = (audioMixer_ ? audioMixer_->masterGain() : 0.0) + outputGainDb();
+    const double master = (audioMixer_ && !withoutMasterFader_ ? audioMixer_->masterGain() : 0.0) + outputGainDb();
     if (master != 0.0) {
         const float gain = master <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, master / 20.0));
         for (media::AudioPiece& piece : pieces) {

@@ -2769,7 +2769,8 @@ p.610–640, ch. 13 p.432–434).**
   their status, the read-only metadata pane, CPLs dragged into bins as
   sequences (11.5c1); New IMF > IMF Original, sequences dragged onto it, the
   editable metadata with red and yellow statuses, Export (11.5c2). Details:
-  docs/spec/imf.md. Supplementals and the audio mapping are 11.5c3.
+  docs/spec/imf.md. Supplementals, the audio mapping, Audio Tracks Grouping and
+  the Multi-Channel Audio Metadata window (11.5c3).
 
 ## 16. Playback (p.389–404, p.627)
 

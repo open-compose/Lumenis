@@ -1162,7 +1162,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_imf`, `tst_imf_ui`), is done. 11.5c2, New IMF and Export of an IMF Original (drafts in `ImfWindow`, the track
   files through `media::writeImfTrackFiles` with bmx's raw2bmx for sound `LUMENIS_RAW2BMX`, the documents through
   `interop::imf::writePackageDocuments`, `MainWindow::exportImfDraft`; test `tst_imf_ui newOriginalAndExport`), is
-  done. 10.6 is an update check that only tells the user (no
+  done. 11.5c3, Supplementals and the MultiChannel Audio Mapping with MCA metadata (`ImfWindow::newSupplemental`,
+  `MainWindow::imfPictureRuns`, `ImfAudioTrack` rows, `media::writeImfSoundFile` with raw2bmx's labels file; test
+  `tst_imf_ui supplementalAndAudioMapping`), is done, so 11.5c is. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

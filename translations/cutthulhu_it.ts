@@ -1517,6 +1517,10 @@
         <source>IMF export of sound needs bmx&apos;s raw2bmx, which was not found (BUILDING.md, &quot;IMF export&quot;).</source>
         <translation type="unfinished">L&apos;esportazione IMF dell&apos;audio richiede raw2bmx di bmx, che non è stato trovato (BUILDING.md, &quot;IMF export&quot;).</translation>
     </message>
+    <message>
+        <source>There is no sound to export.</source>
+        <translation type="unfinished">Non c&apos;è audio da esportare.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -11950,6 +11954,104 @@ Data creazione: %4</translation>
         <source>Promotion</source>
         <translation type="unfinished">Promozione</translation>
     </message>
+    <message>
+        <source>Select the IMF Original on disk that the Supplemental adds to.</source>
+        <translation type="unfinished">Seleziona l&apos;Originale IMF su disco a cui il Supplemental si aggiunge.</translation>
+    </message>
+    <message>
+        <source>Supplemental of %1</source>
+        <translation type="unfinished">Supplemental di %1</translation>
+    </message>
+    <message>
+        <source>Descriptive Video Service</source>
+        <translation type="unfinished">Descriptive Video Service</translation>
+    </message>
+    <message>
+        <source>Dialog Centric Mix</source>
+        <translation type="unfinished">Dialog Centric Mix</translation>
+    </message>
+    <message>
+        <source>Main Program</source>
+        <translation type="unfinished">Programma principale</translation>
+    </message>
+    <message>
+        <source>MCA Content Kind: %1
+MCA Language: %2</source>
+        <translation type="unfinished">Tipo di contenuto MCA: %1
+Lingua MCA: %2</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished">Nessuna</translation>
+    </message>
+    <message>
+        <source>Supplemental of</source>
+        <translation type="unfinished">Supplemental di</translation>
+    </message>
+    <message>
+        <source>Audio Mapping</source>
+        <translation type="unfinished">Mappatura audio</translation>
+    </message>
+    <message>
+        <source>All Active Tracks</source>
+        <translation type="unfinished">Tutte le tracce attive</translation>
+    </message>
+    <message>
+        <source>Mono</source>
+        <translation type="unfinished">Mono</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation type="unfinished">Stereo</translation>
+    </message>
+    <message>
+        <source>5.1</source>
+        <translation type="unfinished">5.1</translation>
+    </message>
+    <message>
+        <source>7.1</source>
+        <translation type="unfinished">7.1</translation>
+    </message>
+    <message>
+        <source>Multi-Channel Audio Metadata</source>
+        <translation type="unfinished">Metadati audio multicanale</translation>
+    </message>
+    <message>
+        <source>Add IMF audio track</source>
+        <translation type="unfinished">Aggiungi traccia audio IMF</translation>
+    </message>
+    <message>
+        <source>Remove IMF audio track</source>
+        <translation type="unfinished">Rimuovi traccia audio IMF</translation>
+    </message>
+    <message>
+        <source>IMF Audio Track %1</source>
+        <translation type="unfinished">Traccia audio IMF %1</translation>
+    </message>
+    <message>
+        <source>Audio Tracks Grouping</source>
+        <translation type="unfinished">Raggruppamento tracce audio</translation>
+    </message>
+    <message>
+        <source>MCA Content Kind</source>
+        <translation type="unfinished">Tipo di contenuto MCA</translation>
+    </message>
+    <message>
+        <source>MCA Language</source>
+        <translation type="unfinished">Lingua MCA</translation>
+    </message>
+    <message>
+        <source>MCA Region</source>
+        <translation type="unfinished">Regione MCA</translation>
+    </message>
+    <message>
+        <source>Group %1</source>
+        <translation type="unfinished">Gruppo %1</translation>
+    </message>
+    <message>
+        <source>Include Master Fader</source>
+        <translation type="unfinished">Includi fader master</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ImportEdlDialog</name>
@@ -14788,7 +14890,7 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
     </message>
     <message>
         <source>IMF: a sequence added to a package on disk makes a Supplemental, which this version cannot write yet.</source>
-        <translation type="unfinished">IMF: una sequenza aggiunta a un pacchetto su disco crea un Supplemental, che questa versione non sa ancora scrivere.</translation>
+        <translation type="obsolete">IMF: una sequenza aggiunta a un pacchetto su disco crea un Supplemental, che questa versione non sa ancora scrivere.</translation>
     </message>
     <message>
         <source>IMF: only sequences go into an IMF package.</source>
@@ -14805,6 +14907,14 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
     <message>
         <source>the sequence %1 is no longer in its bin.</source>
         <translation type="unfinished">la sequenza %1 non è più nel suo bin.</translation>
+    </message>
+    <message>
+        <source>%1: there are no video tracks to export.</source>
+        <translation type="unfinished">%1: non ci sono tracce video da esportare.</translation>
+    </message>
+    <message>
+        <source>%1: an IMF audio track has no enabled tracks to mix.</source>
+        <translation type="unfinished">%1: una traccia audio IMF non ha tracce attive da mixare.</translation>
     </message>
 </context>
 <context>

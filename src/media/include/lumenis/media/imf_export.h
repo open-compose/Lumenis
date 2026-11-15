@@ -28,13 +28,6 @@ bool imfFormatSupported(QSize raster, const Rational& rate, bool interlaced, con
 // raw2bmx: LUMENIS_RAW2BMX, else beside the application, else on PATH. Empty when not found.
 QString raw2bmxPath();
 
-struct ImfTrackOptions {
-    QString profile = QStringLiteral("J2K IMF YCrCb");
-    QString name;          // the files' base name (the composition's content title, made safe)
-    // The sound: the mix's first `channels` channels as one track file (MultiChannel Audio Mapping, 11.5c3, makes more).
-    int channels = 2;
-    QString wrapTool;      // raw2bmx; empty: raw2bmxPath()
-};
 // A written track file: its asset id, absolute path, essence and duration in its own edit rate.
 struct ImfTrackFile {
     QUuid id;
@@ -42,6 +35,44 @@ struct ImfTrackFile {
     bool picture = true;
     std::int64_t duration = 0;
     Rational editRate{24};
+};
+
+// One IMF audio track (MultiChannel Audio Mapping, 11.5c3, p.338-340): its format and its MCA descriptive metadata.
+struct ImfSoundOptions {
+    QString format = QStringLiteral("stereo"); // "mono", "stereo", "5.1" or "7.1"
+    // MCA Content Kind, as the label of the soundfield group of groups (ST 2067-8): "main" (Main Program, ggMPg),
+    // "dvs" (Descriptive Video Service, ggDVS) or "dialog" (Dialog Centric Mix, ggDcm). Ours: the guide does not
+    // list its menu's values.
+    QString contentKind = QStringLiteral("main");
+    QString language;      // the MCA Language, an RFC 5646 language subtag ("en"); empty: none
+    QString region;        // the region subtag ("US"); with a language, the tag is "en-US"
+    QString name;          // the files' base name
+    QString wrapTool;      // raw2bmx; empty: raw2bmxPath()
+};
+// The channels of a format (mono 1, stereo 2, 5.1 6, 7.1 8).
+int imfSoundChannels(const QString& format);
+// raw2bmx's labels file for a track (bmx's docs/mca_labels_format.md): one channel label a channel (chM1; chL, chR;
+// chL, chR, chC, chLFE, chLs, chRs; 7.1 with chLss, chRss, chLrs, chRrs), the soundfield group (sgM, sgST, sg51,
+// sg71) and the group of groups with the language.
+QString imfMcaLabels(const ImfSoundOptions& options);
+// RFC 5646's tag of a language and region ("en-US"), empty without a language.
+QString imfLanguageTag(const QString& language, const QString& region);
+// The languages offered for MCA Language (RFC 5646 subtags) and, for one, its regions (ours: a short list).
+QStringList imfLanguages();
+QStringList imfRegions(const QString& language);
+
+// Writes `source`'s sound (its picture is not used) as one IMF sound track file in `root`, MXF OP1a through raw2bmx
+// with the MCA labels; `file` gets it. Same failure contract as writeImfTrackFiles.
+bool writeImfSoundFile(const QString& root, const MovieSource& source, const ImfSoundOptions& options, ImfTrackFile* file,
+                       const std::function<bool(double)>& progress = {}, QString* error = nullptr);
+
+struct ImfTrackOptions {
+    QString profile = QStringLiteral("J2K IMF YCrCb");
+    QString name;          // the files' base name (the composition's content title, made safe)
+    // The sound: the mix's first `channels` channels as one stereo track file; 0 for none (MultiChannel Audio Mapping
+    // writes its tracks with writeImfSoundFile).
+    int channels = 2;
+    QString wrapTool;      // raw2bmx; empty: raw2bmxPath()
 };
 
 // Writes `source`'s picture, and its sound when it has some, into the existing folder `root`. `progress` gets 0 to 1

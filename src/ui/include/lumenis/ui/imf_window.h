@@ -29,6 +29,24 @@ class QWidget;
 // (ours).
 namespace lumenis::ui {
 
+// A group of the sequence's audio tracks made with Audio Tracks Grouping (p.338): "contiguous or non-contagious tracks
+// into a single group that can be applied to the output ... these settings do not persist beyond the selected sequence".
+struct ImfTrackGroup {
+    QString name;
+    QStringList tracks;      // "A1", "A3", ...
+    bool masterFader = true; // "the group can include or exclude the Master Fader" (ours: the mix without it has no
+                             // output gain)
+};
+// One IMF audio track of a CPL (MultiChannel Audio Mapping, p.338-340): which of the sequence's tracks feed it (the
+// left-hand menu), its IMF track format (the right-hand menu) and its MCA descriptive metadata (p.340).
+struct ImfAudioTrack {
+    QString source;          // "" All Active Tracks; "track:A2"; "group:<name>"
+    QString format = QStringLiteral("stereo"); // "mono", "stereo", "5.1", "7.1"
+    QString contentKind = QStringLiteral("main"); // media::ImfSoundOptions::contentKind
+    QString language;        // RFC 5646 subtags (media::imfLanguages, imfRegions)
+    QString region;
+};
+
 // A sequence in a package not yet written: the bin item it came from and its CPL's metadata.
 struct ImfDraftCpl {
     QString binId;
@@ -38,6 +56,9 @@ struct ImfDraftCpl {
     QString contentKind = QStringLiteral("feature");
     QString profile = QStringLiteral("J2K IMF YCrCb");
     QString issuer, creator, annotation;
+    // The audio mapping: one row, All Active Tracks as stereo, until it is changed; and the groups made for it.
+    QList<ImfAudioTrack> audio{ImfAudioTrack{}};
+    QList<ImfTrackGroup> groups;
 };
 // An IMP not yet written: its CPLs and metadata. Its name is "untitled" until it is written (p.335).
 struct ImfDraftImp {
@@ -50,6 +71,10 @@ struct ImfDraft {
     QString directory;
     QString issuer, creator, annotation;
     QList<ImfDraftImp> imps;
+    // A Supplemental's Original: the root folder of the package on disk whose track files its CPLs may use; empty for
+    // an Original.
+    QString original;
+    bool isSupplemental() const { return !original.isEmpty(); }
     // The root folder the package is written as: `directory`/`name`.
     QString root() const;
 };
@@ -77,6 +102,13 @@ public:
     // ---- packages not yet written (11.5c2)
     // New IMF > IMF Original (p.337): an untitled root folder and IMP; its index in drafts().
     int newOriginal();
+    // New IMF > IMF Supplemental (p.334): a draft supplementing the package on disk at `originalRoot` (empty: the
+    // selected one), in the Original's folder's directory, named "<Original>_SUPP" (ours); -1 when no package on disk
+    // is chosen. A sequence dragged onto a package on disk goes into its Supplemental draft, made as needed ("To add to
+    // an existing package", p.336).
+    int newSupplemental(const QString& originalRoot = {});
+    // The draft supplementing `originalRoot`, -1 for none.
+    int supplementOf(const QString& originalRoot) const;
     // Sequences dragged onto a draft's root folder (`draft`; -1: a new Original, as a drag onto the empty sidebar).
     // The first drag fills the draft's untitled IMP, each later one makes a new IMP ("if you add additional sequences
     // after the first drag and drop into the folder, a new IMP is created", p.337-338). The draft's index.
@@ -86,6 +118,22 @@ public:
     // "name", "directory", "issuer", "creator", "annotation", "contentTitle", "contentKind", "profile". Completing a
     // CPL's Issuer or Creator fills the IMP's and the root's when they are empty (p.336).
     void setDraftField(int draft, int imp, int cpl, const QString& field, const QString& value);
+    // A CPL's audio mapping (p.338-340): rows added, removed and changed; groups added. `tracks` is the sequence's audio
+    // tracks with their formats ("A1 (Mono)"), from MainWindow, for the left-hand menu.
+    void setAudioTrack(int draft, int imp, int cpl, int row, const ImfAudioTrack& track);
+    void addAudioTrack(int draft, int imp, int cpl);
+    void removeAudioTrack(int draft, int imp, int cpl, int row);
+    void addTrackGroup(int draft, int imp, int cpl, const ImfTrackGroup& group);
+    void setSequenceTracks(std::function<QList<std::pair<QString, QString>>(const ImfDraftCpl&)> tracks) { sequenceTracks_ = std::move(tracks); }
+    // The MCA metadata window and the grouping window: hooks answer for tests (they get the row or the tracks and
+    // return the edited values, nothing when cancelled).
+    void setMcaEditor(std::function<std::optional<ImfAudioTrack>(const ImfAudioTrack&)> editor) { mcaEditor_ = std::move(editor); }
+    void setGroupEditor(std::function<std::optional<ImfTrackGroup>(const QList<std::pair<QString, QString>>&)> editor) {
+        groupEditor_ = std::move(editor);
+    }
+    // The tooltip of a row's edit button: "hovering the mouse over the button reveals a tool tip that shows the current
+    // metadata values for that output track" (p.340).
+    static QString mcaSummary(const ImfAudioTrack& track);
     // What a CPL still needs before it can be written, beyond its fields (MainWindow: the project's format against
     // the IMF Supported Formats, p.340-341); empty when it can be.
     void setCplCheck(std::function<QString(const ImfDraftCpl&)> check) { cplCheck_ = std::move(check); rebuild(); }
@@ -136,6 +184,9 @@ private:
     void rebuild();
     void showSelection();
     void showDraft(const QTreeWidgetItem* item);
+    void showAudioMapping(int draft, int imp, int cpl);
+    std::optional<ImfAudioTrack> editMca(const ImfAudioTrack& track);
+    std::optional<ImfTrackGroup> editGroup(const QList<std::pair<QString, QString>>& tracks);
     void refreshStatuses();
     void dropped(const QMimeData* mime, QTreeWidgetItem* on);
 
@@ -143,6 +194,9 @@ private:
     QList<ImfDraft> drafts_;
     std::function<QString(const ImfDraftCpl&)> cplCheck_;
     std::function<QString()> directoryChooser_;
+    std::function<QList<std::pair<QString, QString>>(const ImfDraftCpl&)> sequenceTracks_;
+    std::function<std::optional<ImfAudioTrack>(const ImfAudioTrack&)> mcaEditor_;
+    std::function<std::optional<ImfTrackGroup>(const QList<std::pair<QString, QString>>&)> groupEditor_;
     QPushButton* newImf_ = nullptr;
     QPushButton* export_ = nullptr;
     QMenu* newMenu_ = nullptr;

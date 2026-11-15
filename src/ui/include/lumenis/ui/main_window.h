@@ -1073,6 +1073,17 @@ public:
     // export), then the CPLs, PKLs and asset map (interop::imf::writePackageDocuments). The root, empty on failure
     // (said in a message, the folder removed).
     QString exportImfDraft(int draft);
+    // A Supplemental's picture as spans of the sequence: those still playing one of the Original's track files (the
+    // track file, its entry point, whole length and rate) and those to write new (a null trackFile).
+    struct ImfPictureRun {
+        std::int64_t start = 0;
+        std::int64_t length = 0;
+        QUuid trackFile{};
+        std::int64_t entry = 0;
+        std::int64_t intrinsic = 0;
+        Rational editRate{24};
+    };
+    QList<ImfPictureRun> imfPictureRuns(const model::Sequence& seq, const QString& originalRoot) const;
     bool editDmfProfile(const QString& folder, const QString& profile);
     void setDmfProfileEditorHook(std::function<bool(DmfProfileEditor&)> hook) { dmfProfileEditorHook_ = std::move(hook); }
     QString acquireDmfAssets(const QString& folder);
@@ -1614,6 +1625,8 @@ private:
     std::function<bool(SubcapPropertiesDialog&)> subcapPropertiesHook_;
     std::function<bool(AncDataImportDialog&)> ancDataImportHook_;
     // The last captions decoded for each monitor, by their data (Show Captions asks for every frame painted).
+    // An IMF audio track of a group without the Master Fader (p.338) is mixed without the Audio Mixer's master gain.
+    bool withoutMasterFader_ = false;
     mutable QByteArray captionData_[2];
     mutable QList<model::ShownCaption> captionShown_[2];
     // Send To's template values while it exports (7.1c2); empty otherwise.

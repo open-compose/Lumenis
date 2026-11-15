@@ -1942,7 +1942,9 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `media::writeImfTrackFiles` in `src/media/imf_export.*` with JPEG 2000 MXF through FFmpeg and raw2bmx for sound;
   `src/interop/imf_writer.*` with the CPL, PKL and asset map; `MainWindow::addImfSequences`/`exportImfDraft`; test
   `tst_imf_ui newOriginalAndExport`, checked by FFmpeg's IMF reader); 11.5c3, Supplementals, MultiChannel Audio
-  Mapping and MCA metadata.
+  Mapping and MCA metadata (done: `ImfWindow::newSupplemental`, `MainWindow::imfPictureRuns` reusing the Original's
+  track files, `ImfAudioTrack`/`ImfTrackGroup` rows, `media::writeImfSoundFile` with `imfMcaLabels`; test `tst_imf_ui
+  supplementalAndAudioMapping`), so 11.5c is.
 
 ## 6. Immediate next steps
 

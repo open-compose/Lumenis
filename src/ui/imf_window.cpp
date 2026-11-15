@@ -8,7 +8,10 @@
 #include "lumenis/media/imf_export.h"
 #include "lumenis/ui/bin_dock.h"
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileDialog>
@@ -19,14 +22,17 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMimeData>
 #include <QPushButton>
 #include <QSplitter>
 #include <QTreeWidget>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -116,13 +122,14 @@ ImfWindow::ImfWindow(QWidget* parent) : QWidget(parent) {
     explore_->setObjectName(QStringLiteral("imfExplore"));
     connect(explore_, &QPushButton::clicked, this, [this] { explore(); });
     buttons->addWidget(explore_);
-    // "New IMF ... Allows you to create a new IMF Original or Supplemental" (p.334). Supplementals come with 11.5c3.
+    // "New IMF ... Allows you to create a new IMF Original or Supplemental" (p.334).
     newImf_ = new QPushButton(tr("New IMF"), this);
     newImf_->setObjectName(QStringLiteral("imfNew"));
     newMenu_ = new QMenu(newImf_);
     newMenu_->addAction(tr("IMF Original"), this, [this] { newOriginal(); });
-    QAction* supplemental = newMenu_->addAction(tr("IMF Supplemental"));
-    supplemental->setEnabled(false);
+    newMenu_->addAction(tr("IMF Supplemental"), this, [this] {
+        if (newSupplemental() < 0) emit failed(tr("Select the IMF Original on disk that the Supplemental adds to."));
+    });
     newImf_->setMenu(newMenu_);
     buttons->addWidget(newImf_);
     export_ = new QPushButton(tr("Export"), this);
@@ -243,6 +250,7 @@ void ImfWindow::rebuild() {
     for (int d = 0; d < drafts_.size(); ++d) {
         const ImfDraft& draft = drafts_.at(d);
         auto* root = new QTreeWidgetItem(tree_, {draft.name, QStringLiteral("●")});
+        if (draft.isSupplemental()) root->setToolTip(0, tr("Supplemental of %1").arg(QFileInfo(draft.original).fileName()));
         root->setData(0, kPathRole, draftKey(d, -1, -1));
         root->setData(0, kKindRole, DraftRoot);
         root->setFlags(root->flags() & ~Qt::ItemIsDragEnabled);
@@ -289,6 +297,86 @@ int ImfWindow::newOriginal() {
     rebuild();
     selectDraft(static_cast<int>(drafts_.size()) - 1);
     return static_cast<int>(drafts_.size()) - 1;
+}
+
+int ImfWindow::newSupplemental(const QString& originalRoot) {
+    QString original = originalRoot;
+    if (original.isEmpty()) {
+        // The package on disk the selection is in.
+        const QTreeWidgetItem* item = tree_->currentItem();
+        while (item && item->parent()) item = item->parent();
+        if (item && item->data(0, kKindRole).toInt() == Root) original = item->data(0, kPathRole).toString();
+    }
+    original = original.isEmpty() ? QString() : QFileInfo(original).absoluteFilePath();
+    const bool listed = std::any_of(packages_.cbegin(), packages_.cend(), [&](const interop::imf::Package& p) { return p.root == original; });
+    if (!listed) return -1;
+    ImfDraft draft;
+    draft.original = original;
+    draft.directory = QFileInfo(original).absolutePath();
+    draft.name = QFileInfo(original).fileName() + QStringLiteral("_SUPP");
+    for (const interop::imf::Package& p : packages_) {
+        if (p.root != original) continue;
+        draft.issuer = p.issuer;
+        draft.creator = p.creator;
+    }
+    draft.imps << ImfDraftImp{};
+    drafts_ << draft;
+    rebuild();
+    selectDraft(static_cast<int>(drafts_.size()) - 1);
+    return static_cast<int>(drafts_.size()) - 1;
+}
+
+int ImfWindow::supplementOf(const QString& originalRoot) const {
+    const QString clean = QFileInfo(originalRoot).absoluteFilePath();
+    for (int d = 0; d < drafts_.size(); ++d) {
+        if (drafts_.at(d).original == clean) return d;
+    }
+    return -1;
+}
+
+void ImfWindow::setAudioTrack(int draft, int imp, int cpl, int row, const ImfAudioTrack& track) {
+    if (draft < 0 || draft >= drafts_.size() || imp < 0 || imp >= drafts_.at(draft).imps.size()) return;
+    QList<ImfDraftCpl>& cpls = drafts_[draft].imps[imp].cpls;
+    if (cpl < 0 || cpl >= cpls.size() || row < 0 || row >= cpls.at(cpl).audio.size()) return;
+    cpls[cpl].audio[row] = track;
+    refreshStatuses();
+}
+
+void ImfWindow::addAudioTrack(int draft, int imp, int cpl) {
+    if (draft < 0 || draft >= drafts_.size() || imp < 0 || imp >= drafts_.at(draft).imps.size()) return;
+    QList<ImfDraftCpl>& cpls = drafts_[draft].imps[imp].cpls;
+    if (cpl < 0 || cpl >= cpls.size()) return;
+    // "To add another IMF audio track, click on the plus button. Doing so will add another row for definition" (p.339).
+    cpls[cpl].audio << ImfAudioTrack{};
+    refreshStatuses();
+    QTimer::singleShot(0, this, [this] { showSelection(); }); // the pane is rebuilt after the click that asked for it
+}
+
+void ImfWindow::removeAudioTrack(int draft, int imp, int cpl, int row) {
+    if (draft < 0 || draft >= drafts_.size() || imp < 0 || imp >= drafts_.at(draft).imps.size()) return;
+    QList<ImfDraftCpl>& cpls = drafts_[draft].imps[imp].cpls;
+    if (cpl < 0 || cpl >= cpls.size() || row < 0 || row >= cpls.at(cpl).audio.size()) return;
+    cpls[cpl].audio.removeAt(row);
+    refreshStatuses();
+    QTimer::singleShot(0, this, [this] { showSelection(); });
+}
+
+void ImfWindow::addTrackGroup(int draft, int imp, int cpl, const ImfTrackGroup& group) {
+    if (draft < 0 || draft >= drafts_.size() || imp < 0 || imp >= drafts_.at(draft).imps.size()) return;
+    QList<ImfDraftCpl>& cpls = drafts_[draft].imps[imp].cpls;
+    if (cpl < 0 || cpl >= cpls.size() || group.tracks.isEmpty()) return;
+    // "Once saved, the group will appear in the tracks list at the bottom" (p.339); a group of the same name is replaced.
+    cpls[cpl].groups.removeIf([&](const ImfTrackGroup& g) { return g.name == group.name; });
+    cpls[cpl].groups << group;
+    QTimer::singleShot(0, this, [this] { showSelection(); });
+}
+
+QString ImfWindow::mcaSummary(const ImfAudioTrack& track) {
+    const QString kind = track.contentKind == QLatin1String("dvs")      ? tr("Descriptive Video Service")
+                         : track.contentKind == QLatin1String("dialog") ? tr("Dialog Centric Mix")
+                                                                        : tr("Main Program");
+    const QString tag = media::imfLanguageTag(track.language, track.region);
+    return tr("MCA Content Kind: %1\nMCA Language: %2").arg(kind, tag.isEmpty() ? tr("None") : tag);
 }
 
 int ImfWindow::addSequences(int draft, const QList<ImfDraftCpl>& sequences) {
@@ -568,6 +656,7 @@ void ImfWindow::showDraft(const QTreeWidgetItem* item) {
     };
     if (i < 0) {
         // "Rename the folder and set the Directory path" (p.337).
+        if (draft.isSupplemental()) label(tr("Supplemental of"), QDir::toNativeSeparators(draft.original));
         edit(tr("IMF Name"), QStringLiteral("name"), draft.name);
         auto* directory = edit(tr("Directory"), QStringLiteral("directory"), QDir::toNativeSeparators(draft.directory));
         auto* browse = new QPushButton(tr("Browse..."), pane_);
@@ -609,6 +698,167 @@ void ImfWindow::showDraft(const QTreeWidgetItem* item) {
     edit(tr("Issuer"), QStringLiteral("issuer"), cpl.issuer);
     edit(tr("Creator"), QStringLiteral("creator"), cpl.creator);
     edit(tr("Annotation"), QStringLiteral("annotation"), cpl.annotation);
+    showAudioMapping(d, i, c);
+}
+
+// "The Audio Mapping section allows you to map sequence tracks to IMF output tracks" (p.338): a row an IMF audio track,
+// the sequence's tracks (and groups) on the left, the IMF track format on the right, then the MCA metadata's edit
+// button and the plus and minus buttons (p.339-340); the Audio Tracks Grouping button below.
+void ImfWindow::showAudioMapping(int d, int i, int c) {
+    const ImfDraftCpl& cpl = drafts_.at(d).imps.at(i).cpls.at(c);
+    auto* heading = new QLabel(tr("Audio Mapping"), pane_);
+    QFont bold = heading->font();
+    bold.setBold(true);
+    heading->setFont(bold);
+    form_->addRow(heading);
+    const QList<std::pair<QString, QString>> tracks = sequenceTracks_ ? sequenceTracks_(cpl) : QList<std::pair<QString, QString>>{};
+    for (int row = 0; row < cpl.audio.size(); ++row) {
+        const ImfAudioTrack track = cpl.audio.at(row);
+        auto* line = new QWidget(pane_);
+        line->setObjectName(QStringLiteral("imfAudioRow%1").arg(row));
+        auto* h = new QHBoxLayout(line);
+        h->setContentsMargins(0, 0, 0, 0);
+        // "The left-hand menu defaults to All Active Tracks, but selecting the menu will show all the tracks in the
+        // sequence as well as their format" (p.338); groups at the bottom (p.339).
+        auto* source = new QComboBox(line);
+        source->setObjectName(QStringLiteral("imfAudioSource"));
+        source->addItem(tr("All Active Tracks"), QString());
+        for (const auto& [name, format] : tracks) source->addItem(QStringLiteral("%1 (%2)").arg(name, format), QStringLiteral("track:%1").arg(name));
+        for (const ImfTrackGroup& g : cpl.groups) source->addItem(g.name, QStringLiteral("group:%1").arg(g.name));
+        source->setCurrentIndex(std::max(0, source->findData(track.source)));
+        // "the IMF track format can be selected in the right-hand menu" (p.339).
+        auto* format = new QComboBox(line);
+        format->setObjectName(QStringLiteral("imfAudioFormat"));
+        const QStringList formats{QStringLiteral("mono"), QStringLiteral("stereo"), QStringLiteral("5.1"), QStringLiteral("7.1")};
+        const QStringList names{tr("Mono"), tr("Stereo"), tr("5.1"), tr("7.1")};
+        for (int n = 0; n < formats.size(); ++n) format->addItem(names.at(n), formats.at(n));
+        format->setCurrentIndex(std::max(0, static_cast<int>(formats.indexOf(track.format))));
+        auto* mca = new QPushButton(QStringLiteral("…"), line);
+        mca->setObjectName(QStringLiteral("imfAudioMca"));
+        mca->setAccessibleName(tr("Multi-Channel Audio Metadata"));
+        mca->setToolTip(mcaSummary(track));
+        auto* plus = new QPushButton(QStringLiteral("+"), line);
+        plus->setObjectName(QStringLiteral("imfAudioAdd"));
+        plus->setAccessibleName(tr("Add IMF audio track"));
+        auto* minus = new QPushButton(QStringLiteral("−"), line);
+        minus->setObjectName(QStringLiteral("imfAudioRemove"));
+        minus->setAccessibleName(tr("Remove IMF audio track"));
+        minus->setEnabled(cpl.audio.size() > 1);
+        for (QPushButton* b : {mca, plus, minus}) b->setFixedWidth(28);
+        h->addWidget(source, 1);
+        h->addWidget(format);
+        h->addWidget(mca);
+        h->addWidget(plus);
+        h->addWidget(minus);
+        connect(source, &QComboBox::activated, this, [this, d, i, c, row, source] {
+            ImfAudioTrack t = drafts_.at(d).imps.at(i).cpls.at(c).audio.at(row);
+            t.source = source->currentData().toString();
+            setAudioTrack(d, i, c, row, t);
+        });
+        connect(format, &QComboBox::activated, this, [this, d, i, c, row, format] {
+            ImfAudioTrack t = drafts_.at(d).imps.at(i).cpls.at(c).audio.at(row);
+            t.format = format->currentData().toString();
+            setAudioTrack(d, i, c, row, t);
+        });
+        connect(mca, &QPushButton::clicked, this, [this, d, i, c, row, mca] {
+            const ImfAudioTrack t = drafts_.at(d).imps.at(i).cpls.at(c).audio.at(row);
+            if (const auto edited = editMca(t)) {
+                setAudioTrack(d, i, c, row, *edited);
+                mca->setToolTip(mcaSummary(*edited));
+            }
+        });
+        connect(plus, &QPushButton::clicked, this, [this, d, i, c] { addAudioTrack(d, i, c); });
+        connect(minus, &QPushButton::clicked, this, [this, d, i, c, row] { removeAudioTrack(d, i, c, row); });
+        form_->addRow(tr("IMF Audio Track %1").arg(row + 1), line);
+    }
+    // "clicking on the Audio Tracks Grouping button will open a window that allows you to group together contiguous or
+    // non-contagious tracks into a single group" (p.338).
+    auto* grouping = new QPushButton(tr("Audio Tracks Grouping"), pane_);
+    grouping->setObjectName(QStringLiteral("imfAudioGrouping"));
+    grouping->setEnabled(!tracks.isEmpty());
+    connect(grouping, &QPushButton::clicked, this, [this, d, i, c, tracks] {
+        if (const auto group = editGroup(tracks)) addTrackGroup(d, i, c, *group);
+    });
+    form_->addRow(QString(), grouping);
+}
+
+// The Multi-Channel Audio Metadata window (p.340): MCA Content Kind, MCA Language and the language's regions.
+std::optional<ImfAudioTrack> ImfWindow::editMca(const ImfAudioTrack& track) {
+    if (mcaEditor_) return mcaEditor_(track);
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Multi-Channel Audio Metadata"));
+    auto* form = new QFormLayout(&dialog);
+    auto* kind = new QComboBox(&dialog);
+    kind->addItem(tr("Main Program"), QStringLiteral("main"));
+    kind->addItem(tr("Descriptive Video Service"), QStringLiteral("dvs"));
+    kind->addItem(tr("Dialog Centric Mix"), QStringLiteral("dialog"));
+    kind->setCurrentIndex(std::max(0, kind->findData(track.contentKind)));
+    auto* language = new QComboBox(&dialog);
+    language->addItem(tr("None"), QString());
+    // Each language by its own name (QLocale's), with its subtag.
+    for (const QString& code : media::imfLanguages()) {
+        language->addItem(QStringLiteral("%1 (%2)").arg(QLocale(code).nativeLanguageName(), code), code);
+    }
+    language->setCurrentIndex(std::max(0, language->findData(track.language)));
+    auto* region = new QComboBox(&dialog);
+    auto fillRegions = [region, language](const QString& keep) {
+        region->clear();
+        region->addItem(tr("None"), QString());
+        const QString code = language->currentData().toString();
+        for (const QString& r : media::imfRegions(code)) {
+            const QLocale locale(QStringLiteral("%1_%2").arg(code, r));
+            region->addItem(locale.territory() == QLocale::AnyTerritory ? r : QStringLiteral("%1 (%2)").arg(locale.nativeTerritoryName(), r), r);
+        }
+        region->setCurrentIndex(std::max(0, region->findData(keep)));
+    };
+    fillRegions(track.region);
+    // "Selecting an MCA Language will also populate the respective regions if available" (p.340).
+    connect(language, &QComboBox::activated, &dialog, [fillRegions] { fillRegions(QString()); });
+    form->addRow(tr("MCA Content Kind"), kind);
+    form->addRow(tr("MCA Language"), language);
+    form->addRow(tr("MCA Region"), region);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+    ImfAudioTrack out = track;
+    out.contentKind = kind->currentData().toString();
+    out.language = language->currentData().toString();
+    out.region = out.language.isEmpty() ? QString() : region->currentData().toString();
+    return out;
+}
+
+// The Audio Tracks Grouping window (p.338): the group's name, its tracks, and whether it includes the Master Fader.
+std::optional<ImfTrackGroup> ImfWindow::editGroup(const QList<std::pair<QString, QString>>& tracks) {
+    if (groupEditor_) return groupEditor_(tracks);
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Audio Tracks Grouping"));
+    auto* form = new QFormLayout(&dialog);
+    auto* name = new QLineEdit(tr("Group %1").arg(1), &dialog);
+    form->addRow(tr("Name"), name);
+    QList<std::pair<QString, QCheckBox*>> boxes;
+    for (const auto& [track, format] : tracks) {
+        auto* box = new QCheckBox(QStringLiteral("%1 (%2)").arg(track, format), &dialog);
+        form->addRow(QString(), box);
+        boxes << std::pair{track, box};
+    }
+    auto* master = new QCheckBox(tr("Include Master Fader"), &dialog);
+    master->setChecked(true);
+    form->addRow(QString(), master);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+    ImfTrackGroup group;
+    group.name = name->text().trimmed();
+    for (const auto& [track, box] : boxes) {
+        if (box->isChecked()) group.tracks << track;
+    }
+    group.masterFader = master->isChecked();
+    if (group.name.isEmpty() || group.tracks.isEmpty()) return std::nullopt;
+    return group;
 }
 
 QStringList ImfWindow::metadata() const {
