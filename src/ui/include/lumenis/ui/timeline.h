@@ -1126,14 +1126,16 @@ public:
     // AudioSuite (p.797-800; lumenis/model/audio_suite.h): `effect` on the whole segment under the
     // Record position on each of `tracks`, or with `onTrack` (the Fast menu's items) on the segments
     // between the marks: IN to OUT, IN to the end ("From IN"), the start to OUT, or the whole track
-    // ("Global", p.799); without an effect, the effect removed. One undo step. Already so: true
+    // ("Global", p.799); without an effect, the effect removed. `level` is the Nested Level Selection
+    // menu's (p.800; model::setAudioSuite): 1 for the first effect. One undo step. Already so: true
     // without a step; no audio segment there: false.
     bool setAudioSuite(const QStringList& tracks, const std::optional<model::AudioSuiteEffect>& effect, bool onTrack,
-                       const QString& description);
+                       const QString& description, int level = 1);
     // The record frames [from, to) the Fast menu's items work on for `track`, as for onTrack above.
     std::pair<std::int64_t, std::int64_t> markedRange(const QString& track) const;
-    // The AudioSuite effect of the segment under the Record position on `track`, if any.
-    std::optional<model::AudioSuiteEffect> audioSuiteAt(const QString& track) const;
+    // The AudioSuite effect of the segment under the Record position on `track` at Nested Level Selection level
+    // `level` (1 for the first), if any.
+    std::optional<model::AudioSuiteEffect> audioSuiteAt(const QString& track, int level = 1) const;
     // Render Effect (p.797, p.800): each segment of `tracks` overlapping record frames [from, to)
     // whose AudioSuite effect is not rendered gets the render `render` makes of it, as one undo step.
     // A render that fails stops there with its message (the ones made before it are kept). Returns
@@ -1388,9 +1390,11 @@ public:
         bool correctionLines = false; // Color Correction: the correction indicator lines (FX Guide p.616)
         // Title Text (FX Guide p.305): "enabled by default", a Titler+ segment's topmost text.
         bool titleText = true;
-        // Show Adapters (p.599): "Temporal (motion) adapters appear with a T". Spatial (FrameFlex) and
-        // Color adapters come with FrameFlex and color management.
+        // Show Adapters (p.599): "Temporal (motion) adapters appear with a T, spatial (FrameFlex) adapters appear
+        // with an S, and Color adapters appear with a C" (shownAdapterIcons()).
         bool motionAdapters = false;
+        bool spatialAdapters = false;
+        bool colorAdapters = false;
         // Windows > Set Font (p.81-82): the clip text's font, "saves as a Timeline View setting".
         // Empty family and 0 size: the Timeline's own.
         QString clipFontFamily;
@@ -1753,5 +1757,10 @@ private:
     mutable QHash<QString, std::pair<bool, qint64>> online_;
     mutable QElapsedTimer onlineClock_;
 };
+
+// The adapter icons Show Adapters draws on a video segment (p.599), in order: "T" for a motion adapter the Timeline shows
+// (model::adapterShown), "S" for a Spatial Adapter with a FrameFlex box, "C" for a Color Adapter; each only when its
+// Show Adapters item is on.
+QStringList shownAdapterIcons(const model::Segment& segment, const Timeline::Display& display);
 
 } // namespace lumenis::ui

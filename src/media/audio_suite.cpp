@@ -383,7 +383,10 @@ std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& s,
         return std::nullopt;
     }
     std::vector<std::vector<float>> sound{segmentSource(s, clip, sequenceRate)};
-    if (!processAudioSuite(s.audioSuite->effect, s.audioSuite->params, sound, error)) return std::nullopt;
+    // Each Nested Level Selection level in turn, level 1 first (p.800).
+    for (const model::AudioSuiteEffect& level : model::audioSuiteLevels(s)) {
+        if (!processAudioSuite(level.effect, level.params, sound, error)) return std::nullopt;
+    }
     const std::vector<float>& made = sound.front();
     const auto rendered = renderedAudioClip(
         QStringLiteral("%1 %2").arg(s.name, s.audioSuite->name), sequenceRate, s.length + 1, 1,

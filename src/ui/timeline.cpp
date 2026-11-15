@@ -94,6 +94,33 @@ namespace lumenis::ui {
 
 namespace {
 
+// An adapter's icon (p.599): a grey square with a T, S or C drawn in strokes, not as letters, so the text-free screenshots
+// keep it.
+void paintAdapterIcon(QPainter& p, const QRectF& box, const QString& kind) {
+    p.save();
+    p.setPen(QPen(QColor(0xff3a3a3a), 1));
+    p.setBrush(QColor(0xffb8b8b8));
+    p.drawRoundedRect(box, 2, 2);
+    p.setPen(QPen(QColor(0xff2a2a2a), 1.5, Qt::SolidLine, Qt::RoundCap));
+    p.setBrush(Qt::NoBrush);
+    const QRectF in = box.adjusted(2.5, 2.5, -2.5, -2.5);
+    if (kind == QLatin1String("T")) {
+        p.drawLine(QPointF(in.left(), in.top() + 0.5), QPointF(in.right(), in.top() + 0.5));
+        p.drawLine(QPointF(in.center().x(), in.top() + 0.5), QPointF(in.center().x(), in.bottom()));
+    } else if (kind == QLatin1String("C")) {
+        p.drawArc(in, 45 * 16, 270 * 16);
+    } else {
+        // S: an upper bowl open to the right and a lower one open to the left.
+        const double h = in.height() / 2;
+        QPainterPath s;
+        s.arcMoveTo(QRectF(in.left(), in.top(), in.width(), h), 30);
+        s.arcTo(QRectF(in.left(), in.top(), in.width(), h), 30, 240);
+        s.arcTo(QRectF(in.left(), in.top() + h, in.width(), h), 90, -270);
+        p.drawPath(s);
+    }
+    p.restore();
+}
+
 // Sizes. The guide's pictures show the layout but not the sizes.
 constexpr int kRulerHeight = 20;
 constexpr int kVideoRow = 30;
@@ -1595,49 +1622,42 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
                 speedText((x0 + x1) / 2, motion->speed, clip->editRate, x1);
             }
         }
-        // A mixed rate clip's Motion Adapter: "Mixed rate clips that are unrendered always appear with a
-        // green dot that represents the Motion Adapter effect" (Editing Guide p.470). With Show Adapters >
-        // Motion its icon, a T, shows too (p.599), left of an effect icon or in the middle; "If there is a
-        // render dot on the clip it will appear on the effect icon. If there is no effect icon, the render
-        // dot will appear on the adapters." A render in date of the segment's effect has none.
-        if (s.adapter && t.kind == model::TrackKind::Video && model::adapterShown(*s.adapter) &&
-            !(s.effect && rendered(index, at, false))) {
+        // Adapters (p.599): "Clips that have source-side color, spatial and motion adapters, have these effects indicated
+        // by separate icons ... Temporal (motion) adapters appear with a T, spatial (FrameFlex) adapters appear with an S,
+        // and Color adapters appear with a C", for those chosen in Show Adapters, left of an effect icon or in the
+        // middle. "If there is a render dot on the clip it will appear on the effect icon. If there is no effect icon,
+        // the render dot will appear on the adapters": the green dot of an unrendered adapter ("Mixed rate clips that
+        // are unrendered always appear with a green dot", p.470; a FrameFlex box or a Color Adapter, p.531, p.528).
+        // Ours: a Spatial Adapter counts only with a FrameFlex box, not for the Reformat attribute alone; a segment's
+        // effect rendered in date covers the motion adapter.
+        if (t.kind == model::TrackKind::Video) {
+            const bool motion = s.adapter && model::adapterShown(*s.adapter) && !(s.effect && rendered(index, at, false));
+            const bool dot = motion || (((s.spatial && s.spatial->frameFlex) || s.color) && !s.effect);
+            const QStringList icons = shownAdapterIcons(s, timeline_.display());
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
             const bool effectIcon = s.effect.has_value();
             const double centre = (x0 + x1) / 2;
             const double y = r.top + r.height / 2.0;
-            p.setPen(Qt::NoPen);
-            if (timeline_.display().motionAdapters && x1 - x0 > (effectIcon ? 3 : 1) * iconWidth + 8) {
-                const double c = effectIcon ? centre - iconWidth - 8 : centre;
-                const QRectF box(c - iconHeight / 2.0, r.top + (r.height - iconHeight) / 2.0, iconHeight, iconHeight);
-                p.setPen(QPen(QColor(0xff3a3a3a), 1));
-                p.setBrush(QColor(0xffb8b8b8));
-                p.drawRoundedRect(box, 2, 2);
-                // The T, drawn (not a letter, so the text-free screenshots keep it).
-                p.setPen(QPen(QColor(0xff2a2a2a), 1.5));
-                p.drawLine(QPointF(box.left() + 2.5, box.top() + 3), QPointF(box.right() - 2.5, box.top() + 3));
-                p.drawLine(QPointF(box.center().x(), box.top() + 3), QPointF(box.center().x(), box.bottom() - 2.5));
-                if (!effectIcon) {
+            const double step = iconHeight + 2;
+            const double group = static_cast<double>(icons.size()) * step - 2;
+            if (!icons.isEmpty() && x1 - x0 > group + (effectIcon ? 2 * iconWidth : 0) + 8) {
+                // The icons side by side, ending left of the effect icon, or centred.
+                double left = effectIcon ? centre - iconWidth / 2.0 - 6 - group : centre - group / 2;
+                for (const QString& kind : icons) {
+                    const QRectF box(left, r.top + (r.height - iconHeight) / 2.0, iconHeight, iconHeight);
+                    paintAdapterIcon(p, box, kind);
+                    left += step;
+                }
+                if (dot && !effectIcon) {
                     p.setPen(Qt::NoPen);
                     p.setBrush(QColor(0xff3cc85a));
-                    p.drawEllipse(QRectF(box.left() - 5, y - 2, 4, 4));
+                    p.drawEllipse(QRectF(centre - group / 2 - 5, y - 2, 4, 4));
                 }
-            } else if (!effectIcon && x1 - x0 > 10) {
-                p.setBrush(QColor(0xff3cc85a));
-                p.drawEllipse(QRectF(centre - 2, y - 2, 4, 4));
-            }
-        } else if (((s.spatial && s.spatial->frameFlex) || s.color) && t.kind == model::TrackKind::Video && !s.effect) {
-            // A reframed clip's Spatial Adapter: "A green dot on the clip in the Timeline indicates that spatial changes
-            // (in the form of a spatial adapter effect) have been applied to this clip" (p.531). Ours: only for a
-            // FrameFlex box, not for the Reformat attribute alone. A Color Adapter has one too ("any of these changes
-            // will be indicated as adapter effects and will display as green dots on the clip", p.528).
-            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
-            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
-            if (x1 - x0 > 10) {
+            } else if (dot && !effectIcon && x1 - x0 > 10) {
                 p.setPen(Qt::NoPen);
                 p.setBrush(QColor(0xff3cc85a));
-                p.drawEllipse(QRectF((x0 + x1) / 2 - 2, r.top + r.height / 2.0 - 2, 4, 4));
+                p.drawEllipse(QRectF(centre - 2, y - 2, 4, 4));
             }
         }
         if (s.eq) {
@@ -3094,12 +3114,12 @@ QMenu* Timeline::fastMenu() {
     for (const model::MarkerColor& c : model::markerColors()) {
         check(markers, c.name, showsMarkers(c.name), [this, name = c.name](bool v) { setMarkersShown(name, v); });
     }
-    // Show Adapters (p.599): the adapters whose icons are drawn. Only Motion adapters are kept yet.
+    // Show Adapters (p.599): the adapters whose icons are drawn.
     QMenu* adapters = m->addMenu(tr("Show Adapters"));
     adapters->setObjectName(QStringLiteral("showAdapters"));
     check(adapters, tr("Motion"), display_.motionAdapters, [this](bool v) { display_.motionAdapters = v; });
-    adapters->addAction(tr("Spatial"))->setEnabled(false);
-    adapters->addAction(tr("Color"))->setEnabled(false);
+    check(adapters, tr("Spatial"), display_.spatialAdapters, [this](bool v) { display_.spatialAdapters = v; });
+    check(adapters, tr("Color"), display_.colorAdapters, [this](bool v) { display_.colorAdapters = v; });
     QMenu* showTrack = m->addMenu(tr("Show Track"));
     check(showTrack, tr("TC1"), display_.timecodeTrack, [this](bool v) { display_.timecodeTrack = v; });
     check(m, tr("Track Control Panel"), display_.trackControlPanel, [this](bool v) { setTrackControlPanel(v); });
@@ -3116,6 +3136,14 @@ QMenu* Timeline::fastMenu() {
     connect(back, &QAction::triggered, this, &Timeline::zoomBack);
     zoom->addAction(tr("Show Every Frame"))->setEnabled(false);
     return m;
+}
+
+QStringList shownAdapterIcons(const model::Segment& s, const Timeline::Display& display) {
+    QStringList icons;
+    if (display.motionAdapters && s.adapter && model::adapterShown(*s.adapter)) icons << QStringLiteral("T");
+    if (display.spatialAdapters && s.spatial && s.spatial->frameFlex) icons << QStringLiteral("S");
+    if (display.colorAdapters && s.color) icons << QStringLiteral("C");
+    return icons;
 }
 
 QMenu* Timeline::undoRedoMenu() {
@@ -7049,7 +7077,7 @@ bool Timeline::setEq(const QStringList& tracks, const std::optional<model::Audio
 }
 
 bool Timeline::setAudioSuite(const QStringList& tracks, const std::optional<model::AudioSuiteEffect>& effect, bool onTrack,
-                             const QString& description) {
+                             const QString& description, int level) {
     message_.clear();
     if (!recordSequence()) return false;
     const model::MonitorState& record = composer_.state(MonitorId::Record);
@@ -7060,7 +7088,7 @@ bool Timeline::setAudioSuite(const QStringList& tracks, const std::optional<mode
         std::int64_t from = record.position();
         std::int64_t to = from + 1;
         if (onTrack) std::tie(from, to) = markedRange(track);
-        changed += model::setAudioSuite(seq, track, from, to, effect);
+        changed += model::setAudioSuite(seq, track, from, to, effect, level);
         // Nothing to do is not an error where the segments already are so.
         const model::Track* t = seq.track(track);
         if (!t || t->kind != model::TrackKind::Audio || t->locked) continue;
@@ -7084,15 +7112,11 @@ std::pair<std::int64_t, std::int64_t> Timeline::markedRange(const QString& track
     return {record.in().value_or(0), record.out() ? *record.out() + 1 : end};
 }
 
-std::optional<model::AudioSuiteEffect> Timeline::audioSuiteAt(const QString& track) const {
-    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
-    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
-    const model::Sequence seq = model::Sequence::fromItem(rec->item);
-    const model::Track* t = seq.track(track);
-    if (!t) return std::nullopt;
-    const int i = t->segmentAt(composer_.state(MonitorId::Record).position());
-    if (i < 0) return std::nullopt;
-    return t->segments.at(i).audioSuite;
+std::optional<model::AudioSuiteEffect> Timeline::audioSuiteAt(const QString& track, int level) const {
+    const auto s = audioSegmentAt(track);
+    if (!s || level < 1) return std::nullopt;
+    const QList<model::AudioSuiteEffect> levels = model::audioSuiteLevels(*s);
+    return level <= levels.size() ? std::optional(levels.at(level - 1)) : std::nullopt;
 }
 
 int Timeline::audioSuiteToRender(const QStringList& tracks, std::int64_t from, std::int64_t to) const {
@@ -8016,6 +8040,8 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("correctionLines"), d.correctionLines},
         {QStringLiteral("titleText"), d.titleText},
         {QStringLiteral("motionAdapters"), d.motionAdapters},
+        {QStringLiteral("spatialAdapters"), d.spatialAdapters},
+        {QStringLiteral("colorAdapters"), d.colorAdapters},
         {QStringLiteral("clipFontFamily"), d.clipFontFamily},
         {QStringLiteral("clipFontSize"), d.clipFontSize},
         {QStringLiteral("syncBreaks"), d.syncBreaks == SyncBreaks::Video   ? QStringLiteral("video")
@@ -8074,6 +8100,8 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("correctionLines", d.correctionLines);
     flag("titleText", d.titleText);
     flag("motionAdapters", d.motionAdapters);
+    flag("spatialAdapters", d.spatialAdapters);
+    flag("colorAdapters", d.colorAdapters);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
     d.syncBreaks = sync == QLatin1String("video")  ? SyncBreaks::Video
                    : sync == QLatin1String("audio") ? SyncBreaks::Audio

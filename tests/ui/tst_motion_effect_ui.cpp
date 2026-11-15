@@ -202,6 +202,24 @@ private slots:
         settle();
         QCOMPARE(shownFrame(composer, MonitorId::Record, 0), 10);
         QCOMPARE(shownFrame(composer, MonitorId::Record, 7), 13);
+        // Render Effect on it renders the clip (Motion Effects Render Using, p.1214-1215: "when Media Composer renders
+        // existing motion effects"), first taking the setting's type: "Changes to motion effect types are permanent"
+        // (p.174).
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("motionEffectsRenderUsing"), QStringLiteral("both"));
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("renderVideoDrive"), drive);
+        window.setRenderHook([](RenderEffectDialog& d) {
+            d.accept();
+            return true;
+        });
+        composer.moveTo(MonitorId::Record, 3);
+        window.renderEffects(true, false, false);
+        settle();
+        const auto renderedSlow = composer.resolve(binId, slow.id);
+        QVERIFY(renderedSlow && media::isLinked(*renderedSlow));
+        QCOMPARE(model::motionEffectOf(*renderedSlow)->field, model::FieldMotion::BothFields);
+        const int frame7 = shownFrame(composer, MonitorId::Record, 7);
+        QVERIFY2(std::abs(frame7 - 13) <= 1, qPrintable(QString::number(frame7)));
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("motionEffectsRenderUsing"), QStringLiteral("original"));
 
         // A segment's own Motion Effect (Fit to Fill's, an import's) plays at its speed too.
         QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Speed"), [&](model::Sequence& s) {

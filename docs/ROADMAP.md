@@ -1856,7 +1856,16 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   (`AudioSuiteInfo::changesLength`); AudioSuite's names marked for translation; tests `tst_time_stretch`,
   `tst_audio_suite newMasterClip`. Later: Time Shift's Formant shift and Follow, the lengths in other units).
 * 11.3, the smaller items: Show Adapters > Spatial and Color, AudioSuite's Nested Level Selection, import gain, the
-  Import setting's OMFI/AAF tab, Media Creation's Apply to All and drives, Motion Effects Render Using.
+  Import setting's OMFI/AAF tab, Media Creation's Apply to All and drives, Motion Effects Render Using. Done:
+  11.3a, Show Adapters > Spatial's S and Color's C (`ui::shownAdapterIcons`, kept with Timeline views; test
+  `tst_frameflex_ui showAdapters`); 11.3b, the Nested Level Selection menu (`Segment::nestedAudioSuites` rendered in
+  turn into level 1's render, `model::audioSuiteLevels`, the tool's levels with EQ at level 0 opening the Audio EQ tool;
+  tests `tst_audio_suite nestedLevels`, `tst_audio_suite_ui nestedLevels`); 11.3c, import gain, was done in 9.2d;
+  11.3e, Apply to All and the Single/Dual Drives Mode button (the settings' `applyToAll` and `driveMode` option types;
+  test `tst_settings_window mediaCreationApplyToAll`); 11.3f, Motion Effects Render Using (`MainWindow::renderMotionClip`
+  from Create and Render and from Render Effect on unrendered motion effect clips; test `tst_motion_effect_ui`). Left:
+  11.3d, the OMFI/AAF tab's Resolution, which needs media embedded in AAF files read first (not yet imported or
+  exported, docs/spec/aaf.md); drive groups and DisabledRes.txt.
 * 11.4, the medium ones: Consolidate/Transcode and Relink options, export from a monitor and by drag and drop, the
   List Tool's lists, the Shot Log tab, extended Punch-In, surround pan automation, the Background Queue's Resume and
   job groups, the settings options marked `"later"`.

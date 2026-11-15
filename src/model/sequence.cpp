@@ -199,6 +199,11 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
     if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
     if (s.audioSuite) o.insert(QStringLiteral("audioSuite"), audioSuiteToJson(*s.audioSuite));
+    if (s.audioSuite && !s.nestedAudioSuites.isEmpty()) {
+        QJsonArray levels;
+        for (const AudioSuiteEffect& e : s.nestedAudioSuites) levels.append(audioSuiteToJson(e));
+        o.insert(QStringLiteral("audioSuiteLevels"), levels);
+    }
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
     if (s.effect && s.render) o.insert(QStringLiteral("render"), renderToJson(*s.render));
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
@@ -317,6 +322,11 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
     if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
     if (o.contains(QStringLiteral("audioSuite"))) s.audioSuite = audioSuiteFromJson(o.value(QStringLiteral("audioSuite")).toObject());
+    if (s.audioSuite) {
+        for (const QJsonValue& v : o.value(QStringLiteral("audioSuiteLevels")).toArray()) {
+            s.nestedAudioSuites.append(audioSuiteFromJson(v.toObject()));
+        }
+    }
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
     if (s.effect) s.render = renderFromJson(o.value(QStringLiteral("render")));
     if (o.contains(QStringLiteral("transition"))) {

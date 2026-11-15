@@ -25,7 +25,7 @@ struct SettingChoice {
 // setting's values.
 struct SettingOption {
     QString key;  // the key in the setting's values
-    QString type; // bool, int, number, choice, drive, timecode, text, info, color, font, safeColorGraph, button (opens a window: SettingsDialog::buttonClicked)
+    QString type; // bool, int, number, choice, drive, timecode, text, info, color, font, safeColorGraph, button (opens a window: SettingsDialog::buttonClicked), applyToAll, driveMode
     QString label;
     QString suffix; // text after the control (a unit)
     QString specialText; // int options: shown for `min` instead of the number ("Recommended")
@@ -43,6 +43,15 @@ struct SettingOption {
     bool later = false; // shown, not available yet: value() returns the default
     bool ours = false;  // not in the guides (no page to cite): ours, on the watch list (docs/spec/ui-inventory.md)
     QList<SettingChoice> choices;
+    // Where a choice option's extra choices come from ("languages", "resolutions", "resolutionNames").
+    QString choicesFrom;
+    // applyToAll options, Media Creation's Apply to All buttons (p.135, p.1207): "resolution" copies the tab's Video
+    // Resolution to every resolution menu of the setting, "drives" its video and audio drives to every drive menu.
+    QString applies;
+    // driveMode options, the Single/Dual Drives Mode button (p.135; a bool, true for dual): in single mode the tab shows
+    // only the video drive menu, which `audioDrive`'s value follows.
+    QString videoDrive;
+    QString audioDrive;
 
     // The value a stored one stands for: the default when nothing is stored,
     // the option is not available yet, the stored value has another JSON

@@ -13,11 +13,20 @@ QString audioSuiteKey(const Segment& s) {
     // Everything the rendered sound depends on, in a fixed order. Parameters print with all their
     // digits so any change shows.
     QStringList parts{s.clipId, s.binId, s.sourceTrack, QString::number(s.sourceIn), QString::number(s.length),
-                      QString::number(s.gain, 'g', 17), s.audioSuite->effect};
-    for (auto it = s.audioSuite->params.cbegin(); it != s.audioSuite->params.cend(); ++it) {
-        parts << it.key() + QLatin1Char('=') + QString::number(it.value(), 'g', 17);
+                      QString::number(s.gain, 'g', 17)};
+    // Every level in turn (p.800): the render holds them all.
+    for (const AudioSuiteEffect& e : audioSuiteLevels(s)) {
+        parts << e.effect;
+        for (auto it = e.params.cbegin(); it != e.params.cend(); ++it) {
+            parts << it.key() + QLatin1Char('=') + QString::number(it.value(), 'g', 17);
+        }
     }
     return parts.join(QLatin1Char('|'));
+}
+
+QList<AudioSuiteEffect> audioSuiteLevels(const Segment& s) {
+    if (!s.audioSuite) return {};
+    return QList<AudioSuiteEffect>{*s.audioSuite} + s.nestedAudioSuites;
 }
 
 bool isRendered(const Segment& s) {
@@ -29,34 +38,56 @@ bool needsRender(const Segment& s) {
 }
 
 int setAudioSuite(Sequence& sequence, const QString& name, std::int64_t from, std::int64_t to,
-                  const std::optional<AudioSuiteEffect>& effect) {
+                  const std::optional<AudioSuiteEffect>& effect, int level) {
     Track* t = sequence.track(name);
     // Multichannel tracks take no AudioSuite effects yet (docs/spec/audiosuite.md).
-    if (!t || t->locked || t->kind != TrackKind::Audio || t->format != AudioFormat::Mono) return 0;
+    if (!t || t->locked || t->kind != TrackKind::Audio || t->format != AudioFormat::Mono || level < 1) return 0;
     int changed = 0;
     std::int64_t at = 0;
     for (Segment& s : t->segments) {
         const std::int64_t end = at + s.length;
-        if (!s.isFiller() && end > from && at < to) {
-            std::optional<AudioSuiteEffect> next;
-            if (effect) {
-                next = *effect;
-                next->rendered.clear();
-                next->renderedStream = 0;
-                next->renderedChannel = 0;
-                next->renderedKey.clear();
-                // The same effect with the same values keeps its render.
-                if (s.audioSuite && s.audioSuite->effect == effect->effect && s.audioSuite->params == effect->params) {
-                    next = s.audioSuite;
-                    next->name = effect->name;
-                }
+        at = end;
+        if (s.isFiller() || end - s.length >= to || end <= from) continue;
+        QList<AudioSuiteEffect> levels = audioSuiteLevels(s);
+        const auto index = static_cast<qsizetype>(level - 1);
+        if (index > levels.size()) continue; // past the next free level
+        const std::optional<AudioSuiteEffect> old = index < levels.size() ? std::optional(levels.at(index)) : std::nullopt;
+        if (effect) {
+            AudioSuiteEffect next = *effect;
+            next.rendered.clear();
+            next.renderedStream = 0;
+            next.renderedChannel = 0;
+            next.renderedKey.clear();
+            // The same effect with the same values keeps itself, and level 1 its render.
+            if (old && old->effect == effect->effect && old->params == effect->params) {
+                next = *old;
+                next.name = effect->name;
             }
-            if (s.audioSuite != next) {
-                s.audioSuite = next;
-                ++changed;
+            if (index < levels.size()) {
+                levels[index] = next;
+            } else {
+                levels.append(next);
+            }
+        } else {
+            if (!old) continue;
+            levels.removeAt(index);
+        }
+        // Level 1 keeps the render of every level; the render's key tells when it is out of date (audioSuiteKey).
+        std::optional<AudioSuiteEffect> first;
+        if (!levels.isEmpty()) {
+            first = levels.takeFirst();
+            if (s.audioSuite && index > 0) {
+                first->rendered = s.audioSuite->rendered;
+                first->renderedStream = s.audioSuite->renderedStream;
+                first->renderedChannel = s.audioSuite->renderedChannel;
+                first->renderedKey = s.audioSuite->renderedKey;
             }
         }
-        at = end;
+        if (s.audioSuite != first || s.nestedAudioSuites != levels) {
+            s.audioSuite = first;
+            s.nestedAudioSuites = levels;
+            ++changed;
+        }
     }
     return changed;
 }

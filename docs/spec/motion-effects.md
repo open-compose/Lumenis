@@ -150,8 +150,11 @@ in `timewarp.*`. Test: `tst_motion_effect_ui`.
   Render Using type unless its Ignore Render Setting is on: "If the option is set to a specific motion
   effect type, Media Composer changes all motion effects to that type when it renders them" (p.173);
   "Changes to motion effect types are permanent" (p.174); ours, as an undo step of its own before the
-  render. Motion Effects Render Using stays dimmed: it chooses among field types our progressive media
-  does not have.
+  render. Motion Effects Render Using (p.1214-1215; ROADMAP 11.3f) does the same for motion effect clips "when
+  Media Composer renders existing motion effects": Create and Render, and Render Effect on an unrendered motion
+  effect clip under the position on a selected video track (the clip rendered in its bin, `MainWindow::renderMotionClip`),
+  take its type first unless it is Original Preference; the frames follow the type for two-field sources
+  (`motionFieldFrame`), whole frames otherwise.
 * Not yet: dragging the Timewarp Effect icon to a bin as a template (p.182) comes with effect templates in
   bins (ROADMAP 6.6); the Value and Position scale sliders and Ctrl+Alt hand dragging (p.180-181); the Motion
   Effect button in the Tool palette and the Timeline's top toolbar (p.179).

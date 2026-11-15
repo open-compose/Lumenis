@@ -162,7 +162,10 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 row = new QWidget;
                 auto* h = new QHBoxLayout(row);
                 h->setContentsMargins(0, 0, 0, 0);
-                if (!o.label.isEmpty() && o.type != QLatin1String("button")) h->addWidget(new QLabel(shown(o.label), row));
+                if (!o.label.isEmpty() && o.type != QLatin1String("button") && o.type != QLatin1String("applyToAll") &&
+                    o.type != QLatin1String("driveMode")) {
+                    h->addWidget(new QLabel(shown(o.label), row));
+                }
                 if (o.type == QLatin1String("int")) {
                     auto* spin = new QSpinBox(row);
                     spin->setRange(o.min, o.max);
@@ -248,6 +251,25 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     editor = menu;
                 } else if (o.type == QLatin1String("info")) {
                     editor = new QLabel(row);
+                } else if (o.type == QLatin1String("driveMode")) {
+                    // Single/Dual Drives Mode (p.135): "To select the same drive for both video and audio, click the
+                    // Single/Dual Drives Mode button until only a single drive menu opens." Checked: dual. The menus are
+                    // wired once the whole tab is built (connectDriveModes()).
+                    auto* button = new QToolButton(row);
+                    button->setCheckable(true);
+                    button->setChecked(current.toBool());
+                    button->setText(shown(o.label));
+                    button->setToolTip(shown(o.label));
+                    editor = button;
+                } else if (o.type == QLatin1String("applyToAll")) {
+                    // Apply to All (p.135, p.1207): this tab's choice copied to the same menus on every tab.
+                    auto* button = new QPushButton(shown(o.label), row);
+                    QStringList sources;
+                    for (const SettingOption& other : tab.options) {
+                        if (sameKind(other, o.applies)) sources << other.key;
+                    }
+                    connect(button, &QPushButton::clicked, this, [this, sources] { applyToAll(sources); });
+                    editor = button;
                 } else if (o.type == QLatin1String("button")) {
                     // A button opening a window of its own (Transcript's Manage Speakers, p.445): buttonClicked(key).
                     auto* button = new QPushButton(shown(o.label), row);
@@ -287,6 +309,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
     } else if (!kind.tabs.isEmpty()) {
         layout->addWidget(page(kind.tabs.constFirst()));
     }
+    connectDriveModes();
     // A graph redraws as the dialog's values change.
     for (QWidget* w : std::as_const(editors_)) {
         auto* graph = qobject_cast<SafeColorGraph*>(w);
@@ -340,15 +363,70 @@ QWidget* SettingsDialog::editor(const QString& key) const {
 // Reads each control back by its type. Timecodes are checked against the project's timecode format
 // (drop-frame when written with ';', as model::parseTimecode reads them) to tell whether they parse;
 // without a project, against 30 fps.
+void SettingsDialog::connectDriveModes() {
+    for (const SettingTab& t : kind_.tabs) {
+        for (const SettingOption& o : t.options) {
+            if (o.type != QLatin1String("driveMode")) continue;
+            auto* mode = qobject_cast<QToolButton*>(editors_.value(o.key));
+            auto* video = qobject_cast<QComboBox*>(editors_.value(o.videoDrive));
+            auto* audio = qobject_cast<QComboBox*>(editors_.value(o.audioDrive));
+            if (!mode || !video || !audio) continue;
+            // Single: the audio menu hidden, following the video menu.
+            auto apply = [mode, video, audio] {
+                const bool dual = mode->isChecked();
+                audio->parentWidget()->setVisible(dual);
+                if (!dual) audio->setCurrentIndex(std::max(audio->findData(video->currentData()), 0));
+            };
+            connect(mode, &QToolButton::toggled, this, apply);
+            connect(video, &QComboBox::currentIndexChanged, this, apply);
+            apply();
+        }
+    }
+}
+
+bool SettingsDialog::sameKind(const SettingOption& o, const QString& applies) {
+    if (applies == QLatin1String("resolution")) return o.type == QLatin1String("choice") && o.choicesFrom == QLatin1String("resolutions");
+    if (applies == QLatin1String("drives")) return o.type == QLatin1String("drive");
+    return false;
+}
+
+void SettingsDialog::applyToAll(const QStringList& sources) {
+    // Each source menu's value goes to the menus of its kind on every tab: a resolution to the resolution menus, a
+    // video drive to the video drives, an audio drive to the audio drives (the Titles tab has a video drive only).
+    auto kindOf = [](const SettingOption& o) {
+        if (o.type == QLatin1String("drive")) return o.key.endsWith(QLatin1String("AudioDrive")) ? 2 : 1;
+        return sameKind(o, QStringLiteral("resolution")) ? 3 : 0;
+    };
+    for (const SettingTab& t : kind_.tabs) {
+        for (const SettingOption& source : t.options) {
+            if (!sources.contains(source.key)) continue;
+            auto* from = qobject_cast<QComboBox*>(editors_.value(source.key));
+            if (!from) continue;
+            for (const SettingTab& other : kind_.tabs) {
+                for (const SettingOption& target : other.options) {
+                    if (target.key == source.key || kindOf(target) != kindOf(source)) continue;
+                    auto* to = qobject_cast<QComboBox*>(editors_.value(target.key));
+                    if (to && to->findData(from->currentData()) >= 0) to->setCurrentIndex(to->findData(from->currentData()));
+                }
+            }
+        }
+    }
+}
+
 QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
         for (const SettingOption& o : t.options) {
             if (o.later || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph") ||
-                o.type == QLatin1String("button")) {
+                o.type == QLatin1String("button") || o.type == QLatin1String("applyToAll")) {
                 continue;
             }
             QWidget* e = editors_.value(o.key);
+            if (o.type == QLatin1String("driveMode")) {
+                auto* mode = qobject_cast<QToolButton*>(e);
+                out.insert(o.key, mode && mode->isChecked());
+                continue;
+            }
             if (auto* box = qobject_cast<QCheckBox*>(e)) {
                 out.insert(o.key, box->isChecked());
             } else if (auto* spin = qobject_cast<QSpinBox*>(e)) {

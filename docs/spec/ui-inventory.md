@@ -680,8 +680,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   offline clip named after it, a new bin when Use active bin finds none.
 * Reformatting and FrameFlex (docs/spec/frameflex.md): clips without a Reformat attribute pillarboxed or letterboxed as
   before 8.5a; the column changed through its right-click menu; FrameFlex X and Y in pixels from the centre, Size as the
-  box's width over the image's, Z Rotation anticlockwise; the green dot only for a FrameFlex box; Show Adapters >
-  Spatial dimmed until 8.5b. Source Settings: the box's colours (Yellow, Red, Green, Blue, White), the rotation handle
+  box's width over the image's, Z Rotation anticlockwise; the green dot only for a FrameFlex box, and Show Adapters >
+  Spatial's S likewise (11.3a). Source Settings: the box's colours (Yellow, Red, Green, Blue, White), the rotation handle
   18 pixels above the top edge, OK applying, Image and Frame aspect 0 meaning the image's own. Playback Rate: only
   clips without sound, the menu's texts "Original: <rate> fps" and "Project: <rate> fps", Refresh Sequence only
   dropping adapters. Panning (8.5b3): the FrameFlex effect left out of the Effect Palette, a segment effect shown before
@@ -2895,8 +2895,16 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * Ours: drives are the writable volumes, plus the home folder where the top
   of the system volume cannot be written (macOS, Linux). Folders can be
   added through `LUMENIS_MEDIA_DRIVES` (BUILDING.md).
-* Later: Apply to All, the Single/Dual Drives Mode button, drive groups and
-  DisabledRes.txt (p.135–136).
+* Apply to All (p.135, p.1207): beside the Video Resolution, the tab's
+  resolution goes to every resolution menu of the setting; beside the
+  drives, its video and audio drives to every video and audio drive menu.
+  Ours: within the setting; the other places that choose a resolution or a
+  drive (the Consolidate/Transcode and Batch Import dialogs) start from the
+  setting's tabs as before. ROADMAP 11.3e.
+* The Single/Dual Drives Mode button (p.135), on the tabs with an audio
+  drive: single shows only the video drive menu, and the audio drive
+  follows it. Dual by default.
+* Later: drive groups and DisabledRes.txt (p.135–136).
 
 ### Import (p.211–216, settings p.1194–1199)
 * File > Input > Import Media opens the Source Browser with Import chosen

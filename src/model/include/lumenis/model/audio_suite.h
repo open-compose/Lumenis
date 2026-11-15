@@ -26,12 +26,16 @@ bool isRendered(const Segment& segment);
 // Whether the segment has an effect that is not rendered (or whose render is out of date).
 bool needsRender(const Segment& segment);
 
-// The AudioSuite effect on audio track `track`'s segments that overlap record frames [from, to):
-// `effect` (its render forgotten), or without one the effect removed. A segment that already has this
-// effect with these values keeps its render. Filler, a locked track and multichannel tracks (later)
-// are left alone. Returns how many segments changed.
+// The AudioSuite effect at Nested Level Selection level `level` (1 for the segment's audioSuite, 2 and up for
+// nestedAudioSuites; p.800) on audio track `track`'s segments that overlap record frames [from, to): `effect` (its
+// render forgotten), or without one the effect removed, the levels after it moving up one. A level past the next free
+// one is left alone, as is a level above 1 on a segment without one at level 1. A segment that already has this effect
+// with these values at that level keeps its render. Filler, a locked track and multichannel tracks (later) are left
+// alone. Returns how many segments changed.
 int setAudioSuite(Sequence& sequence, const QString& track, std::int64_t from, std::int64_t to,
-                  const std::optional<AudioSuiteEffect>& effect);
+                  const std::optional<AudioSuiteEffect>& effect, int level = 1);
+// The segment's AudioSuite effects by level, level 1 first; empty without one.
+QList<AudioSuiteEffect> audioSuiteLevels(const Segment& segment);
 
 // An AudioSuite effect template (p.804): the effect and its values, and for one made by creating a
 // new master clip, the master clip it was applied to (its bin and id), the clip's tracks used

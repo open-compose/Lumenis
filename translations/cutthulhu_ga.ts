@@ -7826,6 +7826,30 @@
         <source>%1: %2, not rendered</source>
         <translation type="unfinished">%1: %2, gan rindreáil</translation>
     </message>
+    <message>
+        <source>1</source>
+        <translation type="unfinished">1</translation>
+    </message>
+    <message>
+        <source>EQ</source>
+        <translation type="unfinished">EQ</translation>
+    </message>
+    <message>
+        <source>0 - EQ</source>
+        <translation type="unfinished">0 - EQ</translation>
+    </message>
+    <message>
+        <source>%1 - %2</source>
+        <translation type="unfinished">%1 - %2</translation>
+    </message>
+    <message>
+        <source>Audio EQ</source>
+        <translation type="unfinished">EQ Fuaime</translation>
+    </message>
+    <message>
+        <source>Remove EQ</source>
+        <translation type="unfinished">Bain an EQ</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::AudioTool</name>
@@ -23801,6 +23825,14 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Sync Rollers for Sync Locked Tracks</source>
         <translation type="unfinished">Rollóirí Sioncronaithe do Rianta faoi Ghlas Sioncronaithe</translation>
+    </message>
+    <message>
+        <source>Apply to All</source>
+        <translation type="unfinished">Cuir i bhFeidhm ar Gach Rud</translation>
+    </message>
+    <message>
+        <source>Single/Dual Drives Mode</source>
+        <translation type="unfinished">Mód tiomántán aonair/dúbailte</translation>
     </message>
 </context>
 <context>

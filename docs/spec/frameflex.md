@@ -36,7 +36,8 @@ Reformatting). 8.5a is the data and the picture; 8.5b the Source Settings dialog
   applies it to whole frames from the frame cache, for segments and for clips in the Source monitor ("The new framing
   of the image will be applied when you drop the clip in the Source viewer or on the Timeline", p.531).
 * The green dot (p.531): on segments with a FrameFlex box (ours: not for the Reformat attribute alone, which every
-  linked clip has); Show Adapters > Spatial stays dimmed until 8.5b.
+  linked clip has). Show Adapters > Spatial draws an S on such segments (p.599; `ui::shownAdapterIcons`, ROADMAP
+  11.3a), > Color a C on segments with a Color Adapter, beside Motion's T.
 * Clip > Refresh Sequence (p.478): Aspect Ratio and Reformatting Options gives segments their clip's current adapter;
   All FrameFlex including creative framing also replaces boxes changed in the sequence (`SpatialAdapter::creative`, set
   from 8.5b by the Effect Editor). `model::refreshSpatialAdapters`.

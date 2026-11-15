@@ -1,4 +1,5 @@
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
@@ -26,6 +27,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QRadioButton>
+#include <QPushButton>
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QTabWidget>
@@ -115,14 +117,21 @@ private slots:
                     // Import's OMFI/AAF report options are described with AAF import, "Sequence Report for AAF Imports"
                     // (p.237-238; 9.2c).
                     const bool aafReport = k.kind == QLatin1String("Import") && o.page >= 237 && o.page <= 238;
+                    // Media Creation's Single/Dual Drives Mode button is described with capturing (p.135).
+                    const bool driveMode = k.kind == QLatin1String("Media Creation") && o.page == 135;
                     // Ours, where the guides say nothing (the interface's language, 10.4): no page, marked "ours".
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
-                                 exportChapter || transcriptChapter || colorChapter || aafReport || (o.ours && o.page == 0),
+                                 exportChapter || transcriptChapter || colorChapter || aafReport || driveMode || (o.ours && o.page == 0),
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
-                    QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph", "button"}).contains(o.type),
+                    QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph", "button",
+                                         "applyToAll", "driveMode"}).contains(o.type),
                              qPrintable(where));
+                    // An Apply to All button names what it copies.
+                    if (o.type == QLatin1String("applyToAll")) {
+                        QVERIFY2(o.applies == QLatin1String("resolution") || o.applies == QLatin1String("drives"), qPrintable(where));
+                    }
                     if (o.type == QLatin1String("choice")) {
                         bool found = false;
                         for (const SettingChoice& c : o.choices) found = found || (c.value == o.defaultValue.toString() && !c.later);
@@ -214,6 +223,55 @@ private slots:
         QVERIFY(SafeColorGraph::xOf(16.0, 300) < SafeColorGraph::xOf(235.0, 300));
         QCOMPARE(SafeColorGraph::xOf(-1000.0, 300), 0.0);
         QCOMPARE(SafeColorGraph::xOf(1000.0, 300), 300.0);
+    }
+
+    // Media Creation's Apply to All (p.135, p.1207): one tab's Video Resolution goes to every resolution menu, its video
+    // and audio drives to every video and audio drive menu (the Motion Effects tab's video drive too); the buttons keep
+    // no value of their own.
+    void mediaCreationApplyToAll() {
+        QTemporaryDir dir;
+        const QString first = dir.filePath(QStringLiteral("First"));
+        const QString second = dir.filePath(QStringLiteral("Second"));
+        QVERIFY(QDir().mkpath(first) && QDir().mkpath(second));
+        media::setExtraMediaDrives({first, second});
+        SettingEntry entry{QStringLiteral("Media Creation"), QString(), true, {}};
+        SettingsDialog dialog(kind("Media Creation"), entry);
+        auto menu = [&](const char* key) { return qobject_cast<QComboBox*>(dialog.editor(key)); };
+        QVERIFY(menu("importResolution") && menu("transcodeResolution") && menu("renderResolution"));
+        menu("importResolution")->setCurrentIndex(menu("importResolution")->findData(QStringLiteral("dnx_lb")));
+        QVERIFY(menu("transcodeResolution")->currentData().toString() != QLatin1String("dnx_lb"));
+        auto* resolution = qobject_cast<QPushButton*>(dialog.editor("importApplyResolution"));
+        QVERIFY(resolution && resolution->isEnabledTo(&dialog));
+        QCOMPARE(resolution->text(), QStringLiteral("Apply to All"));
+        resolution->click();
+        QCOMPARE(menu("transcodeResolution")->currentData().toString(), QStringLiteral("dnx_lb"));
+        QCOMPARE(menu("renderResolution")->currentData().toString(), QStringLiteral("dnx_lb"));
+        // Drives: the second folder for video, the first for audio.
+        const int videoAt = menu("importVideoDrive")->findData(QDir::cleanPath(second));
+        const int audioAt = menu("importAudioDrive")->findData(QDir::cleanPath(first));
+        QVERIFY(videoAt >= 0 && audioAt >= 0);
+        menu("importVideoDrive")->setCurrentIndex(videoAt);
+        menu("importAudioDrive")->setCurrentIndex(audioAt);
+        qobject_cast<QPushButton*>(dialog.editor("importApplyDrives"))->click();
+        QCOMPARE(menu("transcodeVideoDrive")->currentData().toString(), QDir::cleanPath(second));
+        QCOMPARE(menu("transcodeAudioDrive")->currentData().toString(), QDir::cleanPath(first));
+        QCOMPARE(menu("motionEffectsVideoDrive")->currentData().toString(), QDir::cleanPath(second));
+        QCOMPARE(menu("renderVideoDrive")->currentData().toString(), QDir::cleanPath(second));
+        const QJsonObject values = dialog.values();
+        QCOMPARE(values.value(QStringLiteral("renderResolution")).toString(), QStringLiteral("dnx_lb"));
+        QVERIFY(!values.contains(QStringLiteral("importApplyDrives")));
+        // Single/Dual Drives Mode (p.135): dual at first; single hides the audio drive, which follows the video drive.
+        auto* mode = qobject_cast<QToolButton*>(dialog.editor("importDualDrives"));
+        QVERIFY(mode && mode->isChecked());
+        mode->setChecked(false);
+        QVERIFY(menu("importAudioDrive")->parentWidget()->isHidden());
+        QCOMPARE(menu("importAudioDrive")->currentData().toString(), QDir::cleanPath(second));
+        menu("importVideoDrive")->setCurrentIndex(audioAt);
+        QCOMPARE(menu("importAudioDrive")->currentData().toString(), QDir::cleanPath(first));
+        QCOMPARE(dialog.values().value(QStringLiteral("importDualDrives")).toBool(), false);
+        mode->setChecked(true);
+        QVERIFY(!menu("importAudioDrive")->parentWidget()->isHidden());
+        media::setExtraMediaDrives({});
     }
 
     void dialogShowsAndReturnsValues() {

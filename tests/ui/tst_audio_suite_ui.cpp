@@ -166,6 +166,40 @@ class TestAudioSuiteUi : public QObject {
     Q_OBJECT
 
 private slots:
+    // The Nested Level Selection menu (p.800): a second effect on another level, the menu's items as the picture lists
+    // them, EQ at level 0 opening the Audio EQ tool, and removing a level.
+    void nestedLevels() {
+        Rig rig;
+        rig.at(35);
+        QVERIFY(rig.tool.choosePlugin(QStringLiteral("suite.reverse")));
+        QCOMPARE(rig.tool.levelItems(), (QStringList{"0", "1 - Reverse", "2"}));
+        rig.tool.chooseLevel(2);
+        QCOMPARE(rig.tool.level(), 2);
+        QCOMPARE(rig.tool.pluginButton()->text(), QStringLiteral("None")); // an empty level
+        QVERIFY(rig.tool.choosePlugin(QStringLiteral("suite.invert")));
+        const model::Segment s = rig.seq().track(QStringLiteral("A1"))->segments.at(1);
+        QCOMPARE(s.audioSuite->effect, QStringLiteral("suite.reverse"));
+        QCOMPARE(s.nestedAudioSuites.size(), 1);
+        QCOMPARE(s.nestedAudioSuites.first().effect, QStringLiteral("suite.invert"));
+        QCOMPARE(rig.tool.levelItems(), (QStringList{"0", "1 - Reverse", "2 - Invert", "3"}));
+        QCOMPARE(rig.tool.findChild<QToolButton*>(QStringLiteral("nestedLevel"))->text(), QStringLiteral("2"));
+        // EQ from the Plug-In Selection menu: level 0 (p.800), and Activate opens the Audio EQ tool.
+        QVERIFY(rig.tool.choosePlugin(QString::fromLatin1(AudioSuiteTool::kEqPlugin)));
+        QCOMPARE(rig.tool.level(), 0);
+        QVERIFY(rig.seq().track(QStringLiteral("A1"))->segments.at(1).eq.has_value());
+        QCOMPARE(rig.tool.levelItems().first(), QStringLiteral("0 - EQ"));
+        QCOMPARE(rig.tool.pluginButton()->text(), QStringLiteral("EQ"));
+        QSignalSpy eqTool(&rig.tool, &AudioSuiteTool::eqToolRequested);
+        QVERIFY(!rig.tool.activate());
+        QCOMPARE(eqTool.count(), 1);
+        // None at level 0 takes the EQ away; at level 1 the first effect, the second moving up.
+        QVERIFY(rig.tool.choosePlugin(QString()));
+        QVERIFY(!rig.seq().track(QStringLiteral("A1"))->segments.at(1).eq.has_value());
+        rig.tool.chooseLevel(1);
+        QVERIFY(rig.tool.choosePlugin(QString()));
+        QCOMPARE(rig.effect("A1", 1)->effect, QStringLiteral("suite.invert"));
+        QCOMPARE(rig.tool.levelItems(), (QStringList{"0", "1 - Invert", "2"}));
+    }
     void initTestCase() { applyTheme(*qApp); }
 
     void controls() {
@@ -174,11 +208,13 @@ private slots:
         QCOMPARE(rig.tool.trackButton()->text(), QStringLiteral("A1"));
         QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no Audio Processing effect")));
         QVERIFY(!rig.tool.activateButton()->isEnabled());
-        // The picture's controls: the ones that come later are there, dimmed.
-        for (const char* name : {"effectIcon", "nestedLevel"}) {
-            auto* b = rig.tool.findChild<QToolButton*>(QString::fromLatin1(name));
-            QVERIFY2(b && !b->isEnabled(), name);
-        }
+        // The picture's controls: the effect icon dimmed until there is a plug-in; the Nested Level Selection menu at
+        // level 1 (ours).
+        auto* icon = rig.tool.findChild<QToolButton*>(QStringLiteral("effectIcon"));
+        QVERIFY(icon && !icon->isEnabled());
+        auto* level = rig.tool.findChild<QToolButton*>(QStringLiteral("nestedLevel"));
+        QVERIFY(level && level->isEnabled());
+        QCOMPARE(level->text(), QStringLiteral("1"));
         // Audio Loop Play works (p.712; tests/ui/tst_audio_mixer.cpp).
         auto* loop = rig.tool.findChild<QToolButton*>(QStringLiteral("audioLoopPlay"));
         QVERIFY(loop && loop->isEnabled() && loop->isCheckable());
@@ -192,6 +228,7 @@ private slots:
         QVERIFY(groups.contains(QLatin1String("Process")));
         QVERIFY(groups.contains(QLatin1String("Dynamics")));
         QCOMPARE(menu->actions().last()->text(), QStringLiteral("None"));
+        QCOMPARE(menu->actions().first()->text(), QStringLiteral("EQ")); // first, as on p.800
         // Choosing in the menu applies the plug-in.
         rig.at(35);
         for (QAction* g : menu->actions()) {

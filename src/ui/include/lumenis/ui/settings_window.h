@@ -65,6 +65,12 @@ signals:
     void buttonClicked(const QString& key);
 
 private:
+    // Apply to All (applyToAll options): the menus `sources` (one tab's) copied to the menus of their kind on every tab.
+    void applyToAll(const QStringList& sources);
+    static bool sameKind(const SettingOption& option, const QString& applies);
+    // The Single/Dual Drives Mode buttons (driveMode options) and the drive menus they show and keep in step.
+    void connectDriveModes();
+
     QDialogButtonBox* buttons_ = nullptr;
     QString saveAsName_;
     const SettingKind& kind_;

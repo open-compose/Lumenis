@@ -2263,6 +2263,8 @@ void MainWindow::createTools() {
         }
         return out;
     });
+    // Activate Current Plug-In on the AudioSuite tool's EQ (level 0, p.800).
+    connect(audioSuite_, &AudioSuiteTool::eqToolRequested, this, [this] { showTool(QStringLiteral("AudioEQ")); });
     connect(audioSuite_, &AudioSuiteTool::sourceRequested, this,
             [this](const QString& binId, const model::BinItem& clip) { composer_->load(MonitorId::Source, binId, clip); });
     audioTool_ = new AudioTool;
@@ -7053,6 +7055,41 @@ void MainWindow::fillCompositionQuality(media::Composition& c) const {
                                                                    : media::ImageInterpolation::Advanced;
 }
 
+bool MainWindow::renderMotionClip(model::BinItem& item, const model::BinItem& source, media::MediaCreation creation) {
+    auto motion = model::motionEffectOf(item);
+    if (!motion) return false;
+    // "Changes to motion effect types are permanent" (p.174): the type the setting asks for is the clip's from now on.
+    const QString renderUsing = settings_->text(QStringLiteral("Render"), QStringLiteral("motionEffectsRenderUsing"));
+    if (!renderUsing.isEmpty() && renderUsing != QLatin1String("original")) {
+        motion->field = model::fieldMotionFromName(renderUsing);
+        model::setMotionEffect(item, *motion);
+    }
+    creation.raster = creation.raster.expandedTo(media::kMinimumRaster);
+    const std::int64_t last = std::max<std::int64_t>(source.durationFrames - 1, 0);
+    QProgressDialog progress(tr("Rendering..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("motionRenderProgress"));
+    creation.progress = progressOn(progress);
+    QString error;
+    const model::MotionEffect m = *motion;
+    const auto rendered = media::renderedVideoClip(
+        item.name, item.editRate, item.durationFrames,
+        [&](std::int64_t frame) {
+            // Two-field sources by the clip's type, as it plays; others whole frames at the effect's speed.
+            if (auto field = motionFieldFrame(item, frame, creation.raster)) return *field;
+            return frames_->frame(source, std::clamp<std::int64_t>(m.sourceFrame(frame), 0, last), creation.raster);
+        },
+        creation, model::BinItemKind::MotionEffect, &error);
+    progress.reset();
+    if (!rendered) {
+        reportFailure(this, tr("Motion Effect: %1").arg(error));
+        return false;
+    }
+    item.link = rendered->link;
+    item.sources = rendered->sources;
+    item.mobId = rendered->mobId;
+    return true;
+}
+
 void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive) {
     auto fail = [this](const QString& text) {
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Render Effect"), text, QMessageBox::Ok, this);
@@ -7088,7 +7125,23 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
     for (const model::RenderTarget& t : model::renderTargets(seq, tracks, from, to)) {
         if (rerender || !model::isRendered(seq, t)) targets << t;
     }
-    if (targets.isEmpty()) {
+    // Unrendered motion effect clips on the selected video tracks there: rendered as their clips (Motion Effects Render
+    // Using, p.1214-1215: "when Media Composer renders existing motion effects").
+    QList<QPair<QString, QString>> motionClips;
+    for (const QString& name : tracks) {
+        const model::Track* track = seq.track(name);
+        if (!track || track->kind != model::TrackKind::Video) continue;
+        std::int64_t at = 0;
+        for (const model::Segment& s : track->segments) {
+            const std::int64_t start = at;
+            at += s.length;
+            if (s.isFiller() || at <= from || start >= to) continue;
+            const auto clip = composer_->resolve(s.binId, s.clipId);
+            const QPair<QString, QString> id{s.binId, s.clipId};
+            if (clip && model::motionEffectOf(*clip) && !media::isLinked(*clip) && !motionClips.contains(id)) motionClips << id;
+        }
+    }
+    if (targets.isEmpty() && motionClips.isEmpty()) {
         fail(tr("There are no effects to render on the selected tracks."));
         return;
     }
@@ -7096,12 +7149,27 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
     if (useLastDrive && !lastRenderDrive_.isEmpty()) {
         creation.videoDrive = lastRenderDrive_;
     } else {
-        RenderEffectDialog dialog(static_cast<int>(targets.size()), lastRenderDrive_.isEmpty() ? creation.videoDrive : lastRenderDrive_, this);
+        RenderEffectDialog dialog(static_cast<int>(targets.size() + motionClips.size()),
+                                  lastRenderDrive_.isEmpty() ? creation.videoDrive : lastRenderDrive_, this);
         const bool ok = renderHook_ ? renderHook_(dialog) : dialog.exec() == QDialog::Accepted;
         if (!ok) return;
         creation.videoDrive = dialog.drive();
         lastRenderDrive_ = creation.videoDrive;
         lastRenderBackground_ = dialog.background();
+    }
+    // The motion effect clips first, in their bins; the segments then play the clips' new media.
+    for (const auto& [binId, clipId] : motionClips) {
+        auto clip = composer_->resolve(binId, clipId);
+        const auto motion = clip ? model::motionEffectOf(*clip) : std::nullopt;
+        const auto source = motion ? composer_->resolve(motion->sourceBin, motion->sourceClip) : std::nullopt;
+        BinDocument* doc = binContainer_->openBin(binId);
+        if (!source || !doc) continue;
+        if (!renderMotionClip(*clip, *source, creation)) return;
+        doc->replaceItem(*clip);
+    }
+    if (targets.isEmpty()) {
+        renderFinished(true);
+        return;
     }
     renderTargetsNow(*rec, seq, targets, creation, rerender, lastRenderBackground_);
 }
@@ -7632,27 +7700,7 @@ std::optional<model::BinItem> MainWindow::motionEffect() {
         // "Click Create and Render to render the clip (creating new media files)" (p.169): its frames,
         // written as managed media; the clip then plays its own media.
         creation.videoDrive = dialog.drive();
-        creation.raster = creation.raster.expandedTo(media::kMinimumRaster);
-        const auto motion = *model::motionEffectOf(item);
-        const std::int64_t last = std::max<std::int64_t>(source.durationFrames - 1, 0);
-        QProgressDialog progress(tr("Rendering..."), tr("Cancel"), 0, 1000, this);
-        progress.setObjectName(QStringLiteral("motionRenderProgress"));
-        creation.progress = progressOn(progress);
-        QString error;
-        const auto rendered = media::renderedVideoClip(
-            item.name, item.editRate, item.durationFrames,
-            [&](std::int64_t frame) {
-                return frames_->frame(source, std::clamp<std::int64_t>(motion.sourceFrame(frame), 0, last), creation.raster);
-            },
-            creation, model::BinItemKind::MotionEffect, &error);
-        progress.reset();
-        if (!rendered) {
-            reportFailure(this, tr("Motion Effect: %1").arg(error));
-            return std::nullopt;
-        }
-        item.link = rendered->link;
-        item.sources = rendered->sources;
-        item.mobId = rendered->mobId;
+        if (!renderMotionClip(item, source, creation)) return std::nullopt;
     }
     placeMotionClip(src->binId, item);
     return item;

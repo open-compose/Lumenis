@@ -83,6 +83,10 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.fxGuide = oo.value(QStringLiteral("guide")).toString() == QLatin1String("fx");
                 option.later = oo.value(QStringLiteral("later")).toBool();
                 option.ours = oo.value(QStringLiteral("ours")).toBool();
+                option.choicesFrom = oo.value(QStringLiteral("choicesFrom")).toString();
+                option.applies = oo.value(QStringLiteral("applies")).toString();
+                option.videoDrive = oo.value(QStringLiteral("videoDrive")).toString();
+                option.audioDrive = oo.value(QStringLiteral("audioDrive")).toString();
                 for (const QJsonValue& c : oo.value(QStringLiteral("choices")).toArray()) {
                     const QJsonObject co = c.toObject();
                     option.choices << SettingChoice{co.value(QStringLiteral("value")).toString(),

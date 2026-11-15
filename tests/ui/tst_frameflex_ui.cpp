@@ -33,6 +33,7 @@
 #include <QSpinBox>
 #include <QToolButton>
 #include <QDir>
+#include <QMenu>
 #include <QMessageBox>
 #include <QTemporaryDir>
 #include <QTest>
@@ -78,6 +79,43 @@ class TestFrameFlexUi : public QObject {
     Q_OBJECT
 
 private slots:
+    // Show Adapters (p.599): "Temporal (motion) adapters appear with a T, spatial (FrameFlex) adapters appear with an S,
+    // and Color adapters appear with a C", for those the menu has on; the menu's three items, kept in Timeline views.
+    void showAdapters() {
+        model::Segment s;
+        s.clipId = QStringLiteral("clip");
+        s.length = 20;
+        s.adapter = model::MotionAdapter{Rational(30), Rational(25), QString(), QString(), false};
+        model::SpatialAdapter spatial;
+        spatial.frameFlex = model::FrameFlex{};
+        s.spatial = spatial;
+        s.color = model::ColorEncoding{};
+        Timeline::Display d;
+        QVERIFY(shownAdapterIcons(s, d).isEmpty()); // none chosen at first
+        d.motionAdapters = d.spatialAdapters = d.colorAdapters = true;
+        QCOMPARE(shownAdapterIcons(s, d), (QStringList{QStringLiteral("T"), QStringLiteral("S"), QStringLiteral("C")}));
+        d.motionAdapters = false;
+        QCOMPARE(shownAdapterIcons(s, d), (QStringList{QStringLiteral("S"), QStringLiteral("C")}));
+        // A Spatial Adapter for the Reformat attribute alone has no icon (ours), as it has no green dot.
+        s.spatial->frameFlex.reset();
+        QCOMPARE(shownAdapterIcons(s, d), QStringList{QStringLiteral("C")});
+        // Kept with the Timeline view.
+        const Timeline::Display back = Timeline::displayFromJson(Timeline::displayToJson(d));
+        QVERIFY(back.spatialAdapters && back.colorAdapters && !back.motionAdapters);
+        // The Fast menu's Show Adapters: all three items work.
+        Composer composer;
+        Timeline timeline{composer};
+        QMenu* menu = timeline.fastMenu();
+        QVERIFY(menu);
+        QMenu* adapters = menu->findChild<QMenu*>(QStringLiteral("showAdapters"));
+        QVERIFY(adapters);
+        QStringList items;
+        for (QAction* a : adapters->actions()) {
+            QVERIFY2(a->isEnabled() && a->isCheckable(), qPrintable(a->text()));
+            items << a->text();
+        }
+        QCOMPARE(items, (QStringList{QStringLiteral("Motion"), QStringLiteral("Spatial"), QStringLiteral("Color")}));
+    }
     void reformatAndFrameFlex() {
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("halves.mov"));

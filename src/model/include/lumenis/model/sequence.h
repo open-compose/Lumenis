@@ -252,8 +252,12 @@ struct Segment {
     QList<AudioKey> panKeys;
     // The segment's Audio EQ effect (p.736-745), on audio segments only.
     std::optional<AudioEq> eq;
-    // The segment's AudioSuite plug-in effect (p.797-800), on audio segments only.
+    // The segment's AudioSuite plug-in effect (p.797-800), on audio segments only: the Nested Level Selection menu's
+    // level 1, which keeps the render of every level (p.800).
     std::optional<AudioSuiteEffect> audioSuite;
+    // The effects at levels 2 and up, run in turn after audioSuite's ("To add another effect, select the Nested level
+    // selection menu", p.800); empty without audioSuite. Their own render fields are unused.
+    QList<AudioSuiteEffect> nestedAudioSuites;
     // Surround pans (p.704-710), one for each channel of a mono or stereo segment; empty for the
     // default (lumenis/model/surround_pan.h: surroundPansOf). Used in 5.1 and 7.1 sequences only.
     QList<SurroundPan> surround;

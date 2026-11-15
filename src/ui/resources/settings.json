@@ -732,8 +732,11 @@
           "options": [
             {"key": "captureResolution", "type": "choice", "choicesFrom": "resolutions", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "captureApplyResolution", "type": "applyToAll", "applies": "resolution", "label": "Apply to All", "page": 1207, "later": true},
+            {"key": "captureDualDrives", "type": "driveMode", "label": "Single/Dual Drives Mode", "default": true, "videoDrive": "captureVideoDrive", "audioDrive": "captureAudioDrive", "page": 135, "later": true},
             {"key": "captureVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true},
-            {"key": "captureAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true}
+            {"key": "captureAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true},
+            {"key": "captureApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207, "later": true}
           ]
         },
         {
@@ -741,7 +744,9 @@
           "options": [
             {"key": "titlesResolution", "type": "choice", "choicesFrom": "resolutions", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
-            {"key": "titlesVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true}
+            {"key": "titlesApplyResolution", "type": "applyToAll", "applies": "resolution", "label": "Apply to All", "page": 1207, "later": true},
+            {"key": "titlesVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true},
+            {"key": "titlesApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207, "later": true}
           ]
         },
         {
@@ -749,8 +754,11 @@
           "options": [
             {"key": "importResolution", "type": "choice", "choicesFrom": "resolutions", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "importApplyResolution", "type": "applyToAll", "applies": "resolution", "label": "Apply to All", "page": 1207},
+            {"key": "importDualDrives", "type": "driveMode", "label": "Single/Dual Drives Mode", "default": true, "videoDrive": "importVideoDrive", "audioDrive": "importAudioDrive", "page": 135},
             {"key": "importVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
-            {"key": "importAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207}
+            {"key": "importAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207},
+            {"key": "importApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207}
           ]
         },
         {
@@ -758,14 +766,18 @@
           "options": [
             {"key": "transcodeResolution", "type": "choice", "choicesFrom": "resolutions", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "transcodeApplyResolution", "type": "applyToAll", "applies": "resolution", "label": "Apply to All", "page": 1207},
+            {"key": "transcodeDualDrives", "type": "driveMode", "label": "Single/Dual Drives Mode", "default": true, "videoDrive": "transcodeVideoDrive", "audioDrive": "transcodeAudioDrive", "page": 135},
             {"key": "transcodeVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
-            {"key": "transcodeAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207}
+            {"key": "transcodeAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207},
+            {"key": "transcodeApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207}
           ]
         },
         {
           "name": "Motion Effects",
           "options": [
-            {"key": "motionEffectsVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207}
+            {"key": "motionEffectsVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
+            {"key": "motionEffectsApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207}
           ]
         },
         {
@@ -773,8 +785,10 @@
           "options": [
             {"key": "renderResolution", "type": "choice", "choicesFrom": "resolutions", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "renderApplyResolution", "type": "applyToAll", "applies": "resolution", "label": "Apply to All", "page": 1207},
             {"key": "renderVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
             {"key": "renderAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true},
+            {"key": "renderApplyDrives", "type": "applyToAll", "applies": "drives", "label": "Apply to All", "page": 1207},
             {"key": "renderEffectsProcessing", "type": "choice", "style": "menu", "label": "Effects Processing", "default": "automatic", "page": 1208,
              "choices": [{"value": "8bit", "label": "8-bit"}, {"value": "16bit", "label": "16-bit"}, {"value": "32bit", "label": "32-bit"}, {"value": "automatic", "label": "Automatic"}]},
             {"key": "saveAfterRender", "type": "bool", "label": "Save after Render", "default": false, "page": 1208}
@@ -981,7 +995,7 @@
              "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicated", "label": "Duplicated Field"}, {"value": "both", "label": "Both Fields"},
                          {"value": "interpolated", "label": "Interpolated Field"}, {"value": "vtr", "label": "VTR-Style"},
                          {"value": "blendedInterpolated", "label": "Blended Interpolated"}, {"value": "blendedVtr", "label": "Blended VTR"}]},
-            {"key": "motionEffectsRenderUsing", "type": "choice", "style": "menu", "label": "Motion Effects Render Using", "default": "original", "page": 1215, "later": true,
+            {"key": "motionEffectsRenderUsing", "type": "choice", "style": "menu", "label": "Motion Effects Render Using", "default": "original", "page": 1215,
              "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicated", "label": "Duplicated Field"}, {"value": "both", "label": "Both Fields"},
                          {"value": "interpolated", "label": "Interpolated Field"}, {"value": "vtr", "label": "VTR-Style"}]},
             {"key": "effectsQualityRenderUsing", "type": "choice", "style": "menu", "label": "Effects Quality Render Using", "default": "eachEffect", "page": 1215, "later": true,

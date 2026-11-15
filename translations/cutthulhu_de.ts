@@ -7824,6 +7824,30 @@
         <source>%1: %2, not rendered</source>
         <translation type="unfinished">%1: %2, nicht gerendert</translation>
     </message>
+    <message>
+        <source>1</source>
+        <translation type="unfinished">1</translation>
+    </message>
+    <message>
+        <source>EQ</source>
+        <translation type="unfinished">EQ</translation>
+    </message>
+    <message>
+        <source>0 - EQ</source>
+        <translation type="unfinished">0 - EQ</translation>
+    </message>
+    <message>
+        <source>%1 - %2</source>
+        <translation type="unfinished">%1 - %2</translation>
+    </message>
+    <message>
+        <source>Audio EQ</source>
+        <translation type="unfinished">Audio-EQ</translation>
+    </message>
+    <message>
+        <source>Remove EQ</source>
+        <translation type="unfinished">EQ entfernen</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::AudioTool</name>
@@ -23755,6 +23779,14 @@ Mediendateien werden nicht gelöscht.</translation>
     <message>
         <source>Sync Rollers for Sync Locked Tracks</source>
         <translation type="unfinished">Sync-Roller für sync-gesperrte Spuren</translation>
+    </message>
+    <message>
+        <source>Apply to All</source>
+        <translation type="unfinished">Auf alle anwenden</translation>
+    </message>
+    <message>
+        <source>Single/Dual Drives Mode</source>
+        <translation type="unfinished">Einzel-/Doppellaufwerksmodus</translation>
     </message>
 </context>
 <context>

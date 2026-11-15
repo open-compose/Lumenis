@@ -212,7 +212,23 @@ public:
 
     void refresh();
 
+    // ---- Nested levels (p.800)
+    // The Nested Level Selection menu's level: 0 for the segment's real-time EQ ("only allowed on the first nested
+    // level (level 0)"), 1 and up for its AudioSuite effects, run in turn. Ours: the tool starts at level 1, the first
+    // AudioSuite effect.
+    int level() const { return level_; }
+    void chooseLevel(int level);
+    // The menu's items for the segment under the position on track(): "0 - EQ" (or "0" without one), "1 - <effect>"
+    // for each AudioSuite effect, then the next free level's number alone, as the picture on p.800 lists them.
+    QStringList levelItems() const;
+    // The Plug-In Selection menu's EQ (p.800): "When you select EQ from the Plug-in Selection menu, the effect is
+    // added to the selected audio track"; Activate then opens the Audio EQ tool.
+    static constexpr char kEqPlugin[] = "eq";
+
 signals:
+    // Activate Current Plug-In at level 0: "it will open the Audio EQ tool where you can make any EQ adjustments"
+    // (p.800).
+    void eqToolRequested();
     // Load In Source Monitor: MainWindow loads the clip.
     void sourceRequested(const QString& binId, const model::BinItem& clip);
 
@@ -230,6 +246,8 @@ private:
 
     Timeline& timeline_;
     QString plugin_;
+    int level_ = 1;
+    QToolButton* levelButton_ = nullptr;
     QMap<QString, double> lastValues_; // the values last set
     Renderer renderer_;
     ClipMaker clipMaker_;

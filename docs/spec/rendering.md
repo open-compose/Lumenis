@@ -153,7 +153,7 @@ and Save after Render in `renderTargetsNow`; the Media Tool's Precompute Clips i
     is interrupted.
   * Timewarps Render Using and Motion Effects Render Using (Original Preference, Duplicated Field, Both
     Fields, Interpolated Field, VTR-Style; Timewarps also Blended Interpolated and Blended VTR), Use frame
-    blending in Motion Adapters: shown dimmed until motion effects and Timewarps (6.5). Effects Quality
+    blending in Motion Adapters: Timewarps' since 6.5c, Motion Effects' since 11.3f (docs/spec/motion-effects.md). Effects Quality
     Render Using (Quality Set In Each Effect, Standard Quality, Highest Quality, p.154) and the Effect
     Editor's HQ button: until the 3D effects that have an HQ render (6.7). Disable GPU effects: dimmed, as
     in the guide's picture; our effects run on the CPU.
@@ -176,7 +176,9 @@ and Save after Render in `renderTargetsNow`; the Media Tool's Precompute Clips i
 * Show Adapters (the Timeline Fast menu, Editing Guide p.599): "Clips that have source-side color,
   spatial and motion adapters, have these effects indicated by separate icons ... Temporal (motion)
   adapters appear with a T, spatial (FrameFlex) adapters appear with an S, and Color adapters appear with a
-  C." We have no adapters yet; the menu stays dimmed until the motion adapters (6.5) bring the first.
+  C." Motion came with the motion adapters (6.5d2); Spatial and Color with FrameFlex and colour adapters, drawn
+  since 11.3a (`ui::shownAdapterIcons`): the icons side by side left of an effect icon or in the middle, each a grey
+  square with its letter in strokes, none chosen at first (ours), and kept with the Timeline view.
 
 ## 6.4d2: background rendering
 

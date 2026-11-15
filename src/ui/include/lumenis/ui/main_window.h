@@ -1435,6 +1435,11 @@ private:
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.
     std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
+    // Renders motion effect clip `item`, made from `source`, into managed media (Create and Render, p.169; Render
+    // Effect on an unrendered one): first the Render setting's Motion Effects Render Using type unless it is Original
+    // Preference ("Effects render as whatever type they were when originally created", p.1214-1215), then its frames
+    // as playback shows them (motionFieldFrame() for two-field sources). `item` takes the media. False, with a message.
+    bool renderMotionClip(model::BinItem& item, const model::BinItem& source, media::MediaCreation creation);
     // A proxy job out on Distributed Processing (submitDistributedProxies).
     struct DistributedJob {
         std::shared_ptr<ext::SharedStorageProvider> storage;

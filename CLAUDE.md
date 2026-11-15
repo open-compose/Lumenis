@@ -1114,7 +1114,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_media transcodeImx`), is done, so 11.1c is. ProRes is offered only where its encoder makes MXF media here
   (`encodesHere` in managed.cpp; VideoToolbox's needs the profile in the stream's parameters, BUILDING.md). 11.2, the time-stretch engine
   (docs/spec/time-stretch.md: WSOLA in `src/media/time_stretch.*`, AudioSuite's Pitch Shift, Time Compression Expansion
-  and Time Shift for new master clips through `AudioSuiteInfo::changesLength`; test `tst_time_stretch`), is done. 10.6 is an update check that only tells the user (no
+  and Time Shift for new master clips through `AudioSuiteInfo::changesLength`; test `tst_time_stretch`), is done.
+  11.3, the smaller left-over items, is done but 11.3d (ROADMAP): Show Adapters' S and C (`ui::shownAdapterIcons`),
+  AudioSuite's Nested Level Selection (`Segment::nestedAudioSuites`, EQ at level 0), Media Creation's Apply to All and
+  Single/Dual Drives Mode (settings option types `applyToAll`, `driveMode`), Motion Effects Render Using
+  (`MainWindow::renderMotionClip`). 11.3d, the OMFI/AAF tab's Resolution, waits for media embedded in AAF files. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

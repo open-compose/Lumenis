@@ -51,13 +51,6 @@ QToolButton* smallButton(const QString& text, const QString& name, const QString
     return b;
 }
 
-// A disabled button for a feature that comes later; its tooltip says so.
-QToolButton* laterButton(const QString& text, const QString& name, const QString& tip, QWidget* parent) {
-    QToolButton* b = smallButton(text, name, tip + QStringLiteral(" (") + QObject::tr("not available yet") + QLatin1Char(')'), parent);
-    b->setEnabled(false);
-    return b;
-}
-
 // Sliders as the Audio Track Effect tool's: log-scaled for frequencies and times.
 bool logScale(const media::AudioEffectParam& p) {
     return p.steps == 0 && p.min > 0 && p.max / p.min >= 50 && (p.unit == QLatin1String("Hz") || p.unit == QLatin1String("ms"));
@@ -266,7 +259,21 @@ AudioSuiteTool::AudioSuiteTool(Timeline& timeline, QWidget* parent) : QWidget(pa
         }
     });
     bar->addWidget(trackButton_);
-    bar->addWidget(laterButton(tr("0"), QStringLiteral("nestedLevel"), tr("Nested Level Selection Menu"), this));
+    // The Nested Level Selection menu (6 on p.797, p.800).
+    levelButton_ = smallButton(tr("1"), QStringLiteral("nestedLevel"), tr("Nested Level Selection Menu"), this);
+    levelButton_->setPopupMode(QToolButton::InstantPopup);
+    levelButton_->setMenu(new QMenu(levelButton_));
+    connect(levelButton_->menu(), &QMenu::aboutToShow, this, [this] {
+        QMenu* menu = levelButton_->menu();
+        menu->clear();
+        const QStringList items = levelItems();
+        for (int i = 0; i < items.size(); ++i) {
+            QAction* a = menu->addAction(items.at(i), this, [this, i] { chooseLevel(i); });
+            a->setCheckable(true);
+            a->setChecked(i == level_);
+        }
+    });
+    bar->addWidget(levelButton_);
     activateButton_ = smallButton(tr("Activate"), QStringLiteral("activatePlugin"), tr("Activate Current Plug-In"), this);
     connect(activateButton_, &QToolButton::clicked, this, [this] { activate(); });
     bar->addWidget(activateButton_);
@@ -294,6 +301,12 @@ AudioSuiteTool::AudioSuiteTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     connect(pluginButton_->menu(), &QMenu::aboutToShow, this, [this] {
         QMenu* menu = pluginButton_->menu();
         menu->clear();
+        // EQ first, as the picture on p.800 lists it, on the Timeline only.
+        if (!masterMode_) {
+            QAction* eq = menu->addAction(tr("EQ"), this, [this] { choosePlugin(QString::fromLatin1(kEqPlugin)); });
+            eq->setCheckable(true);
+            eq->setChecked(plugin_ == QLatin1String(kEqPlugin));
+        }
         QMap<QString, QMenu*> groups;
         for (const media::AudioSuiteInfo& i : media::audioSuitePlugins()) {
             if (i.masterClipOnly && !masterMode_) continue;
@@ -423,7 +436,30 @@ void AudioSuiteTool::chooseTrack(const QString& name, bool add) {
 
 std::optional<model::AudioSuiteEffect> AudioSuiteTool::current() const {
     const QString t = track();
-    return t.isEmpty() ? std::nullopt : timeline_.audioSuiteAt(t);
+    return t.isEmpty() || level_ < 1 ? std::nullopt : timeline_.audioSuiteAt(t, level_);
+}
+
+void AudioSuiteTool::chooseLevel(int level) {
+    level_ = std::clamp(level, 0, std::max(0, static_cast<int>(levelItems().size()) - 1));
+    // An empty level shows no plug-in until one is chosen.
+    if (level_ == 0) {
+        const QString t = track();
+        const auto s = t.isEmpty() ? std::nullopt : timeline_.audioSegmentAt(t);
+        plugin_ = s && s->eq ? QString::fromLatin1(kEqPlugin) : QString();
+    } else if (!current()) {
+        plugin_.clear();
+    }
+    refresh();
+}
+
+QStringList AudioSuiteTool::levelItems() const {
+    const QString t = track();
+    const auto s = t.isEmpty() ? std::nullopt : timeline_.audioSegmentAt(t);
+    QStringList items{s && s->eq ? tr("0 - EQ") : tr("0")};
+    const QList<model::AudioSuiteEffect> levels = s ? model::audioSuiteLevels(*s) : QList<model::AudioSuiteEffect>{};
+    for (int i = 0; i < levels.size(); ++i) items << tr("%1 - %2").arg(i + 1).arg(levels.at(i).name);
+    items << QString::number(levels.size() + 1);
+    return items;
 }
 
 bool AudioSuiteTool::fail(const QString& text) {
@@ -447,10 +483,30 @@ bool AudioSuiteTool::choosePlugin(const QString& id) {
         return true;
     }
     if (tracks().isEmpty()) return fail(tr("Select an audio track."));
-    if (id.isEmpty()) {
-        if (!timeline_.setAudioSuite(tracks(), std::nullopt, false, tr("Remove Audio Processing"))) return fail(timeline_.lastMessage());
+    if (id == QLatin1String(kEqPlugin)) {
+        // "The real-time EQ effect is only allowed on the first nested level (level 0)" (p.800): a flat EQ, which the
+        // Audio EQ tool then sets.
+        level_ = 0;
+        plugin_ = id;
+        const QString t = track();
+        const auto s = t.isEmpty() ? std::nullopt : timeline_.audioSegmentAt(t);
+        if (!(s && s->eq) && !timeline_.setEq(tracks(), model::AudioEq{}, false, tr("Audio EQ"))) return fail(timeline_.lastMessage());
+        refresh();
         return true;
     }
+    if (id.isEmpty()) {
+        if (level_ == 0) {
+            plugin_.clear();
+            if (!timeline_.setEq(tracks(), std::nullopt, false, tr("Remove EQ"))) return fail(timeline_.lastMessage());
+            refresh();
+            return true;
+        }
+        if (!timeline_.setAudioSuite(tracks(), std::nullopt, false, tr("Remove Audio Processing"), level_)) return fail(timeline_.lastMessage());
+        refresh();
+        return true;
+    }
+    // Level 0 holds the EQ alone: an AudioSuite plug-in chosen there goes to level 1 (ours).
+    if (level_ == 0) level_ = 1;
     const auto info = media::findAudioSuitePlugin(id);
     if (!info) return fail(tr("The Audio Processing plug-in %1 is not installed.").arg(id));
     // "This plug-in applies only when you use the Create New Master Clips features" (p.839).
@@ -461,7 +517,9 @@ bool AudioSuiteTool::choosePlugin(const QString& id) {
     e.params = info->defaults();
     plugin_ = id;
     lastValues_ = e.params;
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name), std::max(level_, 1))) {
+        return fail(timeline_.lastMessage());
+    }
     refresh();
     return true;
 }
@@ -482,12 +540,18 @@ bool AudioSuiteTool::setValues(const QMap<QString, double>& values) {
         refresh();
         return true;
     }
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name), std::max(level_, 1))) {
+        return fail(timeline_.lastMessage());
+    }
     return true;
 }
 
 AudioSuitePluginDialog* AudioSuiteTool::activate() {
     message_->clear();
+    if (!masterMode_ && plugin_ == QLatin1String(kEqPlugin)) {
+        emit eqToolRequested();
+        return nullptr;
+    }
     const auto info = media::findAudioSuitePlugin(plugin_);
     if (!info) {
         fail(tr("Choose a plug-in first."));
@@ -581,7 +645,9 @@ bool AudioSuiteTool::setInScope() {
     for (auto it = lastValues_.cbegin(); it != lastValues_.cend(); ++it) {
         if (info->param(it.key())) e.params.insert(it.key(), it.value());
     }
-    if (!timeline_.setAudioSuite(tracks(), e, true, tr("Set Audio Processing - %1").arg(scope()))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, true, tr("Set Audio Processing - %1").arg(scope()), std::max(level_, 1))) {
+        return fail(timeline_.lastMessage());
+    }
     return true;
 }
 
@@ -591,7 +657,7 @@ bool AudioSuiteTool::renderInScope() {
 
 bool AudioSuiteTool::removeInScope() {
     message_->clear();
-    if (!timeline_.setAudioSuite(tracks(), std::nullopt, true, tr("Remove Audio Processing - %1").arg(scope()))) {
+    if (!timeline_.setAudioSuite(tracks(), std::nullopt, true, tr("Remove Audio Processing - %1").arg(scope()), std::max(level_, 1))) {
         return fail(timeline_.lastMessage());
     }
     return true;
@@ -615,7 +681,9 @@ bool AudioSuiteTool::applyTemplate(const model::AudioSuiteTemplate& t) {
     plugin_ = e.effect;
     lastValues_ = e.params;
     // One undo step, as dropping a template is.
-    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name))) return fail(timeline_.lastMessage());
+    if (!timeline_.setAudioSuite(tracks(), e, false, tr("Audio Processing %1").arg(info->name), std::max(level_, 1))) {
+        return fail(timeline_.lastMessage());
+    }
     refresh();
     return true;
 }
@@ -630,6 +698,8 @@ void AudioSuiteTool::setMasterClipMode(bool on) {
     if (!on && !plugin_.isEmpty()) {
         if (const auto info = media::findAudioSuitePlugin(plugin_); info && info->masterClipOnly) plugin_.clear();
     }
+    // The real-time EQ is a Timeline effect: new master clips take AudioSuite plug-ins only.
+    if (on && plugin_ == QLatin1String(kEqPlugin)) plugin_.clear();
     refresh();
 }
 
@@ -945,9 +1015,12 @@ void AudioSuiteTool::refresh() {
         plugin_ = shown->effect;
         lastValues_ = shown->params;
     }
-    const auto info = plugin_.isEmpty() ? std::nullopt : media::findAudioSuitePlugin(plugin_);
-    pluginButton_->setText(info ? info->name : shown ? shown->name : tr("None"));
-    activateButton_->setEnabled(info.has_value());
+    levelButton_->setText(QString::number(level_));
+    levelButton_->setEnabled(!masterMode_);
+    const bool eq = !masterMode_ && plugin_ == QLatin1String(kEqPlugin);
+    const auto info = plugin_.isEmpty() || eq ? std::nullopt : media::findAudioSuitePlugin(plugin_);
+    pluginButton_->setText(eq ? tr("EQ") : info ? info->name : shown ? shown->name : tr("None"));
+    activateButton_->setEnabled(info.has_value() || eq);
     effectIcon_->setEnabled(info.has_value());
     findSource_->setEnabled(pendingTemplate_.has_value());
     loadSource_->setEnabled(active_ >= 0);

@@ -376,6 +376,66 @@ private slots:
 
     // Creating new master clips (p.800-804): tracks chosen, the marks, a handle, several tracks
     // processed together; Duplicate.
+    // The Nested Level Selection menu's levels (p.800): effects set and removed by level, kept in sequences, all in the
+    // render's key, and rendered in turn into one file.
+    void nestedLevels() {
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment g;
+        g.clipId = QStringLiteral("c");
+        g.sourceTrack = QStringLiteral("A1");
+        g.length = 20;
+        seq.splice(QStringLiteral("A1"), 0, {g});
+        const QString a1 = QStringLiteral("A1");
+        auto segment = [&] { return seq.track(a1)->segments.first(); };
+        // Level 2 needs level 1 first.
+        QCOMPARE(model::setAudioSuite(seq, a1, 0, 1, suite("suite.gain", "Gain"), 2), 0);
+        QCOMPARE(model::setAudioSuite(seq, a1, 0, 1, suite("suite.invert", "Invert")), 1);
+        QCOMPARE(model::setAudioSuite(seq, a1, 0, 1, suite("suite.gain", "Gain", {{QStringLiteral("gain"), -6}}), 2), 1);
+        QCOMPARE(model::setAudioSuite(seq, a1, 0, 1, suite("suite.reverse", "Reverse"), 4), 0); // past the next free one
+        QCOMPARE(model::audioSuiteLevels(segment()).size(), 2);
+        QCOMPARE(segment().nestedAudioSuites.first().effect, QStringLiteral("suite.gain"));
+        // Both levels are in the key: a change at level 2 puts the render out of date.
+        const QString key = model::audioSuiteKey(segment());
+        QVERIFY(key.contains(QLatin1String("suite.invert")) && key.contains(QLatin1String("suite.gain")));
+        // Kept in sequences.
+        model::BinItem item;
+        item.kind = model::BinItemKind::Sequence;
+        seq.storeIn(item);
+        QCOMPARE(model::audioSuiteLevels(model::Sequence::fromItem(item).track(a1)->segments.first()).size(), 2);
+        // Removing level 1 moves level 2 up.
+        QCOMPARE(model::setAudioSuite(seq, a1, 0, 1, std::nullopt, 1), 1);
+        QCOMPARE(segment().audioSuite->effect, QStringLiteral("suite.gain"));
+        QVERIFY(segment().nestedAudioSuites.isEmpty());
+
+        // Rendered in turn: Invert at level 1 and Gain -6 dB at level 2 make the tone inverted and halved.
+        QTemporaryDir dir;
+        const QString wav = dir.filePath(QStringLiteral("tone.wav"));
+        QVERIFY(writeTone(wav, 2 * kRate));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const model::BinItem clip = linkFiles({wav}, o).first();
+        model::Segment s;
+        s.clipId = clip.id;
+        s.name = clip.name;
+        s.sourceTrack = QStringLiteral("A1");
+        s.length = 10;
+        s.audioSuite = suite("suite.invert", "Invert");
+        s.nestedAudioSuites = {suite("suite.gain", "Gain", {{QStringLiteral("gain"), -6}})};
+        const QString drive = dir.filePath(QStringLiteral("Drive"));
+        QVERIFY(QDir().mkpath(drive));
+        MediaCreation creation;
+        creation.videoDrive = drive;
+        QString error;
+        const auto e = renderAudioSuite(s, clip, Rational(25), creation, &error);
+        QVERIFY2(e, qPrintable(error));
+        AudioReader r;
+        QVERIFY(r.open(e->rendered));
+        const std::vector<float> made = r.samples(0, 4000);
+        for (std::size_t i = 100; i < made.size(); i += 397) {
+            QVERIFY(std::abs(static_cast<double>(made[i]) + tone(static_cast<std::int64_t>(i)) * dbToGainOf(-6)) < 1e-3);
+        }
+    }
+
     void newMasterClip() {
         QTemporaryDir dir;
         // Two channels: 0.5 and 0.1 sines.

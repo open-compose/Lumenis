@@ -109,8 +109,26 @@ The controls follow the picture on p.797:
   (p.804); ours lists the AudioSuite templates in the open bins. Applying
   one puts its plug-in and values on the segments under the position, one
   undo step, or in master clip mode makes them the next render's.
-* Dimmed until later: Audio Loop Play and the Nested Level Selection menu
-  (real-time EQ in AudioSuite, p.800).
+* Dimmed until later: Audio Loop Play.
+* **Nested Level Selection** menu (6 on p.797; p.800, ROADMAP 11.3b): "To add
+  another effect, select the Nested level selection menu and choose to add
+  another effect to the track."
+  * Its items, as the picture on p.800 lists them: "0 - EQ" (or "0"), then
+    "1 - <effect>" for each AudioSuite effect on the segment under the
+    position, then the next free level's number alone.
+  * Level 0 is the real-time EQ ("only allowed on the first nested level"):
+    EQ, first in the Plug-In Selection menu, puts a flat EQ on the segment
+    and Activate Current Plug-In opens the Audio EQ tool ("it will open the
+    Audio EQ tool where you can make any EQ adjustments"); None takes it off.
+  * Levels 1 and up are AudioSuite effects (`Segment::audioSuite` at level
+    1, `Segment::nestedAudioSuites` after it), run in turn into one render
+    that level 1 keeps; every level is in the render's key
+    (`model::audioSuiteKey`). Removing a level moves the ones after it up; a
+    level past the next free one is refused.
+  * Ours: the tool starts at level 1; an AudioSuite plug-in chosen at level
+    0 goes to level 1; the EQ stays where the render order puts it (p.700),
+    after the AudioSuite effects. The Fast menu's Set and Remove work on the
+    level shown.
 
 ## Creating new master clips (p.800-804)
 
@@ -165,7 +183,6 @@ The controls follow the picture on p.797:
 * Several clips rendered at once, and stereo processing of track pairs
   (p.803-805).
 * Preview, Bypass, Find Level, Plug-In Settings and Compare (p.798-799).
-* Nested levels and real-time EQ in the tool (p.800).
 * AudioSuite effects on multichannel tracks (docs/spec/multichannel.md).
 * Cancelling a render (p.805), and a progress bar while it runs.
 * Rendered files belong to no clip: the Media Tool lists them with the
