@@ -130,6 +130,19 @@ private:
     QCheckBox* blackEdits_ = nullptr;
     QCheckBox* clipNames_ = nullptr;
     QCheckBox* markers_ = nullptr;
+    // 11.4c1's List Options and Formatting (p.958-960).
+    QCheckBox* otherTransitions_ = nullptr;
+    QCheckBox* segmentEffects_ = nullptr;
+    QCheckBox* colorDecisionLists_ = nullptr;
+    QCheckBox* sourceFileName_ = nullptr;
+    QCheckBox* allMarkersAtEnd_ = nullptr;
+    QCheckBox* edlClipComments_ = nullptr;
+    QComboBox* sourceTc_ = nullptr;
+    QComboBox* reelType_ = nullptr;
+    QComboBox* sortMode_ = nullptr;
+    QComboBox* truncation_ = nullptr;
+    QCheckBox* tapeNumbers_ = nullptr;
+    QLineEdit* startingTc_ = nullptr;
     QCheckBox* optimize_ = nullptr;
     QComboBox* s3dContributor_ = nullptr;
     QSpinBox* startEvent_ = nullptr;

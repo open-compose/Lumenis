@@ -131,6 +131,32 @@ Number.
   segment effects are left out with a warning.
 * Lines end in CR LF.
 
+### List Options and Formatting (11.4c1)
+The options of p.958-960 whose form a published list shows (the OpenTimelineIO adapter's Avid sample lists in the
+corpus) or that the guide spells out:
+
+* **Other Transitions** (p.958): on, wipes are `Wnnn` and other transitions dissolves, as above; off, every transition
+  but a dissolve is a cut.
+* **Source File Name:** `* SOURCE FILE: <the clip's Source File>` after the event's clip names.
+* **Clip Comments:** `* <the clip's Comments>`.
+* **Color Decision Lists:** the clip's ASC_SOP and ASC_SAT columns as `*ASC_SOP (s s s) (o o o) (p p p)` and
+  `*ASC_SAT x`, as the corpus's lists write them; an ASC_SOP the reader cannot split into three triples is written as
+  it is.
+* **Other Segment Effects:** `* <category>, <name>` for each segment effect but the motion effects written as `M2`
+  (the corpus's `* BLEND, DISSOLVE` form); on, they are no longer warned about.
+* **All Markers at End** (p.954): the markers outside every event, as `* LOC:` lines after the last event, in record
+  order.
+* **Sort Mode** (p.959): A (Record In), B (Source, Record In), C (Source, Source In), D and E as B and C with the
+  effect events (transitions, motion effects) last, S (by source IN alone). Events are numbered after sorting.
+* **Source TC:** Start, Sound TC or Auxiliary TC1-5; a clip without the column is listed with its Start, with a
+  warning. VITC, Film_TC and TC24 stay dimmed.
+* **Reel ID Type:** Tape, Soundroll, Camroll, Labroll or Disk Label; a clip without the column keeps its tape reel.
+* **Tape or File Name truncation** (p.960): End, Middle, Beginning and First_N, the guide's own examples (CHICAGO138101
+  becomes CHICAGO1, CHIC8101, GO138101 and CO138101).
+* **Convert tape names to numbers** (p.960): every reel but BL and AX as 001, 002 ... in the order first used (ours:
+  the guide does not say the order).
+* **Starting TC** (p.960): the record timecode of the sequence's first frame; empty, the sequence's Start.
+
 ### Titles (6.8c4b)
 "Beginning with Media Composer v2025.6, all titles used in the Timeline can be exported as part of an Edit Decision List
 (EDL). Each Titler+ effect is assigned a dedicated event timecode and a unique name (based on the Clip Text label)" (FX
@@ -161,7 +187,8 @@ The menus and dialogs are in ui-inventory.md §19.
   File_129), round trips (sequence -> EDL -> sequence, the same by
   structure dump, optimized or not, through a file), centred transitions,
   sequences of master clips with Black Edits, and every OpenTimelineIO
-  sample list read, written and read again the same.
+  sample list read, written and read again the same; `listOptions`, the
+  List Options and Formatting above with the guide's truncation examples.
 * `tst_interchange` (UI): Import EDL and the List Tool.
 * `cutthulhu --import-edl FILE [--rate R]` prints the bin as a structure
   dump; `cutthulhu --export-edl BIN SEQUENCE OUT.edl [--edl-type
@@ -173,11 +200,11 @@ The menus and dialogs are in ui-inventory.md §19.
 * The other output types (CMX_DigitalCut, CMX_Transfer, Cuedos, File_16,
   File_32) and the cut and change lists (Columnar, TabbedLists, WebLists,
   XML, p.947).
-* Sort modes B-E and S, Source TC and Record TC other than Start and TC1,
-  Reel ID Types other than Tape, truncation other than End, tape names to
-  numbers, the source table in the saved list, Starting TC (p.959-960).
-* Split edits, audio levels, Track Patching, CDL comments, All Markers at
-  End and spanned markers (p.954-958).
+* Source TC VITC, Film_TC and TC24, Record TC other than TC1, Frame
+  Count, Reel Names, the source table in the saved list (p.959-960).
+* Split edits, audio levels (Volume), EQ, Track Patching, Color Effects,
+  the adapters' comments and spanned markers (p.954-958): no published list
+  shows their form.
 * One list per video track (p.949 step 9), the Edit mode (p.949-950), New
   List and Clone List, Active Settings (p.956-957), dragging a sequence in.
 * Import EDL's Project Type and Audio Mapping (p.951 step 4), and

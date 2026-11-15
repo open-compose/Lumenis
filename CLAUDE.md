@@ -1131,7 +1131,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `relinkVideo`/`relinkAudio`; tests `tst_media relinkOptions`, `tst_managed_media relinkDialogOptions`), is done, so
   11.4a is. 11.4b, export from a monitor and by drag and drop (`MainWindow::exportSelection` with the active monitor,
   `ExportDragData` in `src/ui/export_drag.*` and `MainWindow::exportDropped`, the Temporary File Directory through
-  `MainWindow::temporaryFolder`; test `tst_movie_export_ui exportFromMonitorAndByDragging`), is done. 10.6 is an update check that only tells the user (no
+  `MainWindow::temporaryFolder`; test `tst_movie_export_ui exportFromMonitorAndByDragging`), is done. 11.4c1, the List Tool's EDL List Options and
+  Formatting (docs/spec/edl.md "List Options and Formatting": `interop::edl::ExportOptions`' sort modes, Source TC, Reel
+  ID Type, truncations, tape numbers, Starting TC and comment lines; test `tst_edl listOptions`), is done. 11.4c2, the
+  Import setting's Shot Log tab (docs/spec/ale.md "Combining and merging events": `model::shotLogEvents` in
+  `src/model/shot_log.*`; tests `tst_ale shotLogEvents`, `tst_interchange shotLogs`), is done, so 11.4c is. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

@@ -198,13 +198,21 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     pictureDissolves_ = new QCheckBox(tr("Dissolves"), picture);
     pictureDissolves_->setChecked(true);
     pictureLayout->addWidget(pictureDissolves_);
-    pictureLayout->addWidget(later(tr("Other Transitions"), picture));
+    auto optionBox = [](const QString& text, const QString& name, bool on, QWidget* owner) {
+        auto* box = new QCheckBox(text, owner);
+        box->setObjectName(name);
+        box->setChecked(on);
+        return box;
+    };
+    otherTransitions_ = optionBox(tr("Other Transitions"), QStringLiteral("listOtherTransitions"), true, picture);
+    pictureLayout->addWidget(otherTransitions_);
     blackEdits_ = new QCheckBox(tr("Black Edits"), picture);
     pictureLayout->addWidget(blackEdits_);
-    for (const QString& t : {tr("Spatial Adapters"), tr("Temporal Adapters"), tr("Color Effects"), tr("Other Segment Effects"),
-                             tr("Color Decision Lists")}) {
-        pictureLayout->addWidget(later(t, picture));
-    }
+    for (const QString& t : {tr("Spatial Adapters"), tr("Temporal Adapters"), tr("Color Effects")}) pictureLayout->addWidget(later(t, picture));
+    segmentEffects_ = optionBox(tr("Other Segment Effects"), QStringLiteral("listSegmentEffects"), false, picture);
+    pictureLayout->addWidget(segmentEffects_);
+    colorDecisionLists_ = optionBox(tr("Color Decision Lists"), QStringLiteral("listColorDecisionLists"), false, picture);
+    pictureLayout->addWidget(colorDecisionLists_);
     optionsLayout->addWidget(picture);
     auto* sound = new QGroupBox(tr("Sound"), options);
     auto* soundLayout = new QVBoxLayout(sound);
@@ -218,13 +226,16 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     clipNames_ = new QCheckBox(tr("Clip Names"), both);
     clipNames_->setChecked(true);
     bothLayout->addWidget(clipNames_);
-    bothLayout->addWidget(later(tr("Source File Name"), both));
+    sourceFileName_ = optionBox(tr("Source File Name"), QStringLiteral("listSourceFileName"), false, both);
+    bothLayout->addWidget(sourceFileName_);
     markers_ = new QCheckBox(tr("Markers"), both);
     markers_->setChecked(true);
     bothLayout->addWidget(markers_);
-    for (const QString& t : {tr("All Markers at End"), tr("Clip Comments"), tr("Reel Names"), tr("Frame Count")}) {
-        bothLayout->addWidget(later(t, both));
-    }
+    allMarkersAtEnd_ = optionBox(tr("All Markers at End"), QStringLiteral("listAllMarkersAtEnd"), false, both);
+    bothLayout->addWidget(allMarkersAtEnd_);
+    edlClipComments_ = optionBox(tr("Clip Comments"), QStringLiteral("listEdlClipComments"), false, both);
+    bothLayout->addWidget(edlClipComments_);
+    for (const QString& t : {tr("Reel Names"), tr("Frame Count")}) bothLayout->addWidget(later(t, both));
     optionsLayout->addWidget(both);
     // Cut List: List Options (p.960-962), shown for the cut list types.
     auto* cut = new QGroupBox(tr("Cut List"), options);
@@ -332,20 +343,50 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     s3dContributor_->setObjectName(QStringLiteral("listS3DContributor"));
     s3dContributor_->addItems({tr("Monoscopic"), tr("S3D Left"), tr("S3D Right")});
     formLayout->addRow(tr("S3D Contributor"), s3dContributor_);
-    formLayout->addRow(tr("Source TC"), menu({tr("Start"), tr("VITC"), tr("Sound_TC"), tr("Film_TC"), tr("TC24")}, formatting));
+    // Source TC (p.959): Start, Sound_TC and AUX_1_TC to AUX_5_TC read the clips' columns; the others are dimmed.
+    sourceTc_ = new QComboBox(formatting);
+    sourceTc_->setObjectName(QStringLiteral("listSourceTc"));
+    sourceTc_->addItem(tr("Start"), QString());
+    sourceTc_->addItem(tr("VITC"), QStringLiteral("-"));
+    sourceTc_->addItem(tr("Sound_TC"), QStringLiteral("Sound TC"));
+    sourceTc_->addItem(tr("Film_TC"), QStringLiteral("-"));
+    sourceTc_->addItem(tr("TC24"), QStringLiteral("-"));
+    for (int i = 1; i <= 5; ++i) sourceTc_->addItem(QStringLiteral("AUX_%1_TC").arg(i), QStringLiteral("Auxiliary TC%1").arg(i));
+    dim(sourceTc_, 1);
+    dim(sourceTc_, 3);
+    dim(sourceTc_, 4);
+    formLayout->addRow(tr("Source TC"), sourceTc_);
     formLayout->addRow(tr("Record TC"), menu({tr("TC1")}, formatting));
-    formLayout->addRow(tr("Reel ID Type"), menu({tr("Tape"), tr("Sound_Roll"), tr("Camera_Roll"), tr("Lab_Roll"), tr("Disk_Label")}, formatting));
-    formLayout->addRow(tr("Sort Mode"), menu({tr("A (Record In)"), tr("B (Source, Record In)"), tr("C (Source, Source In)"),
-                                              tr("D (Source, Record In, Effects at End)"), tr("E (Source, Source In, Effects at End)"),
-                                              tr("S (Source Start)")},
-                                             formatting));
+    reelType_ = new QComboBox(formatting);
+    reelType_->setObjectName(QStringLiteral("listReelIdType"));
+    reelType_->addItem(tr("Tape"), QString());
+    reelType_->addItem(tr("Sound_Roll"), QStringLiteral("Soundroll"));
+    reelType_->addItem(tr("Camera_Roll"), QStringLiteral("Camroll"));
+    reelType_->addItem(tr("Lab_Roll"), QStringLiteral("Labroll"));
+    reelType_->addItem(tr("Disk_Label"), QStringLiteral("Disk Label"));
+    formLayout->addRow(tr("Reel ID Type"), reelType_);
+    sortMode_ = new QComboBox(formatting);
+    sortMode_->setObjectName(QStringLiteral("listSortMode"));
+    sortMode_->addItems({tr("A (Record In)"), tr("B (Source, Record In)"), tr("C (Source, Source In)"),
+                         tr("D (Source, Record In, Effects at End)"), tr("E (Source, Source In, Effects at End)"),
+                         tr("S (Source Start)")});
+    formLayout->addRow(tr("Sort Mode"), sortMode_);
     startEvent_ = new QSpinBox(formatting);
     startEvent_->setObjectName(QStringLiteral("listStartEvent"));
     startEvent_->setRange(0, 9999);
     startEvent_->setValue(1);
     formLayout->addRow(tr("Starting Event Number"), startEvent_);
-    formLayout->addRow(tr("Tape or File Name truncation"), menu({tr("End"), tr("Middle"), tr("Beginning"), tr("First_N")}, formatting));
-    formLayout->addRow(later(tr("Convert tape names to numbers"), formatting));
+    // Starting TC (p.960): empty for the sequence's own.
+    startingTc_ = new QLineEdit(formatting);
+    startingTc_->setObjectName(QStringLiteral("listStartingTc"));
+    startingTc_->setPlaceholderText(tr("The sequence's start"));
+    formLayout->addRow(tr("Starting TC"), startingTc_);
+    truncation_ = new QComboBox(formatting);
+    truncation_->setObjectName(QStringLiteral("listTruncation"));
+    truncation_->addItems({tr("End"), tr("Middle"), tr("Beginning"), tr("First_N")});
+    formLayout->addRow(tr("Tape or File Name truncation"), truncation_);
+    tapeNumbers_ = optionBox(tr("Convert tape names to numbers"), QStringLiteral("listTapeNumbers"), false, formatting);
+    formLayout->addRow(tapeNumbers_);
     formLayout->addRow(later(tr("Include source table with saved EDL"), formatting));
     tabs->addTab(formatting, tr("Formatting"));
     leftLayout->addWidget(tabs, 1);
@@ -583,6 +624,18 @@ interop::edl::ExportOptions ListTool::options() const {
                        : s3dContributor_->currentIndex() == 2 ? model::S3DContributor::Right
                                                               : model::S3DContributor::Monoscopic;
     o.startEvent = startEvent_->value();
+    o.otherTransitions = otherTransitions_->isChecked();
+    o.segmentEffects = segmentEffects_->isChecked();
+    o.colorDecisionLists = colorDecisionLists_->isChecked();
+    o.sourceFileName = sourceFileName_->isChecked();
+    o.allMarkersAtEnd = allMarkersAtEnd_->isChecked();
+    o.clipComments = edlClipComments_->isChecked();
+    o.sourceTimecode = sourceTc_->currentData().toString();
+    o.reelColumn = reelType_->currentData().toString();
+    o.sortMode = static_cast<interop::edl::ExportOptions::SortMode>(sortMode_->currentIndex());
+    o.truncation = static_cast<interop::edl::ExportOptions::Truncation>(truncation_->currentIndex());
+    o.tapeNumbers = tapeNumbers_->isChecked();
+    o.startingTimecode = startingTc_->text().trimmed();
     o.resolve = resolve_;
     return o;
 }

@@ -54,6 +54,7 @@
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/group_clip.h"
 #include "lumenis/model/sync_clips.h"
+#include "lumenis/model/shot_log.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
@@ -5956,6 +5957,16 @@ QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& 
     if (!doc || paths.isEmpty()) return {};
     QStringList ids;
     model::BinDisplay display = doc->bin().display;
+    // The Shot Log tab (p.1197-1198): the events kept, combined, or merged with the clips selected in the bin when
+    // the import starts ("You must select the clips that you want to merge before selecting this option").
+    const model::ShotLogEvents mode =
+        model::shotLogEventsOf(settings_->value(QStringLiteral("Import"), QStringLiteral("shotLogEvents")).toString());
+    QList<model::BinItem> known;
+    if (const BinView* view = binContainer_->viewFor(doc)) {
+        for (const QString& id : view->selectedIds()) {
+            if (const model::BinItem* item = doc->bin().item(id)) known << *item;
+        }
+    }
     for (const QString& path : paths) {
         QString error;
         interop::ale::ImportOptions options;
@@ -5965,16 +5976,22 @@ QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& 
             reportFailure(this, tr("Import: %1").arg(error));
             continue;
         }
-        for (const model::BinItem& item : imported->items) {
+        const model::ShotLogResult events = model::shotLogEvents(mode, imported->items, known, doc->bin(), options.when);
+        for (const model::BinItem& item : events.added) {
             doc->addItem(item);
             ids << item.id;
         }
+        for (const model::BinItem& item : events.updated) {
+            if (doc->replaceItem(item)) ids << item.id;
+        }
+        for (const QString& w : events.warnings) reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
         for (const QString& column : imported->customColumns) {
             if (!display.customColumns.contains(column)) display.customColumns << column;
         }
         // Console only: what was imported.
         ConsoleLog::instance().append(
-            tr("Import: %1: %n clip(s) from the shot log", "", static_cast<int>(imported->items.size())).arg(QFileInfo(path).fileName()));
+            tr("Import: %1: %n clip(s) from the shot log", "", static_cast<int>(events.added.size() + events.updated.size()))
+                .arg(QFileInfo(path).fileName()));
         for (const QString& w : imported->warnings) reportFailure(this, tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
     }
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);

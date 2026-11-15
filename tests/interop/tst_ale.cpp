@@ -1,5 +1,6 @@
 #include "corpus.h"
 #include "lumenis/interop/ale.h"
+#include "lumenis/model/shot_log.h"
 #include "lumenis/model/structure.h"
 
 #include <QDir>
@@ -64,6 +65,7 @@ private slots:
     void exportChoices();
     void malformed();
     void shotLogFiles();
+    void shotLogEvents();
     void corpus();
 };
 
@@ -304,6 +306,93 @@ void TestAle::shotLogFiles() {
 }
 
 // OpenTimelineIO's sample logs: each reads, and what Cutthulhu writes from it reads back the same.
+// The Import setting's Shot Log tab (p.1197-1198): a log's events kept, combined by scene or camera roll into master
+// clips with subclips, or merged with the selected clips.
+void TestAle::shotLogEvents() {
+    const QString log = QStringLiteral(
+        "Heading\nFIELD_DELIM\tTABS\nVIDEO_FORMAT\t1080\nFPS\t25\n\n"
+        "Column\nName\tTracks\tStart\tEnd\tTape\tScene\tCamroll\tComments\n\n"
+        "Data\n"
+        "12-1\tVA1A2\t01:00:00:00\t01:00:10:00\tT1\t12\tR1\tfirst\n"
+        "13-1\tVA1A2\t01:00:20:00\t01:00:30:00\tT1\t13\tR1\t\n"
+        "12-2\tVA1\t01:00:40:00\t01:00:50:00\tT1\t12\tR2\tbest\n"
+        "x\tV\t01:01:00:00\t01:01:05:00\tT1\t\t\t\n");
+    const QDateTime when = QDateTime::currentDateTimeUtc();
+    const QList<model::BinItem> events = ale::importText(log).items;
+    QCOMPARE(events.size(), 4);
+    const model::Bin bin;
+
+    // Maintain events as logged: the events themselves.
+    auto r = model::shotLogEvents(model::ShotLogEvents::AsLogged, events, {}, bin, when);
+    QCOMPARE(r.added.size(), 4);
+    QCOMPARE(model::shotLogEventsOf(QStringLiteral("camroll")), model::ShotLogEvents::CameraRoll);
+    QCOMPARE(model::shotLogEventsOf(QStringLiteral("nonsense")), model::ShotLogEvents::AsLogged);
+
+    // By scene: scene 12's master clip over its two takes, with a subclip for each, then scene 13's; the event
+    // without a scene kept as logged, with a warning.
+    r = model::shotLogEvents(model::ShotLogEvents::Scene, events, {}, bin, when);
+    QStringList names;
+    for (const model::BinItem& i : r.added) names << i.name;
+    QCOMPARE(names, (QStringList{"12", "12-1", "12-2", "13", "13-1", "x"}));
+    const model::BinItem& scene12 = r.added[0];
+    QCOMPARE(scene12.kind, model::BinItemKind::MasterClip);
+    QCOMPARE(scene12.fields.value("Start"), QStringLiteral("01:00:00:00"));
+    QCOMPARE(scene12.fields.value("End"), QStringLiteral("01:00:50:00"));
+    QCOMPARE(scene12.durationFrames, 50 * 25);
+    QCOMPARE(scene12.fields.value("Tracks"), QStringLiteral("V1 A1-2"));
+    const model::BinItem& take2 = r.added[2];
+    QCOMPARE(take2.kind, model::BinItemKind::Subclip);
+    QCOMPARE(take2.fields.value("Start"), QStringLiteral("01:00:40:00"));
+    QCOMPARE(take2.durationFrames, 10 * 25);
+    QCOMPARE(take2.fields.value("Comments"), QStringLiteral("best"));
+    QCOMPARE(take2.fields.value("Tracks"), QStringLiteral("V1 A1"));
+    QCOMPARE(take2.sources.size(), 1);
+    QCOMPARE(take2.sources[0].mob, model::mobIdOf(scene12));
+    QCOMPARE(take2.sources[0].offset, 40 * 25);
+    QVERIFY(r.warnings.join(' ').contains("without a Scene"));
+
+    // By camera roll: R1's two events, R2's one.
+    r = model::shotLogEvents(model::ShotLogEvents::CameraRoll, events, {}, bin, when);
+    names.clear();
+    for (const model::BinItem& i : r.added) names << i.name;
+    QCOMPARE(names, (QStringList{"R1", "12-1", "13-1", "R2", "12-2", "x"}));
+    QCOMPARE(r.added[0].fields.value("End"), QStringLiteral("01:00:30:00"));
+
+    // Known sources: a selected clip of tape T1 from 01:00:00:00 to 01:00:35:00 takes the two events inside it as
+    // subclips; the others are kept as logged. A clip of another tape takes nothing.
+    model::BinItem source = clip(QStringLiteral("Roll"), QStringLiteral("01:00:00:00"), 35 * 25, QStringLiteral("V1 A1-2"));
+    source.editRate = Rational(25);
+    source.fields.insert("Tape", "T1");
+    model::BinItem other = source;
+    other.id = model::newItemId();
+    other.fields.insert("Tape", "T2");
+    r = model::shotLogEvents(model::ShotLogEvents::KnownSources, events, {other, source}, bin, when);
+    QCOMPARE(r.added.size(), 4);
+    QCOMPARE(r.added[0].kind, model::BinItemKind::Subclip);
+    QCOMPARE(r.added[0].sources[0].mob, model::mobIdOf(source));
+    QCOMPARE(r.added[1].sources[0].offset, 20 * 25);
+    QCOMPARE(r.added[2].kind, model::BinItemKind::MasterClip);
+    QVERIFY(r.updated.isEmpty());
+    QVERIFY(r.warnings.join(' ').contains("outside the selected clips"));
+
+    // Known master clips: the selected clip with the same tape, Start and End takes the log's columns, keeping its
+    // name and id; a clip with another End takes nothing.
+    model::BinItem master = clip(QStringLiteral("Take one"), QStringLiteral("01:00:00:00"), 10 * 25, QStringLiteral("V1 A1-2"));
+    master.editRate = Rational(25);
+    master.fields.insert("Tape", "T1");
+    model::BinItem longer = master;
+    longer.id = model::newItemId();
+    longer.durationFrames += 1;
+    r = model::shotLogEvents(model::ShotLogEvents::KnownMasterClips, events, {longer, master}, bin, when);
+    QCOMPARE(r.updated.size(), 1);
+    QCOMPARE(r.updated[0].id, master.id);
+    QCOMPARE(r.updated[0].name, QStringLiteral("Take one"));
+    QCOMPARE(r.updated[0].fields.value("Scene"), QStringLiteral("12"));
+    QCOMPARE(r.updated[0].fields.value("Comments"), QStringLiteral("first"));
+    QCOMPARE(r.added.size(), 3);
+    QVERIFY(r.warnings.join(' ').contains("no selected master clip"));
+}
+
 void TestAle::corpus() {
     const QString folder = corpusFolder();
     if (folder.isEmpty()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");

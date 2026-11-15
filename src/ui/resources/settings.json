@@ -674,7 +674,7 @@
         {
           "name": "Shot Log",
           "options": [
-            {"key": "shotLogEvents", "type": "choice", "style": "radio", "label": "", "default": "asLogged", "page": 1197, "later": true,
+            {"key": "shotLogEvents", "type": "choice", "style": "radio", "label": "", "default": "asLogged", "page": 1197,
              "choices": [{"value": "asLogged", "label": "Maintain events as logged."}, {"value": "scene", "label": "Combine events based on scene and automatically create subclips."}, {"value": "camroll", "label": "Combine events based on camera roll and automatically create subclips."}, {"value": "sources", "label": "Merge events with known sources and automatically create subclips."}, {"value": "masters", "label": "Merge events with known master clips."}]}
           ]
         },

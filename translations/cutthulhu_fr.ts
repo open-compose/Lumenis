@@ -12351,6 +12351,14 @@ Date de création: %4</translation>
         <source>List Tool: saved %1</source>
         <translation type="unfinished">Outil Liste: %1 enregistré</translation>
     </message>
+    <message>
+        <source>The sequence&apos;s start</source>
+        <translation type="unfinished">Le début de la séquence</translation>
+    </message>
+    <message>
+        <source>Starting TC</source>
+        <translation type="unfinished">TC de départ</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::MainWindow</name>

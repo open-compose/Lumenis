@@ -102,11 +102,29 @@ The menus and dialogs are in ui-inventory.md §19.
 * **Import:** a shot log selected for Import in the Source Browser
   (p.131-132 steps 3-6) is read as clip information, not media
   (`MainWindow::importShotLogs`). Its custom columns are added to the bin.
+* **The Shot Log tab** (11.4c2; `model::shotLogEvents` in `src/model/shot_log.*`): see "Combining and merging events"
+  below.
 * **File > Output > Export Bin** (p.130): the Export Bin As dialog, Avid
   Log Exchange; the active bin's master clips with the bin's columns.
 * **File > Output > Export to File** with the Export setting's Export As at
   Avid Log Exchange (p.129-130, p.1174): the selected master clips and
   subclips.
+
+## Combining and merging events (p.1197-1198)
+
+The Import setting's Shot Log tab chooses what a log's events become. The guide gives each choice a sentence; the
+rest is ours, marked so.
+
+| Choice | Ours |
+|---|---|
+| Maintain events as logged | A master clip (or audio clip) for each event, as above. |
+| Combine events based on scene and automatically create subclips | Events with a Scene value become one master clip for each scene, and a subclip of it for each event, with the event's name and columns. **Ours:** events are grouped per source (Tape, else Source File) and rate as well as by scene, since one master clip has one source; the master clip is named for the scene's value, spans its events' first Start to last End, has every event's tracks and the first event's other columns, and comes into the bin before its subclips. Events without a Scene are kept as logged, with a warning. |
+| Combine events based on camera roll and automatically create subclips | The same with the Camroll column. The guide adds "for a film project"; ours takes the column in any project. |
+| Merge events with known sources and automatically create subclips | Each event becomes a subclip of the selected clip (master or audio clip) with the same source and rate whose Start to End holds it. **Ours:** an event that no selected clip holds is kept as logged, with a warning. |
+| Merge events with known master clips | The log's columns are merged onto the selected master clip with the same tape name or source file name and exactly the same Start and End (Merging Additional Metadata for Clips: "This must be an exact match and so should the START and END timecodes"). The clip keeps its name, media and sources. **Ours:** an event that matches no selected clip is added as logged, with a warning. |
+
+The merge modes read the clips selected in the bin when the import starts ("You must select the clips that you want
+to merge before selecting this option", p.1198).
 
 ## Checks
 
@@ -115,18 +133,18 @@ The menus and dialogs are in ui-inventory.md §19.
   FPS values, round trips (bin -> ALE -> bin, the same by structure dump,
   through a file), Export Bin's and Export to File's choices, 300 randomly
   damaged logs, which files are shot logs, and every OpenTimelineIO sample
-  log read, written and read again the same.
+  log read, written and read again the same; `shotLogEvents`, the Shot Log
+  tab's five choices.
 * `tst_interchange` (UI): Import through `importFiles`, Export Bin and
-  Export to File.
+  Export to File; merging onto a selected take and combining by scene.
 * `cutthulhu --import-ale FILE` prints the bin as a structure dump;
   `cutthulhu --export-ale BIN OUT.ale` writes a .cthbin's clips (an .ale is
   imported first, a round trip).
 
 ## Later
 
-* The Import setting's Shot Log tab (p.1197-1198): combining events by
-  scene or camera roll into master clips with subclips, merging events
-  with known sources or master clips (also for CDL values, p.543, p.549).
+* CDL values merged through the Shot Log tab onto clips' colour adapters
+  (p.543, p.549): the columns are merged, not yet applied.
 * Tab Delimited export (p.130, p.1174).
 * Film titles carried as such (KN Start/End/Duration, Ink Number, Pullin,
   Pullout, Perf): kept as columns now.

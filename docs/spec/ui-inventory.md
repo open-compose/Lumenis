@@ -3217,13 +3217,17 @@ docs/spec/otio.md.
   the sequence's name. A sequence selected in the active bin when the tool
   opens is loaded (p.948 step 3). Dragging a sequence in: later.
 * List Options (p.958): Picture Dissolves and Black Edits, Sound Dissolves,
-  Clip Names and Markers work; the others are shown dimmed (a subset of the
-  guide's list).
-* Formatting (p.958-960): Optimize EDL and Starting Event Number work;
-  Source TC (Start), Record TC (TC1), Reel ID Type (Tape), Sort Mode (A),
-  Tape or File Name truncation (End) show their working first entry, the
-  rest dimmed; Convert tape names to numbers and Include source table
-  dimmed.
+  Other Transitions, Clip Names, Markers, All Markers at End (p.954), Source
+  File Name, Clip Comments, Color Decision Lists and Other Segment Effects
+  work (11.4c1; docs/spec/edl.md "List Options and Formatting"); Spatial and
+  Temporal Adapters, Color Effects, Volume, Track Patching and EQ are shown
+  dimmed (no published list shows their form).
+* Formatting (p.958-960): Optimize EDL, Starting Event Number, Starting TC,
+  Sort Mode (A, B, C, D, E, S), Source TC (Start, Sound_TC, Aux_TC1-5),
+  Reel ID Type (Tape, Soundroll, Camroll, Labroll, Disk Label), Tape or File
+  Name truncation (End, Middle, Beginning, First_N) and Convert tape names to
+  numbers work; Source TC VITC/Film_TC/TC24, Record TC other than TC1, Reel
+  Names, Frame Count and Include source table dimmed.
 * Preview fills Master EDL and Sources (reel, source name, MobID; p.950-951)
   and sends the list's warnings to the Console. Save List writes the list
   to one file (p.949 step 9), named for the Title.
@@ -3258,7 +3262,8 @@ docs/spec/otio.md.
 * **Export to File** with the Export setting's Export As at Avid Log
   Exchange (now working, p.1174): the selected master clips and subclips,
   to an `.ale`.
-* Later: the Import setting's Shot Log tab (p.1197-1198), Tab Delimited.
+* The Import setting's Shot Log tab (p.1197-1198) works (11.4c2; docs/spec/ale.md "Combining and merging events").
+* Later: Tab Delimited.
 
 ## 20. Audio Mixdown (p.731-732)
 Details: docs/spec/audio-mixdown.md.

@@ -100,6 +100,7 @@ private slots:
     void malformed();
     void reelNames();
     void s3dContributor();
+    void listOptions();
     void roundTrip();
     void centredTransition();
     void optimize();
@@ -524,6 +525,146 @@ void TestEdl::s3dContributor() {
 
 // A sequence of the import's own form (tape sources, transitions starting at their cut, a motion
 // effect, gaps, a marker) written and read back is the same, by structure dump and markers.
+// 11.4c1's List Options and Formatting (p.954, p.958-960): truncations, Reel ID Type, Source TC, Sort Modes, tape names
+// to numbers, Starting TC, Source File Name, Clip Comments, CDLs, Other Segment Effects, Other Transitions and All
+// Markers at End.
+void TestEdl::listOptions() {
+    auto clip = [](const QString& name, const QString& tape) {
+        model::BinItem c;
+        c.id = model::newItemId();
+        c.kind = model::BinItemKind::MasterClip;
+        c.name = name;
+        c.mobId = MobId::generate();
+        c.editRate = Rational(25);
+        c.durationFrames = 1000;
+        c.link = QJsonObject{{QStringLiteral("path"), QStringLiteral("/m/") + name + QStringLiteral(".mov")}};
+        c.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+        c.fields.insert(QStringLiteral("Tape"), tape);
+        return c;
+    };
+    model::BinItem a = clip(QStringLiteral("Wide"), QStringLiteral("CHICAGO138101"));
+    a.fields.insert(QStringLiteral("Camroll"), QStringLiteral("R7"));
+    a.fields.insert(QStringLiteral("Source File"), QStringLiteral("A001_C002.mov"));
+    a.fields.insert(QStringLiteral("Comments"), QStringLiteral("good take"));
+    a.fields.insert(QStringLiteral("ASC_SOP"), QStringLiteral("(1.1 1 1)(0 0.05 0)(1 1 0.9)"));
+    a.fields.insert(QStringLiteral("ASC_SAT"), QStringLiteral("0.9"));
+    a.fields.insert(QStringLiteral("Sound TC"), QStringLiteral("05:00:00:00"));
+    const model::BinItem b = clip(QStringLiteral("Close"), QStringLiteral("ZEBRA"));
+    model::BinItem seq;
+    seq.id = QStringLiteral("s");
+    seq.kind = model::BinItemKind::Sequence;
+    seq.name = QStringLiteral("Seq");
+    seq.editRate = Rational(25);
+    seq.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+    model::Sequence s;
+    auto seg = [](const model::BinItem& c, std::int64_t in, std::int64_t length) {
+        model::Segment g;
+        g.clipId = c.id;
+        g.sourceMob = c.mobId;
+        g.name = c.name;
+        g.sourceTrack = QStringLiteral("V1");
+        g.sourceIn = in;
+        g.length = length;
+        return g;
+    };
+    model::Segment first = seg(b, 0, 25);
+    model::Segment second = seg(a, 50, 25);
+    second.effect = model::Effect{QStringLiteral("Image"), QStringLiteral("Resize"), {}};
+    model::Segment third = seg(b, 100, 25);
+    model::Transition wipe;
+    wipe.effect = model::Effect{QStringLiteral("EDL"), QStringLiteral("W001"), {}};
+    wipe.duration = 10;
+    third.transition = wipe;
+    s.ensureTrack(QStringLiteral("V1"))->segments = {first, second, third};
+    s.storeIn(seq);
+    model::Marker late;
+    late.track = QStringLiteral("V1");
+    late.frame = 200;
+    late.color = QStringLiteral("red");
+    late.comment = QStringLiteral("after the end");
+    model::addMarker(seq, late);
+    const QList<model::BinItem> items{a, b};
+    edl::ExportOptions o;
+    o.upperCase = false;
+    o.resolve = [items](const MobId& mob, const QString& id) -> std::optional<model::BinItem> {
+        for (const model::BinItem& i : items) {
+            if (i.id == id || (!mob.isNull() && model::mobIdOf(i) == mob)) return i;
+        }
+        return std::nullopt;
+    };
+    auto listed = [&](const edl::ExportOptions& opts) { return edl::exportText(seq, opts).text; };
+    auto eventLines = [](const QString& text) {
+        QStringList out;
+        for (const QString& l : text.split(QStringLiteral("\r\n"))) {
+            if (!l.isEmpty() && l.at(0).isDigit()) out << l;
+        }
+        return out;
+    };
+
+    // Tape or File Name truncation, the guide's own examples (p.960).
+    for (const auto& [mode, reel] : {std::pair{edl::ExportOptions::Truncation::End, "CHICAGO1"},
+                                     std::pair{edl::ExportOptions::Truncation::Middle, "CHIC8101"},
+                                     std::pair{edl::ExportOptions::Truncation::Beginning, "GO138101"},
+                                     std::pair{edl::ExportOptions::Truncation::FirstN, "CO138101"}}) {
+        edl::ExportOptions t = o;
+        t.truncation = mode;
+        QVERIFY2(listed(t).contains(QLatin1String(reel)), reel);
+    }
+    // Reel ID Type Camera_Roll: R7 for the clip that has one; the other keeps its tape.
+    edl::ExportOptions r = o;
+    r.reelColumn = QStringLiteral("Camroll");
+    QString text = listed(r);
+    QVERIFY(text.contains(QStringLiteral("002  R7 ")));
+    QVERIFY(text.contains(QStringLiteral("001  ZEBRA ")));
+    // Source TC Sound_TC: the clip's sound timecode, 05:00:02:00 for its frame 50 (the event ends where the wipe starts).
+    r = o;
+    r.sourceTimecode = QStringLiteral("Sound TC");
+    QVERIFY2(listed(r).contains(QStringLiteral("05:00:02:00 05:00:02:20")), qPrintable(listed(r)));
+    // Sort Mode B (Source, Record In): CHICAGO1's event before ZEBRA's; S (Source Start): by source IN only.
+    r = o;
+    r.sortMode = edl::ExportOptions::SortMode::SourceRecordIn;
+    QStringList events = eventLines(listed(r));
+    QVERIFY2(events.first().contains(QStringLiteral("CHICAGO1")), qPrintable(events.join('\n')));
+    r.sortMode = edl::ExportOptions::SortMode::SourceStart;
+    events = eventLines(listed(r));
+    QVERIFY(events.first().contains(QStringLiteral("ZEBRA")) && events.first().contains(QStringLiteral("01:00:00:00 01:00:01:00")));
+    // D (Source, Record In, Effects at End): the wipe's event last.
+    r.sortMode = edl::ExportOptions::SortMode::SourceRecordInEffectsAtEnd;
+    events = eventLines(listed(r));
+    QVERIFY(events.last().contains(QStringLiteral(" W001 ")));
+    // Convert tape names to numbers: in the order first used, ZEBRA first; Starting TC.
+    r = o;
+    r.tapeNumbers = true;
+    r.startingTimecode = QStringLiteral("02:00:00:00");
+    text = listed(r);
+    QVERIFY(text.contains(QStringLiteral("001  001 ")));
+    QVERIFY(text.contains(QStringLiteral("002  002 ")));
+    QVERIFY(text.contains(QStringLiteral(" 02:00:00:00 02:00:01:00")));
+    // The comments.
+    r = o;
+    r.sourceFileName = true;
+    r.clipComments = true;
+    r.colorDecisionLists = true;
+    r.segmentEffects = true;
+    text = listed(r);
+    QVERIFY(text.contains(QStringLiteral("* SOURCE FILE: A001_C002.mov\r\n")));
+    QVERIFY(text.contains(QStringLiteral("* good take\r\n")));
+    QVERIFY(text.contains(QStringLiteral("*ASC_SOP (1.1 1 1) (0 0.05 0) (1 1 0.9)\r\n")));
+    QVERIFY(text.contains(QStringLiteral("*ASC_SAT 0.9\r\n")));
+    QVERIFY(text.contains(QStringLiteral("* Image, Resize\r\n")));
+    QVERIFY(!edl::exportText(seq, r).warnings.join(' ').contains(QStringLiteral("segment effects left out")));
+    // Other Transitions off: the wipe is a cut.
+    r = o;
+    QVERIFY(listed(r).contains(QStringLiteral(" W001 ")));
+    r.otherTransitions = false;
+    QVERIFY(!listed(r).contains(QStringLiteral(" W001 ")));
+    // All Markers at End: the marker past the events, last.
+    r = o;
+    QVERIFY(!listed(r).contains(QStringLiteral("after the end")));
+    r.allMarkersAtEnd = true;
+    QVERIFY(listed(r).trimmed().endsWith(QStringLiteral("after the end")));
+}
+
 void TestEdl::roundTrip() {
     const QString text = QStringLiteral(
         "TITLE:   Round Trip\n"

@@ -1889,7 +1889,13 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   so 11.4a is. 11.4b, export from a monitor and by drag and drop (done: `MainWindow::exportSelection`/`exportSelectionOf`
   taking the active monitor's item, the bin's Output > Export to File, `ExportDragData` in `src/ui/export_drag.*` with
   `MainWindow::exportDropped` into the General setting's Temporary File Directory `MainWindow::temporaryFolder`; test
-  `tst_movie_export_ui exportFromMonitorAndByDragging`).
+  `tst_movie_export_ui exportFromMonitorAndByDragging`). 11.4c is in two parts: 11.4c1, the List Tool's EDL List Options
+  and Formatting that have a known form (done: Other Transitions, Source File Name, Clip Comments, Color Decision Lists,
+  Other Segment Effects, All Markers at End, Sort Modes B-E and S, Source TC, Reel ID Type, the four truncations, tape
+  names as numbers and Starting TC through `interop::edl::ExportOptions`; docs/spec/edl.md "List Options and
+  Formatting"; test `tst_edl listOptions`); 11.4c2, the Import setting's Shot Log tab (done: `model::shotLogEvents` in
+  `src/model/shot_log.*` from `MainWindow::importShotLogs`; docs/spec/ale.md "Combining and merging events"; tests
+  `tst_ale shotLogEvents`, `tst_interchange shotLogs`), so 11.4c is.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

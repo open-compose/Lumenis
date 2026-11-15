@@ -361,6 +361,24 @@ private slots:
         QCOMPARE(user.entries.at(now).name, QStringLiteral("Shot Logs"));
         QCOMPARE(user.entries.at(now).values.value(QStringLiteral("exportAs")).toString(), QStringLiteral("ale"));
         window.setExportOptionsHook({});
+
+        // The Import setting's Shot Log tab (p.1197-1198): Merge events with known master clips puts the log's columns
+        // on the selected take with the same tape, Start and End; the other event is added as logged.
+        window.settings().setValue(QStringLiteral("Import"), QStringLiteral("shotLogEvents"), QStringLiteral("masters"));
+        window.binContainer().viewFor(bin)->selectIds({ids.first()});
+        const QString merge = dir.filePath(QStringLiteral("merge.ale"));
+        writeFile(merge, QByteArray(kLog).replace("\tyes\r\n", "\tagain\r\n"));
+        const qsizetype before = bin->bin().items.size();
+        const QStringList merged = window.importFiles(binId, {merge});
+        QCOMPARE(merged.size(), 2);
+        QCOMPARE(bin->bin().items.size(), before + 1);
+        QCOMPARE(bin->bin().item(ids.first())->fields.value(QStringLiteral("Circled")), QStringLiteral("again"));
+        // Combine events based on scene: scene 4's master clip and a subclip for each take.
+        window.settings().setValue(QStringLiteral("Import"), QStringLiteral("shotLogEvents"), QStringLiteral("scene"));
+        const QStringList combined = window.importFiles(binId, {log});
+        QCOMPARE(combined.size(), 3);
+        QCOMPARE(bin->bin().item(combined.first())->name, QStringLiteral("4"));
+        QCOMPARE(bin->bin().item(combined.last())->kind, model::BinItemKind::Subclip);
     }
 
     // OpenTimelineIO (p.969): Import Media and a drop into a bin import a sequence and offline master

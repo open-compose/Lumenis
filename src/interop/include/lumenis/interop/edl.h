@@ -97,6 +97,38 @@ struct ExportOptions {
     // S3D Contributor (p.959): a stereoscopic clip's segment is listed as the contributing eye's master clip (its name,
     // reel and timecode, found through `resolve` by the eye's MobID and id; its name alone when it is gone).
     model::S3DContributor s3dContributor = model::S3DContributor::Monoscopic;
+
+    // ---- 11.4c1: the rest of the List Options and Formatting that have a known form (docs/spec/edl.md, "Export").
+    // List Options (p.958): Other Transitions, the transitions that are not dissolves (wipes as Wnnn, others as dissolves);
+    // off, they are cuts. Source File Name, "* SOURCE FILE: <the clip's Source File>". Clip Comments, "* <the clip's
+    // Comments>". Color Decision Lists, the clip's ASC_SOP and ASC_SAT columns as "*ASC_SOP (s s s) (o o o) (p p p)" and
+    // "*ASC_SAT x". Other Segment Effects, "* <CATEGORY>, <NAME>" for each segment effect but motion effects (written
+    // as M2). All Markers at End (p.954): the markers outside every event, at the end of the list.
+    bool otherTransitions = true;
+    bool sourceFileName = false;
+    bool clipComments = false;
+    bool colorDecisionLists = false;
+    bool segmentEffects = false;
+    bool allMarkersAtEnd = false;
+    // Formatting (p.959-960). Sort Mode: A (Record In), B (Source, Record In), C (Source, Source In), D and E as B and C
+    // with the effect events (transitions, motion effects) at the end, S (Source IN only).
+    enum class SortMode { RecordIn, SourceRecordIn, SourceSourceIn, SourceRecordInEffectsAtEnd, SourceSourceInEffectsAtEnd, SourceStart };
+    SortMode sortMode = SortMode::RecordIn;
+    // Source TC: the column a clip's timecode comes from; empty for Start, else "Sound TC" or "Auxiliary TC1" to "TC5".
+    QString sourceTimecode;
+    // Reel ID Type: the column the reel comes from; empty for Tape (the reel as before), else "Soundroll", "Camroll",
+    // "Labroll" or "Disk Label" (a clip without it falls back to its tape reel).
+    QString reelColumn;
+    // Tape or File Name truncation (p.960): End ("CHICAGO138101 becomes CHICAGO1"), Middle ("CHIC8101"), Beginning
+    // ("GO138101") or First_N, which "keeps the first character and the last character and removes everything in between.
+    // For example, CHICAGO138101 becomes CO138101": the first character and the end that fits.
+    enum class Truncation { End, Middle, Beginning, FirstN };
+    Truncation truncation = Truncation::End;
+    // Convert tape names to numbers (p.960): every reel (but BL and AX) as a number, 001 up in the order the reels are
+    // first used (ours).
+    bool tapeNumbers = false;
+    // Starting TC (p.960): the record timecode the sequence starts at; empty for the sequence's Start.
+    QString startingTimecode;
 };
 
 // What an export made.

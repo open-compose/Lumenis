@@ -600,6 +600,12 @@ struct Piece {
     QString fromName;
     QList<model::Marker> markers;
     bool title = false; // a Titler+ title's event (titlePieces)
+    // 11.4c1's comments: the clip's Source File, Comments and CDL, and the segment's effect ("CATEGORY, NAME").
+    QString sourceFile;
+    QString comment;
+    QString cdlSop;
+    QString cdlSat;
+    QString effect;
 
     // Whether two pieces are the same edit and can share an event (Optimize EDL).
     bool sameEdit(const Piece& o) const {
@@ -625,6 +631,11 @@ public:
         nominal_ = TimecodeFormat::forRate(rate_, false).nominalFps;
         start_ = detail::timecodeFrames(item_.fields.value(QStringLiteral("Start")), rate_)
                      .value_or(model::kDefaultStartHours * 3600 * nominal_);
+        // Starting TC (p.960).
+        if (!options_.startingTimecode.isEmpty()) {
+            if (const auto at = detail::timecodeFrames(options_.startingTimecode, rate_)) start_ = *at;
+            else notes_.add(QStringLiteral("the Starting TC %1 is not a timecode: the sequence's start used").arg(options_.startingTimecode));
+        }
 
         // The tracks listed: one video track, audio 1 to 4.
         QStringList listed = options_.tracks.isEmpty() ? sequence.trackNames() : options_.tracks;
@@ -655,6 +666,7 @@ public:
         }
         pieces += titlePieces(sequence, listed);
         attachMarkers(pieces);
+        // Events are made in record order (Optimize EDL joins pieces of one edit), then sorted by the Sort Mode.
         std::stable_sort(pieces.begin(), pieces.end(), [](const Piece& a, const Piece& b) {
             return a.recIn != b.recIn ? a.recIn < b.recIn : a.order < b.order;
         });
@@ -674,6 +686,26 @@ public:
             }
             if (!joined) events.append({p});
         }
+        sortEvents(events);
+        // Convert tape names to numbers (p.960), in the order the reels are now first used.
+        if (options_.tapeNumbers) {
+            QHash<QString, QString> numbers;
+            auto number = [&](QString& reel) {
+                if (reel.isEmpty() || reel == QLatin1String("BL") || reel == QLatin1String("AX")) return;
+                if (!numbers.contains(reel)) numbers.insert(reel, QStringLiteral("%1").arg(numbers.size() + 1, 3, 10, QLatin1Char('0')));
+                reel = numbers.value(reel);
+            };
+            for (QList<Piece>& e : events) {
+                for (Piece& p : e) {
+                    number(p.fromReel);
+                    number(p.reel);
+                }
+            }
+            for (Piece& p : pieces) {
+                number(p.fromReel);
+                number(p.reel);
+            }
+        }
         reelWidth_ = 8;
         if (options_.format == Format::File129) {
             for (const Piece& p : pieces) reelWidth_ = std::max(reelWidth_, static_cast<int>(std::max(p.reel.size(), p.fromReel.size())));
@@ -686,6 +718,11 @@ public:
         for (const QList<Piece>& e : events) {
             if (number > 999 && options_.format == Format::Cmx3600) notes_.add(QStringLiteral("event numbers past 999"));
             write(lines, e, number++);
+        }
+        // All Markers at End (p.954): "Previously, if the marker was in the composition but was not part of an event, it
+        // was not included in the output."
+        for (const model::Marker& m : leftMarkers_) {
+            lines << QStringLiteral("* LOC: %1 %2 %3").arg(tc(start_ + m.frame), m.color.toUpper().leftJustified(7), text(m.comment)).trimmed();
         }
         result.ok = true;
         result.events = static_cast<int>(events.size());
@@ -702,6 +739,12 @@ private:
     // name, else its own name; spaces become underscores and a name too long for the format loses its
     // end (Tape or File Name truncation: End, p.960).
     QString reelOf(const model::BinItem& clip) {
+        // Reel ID Type (p.959): another column's reel when the clip has one.
+        if (!options_.reelColumn.isEmpty()) {
+            const QString other = clip.fields.value(options_.reelColumn).trimmed();
+            if (!other.isEmpty()) return reelText(other);
+            notes_.add(QStringLiteral("clips without a %1: their tape reel listed").arg(options_.reelColumn));
+        }
         QString reel = clip.fields.value(QStringLiteral("Tape"));
         for (const model::ClipSource& s : clip.sources) {
             if (reel.isEmpty() && s.kind == model::ClipSource::Kind::Tape) reel = s.name;
@@ -722,7 +765,13 @@ private:
         const int limit = reelLength(options_.format);
         if (reel.size() > limit) {
             notes_.add(QStringLiteral("reel names longer than %1 characters cut short").arg(limit));
-            reel.truncate(limit);
+            // Tape or File Name truncation (p.960).
+            switch (options_.truncation) {
+            case ExportOptions::Truncation::End: reel.truncate(limit); break;
+            case ExportOptions::Truncation::Middle: reel = reel.left(limit / 2) + reel.right(limit - limit / 2); break;
+            case ExportOptions::Truncation::Beginning: reel = reel.right(limit); break;
+            case ExportOptions::Truncation::FirstN: reel = reel.left(1) + reel.right(limit - 1); break;
+            }
         }
         return reel;
     }
@@ -732,13 +781,18 @@ private:
         QString reel;
         std::int64_t in = 0;
         QString name; // a stereoscopic clip's contributing eye's name; empty: the segment's
+        // The clip's Source File, Comments, ASC_SOP and ASC_SAT columns (List Options, 11.4c1).
+        QString sourceFile;
+        QString comment;
+        QString cdlSop;
+        QString cdlSat;
     };
     Source sourceOf(const model::Segment& s) {
         std::optional<model::BinItem> clip;
         if (options_.resolve) clip = options_.resolve(s.sourceMobId(), s.clipId);
         if (!clip) {
             notes_.add(QStringLiteral("clips not found: the segment's name is its reel, its IN point from 00:00:00:00"));
-            return {reelText(s.name), s.sourceIn, QString()};
+            return {reelText(s.name), s.sourceIn, QString(), {}, {}, {}, {}};
         }
         // A stereoscopic clip contributes one eye's master clip (S3D Contributor, p.959).
         QString name;
@@ -748,13 +802,24 @@ private:
             if (auto eyeClip = options_.resolve(eye.mob, eye.id)) clip = std::move(eyeClip);
             else notes_.add(QStringLiteral("stereoscopic clips' eye clips not found: their names listed"));
         }
-        std::int64_t start = detail::timecodeFrames(clip->fields.value(QStringLiteral("Start")), clip->editRate).value_or(0);
+        // Source TC (p.959): Start, or the clip's Sound TC or Auxiliary TC column (Start when it has none).
+        QString column = QStringLiteral("Start");
+        if (!options_.sourceTimecode.isEmpty()) {
+            if (!clip->fields.value(options_.sourceTimecode).isEmpty()) column = options_.sourceTimecode;
+            else notes_.add(QStringLiteral("clips without a %1: their Start listed").arg(options_.sourceTimecode));
+        }
+        std::int64_t start = detail::timecodeFrames(clip->fields.value(column), clip->editRate).value_or(0);
         const int clipFps = TimecodeFormat::forRate(clip->editRate, false).nominalFps;
         if (clipFps != nominal_) {
             notes_.add(QStringLiteral("clips at other frame rates: their timecode counted at the sequence's"));
             start = detail::startAtRate(start, clipFps, rate_);
         }
-        return {reelOf(*clip), start + s.sourceIn, name};
+        Source out{reelOf(*clip), start + s.sourceIn, name, {}, {}, {}, {}};
+        out.sourceFile = clip->fields.value(QStringLiteral("Source File"));
+        out.comment = clip->fields.value(QStringLiteral("Comments"));
+        out.cdlSop = clip->fields.value(QStringLiteral("ASC_SOP"));
+        out.cdlSat = clip->fields.value(QStringLiteral("ASC_SAT"));
+        return out;
     }
 
     // A track's segments as pieces, with each transition's cut moved to where it starts.
@@ -768,7 +833,11 @@ private:
             const std::int64_t at = pos;
             pos += s.length;
             const bool dissolves = track.kind == model::TrackKind::Video ? options_.pictureDissolves : options_.soundDissolves;
-            const bool transition = s.transition && dissolves && s.transition->duration > 0;
+            // Other Transitions (p.958): the transitions that are not dissolves; off, they are cuts.
+            const bool isDissolve = s.transition && s.transition->effect.category == QLatin1String("Blend") &&
+                                    s.transition->effect.name == QLatin1String("Dissolve");
+            const bool listedKind = isDissolve ? dissolves : options_.otherTransitions;
+            const bool transition = s.transition && listedKind && s.transition->duration > 0;
             const bool last = i + 1 == track.segments.size();
             // A title on filler is an event of its own (titlePieces), not black.
             const bool title = s.isFiller() && s.effect && model::isTitlerEffect(*s.effect);
@@ -789,6 +858,10 @@ private:
                 const Source src = sourceOf(s);
                 p.reel = src.reel;
                 p.srcIn = src.in;
+                p.sourceFile = src.sourceFile;
+                p.comment = src.comment;
+                p.cdlSop = src.cdlSop;
+                p.cdlSat = src.cdlSat;
                 p.name = src.name.isEmpty() ? s.name : src.name;
                 p.speed = s.effect ? speedOf(*s.effect) : std::nullopt;
                 // A motion effect uses the source frames its speed covers; a freeze frame (speed 0)
@@ -797,7 +870,10 @@ private:
                                                                                          static_cast<double>(nominal_)))
                                                : s.length);
                 if (s.effect && !p.speed && !model::isTitlerEffect(*s.effect)) {
-                    notes_.add(QStringLiteral("segment effects left out (%1/%2)").arg(s.effect->category, s.effect->name));
+                    // Other Segment Effects (p.958): a comment naming it, as Media Composer's lists do ("* BLEND,
+                    // DISSOLVE", "*AVX2 EFFECT, RESIZE" in OpenTimelineIO's Avid samples).
+                    if (options_.segmentEffects) p.effect = QStringLiteral("%1, %2").arg(s.effect->category, s.effect->name);
+                    else notes_.add(QStringLiteral("segment effects left out (%1/%2)").arg(s.effect->category, s.effect->name));
                 }
             }
             if (transition) {
@@ -889,6 +965,8 @@ private:
             }
             if (found) {
                 found->markers << m;
+            } else if (options_.allMarkersAtEnd) {
+                leftMarkers_ << m;
             } else {
                 notes_.add(QStringLiteral("markers outside the events left out"));
             }
@@ -943,6 +1021,21 @@ private:
                 lines << QStringLiteral("* FROM CLIP NAME:  %1").arg(text(p.name));
             }
         }
+        // The clip's columns and the segment's effect (List Options, 11.4c1), once each in the event.
+        QStringList extra;
+        for (const Piece& q : event) {
+            if (options_.sourceFileName && !q.sourceFile.isEmpty()) extra << QStringLiteral("* SOURCE FILE: %1").arg(text(q.sourceFile));
+            if (options_.clipComments && !q.comment.isEmpty()) extra << QStringLiteral("* %1").arg(text(q.comment.simplified()));
+            if (options_.colorDecisionLists) {
+                if (const QString sop = ascSop(q.cdlSop); !sop.isEmpty()) extra << QStringLiteral("*ASC_SOP %1").arg(sop);
+                if (bool ok = false; !q.cdlSat.trimmed().isEmpty() && (q.cdlSat.trimmed().toDouble(&ok), ok)) {
+                    extra << QStringLiteral("*ASC_SAT %1").arg(q.cdlSat.trimmed());
+                }
+            }
+            if (!q.effect.isEmpty()) extra << QStringLiteral("* %1").arg(text(q.effect));
+        }
+        extra.removeDuplicates();
+        lines << extra;
         for (const Piece& q : event) {
             for (const model::Marker& m : q.markers) {
                 lines << QStringLiteral("* LOC: %1 %2 %3").arg(tc(start_ + m.frame), m.color.toUpper().leftJustified(7), text(m.comment)).trimmed();
@@ -950,8 +1043,41 @@ private:
         }
     }
 
+    // An ASC_SOP column ("(s s s)(o o o)(p p p)", any spacing) as the list writes it, "(s s s) (o o o) (p p p)"; empty
+    // when it does not hold nine numbers.
+    static QString ascSop(const QString& column) {
+        static const QRegularExpression number(QStringLiteral("[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?"));
+        QStringList values;
+        for (auto it = number.globalMatch(column); it.hasNext();) values << it.next().captured(0);
+        if (values.size() != 9) return {};
+        return QStringLiteral("(%1 %2 %3) (%4 %5 %6) (%7 %8 %9)")
+            .arg(values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[8]);
+    }
+
+    // Sort Mode (p.959-960). A keeps the record order the events were made in; B and C go by reel then record or source
+    // IN; D and E as B and C, the events with effects (a transition or a motion effect) after the rest; S by source IN.
+    void sortEvents(QList<QList<Piece>>& events) const {
+        using Mode = ExportOptions::SortMode;
+        const Mode mode = options_.sortMode;
+        if (mode == Mode::RecordIn) return;
+        auto effect = [](const QList<Piece>& e) { return !e.first().transition.isEmpty() || e.first().speed.has_value(); };
+        std::stable_sort(events.begin(), events.end(), [&](const QList<Piece>& x, const QList<Piece>& y) {
+            const Piece& a = x.first();
+            const Piece& b = y.first();
+            if (mode == Mode::SourceStart) return a.srcIn != b.srcIn ? a.srcIn < b.srcIn : a.recIn < b.recIn;
+            if ((mode == Mode::SourceRecordInEffectsAtEnd || mode == Mode::SourceSourceInEffectsAtEnd) && effect(x) != effect(y)) {
+                return !effect(x);
+            }
+            if (a.reel != b.reel) return a.reel < b.reel;
+            const bool bySource = mode == Mode::SourceSourceIn || mode == Mode::SourceSourceInEffectsAtEnd;
+            if (bySource && a.srcIn != b.srcIn) return a.srcIn < b.srcIn;
+            return a.recIn < b.recIn;
+        });
+    }
+
     const model::BinItem& item_;
     ExportOptions options_;
+    QList<model::Marker> leftMarkers_; // All Markers at End: those outside every event
     Rational rate_{24000, 1001};
     bool drop_ = false;
     int nominal_ = 24;
