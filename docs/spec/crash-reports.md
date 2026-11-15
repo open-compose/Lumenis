@@ -61,8 +61,8 @@ builds.
 
 * 10.5a, the reports and the notice above, is done.
 * 10.5b, symbols, is done. The builds are RelWithDebInfo; the packages ship unstripped (`CPACK_STRIP_FILES OFF`) and
-  the Windows packages carry `cutthulhu.pdb`. Each self-hosted CI job keeps, beside its package in the owner's builds
-  folder: on Linux `cutthulhu.debug` (`objcopy --only-keep-debug`, gzipped), on macOS `Cutthulhu.dSYM` (zipped;
+  the Windows packages carry `cutthulhu.pdb`. The release workflow (`.github/workflows/release.yml`) puts beside each
+  package on the release: on Linux `cutthulhu.debug` (`objcopy --only-keep-debug`, gzipped), on macOS `Cutthulhu.dSYM` (zipped;
   `dsymutil` of the build tree's executable, whose UUID the packaged one keeps). `scripts/symbolize-crash.py` turns a
   Linux report's frames into functions, files and lines through `addr2line`, finding each module's load address in the
   report's memory map; `--search <folder>` finds the module or its `.debug` file elsewhere. The ctest `crash_report`

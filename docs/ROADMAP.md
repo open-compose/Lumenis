@@ -340,7 +340,7 @@ Sub-steps:
 
   | Gate | How | Status |
   |---|---|---|
-  | 1. Screenshots match across platforms | `ui-consistency` CI job | Passes on the self-hosted Mac, Windows and Linux runners (2026-10-16); the hosted jobs wait for Actions minutes |
+  | 1. Screenshots match across platforms | `ui-consistency` CI job | Passes (2026-10-16 on the owner's machines; on GitHub's hosted runners since 10.0) |
   | 2. Every menu entry present | `tst_menu_inventory` | Passes |
   | 3. Default keyboard | `tst_keyboard` | Passes |
   | 4. Workspaces survive a restart | `tst_keyboard_workspaces` | Passes |
@@ -485,7 +485,7 @@ Sub-steps:
     frames, and lip sync as how far the sound already is into a frame when
     the picture moves on to it. The Composer steps every 5 ms on a precise
     timer (macOS coalesced the 20 ms one: the picture fell up to 1.2 frames
-    behind). The self-hosted Mac reports a 30-second run in CI; the 10- and
+    behind). A 30-second run was reported in CI on the owner's Mac; the 10- and
     60-minute runs on the reference machines are by hand **(M)**.
   * Gate 5: `tst_media` `transcodeRoundTrips`: each DNx resolution's
     Y'CbCr PSNR (expected values are ours, measured), timecode and tape.
@@ -662,9 +662,9 @@ and pyaaf2's test suites, made with real Media Composer
     bin readers, importers and the bin writer (`fuzz/`, `scripts/fuzz.py`,
     BUILDING.md "Fuzzing") found and fixed 9 bugs (hangs, a division by
     zero, an overflow, three writer round-trip slips); saved inputs replay
-    on every platform (ctest `fuzz_replay`). The 24-hour run is by hand on
-    the self-hosted Linux runner (`.github/workflows/fuzz.yml`, needs
-    `libclang-rt-dev`). The first three found three more bugs in the AAF
+    on every platform (ctest `fuzz_replay`). The 24-hour run was by hand on
+    the owner's Linux machine (`.github/workflows/fuzz.yml`, needs
+    `libclang-rt-dev`; now on hosted runners, up to 5.5 hours a run). The first three found three more bugs in the AAF
     dump and import (fixed, with regression inputs); the fourth
     (2026-10-23/24, run 39992718177) was clean on every target: **passed**.
   * 3.7, shared-storage bin locking (docs/spec/bin-locking.md), is done:
@@ -1398,8 +1398,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 
 ### Phase 8 — Advanced workflows
 Status (2026-11-11): every step, 8.1 to 8.7, is done; 7.3c's hardware modules and the gates waiting for the owner's
-seat are outside it. The hosted macOS jobs' end-of-phase run waits for Actions minutes (`HOSTED_CI` off); the owner's
-Mac runs the macOS job on every push.
+seat are outside it.
 * Multicam (group/multigroup), ScriptSync/PhraseFind equivalents, Dynamic Media
   Folders/background services, FrameFlex, stereoscopic, Symphony-level colour,
   and multi-user bin locking.
@@ -1702,7 +1701,7 @@ The items:
   translations (strings go through `tr()`, but there are no `.ts` files and no language setting), no accessible
   names on our custom-painted widgets, no crash handler, no update check. Signing exists only as
   `packaging/macos/sign-and-notarize.sh`, run by hand.
-  * 10.1, performance profiling. Add a benchmark set run by `ctest -L perf` on the self-hosted runners: open a large
+  * 10.1, performance profiling. Add a benchmark set run by `ctest -L perf` on the CI runners: open a large
     project and bins, a long sequence in the Timeline, a render, a Transcode, scrubbing, and `--measure-playback`
     at each Video Quality setting. Record the times in `tests/data/perf_baseline.json` for each runner, and fail
     when one gets slower than the recorded time by more than a set margin. Profile the slowest paths (perf on
@@ -1768,7 +1767,7 @@ The items:
     the report for the user to read and submit (the owner's answer below); the application sends nothing itself. In two parts (docs/spec/crash-reports.md): 10.5a, the
     reports and the notice (done: `app/crash_report.*`, `--crash-reports`, ctest `crash_report`); 10.5b, symbols kept
     for the release builds and a script to read a Linux report (done: the Linux debug file and the macOS dSYM kept
-    beside each self-hosted package, the Windows PDB in the packages, `scripts/symbolize-crash.py`), so 10.5 is done but
+    with each release, the Windows PDB in the packages, `scripts/symbolize-crash.py`), so 10.5 is done but
     the GitHub issue (done:
     `crashIssueUrl`, the notice's Report on GitHub).
   * 10.6, the update check (the owner's decision, 2026-11-14: no automatic updates; editors talking to the owner do not
@@ -1806,7 +1805,11 @@ The items:
   * CI: the self-hosted runners are removed before the repository goes public (security), with a step-by-step guide
     for the owner; afterwards all CI runs on GitHub's hosted runners or Claude's machines.
   * Names: Smart Render and Composer stay for now (docs/spec/trademarks.md).
-* **10.0, going public** (new, last before release): remove the self-hosted runners and their jobs, variables and
+* **10.0, going public** (new, last before release; **done**, 2026-11-15: the history's two commits carry the
+  no-reply address, the old runs and `ci-screenshots/*` branches are deleted but run 423, which GitHub will not delete
+  through its API, the runners and their jobs, variables and scripts are removed, every job runs on GitHub's hosted
+  runners with screenshots and packages as artifacts, and the repository is public; the community files wait for
+  §2.2): remove the self-hosted runners and their jobs, variables and
   scripts; move every job to hosted runners; check the history and branches for anything that must not be public
   (secrets, `ci-screenshots/*` branches, the owner's personal details); and add the community files (README for
   users, CONTRIBUTING with adding a language, SECURITY, issue templates for bugs and crashes) after §2.2 is decided.

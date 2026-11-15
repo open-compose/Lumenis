@@ -12,8 +12,8 @@
 // Screenshots and layout dumps for the cross-platform consistency check (Phase 1 gate 1, capture.h). The
 // text-free picture works by making every text role of the palette transparent, which is why
 // custom-painted widgets draw their text with palette colours (WindowText, BrightText). The pictures and
-// dumps of each platform are compared by CI's ui-consistency job; scripts/ci-screenshots.py carries them
-// between jobs.
+// dumps of each platform are compared by CI's ui-consistency job, which gets them from
+// each job's screenshots artifact.
 
 namespace lumenis::ui {
 

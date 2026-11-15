@@ -5,11 +5,6 @@ on:
     branches: [main, 'claude/**']
   pull_request:
   workflow_dispatch:
-    inputs:
-      hosted_macos:
-        description: Also build on GitHub-hosted macOS (billed at 10x)
-        type: boolean
-        default: true
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,27 +13,22 @@ concurrency:
 env:
   QT_VERSION: '6.8.3'
 
-# Artifact storage is limited (a private repository's quota is small), so
-# the screenshots for ui-consistency travel through the repository instead:
-# each job stores them on the branch ci-screenshots/<branch>/<platform>
-# (scripts/ci-screenshots.py, .ps1), which needs write access to contents.
-# Packages are still uploaded where there is room; the self-hosted jobs keep
-# theirs for the owner (scripts/keep-build.sh).
+# Every job runs on GitHub's hosted runners (the repository is public, so they
+# and artifact storage cost nothing; ROADMAP 10.0). Each job uploads its
+# screenshots as an artifact, screenshots-<platform>, for ui-consistency, and
+# its packages for anyone to try.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   linux:
     name: Linux x64 (system Qt)
-    # GitHub-hosted jobs stop when the repository variable HOSTED_CI is off
-    # (Actions minutes used up); the self-hosted Mac keeps building.
-    if: vars.HOSTED_CI != 'off'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Shell scripts parse
-        # Some only run elsewhere (scripts/setup-mac-runner.sh on a Mac).
+        # Every one, including those only run elsewhere (packaging/macos on a Mac).
         run: for f in scripts/*.sh packaging/*/*.sh; do bash -n "$f" || exit 1; done
 
       - name: Install dependencies
@@ -82,11 +72,12 @@ jobs:
           build/ci/bin/cutthulhu --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci-screenshots.py push --name linux --dir shots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-linux
+          path: shots
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Package (.deb, .tar.gz, AppImage)
         run: |
@@ -130,7 +121,6 @@ jobs:
     # what someone building on a current distribution gets. New warnings
     # and Qt deprecations fail here, as warnings are errors.
     name: Linux x64 (Ubuntu 26.04, newest GCC and Qt)
-    if: vars.HOSTED_CI != 'off'
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     steps:
@@ -194,15 +184,33 @@ jobs:
           packaging/linux/make-appimage.sh build/ci
           scripts/check-appimage-wayland.sh build/ci/*.AppImage
 
+  linux-asan:
+    # Memory errors that glibc tolerates and MSVC's heap does not (a reference
+    # into a destroyed temporary crashed tst_main_window on Windows only):
+    # every test again in a Debug build with AddressSanitizer and UBSan,
+    # failing on the first report (BUILDING.md). A job of its own, so it runs
+    # beside the others.
+    name: Linux x64 (AddressSanitizer, UBSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: scripts/bootstrap-linux.sh
+      - name: Python packages for the checks
+        continue-on-error: true
+        timeout-minutes: 25
+        run: python3 scripts/check-python.py --github-env
+      - name: Sanitizers (AddressSanitizer, UBSan)
+        run: |
+          cmake --preset asan ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
+          cmake --build --preset asan
+          ctest --preset asan
+
   macos:
     # macos-14 is the oldest supported toolchain (Xcode 15); macos-26 the
     # newest (Xcode 26, which dropped the AGL framework).
     name: macOS arm64 (${{ matrix.os }})
-    # macOS minutes cost ten times Linux ones on a private repository, so
-    # development-branch pushes skip it; it runs for main, pull requests and
-    # by hand (Actions > CI > Run workflow, or `gh workflow run ci.yml
-    # --ref <branch>`; `-f hosted_macos=false` runs only the self-hosted Mac).
-    if: vars.HOSTED_CI != 'off' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.hosted_macos))
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -262,11 +270,12 @@ jobs:
           "$app" --screenshot shots/pseudo --language pseudo
 
       - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci-screenshots.py push --name ${{ matrix.os }} --dir shots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.os }}
+          path: shots
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Package (.dmg)
         run: cd build/ci-macos && cpack
@@ -294,532 +303,8 @@ jobs:
           path: build/ci-macos/*.dmg
           if-no-files-found: error
 
-  macos-local:
-    # The project owner's Apple Silicon Mac, as a self-hosted runner
-    # (scripts/setup-mac-runner.sh): free minutes, so it runs on every push.
-    # Turned on by the repository variable MAC_RUNNER = on; set it to off
-    # while the Mac is away, or jobs wait for it.
-    name: macOS arm64 (self-hosted)
-    if: vars.MAC_RUNNER == 'on'
-    runs-on: [self-hosted, macOS, ARM64, cutthulhu]
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Qt (once, kept in the runner's home)
-        # Not install-qt-action: the Python it sets up only installs under
-        # /Users/runner, the GitHub-hosted runners' home. aqtinstall runs in
-        # its own virtual environment instead.
-        run: |
-          qt="$HOME/Qt/$QT_VERSION/macos"
-          if [ ! -d "$qt" ]; then
-            python3 -m venv "$HOME/.aqt-venv"
-            "$HOME/.aqt-venv/bin/pip" install --quiet --upgrade aqtinstall
-            "$HOME/.aqt-venv/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 -O "$HOME/Qt"
-          fi
-          echo "QT_ROOT_DIR=$qt" >> "$GITHUB_ENV"
-          echo "$qt/bin" >> "$GITHUB_PATH"
-
-      - name: Check build tools
-        # Installed by an administrator; the runner's user cannot use brew.
-        run: |
-          command -v ninja && command -v cmake
-          if [ ! -f /opt/homebrew/include/libavcodec/avcodec.h ]; then
-            echo "::error::FFmpeg is missing on the Mac: as an administrator run 'brew install ffmpeg pkg-config' (BUILDING.md)"
-            exit 1
-          fi
-
-      - name: Disk space
-        # A full disk fails the build in odd places (CMake reports the compiler as broken):
-        # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
-        # The temporary folder too: the compiler writes there, and it can be another disk.
-        run: |
-          status=0
-          for dir in . "${TMPDIR:-/tmp}"; do
-            free=$(df -Pk "$dir" | awk 'NR==2 {print int($4 / 1048576)}')
-            echo "$free GB free for $dir"
-            if [ "$free" -lt 5 ]; then
-              echo "::error::Only $free GB free for $dir ($(cd "$dir" && pwd)) on the runner: CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-              status=1
-            fi
-          done
-          exit $status
-
-      - name: Python packages for the checks
-        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
-        # the runner's home, made again only when scripts/check-requirements.txt
-        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
-        # be made, the build goes on and those checks are skipped.
-        continue-on-error: true
-        timeout-minutes: 25
-        run: |
-          if ! python3 scripts/check-python.py --github-env; then
-            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
-            exit 1
-          fi
-
-      - name: Configure
-        run: cmake --preset ci-macos ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
-
-      - name: Build
-        run: cmake --build --preset ci-macos
-
-      - name: Test
-        run: ctest --preset ci-macos
-
-      - name: Logs of failed tests
-        # QTest's own report, written to a file as well: ctest's capture can
-        # lose it (BUILDING.md).
-        if: failure()
-        run: grep -l -E "^(FAIL!|QFATAL)" build/ci-macos/test-logs/*.txt 2>/dev/null | xargs -r cat
-
-      - name: Playback measurement (ROADMAP Phase 2 gates 3 and 4; reports only)
-        # A short run on the reference M1; the gate's 10-minute run is by
-        # hand (BUILDING.md, "Phase 2 gates").
-        if: always()
-        continue-on-error: true
-        run: >-
-          python3 scripts/measure-playback.py --offscreen --seconds 30
-          --app build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu || true
-
-      - name: Screenshots
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          rm -rf shots
-          app=build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu
-          "$app" --screenshot shots/1x
-          QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
-          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
-          "$app" --screenshot shots/pseudo --language pseudo
-
-      - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci-screenshots.py push --name macos-self-hosted --dir shots
-
-      - name: Package (.dmg)
-        run: |
-          rm -f build/ci-macos/*.dmg
-          cd build/ci-macos && cpack
-
-      - name: Installer gate (mount, launch, check architecture)
-        # The runner has no window server session: no on-screen windows.
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          dmg=$(ls build/ci-macos/*.dmg)
-          mnt=$(mktemp -d)
-          hdiutil attach "$dmg" -mountpoint "$mnt" -nobrowse
-          trap 'hdiutil detach "$mnt" >/dev/null 2>&1 || true' EXIT
-          app="$mnt/Cutthulhu.app/Contents/MacOS/Cutthulhu"
-          lipo -archs "$app" | grep -q arm64
-          test -f "$mnt/Cutthulhu.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
-          codesign --verify --deep "$mnt/Cutthulhu.app"
-          # Without it macOS gives the microphone only silence (Audio Punch-In; BUILDING.md).
-          plutil -extract NSMicrophoneUsageDescription raw "$mnt/Cutthulhu.app/Contents/Info.plist"
-          "$app" --version
-          "$app" --smoke-test
-
-      - name: Keep the .dmg for the owner to try
-        # In the folder set up by "setup-mac-runner.sh builds" (BUILDING.md).
-        run: scripts/keep-build.sh build/ci-macos/*.dmg
-
-      - name: Keep the debug symbols (dSYM) beside it
-        # So a crash report from that .dmg reads as functions and lines (ROADMAP 10.5b; BUILDING.md, "Crash
-        # reports"): the build tree's executable has the same UUID as the packaged one.
-        continue-on-error: true
-        run: |
-          rm -rf build/ci-macos/Cutthulhu.dSYM build/ci-macos/Cutthulhu-dSYM.zip
-          xcrun dsymutil build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu -o build/ci-macos/Cutthulhu.dSYM
-          dwarfdump --uuid build/ci-macos/Cutthulhu.dSYM
-          ditto -c -k --keepParent build/ci-macos/Cutthulhu.dSYM build/ci-macos/Cutthulhu-dSYM.zip
-          scripts/keep-build.sh build/ci-macos/Cutthulhu-dSYM.zip
-
-  windows-local:
-    # The owner's Windows PC as a self-hosted runner (scripts/setup-windows-
-    # runner.ps1): a service under its own standard user, with Qt in C:\Qt
-    # and the Visual Studio Build Tools installed. Turned on by the
-    # repository variable WINDOWS_RUNNER = on.
-    name: Windows x64 (self-hosted)
-    if: vars.WINDOWS_RUNNER == 'on'
-    runs-on: [self-hosted, Windows, X64, cutthulhu]
-    timeout-minutes: 120
-    # Windows PowerShell 5.1, which every Windows has; PowerShell 7 (pwsh)
-    # may not be installed.
-    defaults:
-      run:
-        shell: powershell
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check PowerShell scripts parse
-        shell: powershell
-        run: |
-          $failed = $false
-          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1 scripts, packaging) {
-            $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
-            foreach ($e in $errors) { Write-Host "::error file=$($f.Name)::$e"; $failed = $true }
-          }
-          if ($failed) { exit 1 }
-
-      - name: Qt (installed on the PC)
-        shell: powershell
-        run: |
-          $qt = "C:\Qt\$env:QT_VERSION\msvc2022_64"
-          if (-not (Test-Path "$qt\bin\qmake.exe")) {
-            Write-Host "::error::Qt $env:QT_VERSION is not in C:\Qt: run scripts\setup-windows-runner.ps1 install again"
-            exit 1
-          }
-          "QT_ROOT_DIR=$qt" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: FFmpeg (downloaded once, kept in the runner's profile)
-        shell: powershell
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Disk space
-        # As on the other runners: a full disk is named before it breaks the build.
-        shell: powershell
-        run: |
-          $drive = Get-PSDrive -Name (Get-Location).Drive.Name
-          $free = [math]::Floor($drive.Free / 1GB)
-          Write-Host "$free GB free on the runner's disk"
-          if ($free -lt 5) {
-            Write-Host "::error::Only $free GB free on the runner's disk ($(Get-Location)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-            exit 1
-          }
-
-      - name: Python packages for the checks
-        # As on the other platforms (BUILDING.md, "Python packages for the
-        # checks"). setup-windows-runner.ps1 makes the environment and names it
-        # in CUTTHULHU_CHECK_VENV.
-        continue-on-error: true
-        timeout-minutes: 25
-        shell: powershell
-        run: |
-          $venvPy = if ($env:CUTTHULHU_CHECK_VENV) { Join-Path $env:CUTTHULHU_CHECK_VENV 'Scripts\python.exe' } else { '' }
-          $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
-          if ($py) { & $py scripts/check-python.py --github-env }
-          if (-not $py -or $LASTEXITCODE -ne 0) {
-            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above, or run scripts\setup-windows-runner.ps1 python (BUILDING.md, Python packages for the checks)"
-            exit 1
-          }
-
-      - name: Configure
-        # The runner's user cannot reach the Windows Installer service that
-        # validates the .msi (BUILDING.md).
-        run: |
-          # Built up, not assigned from an if: PowerShell unrolls a one-element array returned
-          # by an if into a string, which @ then splats character by character.
-          $python = @()
-          if ($env:CHECK_PYTHON) { $python += "-DPython3_EXECUTABLE=$env:CHECK_PYTHON" }
-          cmake --preset ci -DLUMENIS_WIX_SKIP_VALIDATION=ON @python
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Build
-        run: cmake --build --preset ci
-
-      - name: File speed check
-        # Writing 200 small files takes well under a second on this PC. A
-        # scan of every new file (antivirus, backup) once made every test
-        # 100 times slower and tests time out; this names the cause
-        # (BUILDING.md "The self-hosted Windows or Linux job waits or fails").
-        shell: powershell
-        run: |
-          $dir = Join-Path $env:RUNNER_TEMP 'file-speed'
-          New-Item -ItemType Directory -Force $dir | Out-Null
-          $bytes = New-Object byte[] 4096
-          $watch = [Diagnostics.Stopwatch]::StartNew()
-          for ($i = 0; $i -lt 200; $i++) { [IO.File]::WriteAllBytes((Join-Path $dir "f$i.bin"), $bytes) }
-          $watch.Stop()
-          Remove-Item -Recurse -Force $dir
-          $s = [math]::Round($watch.Elapsed.TotalSeconds, 2)
-          Write-Host "200 files written in $s s"
-          if ($s -gt 10) { Write-Host "::warning::Writing files is slow on this runner ($s s for 200): tests may time out. See BUILDING.md." }
-
-      - name: Test
-        shell: powershell
-        run: |
-          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
-          ctest --preset ci
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Playback measurement (ROADMAP Phase 2 gates 3 and 4)
-        # A short run: dropped frames or missing sound (the runner is a
-        # service) only report; the application failing (exit 2) fails it.
-        shell: powershell
-        run: |
-          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
-          $py = @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
-          if (-not $py) { Write-Host "::warning::No Python on this runner: the playback measurement and decode_corpus are left out (BUILDING.md, Phase 2 gates)"; exit 0 }
-          & $py scripts/measure-playback.py --offscreen --seconds 20 --app build\ci\bin\cutthulhu.exe
-          if ($LASTEXITCODE -eq 2) { Write-Host "::error::cutthulhu --measure-playback failed (BUILDING.md, Troubleshooting)"; exit 1 }
-          exit 0
-
-      - name: Logs of failed tests
-        # QTest's own report, written to a file as well: ctest's capture can
-        # lose it (BUILDING.md).
-        if: failure()
-        shell: powershell
-        run: |
-          Get-ChildItem build\ci\test-logs\*.txt -ErrorAction SilentlyContinue |
-            Where-Object { Select-String -Path $_.FullName -Pattern '^(FAIL!|QFATAL)' -Quiet } |
-            ForEach-Object { Write-Host "==== $($_.Name)"; Get-Content $_.FullName }
-
-      - name: Screenshots
-        shell: powershell
-        run: |
-          Remove-Item -Recurse -Force shots -ErrorAction SilentlyContinue
-          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
-          $env:QT_QPA_PLATFORM = 'offscreen'
-          build\ci\bin\cutthulhu.exe --screenshot shots\1x | Out-Host
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:QT_SCALE_FACTOR = '2'
-          build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
-          Remove-Item Env:QT_SCALE_FACTOR
-          build\ci\bin\cutthulhu.exe --screenshot shots\pseudo --language pseudo | Out-Host
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.ps1).
-        continue-on-error: true
-        shell: powershell
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci-screenshots.ps1 -Name windows-self-hosted -Dir shots
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Package (.msi, .zip)
-        shell: powershell
-        run: |
-          Remove-Item -Force build\ci\*.msi, build\ci\*.zip -ErrorAction SilentlyContinue
-          cd build\ci
-          cpack
-          if ($LASTEXITCODE -ne 0) {
-            # WiX's own messages are only in its log.
-            Get-ChildItem -Recurse -Filter wix.log _CPack_Packages | ForEach-Object { Get-Content $_.FullName -Tail 60 }
-            exit $LASTEXITCODE
-          }
-
-      - name: Package gate (.zip, launch)
-        # The runner's user may not use the Windows Installer service (error
-        # 0x80070005), so the .msi cannot be installed or even unpacked here.
-        # The .zip has the same files: unpack it and launch the app. The
-        # GitHub-hosted job installs and uninstalls the .msi.
-        run: |
-          if (-not (Get-ChildItem build\ci\*.msi)) { Write-Error 'no .msi was built'; exit 1 }
-          $zip = (Get-ChildItem build\ci\*.zip | Select-Object -First 1).FullName
-          $target = Join-Path $env:RUNNER_TEMP 'zip'
-          Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
-          Expand-Archive -Force $zip $target
-          $exe = Get-ChildItem -Recurse -Filter cutthulhu.exe $target | Select-Object -First 1
-          if (-not $exe) { Write-Error 'cutthulhu.exe is not in the package'; exit 1 }
-          $out = & $exe.FullName --smoke-test | Out-String
-          Write-Host $out
-          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
-
-      - name: Keep the .msi for the owner to try
-        # In the runner's profile (BUILDING.md, "Trying the builds"), named with
-        # the date and commit; the newest five.
-        run: |
-          # In the runner's own profile, which its user can always write in (the owner's
-          # Documents can be closed to it by security software, as in run 179);
-          # "setup-windows-runner.ps1 builds" links it into the owner's Documents.
-          $dir = Join-Path $env:USERPROFILE 'Cutthulhu Builds'
-          New-Item -ItemType Directory -Force $dir | Out-Null
-          $msi = Get-ChildItem build\ci\*.msi | Select-Object -First 1
-          # The commit from GitHub: the PC may have no git.
-          $sha = $env:GITHUB_SHA.Substring(0, 7)
-          $name = '{0}_{1}_{2}.msi' -f $msi.BaseName, (Get-Date -Format 'yyyy-MM-dd_HHmm'), $sha
-          # Keeping a copy is for the owner, not a check of the build: a copy that fails is a
-          # warning, with what may stop the runner's user writing there (BUILDING.md,
-          # "The .msi is not kept").
-          try {
-            Copy-Item $msi.FullName (Join-Path $dir $name) -ErrorAction Stop
-            Write-Host "kept $(Join-Path $dir $name)"
-            Get-ChildItem (Join-Path $dir '*.msi') | Sort-Object LastWriteTime -Descending |
-              Select-Object -Skip 5 | Remove-Item -Force
-          } catch {
-            Write-Host "::warning::the .msi could not be kept in ${dir}: $($_.Exception.Message)"
-            $cfa = 'unknown'
-            try { $cfa = (Get-MpPreference -ErrorAction Stop).EnableControlledFolderAccess } catch { }
-            Write-Host "Controlled Folder Access: $cfa (1 = on; it blocks writes to Documents by apps not allowed)"
-            Write-Host "Folder attributes: $((Get-Item $dir).Attributes) (ReparsePoint: a link, e.g. OneDrive)"
-            icacls $dir
-          }
-          # The runner ends the step with the last program's exit code (icacls's).
-          exit 0
-
-  linux-local:
-    # Ubuntu in WSL on the owner's PC (scripts/setup-wsl-runner.sh), one
-    # runner per version, labelled ubuntu-<version>. The repository variable
-    # LINUX_RUNNERS lists the versions that have one, e.g. ["24.04","26.04"].
-    # The installer gate needs no root: the .deb is unpacked, not installed.
-    name: Linux x64 (self-hosted, Ubuntu ${{ matrix.ubuntu }})
-    if: vars.LINUX_RUNNERS != ''
-    strategy:
-      fail-fast: false
-      matrix:
-        ubuntu: ${{ fromJSON(vars.LINUX_RUNNERS || '[]') }}
-    runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ matrix.ubuntu }}']
-    timeout-minutes: 90
-    steps:
-      # Temporary files in the runner's own temporary folder, on the work disk, which the runner
-      # empties after each job: Ubuntu 26.04's /tmp is a small tmpfs (in memory), which filled up
-      # and stopped every build (BUILDING.md, "The self-hosted Windows or Linux job waits or
-      # fails"). Set here, as a job's env cannot use the runner context.
-      - name: Temporary folder
-        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
-
-      - uses: actions/checkout@v4
-
-      - name: Shell scripts parse
-        run: for f in scripts/*.sh packaging/*/*.sh; do bash -n "$f" || exit 1; done
-
-      - name: Versions
-        run: |
-          c++ --version | head -n1
-          cmake --version | head -n1
-          dpkg-query -W qt6-base-dev
-          if ! dpkg-query -W libavcodec-dev libswresample-dev >/dev/null 2>&1; then
-            echo "::error::FFmpeg is missing: run 'sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev' (BUILDING.md)"
-            exit 1
-          fi
-          dpkg-query -W libavcodec-dev
-          if ! command -v ffmpeg >/dev/null; then
-            echo "::warning::The ffmpeg command is missing, so the decode_corpus test is left out: in WSL run 'sudo apt-get install -y ffmpeg' (BUILDING.md, Phase 2 gates)"
-          fi
-
-      - name: Disk space
-        # A full disk fails the build in odd places (CMake reports the compiler as broken):
-        # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
-        # The temporary folder too: the compiler writes there, and it can be another disk.
-        run: |
-          status=0
-          for dir in . "${TMPDIR:-/tmp}"; do
-            free=$(df -Pk "$dir" | awk 'NR==2 {print int($4 / 1048576)}')
-            echo "$free GB free for $dir"
-            if [ "$free" -lt 5 ]; then
-              echo "::error::Only $free GB free for $dir ($(cd "$dir" && pwd)) on the runner: CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-              status=1
-            fi
-          done
-          # Memory: GCC 15 takes several GB for our largest files, and running out
-          # can stop WSL altogether, so the job is cancelled with no error of its own
-          # (2026-11-10). Warn when RAM and swap leave less than 3 GB per parallel
-          # compile (BUILDING.md, The self-hosted Windows or Linux job waits or fails).
-          jobs=${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}
-          mem=$(awk '/^(MemTotal|SwapTotal):/ {kb += $2} END {print int(kb / 1048576)}' /proc/meminfo)
-          echo "$mem GB of memory and swap for $jobs parallel compiles"
-          if [ "$mem" -lt $((jobs * 3)) ]; then
-            echo "::warning::Only $mem GB of memory and swap for $jobs parallel compiles: the build may run out and stop WSL. Give WSL more memory in .wslconfig or lower CMAKE_BUILD_PARALLEL_LEVEL (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-          fi
-          exit $status
-
-      - name: Python packages for the checks
-        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
-        # the runner's home, made again only when scripts/check-requirements.txt
-        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
-        # be made, the build goes on and those checks are skipped.
-        continue-on-error: true
-        timeout-minutes: 25
-        run: |
-          if ! python3 scripts/check-python.py --github-env; then
-            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
-            exit 1
-          fi
-
-      - name: Configure
-        run: |
-          set -o pipefail # a failed configure must fail the step, not pass through tee
-          cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"} 2>&1 | tee configure.log
-          ! grep -q "Wayland support is incomplete" configure.log
-
-      - name: Build
-        run: cmake --build --preset ci
-
-      - name: Test
-        run: ctest --preset ci
-
-      - name: Logs of failed tests
-        # QTest's own report, written to a file as well: ctest's capture can
-        # lose it (BUILDING.md).
-        if: failure()
-        run: grep -l -E "^(FAIL!|QFATAL)" build/ci/test-logs/*.txt 2>/dev/null | xargs -r cat
-
-      - name: Screenshots
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          rm -rf shots
-          build/ci/bin/cutthulhu --screenshot shots/1x
-          QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
-          # The pseudo-locale (10.4c): longer, accented texts in the same windows, compared too.
-          build/ci/bin/cutthulhu --screenshot shots/pseudo --language pseudo
-
-      - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/ci-screenshots.py push --name linux-self-hosted-${{ matrix.ubuntu }} --dir shots
-
-      - name: Package (.deb, .tar.gz, AppImage)
-        run: |
-          rm -f build/ci/*.deb build/ci/*.rpm build/ci/*.tar.gz build/ci/*.AppImage
-          cd build/ci && cpack
-          cd ../.. && packaging/linux/make-appimage.sh build/ci
-
-      - name: Installer gate (unpack, launch)
-        run: |
-          dpkg-deb -f build/ci/*.deb Recommends | grep -q qt6-wayland
-          root=$(mktemp -d)
-          dpkg-deb -x build/ci/*.deb "$root"
-          "$root/usr/bin/cutthulhu" --version
-          QT_QPA_PLATFORM=offscreen "$root/usr/bin/cutthulhu" --smoke-test
-          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./build/ci/*.AppImage --smoke-test
-
-      - name: AppImage on Wayland
-        run: scripts/check-appimage-wayland.sh build/ci/*.AppImage
-
-      - name: Keep the AppImage for the owner to try
-        # In the folder set up by "setup-wsl-runner.sh builds" (BUILDING.md).
-        run: scripts/keep-build.sh build/ci/*.AppImage
-
-      - name: Keep the debug information beside it
-        # For scripts/symbolize-crash.py --search, whatever the AppImage's tools strip (ROADMAP 10.5b; BUILDING.md,
-        # "Crash reports").
-        continue-on-error: true
-        run: |
-          objcopy --only-keep-debug build/ci/bin/cutthulhu build/ci/cutthulhu.debug
-          gzip -f build/ci/cutthulhu.debug
-          scripts/keep-build.sh build/ci/cutthulhu.debug.gz
-
-      - name: Sanitizers (AddressSanitizer, UBSan)
-        # Memory errors that glibc tolerates and MSVC's heap does not (a
-        # reference into a destroyed temporary crashed tst_main_window on
-        # Windows only): every test again in a Debug build with the
-        # sanitizers, failing on the first report (BUILDING.md).
-        run: |
-          cmake --preset asan ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
-          cmake --build --preset asan
-          ctest --preset asan
-
   windows:
     name: Windows x64
-    if: vars.HOSTED_CI != 'off'
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -859,8 +344,8 @@ jobs:
 
       - name: Python packages for the checks
         # As on the other platforms (BUILDING.md, "Python packages for the
-        # checks"). setup-windows-runner.ps1 makes the environment and names it
-        # in CUTTHULHU_CHECK_VENV.
+        # checks"). A machine with the environment made already names it in
+        # CUTTHULHU_CHECK_VENV.
         continue-on-error: true
         timeout-minutes: 25
         shell: powershell
@@ -869,7 +354,7 @@ jobs:
           $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
           if ($py) { & $py scripts/check-python.py --github-env }
           if (-not $py -or $LASTEXITCODE -ne 0) {
-            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above, or run scripts\setup-windows-runner.ps1 python (BUILDING.md, Python packages for the checks)"
+            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above, or BUILDING.md (Python packages for the checks)"
             exit 1
           }
 
@@ -919,14 +404,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Pass the screenshots to ui-consistency
-        # Through the repository, not artifact storage (scripts/ci-screenshots.ps1).
-        continue-on-error: true
-        shell: powershell
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci-screenshots.ps1 -Name windows -Dir shots
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: shots
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Package (.msi, .zip)
         run: cd build/ci && cpack
@@ -959,42 +442,25 @@ jobs:
   ui-consistency:
     # Phase 1 gate 1: every window renders the same on every platform.
     # Linux is the reference; each other platform's screenshots must match it.
-    # With HOSTED_CI off it runs on the self-hosted Linux runner in WSL, and
-    # that runner's screenshots are the reference.
     name: UI looks the same on all platforms
-    needs: [linux, macos, macos-local, windows, windows-local, linux-local]
+    needs: [linux, macos, windows]
     if: >-
-      ${{ !cancelled()
-          && (needs.linux.result == 'success' || needs.linux-local.result == 'success')
-          && needs.linux.result != 'failure' && needs.linux-local.result != 'failure'
-          && needs.windows.result != 'failure' && needs.windows-local.result != 'failure'
-          && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
-    runs-on: ${{ vars.HOSTED_CI == 'off' && fromJSON('["self-hosted","Linux","X64","cutthulhu"]') || 'ubuntu-24.04' }}
+      ${{ !cancelled() && needs.linux.result == 'success'
+          && needs.windows.result != 'failure' && needs.macos.result != 'failure' }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Fetch this run's screenshots
-        # Each job stored its screenshots on ci-screenshots/<branch>/<platform>
-        # (scripts/ci-screenshots.py); older runs' are left out.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          rm -rf shots
-          python3 scripts/ci-screenshots.py fetch-all --dest shots
+        # Each job's artifact screenshots-<platform>, into shots/screenshots-<platform>.
+        uses: actions/download-artifact@v4
+        with:
+          pattern: screenshots-*
+          path: shots
 
       - name: Pillow
-        # scripts/imgdiff.py needs it. The GitHub-hosted runner installs it
-        # with pip; the self-hosted one has python3-pil
-        # (scripts/setup-wsl-runner.sh).
-        run: |
-          if ! python3 -c 'import PIL' 2>/dev/null; then
-            if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
-              pip install --quiet pillow
-            else
-              echo "::error::Pillow is missing on this runner: in WSL run 'sudo apt-get install -y python3-pil'"
-              exit 1
-            fi
-          fi
+        # scripts/imgdiff.py needs it.
+        run: python3 -c 'import PIL' 2>/dev/null || pip install --quiet pillow
 
       - name: Compare screenshots with Linux
         # Gate: the text-free images (*.notext.png) must match within 0.5%,
@@ -1005,14 +471,11 @@ jobs:
         run: |
           rm -rf diffs
           mkdir -p diffs
-          # The GitHub-hosted Linux screenshots, or else the self-hosted ones.
           reference=shots/screenshots-linux
-          [ -d "$reference" ] || reference=$(ls -d shots/screenshots-linux-self-hosted-* 2>/dev/null | head -n1)
-          # Nothing to compare (uploads failed, e.g. a full artifact quota)
-          # must not pass.
+          # Nothing to compare (an upload failed) must not pass.
           others=$(ls -d shots/screenshots-* 2>/dev/null | grep -vxF "$reference" | wc -l)
-          if [ -z "$reference" ] || [ "$others" -eq 0 ]; then
-            echo "::error::No screenshots to compare: the jobs could not store them (see BUILDING.md, CI screenshots)"
+          if [ ! -d "$reference" ] || [ "$others" -eq 0 ]; then
+            echo "::error::No screenshots to compare: a job did not upload its artifact (BUILDING.md, CI screenshots)"
             exit 1
           fi
           echo "Reference: $reference"
@@ -1035,11 +498,11 @@ jobs:
           exit $status
 
       - name: Keep the differences
-        # On ci-screenshots/<branch>/diffs; BUILDING.md says how to look.
-        continue-on-error: true
+        # An artifact, screenshot-diffs; BUILDING.md says how to look.
         if: always()
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          [ -n "$(ls -A diffs 2>/dev/null)" ] || exit 0
-          python3 scripts/ci-screenshots.py push --name diffs --dir diffs
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: diffs
+          retention-days: 14
+          if-no-files-found: ignore

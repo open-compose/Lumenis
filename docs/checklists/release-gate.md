@@ -25,7 +25,7 @@ made (BUILDING.md "Releases").
 | 10.5 crash reports | done | a crash from the release package reads as functions and lines with its symbols (BUILDING.md "Crash reports") |
 | 10.6 update check | done (12.1) | once a release is published: an older build's Help > Check for Updates offers it |
 | 10.7 release pipeline | done (12.2) but its first run | section 1 above |
-| 10.0 going public | not started | the owner's steps in ROADMAP 10.0: the history's email, deleting old runs and `ci-screenshots/*`, the self-hosted runners removed, the community files after §2.2 |
+| 10.0 going public | done (2026-11-15) | the community files after §2.2; run 423, stuck queued, deleted from the Actions page or by GitHub Support |
 
 ## 3. Gates the phases left open
 

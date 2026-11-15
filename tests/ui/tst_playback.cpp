@@ -104,7 +104,7 @@ private slots:
         QTest::qWait(300);
         // The picture follows the sound: the position is where the clock
         // put it at the last tick (every 20 ms). A busy machine can hold
-        // ticks back, for over a second on the self-hosted Mac runner (12
+        // ticks back, for over a second on a Mac CI runner (12
         // frames shown and 37 dropped in what should have been 14), so the
         // closest of the looks counts, and the looks go on for up to two
         // seconds until one lands on a tick in time (BUILDING.md).

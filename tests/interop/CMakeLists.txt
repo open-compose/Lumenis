@@ -19,7 +19,7 @@ if(DEFINED ENV{CUTTHULHU_INTEROP_CORPUS})
     set(LUMENIS_INTEROP_CORPUS_DEFAULT "$ENV{CUTTHULHU_INTEROP_CORPUS}")
 else()
     # The user's cache folder, as interop-corpus.py's own default: one download for every build folder,
-    # and kept when a self-hosted runner's checkout is cleaned (git clean -ffdx removes the build folder,
+    # and kept when a CI machine's checkout is cleaned (git clean -ffdx removes the build folder,
     # and a download each run fails whenever the network drops; BUILDING.md "Troubleshooting").
     if(WIN32 AND DEFINED ENV{LOCALAPPDATA})
         file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" _cache)

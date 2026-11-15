@@ -106,8 +106,8 @@
 // --dump-aaf, --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
-// check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
-// ci-screenshots.py); BUILDING.md describes them. Module search paths are in module_paths.cpp and
+// check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py);
+// BUILDING.md describes them. Module search paths are in module_paths.cpp and
 // the crash reports (--crash-reports, and --crash-test for their test) in crash_report.cpp.
 
 namespace {
@@ -1361,7 +1361,7 @@ int main(int argc, char** argv) {
 
     // --screenshot <dir>: fixed sample projects, bins and sequences in a temporary folder, then a PNG of
     // each window and tool in a fixed state, saved through ui::capture(). The images are compared across
-    // platforms (ui-consistency in CI, scripts/ci-screenshots.py), so everything shown must be the same
+    // platforms (ui-consistency in CI), so everything shown must be the same
     // on every machine: fixed sizes, dates and labels, no focus or text cursor.
     if (parser.isSet(screenshot)) {
         // Same content size on every platform: the macOS menu bar lives

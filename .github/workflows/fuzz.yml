@@ -1,42 +1,30 @@
 name: Fuzz
 
-# ROADMAP Phase 3 gate 4: the bin and AAF parsers fuzzed for 24 hours without a
-# crash (fuzz/README.md, BUILDING.md "Fuzzing"). Run by hand only, on the
-# owner's self-hosted Linux runner (Ubuntu in WSL), which needs Clang and its
-# runtime libraries (sudo apt-get install -y clang libclang-rt-dev):
+# ROADMAP Phase 3 gate 4: the bin and AAF parsers fuzzed without a crash
+# (fuzz/README.md, BUILDING.md "Fuzzing"; the 24-hour gate run passed in 2026).
+# Run by hand on GitHub's hosted Linux runner:
 #
-#   gh workflow run fuzz.yml --ref <branch> -f hours=24
+#   gh workflow run fuzz.yml -f hours=5
 #
-# The time is split between the targets (scripts/fuzz.py run). Every target
-# runs for its whole time even after a crash, hang or sanitizer report
-# (--keep-going); at the end the failing inputs are grouped into problems by
-# their stacks, each problem's stack and smallest reproducer (base64) are
-# printed, and the job fails if there were any. Nothing is uploaded (the
-# artifact quota is used up). The corpora the run grows are kept on the runner, outside the
-# workspace (actions/checkout cleans it), so each run starts where the last
-# one ended. While it runs, the runner takes no other jobs.
-#
-# GitHub only dispatches a workflow it has seen run, and the default branch
-# does not hold this file yet, so a push that changes it also starts it: the
-# job is skipped then (nothing is fuzzed), but the run makes `gh workflow run`
-# find the workflow (BUILDING.md, Fuzzing: "HTTP 404").
+# A hosted job stops after 6 hours, so one run fuzzes at most 5.5; the corpora
+# it grows are kept in the Actions cache and the next run starts where this one
+# ended, so a longer campaign is several runs. The time is split between the
+# targets (scripts/fuzz.py run). Every target runs for its whole time even after
+# a crash, hang or sanitizer report (--keep-going); at the end the failing inputs
+# are grouped into problems by their stacks, each problem's stack and smallest
+# reproducer (base64) are printed, the failing inputs are uploaded as the
+# artifact fuzz-artifacts, and the job fails if there were any.
 on:
-  push:
-    paths: ['.github/workflows/fuzz.yml']
   workflow_dispatch:
     inputs:
       hours:
-        description: Hours of fuzzing in all, split between the targets
+        description: Hours of fuzzing in all (at most 5.5), split between the targets
         type: string
-        default: '24'
+        default: '5'
       jobs:
         description: Processes per target (libFuzzer -fork)
         type: string
         default: '2'
-      ubuntu:
-        description: The self-hosted runner's Ubuntu version (label ubuntu-<version>)
-        type: string
-        default: '26.04'
 
 permissions:
   contents: read
@@ -48,29 +36,33 @@ concurrency:
 jobs:
   fuzz:
     name: Fuzz the interchange parsers (${{ inputs.hours }} h)
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ inputs.ubuntu }}']
-    # Self-hosted jobs may run up to 5 days; this allows a 24-hour run with
-    # room for the build, the seeds and the corpus merges between targets.
-    timeout-minutes: 2160
+    runs-on: ubuntu-24.04
+    # GitHub-hosted jobs may run 6 hours: up to 5.5 of fuzzing, with room for the build, seeds and merges.
+    timeout-minutes: 355
     env:
-      FUZZ_HOME: ${{ github.workspace }}/../cutthulhu-fuzz
+      FUZZ_HOME: /home/runner/cutthulhu-fuzz
     steps:
-      # Not Ubuntu 26.04's small in-memory /tmp (ci.yml, linux-local).
-      - name: Temporary folder
-        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: At most 5.5 hours
+        run: |
+          awk -v h="${{ inputs.hours }}" 'BEGIN { exit !(h > 0 && h <= 5.5) }' || {
+            echo "::error::hours must be more than 0 and at most 5.5 (a hosted job stops after 6 hours)"; exit 1; }
 
       - uses: actions/checkout@v4
 
-      - name: Clang and libFuzzer
+      - name: Dependencies, Clang and libFuzzer
         run: |
+          scripts/bootstrap-linux.sh
+          sudo apt-get install -y clang libclang-rt-dev || sudo apt-get install -y clang "libclang-rt-$(clang --version | sed -n 's/.*clang version \([0-9]*\).*/\1/p' | head -1)-dev"
           clang++ --version | head -n1
           printf 'extern "C" int LLVMFuzzerTestOneInput(const char*, unsigned long) { return 0; }\n' > "$RUNNER_TEMP/probe.cpp"
-          if ! clang++ -fsanitize=fuzzer,address,undefined "$RUNNER_TEMP/probe.cpp" -o "$RUNNER_TEMP/probe"; then
-            echo "::error::Clang cannot link libFuzzer: run 'sudo apt-get install -y clang libclang-rt-dev' in the runner's Ubuntu (BUILDING.md, Fuzzing)"
-            exit 1
-          fi
+          clang++ -fsanitize=fuzzer,address,undefined "$RUNNER_TEMP/probe.cpp" -o "$RUNNER_TEMP/probe"
 
+      - name: The corpora from the last run
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.FUZZ_HOME }}/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
       - name: Interchange corpus
         # The seeds: pyaaf2's and pyavb's test files, downloaded at pinned commits.
         run: python3 scripts/interop-corpus.py fetch --dir "$FUZZ_HOME/interop-corpus"
@@ -89,3 +81,19 @@ jobs:
           python3 scripts/fuzz.py run --keep-going --time "${{ inputs.hours }}h" --jobs "${{ inputs.jobs }}" \
             --corpus-dir "$FUZZ_HOME/corpus" --artifacts "$FUZZ_HOME/artifacts" \
             --stats "$FUZZ_HOME/stats.json"
+
+      - name: Keep the corpora for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.FUZZ_HOME }}/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+
+      - name: The failing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: ${{ env.FUZZ_HOME }}/artifacts
+          retention-days: 30
+          if-no-files-found: ignore

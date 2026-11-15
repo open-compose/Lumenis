@@ -67,8 +67,8 @@ endif()
 
 # macdeployqt bundles only the cocoa platform plugin. Add Qt's offscreen one
 # so the installed app runs without a window server: --screenshot and
-# --smoke-test from a launchd service, such as the self-hosted CI runner
-# (BUILDING.md). Its rpath must find the bundle's Frameworks. Packaging.cmake
+# --smoke-test from a launchd service, such as a CI runner without a
+# login session. Its rpath must find the bundle's Frameworks. Packaging.cmake
 # signs the bundle afterwards.
 if(APPLE AND TARGET Qt6::QOffscreenIntegrationPlugin)
     install(CODE "

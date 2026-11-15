@@ -152,7 +152,7 @@ with AddressSanitizer and UBSan and stop at the first report:
 
     cmake --preset asan && cmake --build --preset asan && ctest --preset asan
 
-The self-hosted Linux job runs them on every push.
+CI's `linux-asan` job runs them on every push.
 
 The `tsan` presets build with ThreadSanitizer (RelWithDebInfo) and run the tests below the UI (label `core`: tests/core,
 model, media and interop), where our own threads are (the compositor's passes, the frame cache, renders, decoding):
@@ -171,159 +171,30 @@ in the child Qt starts with `clone`. To build only the tests the preset runs, `c
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` builds, tests and packages on `ubuntu-24.04`
-(and Ubuntu 26.04 in a container), `macos-14` and `macos-26` (arm64) and
-`windows-2022`. It then installs each package, launches the installed
-program with `--smoke-test`, and uninstalls it. The installers are uploaded
-as workflow artifacts.
+`.github/workflows/ci.yml` runs on every push to `main` and `claude/**`, on
+pull requests and by hand, all on GitHub's hosted runners (the repository is
+public, so their minutes and artifact storage cost nothing):
 
-GitHub bills macOS minutes at ten times the Linux rate on a private
-repository. The GitHub-hosted macOS jobs therefore run only for `main`, pull
-requests and manual runs (`gh workflow run ci.yml --ref <branch>`). Pushes
-to other branches build on macOS only through the self-hosted runner below.
+| Job | Runner | What it does |
+|---|---|---|
+| `linux` | `ubuntu-24.04` | system Qt 6.4: build, test, AppImage and .deb, the installer gate (also the AppImage on a headless Wayland compositor) |
+| `linux-latest` | Ubuntu 26.04 container | GCC 15 and Qt 6.10 with warnings as errors |
+| `linux-asan` | `ubuntu-24.04` | the `asan` preset: AddressSanitizer and UBSan over every test |
+| `macos` | `macos-14` (Xcode 15), `macos-26` (Xcode 26) | arm64 build, test, `.dmg` and its gate |
+| `windows` | `windows-2022` | MSVC 2022 build, test, `.msi` and `.zip`; installs the .msi, launches it, uninstalls it |
+| `ui-consistency` | `ubuntu-24.04` | each platform's screenshots against Linux's ("CI screenshots" under Troubleshooting) |
 
-When the account's included Actions minutes run out, GitHub refuses the
-hosted jobs (they fail within seconds without running a step). Set the
-repository variable `HOSTED_CI` to `off` (Settings > Secrets and variables >
-Actions > Variables) until the allowance resets: the GitHub-hosted jobs are
-then skipped and the self-hosted Mac still builds and tests every push.
-Delete the variable, or set it to `on`, to bring them back.
+The installer gate installs (or mounts) each package, launches the installed
+program with `--smoke-test` and uninstalls it. Each job uploads its packages as
+workflow artifacts, kept for GitHub's default 90 days: open the run on the
+repository's Actions tab, and they are listed at the bottom of its summary page
+(`gh run download <run id>` fetches them). These are development builds, with
+the patent-encumbered codecs on; the packages for people to download come from
+the release workflow ("Releases").
 
-### Self-hosted macOS runner
-
-An Apple Silicon Mac can run the macOS job for free. The runner works
-headless: it runs as its own hidden standard user, is started by launchd at
-boot, and needs nobody to log in as that user. It never opens windows (the
-tests and screenshots use Qt's offscreen platform) or takes the keyboard,
-mouse or screen, so you keep using the Mac as usual. Builds run in the
-background QoS class at low priority, mostly on the efficiency cores, so
-your own work comes first.
-
-1. In your administrator account, install the build tools for all users:
-   Xcode (or `xcode-select --install`) and `brew install cmake ninja`.
-2. On GitHub, open the repository's Settings > Actions > Runners > New
-   self-hosted runner, and copy the token from the `./config.sh` line. It
-   is valid for an hour.
-3. From your checkout, run:
-
-   ```sh
-   sudo scripts/setup-mac-runner.sh install <token>
-   ```
-
-   This creates the hidden user `ghrunner`, downloads and registers the
-   runner (labels `self-hosted`, `macOS`, `ARM64`, `cutthulhu`), and
-   installs `/Library/LaunchDaemons/com.open-compose.actions-runner.plist`.
-4. Check that the runner shows as Idle under Settings > Actions > Runners.
-   Then add the repository variable `MAC_RUNNER` with the value `on`
-   (Settings > Secrets and variables > Actions > Variables). The
-   `macOS arm64 (self-hosted)` job then runs on every push.
-
-Day to day:
-
-* `sudo scripts/setup-mac-runner.sh status` shows whether it is running and
-  the end of its log (`/Users/ghrunner/runner.log`).
-* `sudo scripts/setup-mac-runner.sh stop` and `start` pause and resume it.
-  While the Mac is off, asleep or stopped, set `MAC_RUNNER` to `off`;
-  otherwise CI runs wait for the Mac (for up to a day).
-* The Mac must be awake for jobs to run. The display can sleep; to keep the
-  Mac itself awake on power, turn on System Settings > Battery (or Energy) >
-  Options > Prevent automatic sleeping when the display is off, or run
-  `sudo pmset -c sleep 0`.
-* Fewer or more parallel compile jobs: `sudo RUNNER_JOBS=2
-  scripts/setup-mac-runner.sh install <token>` (the default is 4).
-* To remove it: `sudo scripts/setup-mac-runner.sh remove <token>` with a
-  removal token from the runner's page on GitHub, then optionally `sudo
-  sysadminctl -deleteUser ghrunner`.
-
-### Self-hosted Windows and Linux (WSL) runners
-
-A Windows x64 PC can run the Windows job, and Ubuntu distributions in its
-WSL the Linux jobs, for free.
-
-* **Windows:** the runner is a Windows service under its own hidden
-  standard user `ghrunner`, started at boot; nobody logs in as it and it
-  never uses the screen, keyboard or mouse. Builds use 4 parallel compile
-  jobs so the PC stays responsive. The user is not an administrator and
-  cannot use the Windows Installer service, so the package gate launches
-  the app from the .zip; the GitHub-hosted job installs the .msi.
-* **Linux in WSL:** one runner per Ubuntu distribution, labelled
-  `ubuntu-<version>`, running as a systemd service under its own user at
-  low priority. WSL only runs while you are logged on to Windows, so the
-  Linux jobs run then; a logon task keeps the distribution running.
-
-Windows, from an elevated PowerShell (Run as administrator) in your
-checkout:
-
-1. On GitHub, Settings > Actions > Runners > New self-hosted runner: copy
-   the token from the `config` line (valid for an hour; one token can
-   register several runners).
-2. Run `scripts\setup-windows-runner.ps1 install <token>`. It first runs
-   `bootstrap-windows.ps1` (Visual Studio Build Tools with C++, CMake,
-   Ninja, Python, Qt in `C:\Qt`, WiX), which takes a while the first time;
-   then it creates the user, downloads and registers the runner in
-   `C:\actions-runner` and starts the service.
-3. Check the runner shows as Idle, then add the repository variable
-   `WINDOWS_RUNNER` = `on`.
-
-Linux, for each Ubuntu version you want (for example 24.04, the supported
-system-Qt platform, and 26.04, the newest):
-
-1. In Windows: `wsl --install -d Ubuntu-24.04` (or `Ubuntu-26.04`) if you
-   do not have it, and open it. systemd must be on (the default on current
-   Ubuntu; otherwise add `[boot]` `systemd=true` to `/etc/wsl.conf` and run
-   `wsl --shutdown`).
-2. In the distribution, in a clone of the repository:
-   `sudo scripts/setup-wsl-runner.sh install <token>`. It installs the
-   build dependencies and weston, creates the user and starts the service.
-3. In the elevated PowerShell: `scripts\setup-windows-runner.ps1 keep-wsl
-   Ubuntu-24.04` (the name `wsl --list` shows). This starts the
-   distribution when you log on and keeps it running.
-4. Set the repository variable `LINUX_RUNNERS` to the versions that have a
-   runner, as a JSON list: `["24.04"]`, or `["24.04","26.04"]`.
-
-While `HOSTED_CI` is `off`, the screenshot comparison (`ui-consistency`)
-runs on the WSL runner too, with its screenshots as the reference.
-
-Day to day: `status`, `stop` and `start` work on both scripts. When the PC
-will be off, set `WINDOWS_RUNNER` to `off` and empty `LINUX_RUNNERS`, or CI
-waits for it (for up to a day). `remove <token>` unregisters a runner (a
-removal token from its page on GitHub); `unkeep-wsl <distribution>` removes
-the logon task.
-
-The runners run code from this repository's branches. Use them only while the
-repository is private, or restrict it to trusted branches before making the
-repository public: a pull request from a fork could otherwise run code on
-the Mac.
-
-### Trying the builds from the self-hosted runners
-
-A runner deletes its work folder after each job, and its user cannot write in
-your own folders. Run the setup script's `builds` command once on each
-machine, from your own account. After that, each successful CI run keeps its
-package in a builds folder, named with the date and commit. Only the newest
-five are kept.
-
-| Machine | Command | Package | Where |
-|---|---|---|---|
-| Mac | `sudo scripts/setup-mac-runner.sh builds` | `.dmg` | `/Users/Shared/Cutthulhu Builds`, linked as `Documents/Cutthulhu Builds` |
-| Windows (elevated PowerShell) | `scripts\setup-windows-runner.ps1 builds` | `.msi` | `C:\Users\ghrunner\Cutthulhu Builds` (the runner's profile), linked as `Documents\Cutthulhu Builds` |
-| WSL Ubuntu | `sudo scripts/setup-wsl-runner.sh builds` | AppImage | `/srv/cutthulhu-builds`, linked as `~/Documents/Cutthulhu Builds` |
-
-From Windows, the AppImages are also under
-`\\wsl$\<distribution>\srv\cutthulhu-builds`. In WSL, run one with
-`./Cutthulhu-*.AppImage`; WSLg shows its window.
-
-The command restarts the runner so that it reads the new setting. A job that
-is running at that moment is cut short.
-
-Notes:
-
-* The self-hosted Windows job builds the `.msi` without WiX's validation
-  (`-sval`), and cannot install it. Installing it yourself is its first real
-  test, so report any installer error.
-* The `.dmg` is not notarized. A copy made on the Mac itself is not marked
-  as downloaded, so it should open directly. If macOS blocks it, open it from
-  Finder with Control-click > Open.
+The self-hosted runners on the owner's machines were removed before the
+repository went public (ROADMAP 10.0): a pull request from a fork could run
+code on them.
 
 ## Application icon
 
@@ -390,8 +261,7 @@ writable volume, or your home folder's `Avid MediaFiles/MXF/1`), and a test scan
 crash in FFmpeg reading a file another test was still writing (`tst_motion_adapter_ui` under
 `ctest -j8`). Every test now runs with `LUMENIS_NO_SYSTEM_DRIVES=1` and a drive folder of its own in
 `build/<preset>/test-media/<test>` (tests/CMakeLists.txt); `tst_media_unmount` checks that nothing
-else is offered. Delete the `Avid MediaFiles` folders the tests left behind on a development machine or
-self-hosted runner, after checking they hold nothing of yours (their clips are named Take, Tone,
+else is offered. Delete the `Avid MediaFiles` folders the tests left behind on a development machine, after checking they hold nothing of yours (their clips are named Take, Tone,
 Mixdown and the like).
 `build/<preset>/test-media` holds only test media and can be deleted between runs: the
 `test_media_drives` ctest fixture makes the folders again before the tests that use them.
@@ -443,48 +313,17 @@ shown. Now the picture is untouched, an upright oval in the marker's colour sits
 frame and the comment is written under it on a dark band (Editing Guide p.413). `tst_monitor_markers`
 checks the frame, the oval, the comment and clicking the oval.
 
-### "Artifact storage quota has been hit"
-
-GitHub keeps a private repository's CI artifacts in a small storage quota.
-When it is full, uploads fail with this message. The quota is for the
-billing period, so deleting artifacts does not free it at once.
-
-The jobs still build, test, package and keep their package (uploads are
-`continue-on-error`). The screenshots do not use artifacts at all (next
-entry), so the screenshot comparison still runs.
-
 ### CI screenshots: where they are and how to look at the differences
 
 "UI looks the same on all platforms" compares each platform's screenshots
 with Linux's: `1x`, `2x` (QT_SCALE_FACTOR=2) and `pseudo`, the 1x windows in
 the pseudo-locale (`--language pseudo`, docs/spec/localisation.md), whose
 longer, accented texts show a control too small for German or French and
-check that the layout stays the same everywhere with them. Each job stores its screenshots in the repository, not in
-artifact storage:
-* `scripts/ci-screenshots.py` does this on Linux and macOS, and
-  `scripts/ci-screenshots.ps1` on Windows (GitHub's Git Data API, so the PC
-  needs neither git nor Python).
-* Each job's screenshots go, as one archive, on the branch
-  `ci-screenshots/<branch>/<platform>`, replaced on every run.
-* The commit message names the run, so the comparison never uses an older
-  run's screenshots.
-
-The differences found are kept on `ci-screenshots/<branch>/diffs`. To look
-at them:
-
-```
-git fetch origin ci-screenshots/<branch>/diffs
-mkdir diffs && git show FETCH_HEAD:shots.tar.gz | tar xz -C diffs
-```
-
-The same works for a platform's screenshots. On Windows, use `shots.zip`
-instead, and unpack it with Expand-Archive.
-
-The `ci-screenshots/*` branches hold nothing else, and you can delete them
-at any time. If the comparison says "the jobs could not store them", the
-job's "Pass the screenshots to ui-consistency" step failed. Check that the
-workflow may write to the repository: Settings > Actions > General >
-Workflow permissions must not block it.
+check that the layout stays the same everywhere with them. Each platform's job
+uploads its screenshots as the artifact `screenshots-<platform>` (kept 7 days);
+`ui-consistency` downloads them all and uploads the differences it finds as
+`screenshot-diffs`. To look at them: `gh run download <run id> -n
+screenshot-diffs`, or download the artifact from the run's summary page.
 
 ### macOS screenshots differ: larger check boxes, sliders or dials
 
@@ -546,7 +385,7 @@ stream itself. And the ProRes encoder is tried once at start-up on a few frames 
 written (`encodesHere` in `src/media/managed.cpp`): where VideoToolbox's still fails, FFmpeg's `prores_ks` is used in
 builds with `LUMENIS_PATENT_CODECS`, and otherwise ProRes is left out of the resolution menus, with the reason in the
 Console ("ProRes: prores_videotoolbox cannot encode here").
-`tst_media transcodeProRes` makes ProRes on the self-hosted M1, so it fails if ProRes is offered but cannot be made.
+`tst_media transcodeProRes` makes ProRes on the macOS CI runners, so it fails if ProRes is offered but cannot be made.
 
 ### "FFmpeg 6.0 or later was not found"
 
@@ -559,51 +398,16 @@ CMake needs FFmpeg's development files.
 * **Windows:** run `scripts\get-ffmpeg.ps1`. It prints a folder; set
   `FFMPEG_ROOT` to it before configuring.
 
-On the self-hosted runners an administrator installs it once. The CI jobs
-stop with this command in their error:
-* **Mac:** `brew install ffmpeg pkg-config`.
-* **WSL:** `sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev`.
-* **Windows PC:** nothing is needed. The job downloads the build itself
-  into the runner's profile.
-
-### The .msi is not kept
-
-The Windows job used to keep the `.msi` in the owner's
-`Documents\Cutthulhu Builds`. In CI run 179, after the owner changed the
-PC's security settings (Acronis was using a lot of CPU and memory), the
-runner's user could no longer write there: `Copy-Item : Could not find file
-'...\Documents\Cutthulhu Builds\cutthulhu-....msi'`. Security software
-blocks writes to Documents this way (Controlled Folder Access, Acronis
-Active Protection).
-
-So the job now keeps it in its own profile, `C:\Users\ghrunner\Cutthulhu
-Builds`, which its user can always write in. Run
-`scripts\setup-windows-runner.ps1 builds` once more, elevated, from your own
-account. It gives you read access to that folder and links it into your
-Documents as `Cutthulhu Builds`. If the old folder is still there, the link
-is `Cutthulhu Builds (CI)`; delete the old one when you no longer need its
-files, then run `builds` again to take the plain name.
-
-Keeping a copy is not a check of the build: if it fails, the step warns
-instead of failing the job. The warning prints the Controlled Folder Access
-setting, the folder's attributes and its permissions.
-
-### ui-consistency: "IncompleteRead" in "Fetch this run's screenshots"
-
-The WSL runner's download of another platform's screenshot archive (about
-4 MB from GitHub's API) was cut off part way, and the comparison job failed
-although every platform built and tested. `scripts/ci-screenshots.py` and
-`.ps1` now try each GitHub API call four times, 2, 4 and 8 seconds apart,
-when the connection drops or GitHub answers 5xx; a 404 or 422 still goes
-straight to the caller. A failure after that is a real outage: re-run the job.
+The CI jobs install it themselves (the bootstrap scripts, and
+`get-ffmpeg.ps1` on Windows).
 
 ### `tst_fcpxml` "corpus(): read 0, expected 5" or `tst_avb` "!original.isEmpty()"
 
 The interchange corpus was only partly downloaded: `interop_corpus_fetch`
-shows "Skipped" because the network dropped while it ran (it happened on the
-Mac and WSL runners at once), and the tests then found empty folders. The
-corpus used to live in the build folder, which a self-hosted runner's
-checkout cleans every run, so it was downloaded every run. It is now kept in
+shows "Skipped" because the network dropped while it ran (it happened on two
+CI machines at once), and the tests then found empty folders. The corpus used
+to live in the build folder, which a CI checkout cleans every run, so it was
+downloaded every run. It is now kept in
 the user's cache folder (one download per machine), each file is tried four
 times, and `scripts/interop-corpus.py fetch` writes `.complete` only once
 every file is in; the tests read the corpus only then
@@ -644,8 +448,7 @@ it with `--ffmpeg <path>`. Run the scripts as yourself, not with `sudo`:
 sudo resets PATH, root usually can't reach your sound server (PipeWire or
 PulseAudio), so the run reports no sound, and the test file goes into
 root's cache folder. CMake now warns when it can't find `ffmpeg` and leaves
-`decode_corpus` out. The self-hosted Linux CI job warns as well. In an
-existing WSL runner, run `sudo apt-get install -y ffmpeg`.
+`decode_corpus` out; the CI jobs install `ffmpeg` with the bootstrap scripts.
 
 On Windows, `scripts/get-ffmpeg.ps1` unpacks FFmpeg into
 `%LOCALAPPDATA%\Cutthulhu\ffmpeg\<build>\bin` and prints `FFMPEG_ROOT`,
@@ -687,14 +490,12 @@ exception and the call stack, with function names and lines from
 shows Cutthulhu's messages and the report when it fails. Send the report
 with the problem.
 
-The self-hosted Windows job runs a 20-second measurement and fails on
-exit 2. It needs Python on the runner. The runner service runs as the
-hidden user `ghrunner`, so Python installed for your own account doesn't
-reach it. From an administrator PowerShell, run:
+The measurement needs Python. For a Python that every account on the PC can
+use (a service's own user cannot use one installed in your profile), run from
+an administrator PowerShell:
 
 ```
 winget install --id Python.Python.3.13 --scope machine --log $env:TEMP\python-install.log
-Restart-Service (Get-Service 'actions.runner.*').Name
 ```
 
 Then check with `py -0p`. Exit code 1603 is the Windows Installer's
@@ -729,7 +530,7 @@ aarch64 PyAV and numpy wheels, and run
 
 ### `transcodeRoundTrips`: "cannot open the dnxhd encoder: Cannot allocate memory"
 
-Seen on the self-hosted Windows runner (runs 236 and 237), where a re-run of the job alone passed. FFmpeg's
+Seen on the owner's Windows PC as a CI runner (runs 236 and 237), where a re-run of the job alone passed. FFmpeg's
 DNx encoder sets up buffers for every thread it starts. With automatic threads on a many-core machine
 that is already running other tests or jobs, those allocations can fail. `MediaWriter::open` now opens such
 an encoder again with one thread when the first open fails for want of memory, so transcodes, renders and
@@ -785,8 +586,8 @@ pass, so the Linux jobs stay green. Run the sanitizers on Linux
 (`cmake --preset asan && cmake --build --preset asan && ctest --preset asan`,
 see Tests): they name the line. The usual cause is a reference into a
 temporary, e.g. `const Segment& s = Sequence::fromItem(item).track(...)->
-segments.first();`; keep the temporary in a variable first. The
-self-hosted Linux job runs the sanitizers on every push so this is caught
+segments.first();`; keep the temporary in a variable first. CI's
+`linux-asan` job runs the sanitizers on every push so this is caught
 there too.
 
 ### Windows: "fatal error C1001: Internal compiler error"
@@ -800,7 +601,7 @@ and that held until two more header changes (`compositor.h` and the headers it i
 there again with the optimizer off (CI runs 317, 318 and 319). All the RGB Keyer's loops, the matte blur among them,
 are now in `src/media/key_mattes.cpp`, a translation unit of its own that includes no Qt or compositor headers
 and has no lambdas: widely included headers no longer rebuild it, and `key_effects.cpp` only reads the
-parameters and calls it, with no `#pragma optimize` left. Keep the Windows runner's Visual Studio Build Tools up to
+parameters and calls it, with no `#pragma optimize` left. Keep your Visual Studio Build Tools up to
 date (Visual Studio Installer > Update): an internal compiler error may be fixed in a later MSVC. Updating 17.14.41
 to 17.14.44 did not help, because it kept the same compiler, cl 14.44.35207 (the job's log prints `VCToolsVersion`).
 CI run 320 then crashed at the function's last statement with a list in it, the post-key correction's names,
@@ -812,7 +613,7 @@ keeps `/O2`. When the error keeps coming back in one function, split that functi
 to a file of their own. If it still comes back, try a newer compiler: Visual Studio 2026's cl 14.5x. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a
-comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the
+comment saying why, so nobody "tidies" it back. CI's Windows job is the check: it is the
 only MSVC build, so a change in `src/media` is not done until that job is green.
 
 ### Windows: "fatal error C1128: number of sections exceeded object file format limit"
@@ -883,77 +684,6 @@ file:line it found. The warning's title is also its main text, and the failures 
 macOS ignores message boxes' window titles, so a test that looked for the box by its title found none there (CI on the
 Mac runner, 2026-11-11); open warnings are found by their `failureTitle` property.
 
-### The self-hosted Windows or Linux job waits or fails
-
-* *Queued for a long time:* the PC is off or asleep, you are logged off
-  (WSL only runs while you are logged on), or a runner is stopped. WSL can
-  also stop while you are logged on (a WSL update from the Store, sleep or
-  hibernation, `wsl --shutdown`); once, the Linux job waited an hour for that
-  (2026-11-10). The `keep-wsl` task now starts the distribution again within 5
-  minutes: run `scripts\setup-windows-runner.ps1 keep-wsl <distribution>` once
-  more to update a task made before then (it only started at logon).
-* *The Linux job is cancelled during Build and WSL has stopped:* the
-  compiles ran out of memory. GCC 15 takes several GB for our largest files,
-  the runner compiles `RUNNER_JOBS` (default 4) at once, and WSL gets only half
-  the PC's memory by default. Give it more in `%UserProfile%\.wslconfig`
-  (`[wsl2]`, `memory=16GB`, `swap=16GB`, then `wsl --shutdown`), or set
-  `CMAKE_BUILD_PARALLEL_LEVEL` lower in the runner's `.env`. The job's Disk
-  space step warns when memory and swap give less than 3 GB per compile;
-  `sudo journalctl -b -1 -k | grep -i oom` in WSL shows what was killed. Check
-  `scripts\setup-windows-runner.ps1 status` and, in the distribution,
-  `sudo scripts/setup-wsl-runner.sh status`; or set `WINDOWS_RUNNER` to
-  `off` / take the version out of `LINUX_RUNNERS` until it is back.
-* *"pwsh: command not found":* the self-hosted Windows job uses Windows
-  PowerShell 5.1 (`shell: powershell`), which every Windows has; PowerShell
-  7 (`pwsh`) is only on GitHub's runners. Write to `$env:GITHUB_ENV` with
-  `Out-File -Encoding utf8 -Append` there, not `>>` (UTF-16 in 5.1).
-* *"Problem running WiX" in Package:* WiX checks the .msi through the
-  Windows Installer service, which the runner's standard user cannot use
-  (light.exe error LGHT0217). The self-hosted job configures with
-  `-DLUMENIS_WIX_SKIP_VALIDATION=ON` (light `-sval`); the GitHub-hosted job
-  still validates. The step prints WiX's log when it fails.
-* *msiexec "Failed to connect to server. Error: 0x80070005":* the same
-  limit: the runner's user may not use the Windows Installer service, not
-  even for `msiexec /a`. The self-hosted job checks the .zip package (the
-  same files) instead; the hosted job installs the .msi.
-* *Tests time out ("Test function timed out"), and every test takes
-  seconds:* something on the PC is scanning each new file or process
-  (an antivirus or backup tool's real-time protection, such as Acronis
-  Active Protection, or a Windows Defender scan). Once, every test ran
-  100 times slower and the tests that write hundreds of files passed 300 s.
-  The job's "File speed check" step warns when writing 200 small files
-  takes over 10 s. Exclude the runner's folder (`C:\actions-runner`) and
-  `ghrunner`'s temporary folder from the scanner, or wait for the scan to
-  end. Tests should read and write damaged inputs in memory, not through
-  hundreds of temporary files.
-* *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
-  install <token>` again; it installs Qt and keeps the existing runner.
-* *"Pillow is missing on this runner":* the screenshot comparison runs on
-  the WSL runner while `HOSTED_CI` is `off` and needs Pillow: in the
-  distribution, `sudo apt-get install -y python3-pil` (newer setup scripts
-  install it).
-* *"Only N GB free on the runner's disk", or "No space left on device"
-  (CMake then calls the compiler broken):* the self-hosted jobs need about
-  5 GB, in the work folder and in the temporary folder (where the compiler
-  writes); the "Disk space" step stops a job with less of either. On Ubuntu
-  26.04 `/tmp` is a tmpfs, in memory and small, and it once filled up with
-  939 GB free on the disk: the Linux jobs now set `TMPDIR` to the runner's
-  own temporary folder on the work disk, which the runner empties after
-  each job. To empty `/tmp` itself, run `wsl --shutdown` in Windows (a
-  tmpfs is cleared when the distribution stops). Each keeps its build
-  folders (`build/ci`, `build/asan`, several GB) in the runner's work
-  folder, and `keep-build.sh` the newest five packages. In WSL, see what
-  is using the disk with `sudo du -xh --max-depth=2 / | sort -h | tail`,
-  and the runner's folder with `sudo du -sh
-  /home/ghrunner/actions-runner/_work/*`. Deleting
-  `/home/ghrunner/actions-runner/_work/Lumenis/Lumenis/build` is safe (the
-  next job builds again). WSL's virtual disk grows to its limit and does not
-  shrink on its own: `wsl --manage <distribution> --set-sparse true` in
-  Windows lets it, and Windows' own free space limits it too.
-* *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
-  `systemd=true` to `/etc/wsl.conf`, run `wsl --shutdown` in Windows, and
-  open the distribution again.
-
 ### pip install opentimelineio: "Could NOT find Python (missing: Python_INCLUDE_DIRS ...)"
 
 OpenTimelineIO has no prebuilt wheel for the newest Pythons (0.18.1 has
@@ -972,7 +702,7 @@ install is stopped after 20 minutes (the step after 25), so the job goes on
 with those checks skipped. A first run that compiles OpenTimelineIO takes a
 few minutes; later runs take under a second. If it stalls on a download,
 check the machine's network or proxy for pip (`pip config list`). An
-earlier, quiet version once ran for 37 minutes on the Windows runner
+earlier, quiet version once ran for 37 minutes on a Windows CI machine
 without a word.
 
 ### CI: a run fails with no jobs
@@ -985,8 +715,7 @@ GitHub refuses a workflow file it cannot use, and the run then shows
 finds such mistakes before a push; run it after changing a workflow. It
 downloads the pinned actionlint release once (checked by SHA-256) into
 `~/.cache/cutthulhu` (or `$CUTTHULHU_TOOLS`), and is skipped without a
-network. Labels of the self-hosted runners are listed in
-`.github/actionlint.yaml`.
+network. Its settings are in `.github/actionlint.yaml`.
 
 actionlint was first a package in `scripts/check-requirements.txt`
 (actionlint-py). It has no Windows wheel, and building one on the Windows
@@ -994,17 +723,17 @@ runner took 20 minutes, so the install was stopped and every interchange
 check was skipped. The check environment holds only the readers now;
 tools come as pinned downloads.
 
-### CI: a run stays "queued" with no jobs, and the runners are idle
+### CI: a run stays "queued" with no jobs
 
-Seen on 2026-11-11 (the owner's report): a push's run stayed queued for 50 minutes with no jobs, while the three
-self-hosted runners were online and idle; cancelling it gave "409 Cannot cancel a workflow run that has not been
+Seen on 2026-11-11 (the owner's report): a push's run stayed queued for 50 minutes with no jobs, while the machines
+that ran CI then were online and idle; cancelling it gave "409 Cannot cancel a workflow run that has not been
 queued yet", and a run started by hand ended in `startup_failure` ("unknown error"). GitHub had an Actions outage
 (https://www.githubstatus.com showed it some minutes later). Nothing in the repository causes this: a workflow GitHub
-cannot use fails at once (above). When GitHub recovers, start a run by hand (`gh workflow run ci.yml --ref <branch> -f
-hosted_macos=false`, or Run workflow on the Actions page); the stuck run may stay queued and can be left, but if it is
+cannot use fails at once (above). When GitHub recovers, start a run by hand (`gh workflow run ci.yml --ref <branch>`, or Run
+workflow on the Actions page); the stuck run may stay queued and can be left, but if it is
 released later the concurrency group cancels the newer run, so check once more. A $0 Actions budget showing "Usage
-blocked" under Billing was a red herring here: hosted minutes were already used up (`HOSTED_CI` off) and the
-self-hosted jobs still ran.
+blocked" under Billing was a red herring here. One such run (run 423) could not be deleted afterwards either: the
+API answers that it cannot be; the Actions page's delete button or GitHub Support can.
 
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 
@@ -1015,34 +744,9 @@ libclang-rt-dev` (or `libclang-rt-<version>-dev` to match `clang++
 
 ### Fuzzing: "HTTP 404: Not Found (.../actions/workflows/fuzz.yml)"
 
-`gh workflow run` only finds a workflow that GitHub has seen run, and a
-workflow only run by hand is not seen until it is on the default branch.
-`fuzz.yml` therefore also runs on a push that changes it, with its job
-skipped, which registers it. If the 404 persists (the registering run is
-missing under the repository's Actions tab), push any change to
-`.github/workflows/fuzz.yml`, or merge the branch into `main`, then run
-`gh workflow run fuzz.yml --ref <branch> -f hours=24`.
-
-### The self-hosted macOS job waits or fails
-
-* *Queued for a long time:* the Mac is off or asleep, or the runner is
-  stopped. Run `sudo scripts/setup-mac-runner.sh status`, or set the
-  repository variable `MAC_RUNNER` to `off` until the Mac is back.
-* *"mkdir: /Users/runner: Permission denied":* `actions/setup-python` (used
-  by `install-qt-action`) only installs Python under `/Users/runner`, the
-  GitHub-hosted runners' home. The self-hosted job therefore installs Qt
-  itself, once, into `/Users/ghrunner/Qt` with aqtinstall in a virtual
-  environment. Delete that folder to make it reinstall.
-* *"Could not find the Qt platform plugin "offscreen"" in the installer
-  gate:* the runner has no window server, so the installed app must start
-  with Qt's offscreen plugin. The bundle gets it at install time
-  (`app/CMakeLists.txt`); the gate checks that it is there.
-* *"command not found: ninja" (or cmake):* install them from an
-  administrator account with `brew install cmake ninja`. The runner's user
-  cannot run `brew`.
-* *`hdiutil attach` fails in the installer gate:* the runner has no login
-  session. Restart it with `sudo scripts/setup-mac-runner.sh stop` and
-  `start`; if it keeps failing, report it with the job log.
+`gh workflow run` only finds a workflow that is on the default branch
+(`main`). Run it from there, or with `--ref <branch>` once `fuzz.yml` is on
+`main`.
 
 **macOS: `fatal error: 'cstdint' file not found`** (or any other standard
 header). The Xcode or Command Line Tools installation is incomplete. This
@@ -1243,25 +947,18 @@ On Windows: `py scripts\check-python.py`, then `cmake --preset ci
 -DPython3_EXECUTABLE="$HOME\.cutthulhu-venv\Scripts\python.exe"`.
 
 **CI** runs the script in every job before configuring ("Python packages
-for the checks") and configures with that Python. On the self-hosted
-runners the environment stays in the runner's home between jobs; if it
-cannot be made, the step is marked failed with an error annotation and the
-job goes on with those checks skipped. The setup scripts make it when they
-install a runner. For a runner installed before that:
+for the checks") and configures with that Python. If the environment cannot
+be made, the step is marked failed with an error annotation and the job goes
+on with those checks skipped. A machine with the environment made elsewhere
+names it in `CUTTHULHU_CHECK_VENV` (its folder). Where a machine lacks what the
+script needs:
 
-* **WSL:** `sudo apt-get install -y python3-venv python3-dev` in the
-  distribution; the next job makes the environment.
-* **Mac:** nothing; the next job makes it. With only the Command Line
-  Tools' Python 3.9, pip compiles OpenTimelineIO (a few minutes, once);
-  `brew install python` avoids that.
-* **Windows:** nothing when a Python is installed for all users (in
-  `C:\Program Files`, on the runner's PATH): the next job makes the
-  environment in the runner's profile. Otherwise, in an elevated
-  PowerShell, `scripts\setup-windows-runner.ps1 python`: the runner's user
-  cannot use a Python installed in your profile, so this installs Python
-  3.12 for all users, makes the environment in
-  `C:\actions-runner-tools\check-venv` and names it in the runner's `.env`
-  (`CUTTHULHU_CHECK_VENV`).
+* **Linux:** `sudo apt-get install -y python3-venv python3-dev`.
+* **Mac:** nothing. With only the Command Line Tools' Python 3.9, pip
+  compiles OpenTimelineIO (a few minutes, once); `brew install python`
+  avoids that.
+* **Windows:** a Python 3 (python.org's installer or `winget install
+  Python.Python.3.12`), on PATH.
 
 * **Gate 1, bins and projects:** dump what Cutthulhu reads with
   `cutthulhu --dump-structure <bin or project>` and compare it with a
@@ -1422,8 +1119,8 @@ language without changing the Interface setting.
 
 **CMake says "Qt's Linguist tools were not found: Cutthulhu builds in English only":** install them as above and run
 CMake again. The Interface setting then offers only English and the pseudo-locale; `tst_translation` and
-`translations_current` check less. Release builds set `-DLUMENIS_REQUIRE_TRANSLATIONS=ON`, which stops instead. The
-owner's WSL runner needs the two packages too: `sudo apt-get install qt6-l10n-tools qt6-tools-dev` there.
+`translations_current` check less. Release builds set `-DLUMENIS_REQUIRE_TRANSLATIONS=ON`, which stops instead. On
+Ubuntu: `sudo apt-get install qt6-l10n-tools qt6-tools-dev`.
 
 ## Soak runs
 
@@ -1563,26 +1260,27 @@ reproduce: `build/fuzz/bin/fuzz_<target> FILE`, or in any build
 sanitizer's report). fuzz/README.md, "After a crash", says how to minimise
 it, fix it, and keep it as a regression input with a unit test.
 
-**The 24-hour gate run** goes on the self-hosted Linux runner (Ubuntu in
-WSL, with Clang installed as above):
+**In CI:** the Fuzz workflow (`.github/workflows/fuzz.yml`, run by hand
+only) runs on GitHub's hosted Linux runner:
 
-    gh workflow run fuzz.yml --ref <branch> -f hours=24 -f jobs=2
+    gh workflow run fuzz.yml -f hours=5 -f jobs=2
 
-The Fuzz workflow (`.github/workflows/fuzz.yml`, run by hand only) builds
-the `fuzz` preset, replays the regression inputs, seeds, and runs every
-target for its share of the hours: with the default weights, 24 hours are
-2.7 for `cfb`, 8 each for `aaf` and `avb` and 5.3 for `avb_rewrite`. It
-prints a progress line every 10 minutes and the summary at the end. Every
-target runs for its whole share even after a failure (`--keep-going`), and
-the job fails if anything failed: the log lists the problems after the
-summary (`== problems`), and above it gives each one's stack and smallest
-reproducer as base64 (nothing is uploaded: the artifact quota is used up).
-Decode each (`base64 -d > input`), reproduce, fix, add it to
-`fuzz/regressions/`, and run the gate again. The corpora it grows are kept in the runner's
-`_work/Lumenis/cutthulhu-fuzz/`, so a later run starts from them. The gate
-passes when one full 24-hour run is clean; record its summary here.
-Meanwhile the runner takes no other jobs, so start it when CI can wait (or
-on a second runner).
+It builds the `fuzz` preset, replays the regression inputs, seeds, and runs
+every target for its share of the hours (with the default weights, 24 hours
+would be 2.7 for `cfb`, 8 each for `aaf` and `avb` and 5.3 for
+`avb_rewrite`). A hosted job stops after 6 hours, so one run fuzzes at most
+5.5; the corpora it grows are kept in the Actions cache, and the next run
+starts from them, so a longer campaign is several runs. It prints a progress
+line every 10 minutes and the summary at the end. Every target runs for its
+whole share even after a failure (`--keep-going`), and the job fails if
+anything failed: the log lists the problems after the summary (`== problems`),
+above it each one's stack and smallest reproducer as base64, and the failing
+inputs are uploaded as the artifact `fuzz-artifacts`. Reproduce each, fix it,
+add it to `fuzz/regressions/`, and run again.
+
+**The 24-hour gate run** passed in October 2026, through this workflow on the
+owner's Linux machine, which ran CI then (below); record any later full run's
+summary here.
 
 **Runs so far** (Clang 18, Ubuntu 24.04 container, 4 cores; executions are
 over all processes):
@@ -1601,7 +1299,7 @@ a division by zero in the imports, a dump that ran away on shared
 references, an overflow in the compound file reader, and three ways the bin
 writer did not write back what it read. Each is fixed, kept as a
 regression input and a unit test. The first three 24-hour gate runs
-(2026-10-22 and 23, on the WSL runner) each ran `cfb` clean for its 2.7
+(2026-10-22 and 23, on the owner's Linux machine) each ran `cfb` clean for its 2.7
 hours and then stopped in `aaf`, each on a new bug: a dump that grew with
 the product of repeated references (a timeout), and two signed overflows in
 the import's frame arithmetic, also kept as regression inputs. Runs now go
@@ -1619,9 +1317,8 @@ target) was clean on every target, and the gate passed:
 The log is on GitHub: the repository's Actions tab, the Fuzz workflow, the
 run, then its job; the table above is its `== summary`. Download it with
 `gh run view <run id> --log > fuzz.log` (or the job page's gear menu,
-"Download log archive"). The runner also keeps each target's libFuzzer log
-in `_work/Lumenis/cutthulhu-fuzz/artifacts/<target>/fuzz.log` until the
-next run.
+"Download log archive"), while GitHub keeps it. The runs made before the
+repository went public were deleted with its other old runs (ROADMAP 10.0).
 
 ## Command-line options
 

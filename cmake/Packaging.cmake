@@ -78,7 +78,7 @@ elseif(WIN32)
         set(CPACK_GENERATOR "WIX;ZIP")
         # light.exe validates the .msi (ICE) through the Windows Installer
         # service, which a service running as a standard user cannot use
-        # (LGHT0217). The self-hosted CI runner skips the validation; the
+        # (LGHT0217). Such a build skips the validation; CI's
         # GitHub-hosted job, an administrator, keeps it.
         option(LUMENIS_WIX_SKIP_VALIDATION "Do not validate the .msi (light -sval)" OFF)
         if(LUMENIS_WIX_SKIP_VALIDATION)

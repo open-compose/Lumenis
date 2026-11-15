@@ -9,7 +9,7 @@ actionlint (MIT, github.com/rhysd/actionlint) is a single program: the pinned re
 system is downloaded once, checked against its SHA-256, into ~/.cache/cutthulhu (or
 $CUTTHULHU_TOOLS). It is not a Python package of the checks: actionlint-py has no Windows wheel,
 and building it there took 20 minutes, long enough to stop the other packages' install in CI.
-Its settings, the self-hosted runners' labels, are in .github/actionlint.yaml. shellcheck and
+Its settings are in .github/actionlint.yaml. shellcheck and
 pyflakes are not run on the steps.
 
 Exits 0 when the workflows are sound, 1 with actionlint's findings, and 77 (ctest's skip) when

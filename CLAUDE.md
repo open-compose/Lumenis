@@ -39,43 +39,21 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - Run the sanitizers before pushing changes to object lifetimes or
   ownership: `cmake --preset asan && cmake --build --preset asan && ctest
   --preset asan` (AddressSanitizer and UBSan). glibc tolerates
-  use-after-free that crashes Windows (0xc0000374); the self-hosted Linux
+  use-after-free that crashes Windows (0xc0000374); CI's `linux-asan`
   job runs them too.
-- Actions minutes are limited (private repository; macOS costs 10×). Pushes
-  to `claude/**` run Linux and Windows only; macOS runs on `main`, pull
-  requests and by hand. Run it by hand (`gh workflow run ci.yml --ref
-  <branch>`) once at the end of each phase, and batch fixes into few pushes.
-  The owner's M1 Mac runs the macOS job on every push as a self-hosted
-  runner (`scripts/setup-mac-runner.sh`, BUILDING.md: hidden user
-  `ghrunner`, launchd daemon, no window server, Qt in its home). The
-  `macos-local` job runs while the repository variable `MAC_RUNNER` is
-  `on`. The hosted macOS jobs (Xcode 15 and 26) still need the by-hand run
-  at the end of each phase; `-f hosted_macos=false` skips them. While the
-  repository variable `HOSTED_CI` is `off` (minutes used up), only the Mac
-  runs: build and test Linux locally (ci preset, clang, GCC 15 check) with
-  extra care. The owner's Windows PC can run the Windows job
-  (`scripts/setup-windows-runner.ps1`, variable `WINDOWS_RUNNER` = `on`) and
-  Ubuntu in its WSL the Linux jobs (`scripts/setup-wsl-runner.sh`, variable
-  `LINUX_RUNNERS`, e.g. `["24.04","26.04"]`); BUILDING.md has the steps.
-  Currently all three self-hosted runners are on (Linux: 26.04 only) and
-  `HOSTED_CI` is off; the screenshot comparison runs on the WSL runner.
-  If the WSL runner goes offline (its job stays queued or is cancelled),
-  go on when the Windows and Mac jobs pass, with Linux checked locally (ci
-  preset, clang, GCC 15 check); come back to it when WSL is back (owner's
-  decision, 2026-11-10). ui-consistency waits for it too.
-  Screenshots travel between jobs on `ci-screenshots/<branch>/<platform>`
-  branches (`scripts/ci-screenshots.py`, `.ps1`), not artifacts: the
-  artifact quota is used up. The
-  .msi install, Ubuntu 24.04 and Xcode 15 wait until minutes reset. Each
-  self-hosted job keeps its package (.dmg, .msi, AppImage) in a builds
-  folder linked from the owner's Documents (`scripts/keep-build.sh`; the
-  setup scripts' `builds` command, BUILDING.md).
+- CI runs only on GitHub's hosted runners (ROADMAP 10.0): the repository is
+  public, so minutes and artifacts are free. Every push to `main` and
+  `claude/**` runs Linux (Ubuntu 24.04, 26.04 and ASan), macOS (Xcode 15 and
+  26), Windows and ui-consistency. Each job uploads its screenshots
+  (`screenshots-<platform>`) and packages as artifacts. The owner's
+  self-hosted runners and their scripts were removed before going public:
+  never add a self-hosted job (a fork's pull request could run code on it).
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:
   - the installers (install, launch, uninstall), and that the AppImage
     opens natively on a headless Wayland compositor;
-  - that PowerShell scripts parse;
+  - that PowerShell and shell scripts parse;
   - cross-platform screenshot consistency (`ui-consistency`).
 - Comment the code for contributors (the project will be public; the map
   is docs/ARCHITECTURE.md): each file starts with what it implements and
@@ -131,7 +109,7 @@ Gate 5's checklist is ready: `docs/checklists/phase1-gate5.md`.
   - Rerun the script after changing menus or commands; ctest
     `checklist_current` fails otherwise.
   - Phase 1 waits on the editor's session (ROADMAP gate status). Gate 1
-    passes on the self-hosted runners; `fixedPixelMetric` in `theme.cpp`
+    passes in CI; `fixedPixelMetric` in `theme.cpp`
     keeps macOS sizes the same as Linux.
 
 Phase 2 (media I/O and playback) has started. 2.1, the media library, is
@@ -227,7 +205,7 @@ prior art, samples or seat; ROADMAP). 3.6a, EDL and ALE (`edl.*`,
 `ale.*`, `--import-edl`/`--export-edl`/`--import-ale`/`--export-ale`; Import
 EDL, the List Tool `list_tool.*`, Export Bin, shot logs through Import), is
 done. Gate 4 (fuzzing, `fuzz/`, `scripts/fuzz.py`) passed: the 24-hour
-run on the WSL runner was clean (BUILDING.md "Fuzzing"). 3.6b, OTIO, is
+run on the owner's Linux machine was clean (BUILDING.md "Fuzzing"). 3.6b, OTIO, is
 done: the reader and writer (`otio.*`, docs/spec/otio.md,
 `--import-otio`/`--export-otio`, ctests `otio_round_trip` and
 `otio_python` against OpenTimelineIO's Python package, fuzz target `otio`),
@@ -1089,8 +1067,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   10.5a, crash reports (docs/spec/crash-reports.md: `app/crash_report.*` with the OS's own means, the owner's choice
   over Crashpad; a minidump and text report on Windows, a signal handler's report on Linux and macOS, in "Crash
   Reports" or `LUMENIS_CRASH_DIR`; the notice at the next start with Report on GitHub through `crashIssueUrl`, `--crash-reports`; ctest
-  `crash_report`), is done. 10.5b, symbols (the Linux `.debug` and macOS dSYM kept beside each
-  self-hosted package, the PDB in the Windows packages, `scripts/symbolize-crash.py` for Linux reports), is done.
+  `crash_report`), is done. 10.5b, symbols (the Linux `.debug` and macOS dSYM in the release's
+  symbol archives, the PDB in the Windows packages, `scripts/symbolize-crash.py` for Linux reports), is done.
   10.3a, accessible names (docs/spec/accessibility.md: `installAccessibleNames` in `src/ui/accessibility.*`, test
   `tst_accessibility`), is done: give a new control without text or tooltip a name with `setAccessibleName`. 10.3b,
   roles for the widgets we paint (the accessibility factory in `accessibility.cpp`: the Timeline's tracks and
