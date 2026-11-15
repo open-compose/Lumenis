@@ -114,7 +114,7 @@ Tools > IMF Window (p.335):
 ## Watch
 
 * Neither the track files nor the documents are validated against ST 2067-2/3/5 or by a checker (Photon): what we
-  check is that our reader and FFmpeg's IMF reader (`ffprobe -f imf`) take them.
+  check is that our reader and FFmpeg's IMF reader (`ffprobe -f imf`, where the FFmpeg has it: Homebrew's does not) take them.
 * bmx documents `--track-mca-labels` and `--audio-layout` for its OP1a writer, so the sound is wrapped `-t op1a`
   rather than `-t imf`; whether its `imf` clip type should be used instead is unchecked.
 * The guide does not list the MCA Content Kind menu's values or the IMF track formats; ours are above.

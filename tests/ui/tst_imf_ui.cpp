@@ -624,8 +624,14 @@ private slots:
                                   QStringLiteral("csv=p=0"), c.file});
             QVERIFY(probe.waitForFinished(60000));
             const QString out = QString::fromUtf8(probe.readAllStandardOutput()).trimmed();
-            QVERIFY2(probe.exitCode() == 0, qPrintable(QString::fromUtf8(probe.readAllStandardError())));
-            QVERIFY2(std::abs(out.toDouble() - 0.5) < 0.01, qPrintable(out));
+            const QString err = QString::fromUtf8(probe.readAllStandardError());
+            // Not every FFmpeg has the IMF demuxer (Homebrew's on the Mac lacks it): then there is no outside check.
+            if (err.contains(QLatin1String("Unknown input format"))) {
+                qInfo("ffprobe has no IMF demuxer; the outside check is skipped");
+            } else {
+                QVERIFY2(probe.exitCode() == 0, qPrintable(err));
+                QVERIFY2(std::abs(out.toDouble() - 0.5) < 0.01, qPrintable(out));
+            }
         }
         // The CPL into a bin again: a 12-frame sequence.
         const QStringList again = window.importFiles(binId, {c.file});
