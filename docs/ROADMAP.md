@@ -1984,8 +1984,10 @@ owner's soak and screen-reader runs carry on as before.
   INSTALL.md's unsigned packages, checksums and codecs; BUILDING.md "Releases"; the tests run under the release
   policy, with `LUMENIS_PATENT_CODECS_OFF=1` locally). Not yet run: the first run is the owner's, once hosted minutes
   allow.
-* 12.3, the release gate, 10.8: a checklist (docs/checklists/release-gate.md) of 10.1-10.7 on each platform, the
-  phases' deferred gates with their reasons, and the owner's tries of a release candidate on each OS.
+* 12.3, the release gate, 10.8 (done: docs/checklists/release-gate.md with the release run on each platform, Phase 10's
+  steps and what is left of each, the gates the phases left open with their reasons, and the owner's try of a release
+  candidate on each OS; ticking it is the owner's). So Phase 12's steps are done: what is left is the first release
+  run, the owner's checks, 10.0's steps that are theirs, and 10.1b/c.
 
 ## 6. Immediate next steps
 

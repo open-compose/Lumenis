@@ -1181,7 +1181,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   12.2b, the release pipeline (`.github/workflows/release.yml` by hand on hosted runners, the `dist`/`dist-macos`
   presets, `scripts/build-release-ffmpeg.sh`, a draft GitHub Release with checksums and symbols; INSTALL.md, BUILDING.md
   "Releases"), is done but its first run. Tests must pass with `LUMENIS_PATENT_CODECS_OFF=1` too (the release workflow
-  runs them with patent codecs off): skip only what the operating system cannot do, never DNx.
+  runs them with patent codecs off): skip only what the operating system cannot do, never DNx. 12.3, the release gate
+  (docs/checklists/release-gate.md), is done, so Phase 12's steps are; what is left is the first release run and the
+  owner's checks.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
