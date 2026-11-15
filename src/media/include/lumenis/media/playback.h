@@ -189,8 +189,16 @@ private:
         const SpeakerGains* surround = nullptr; // the last piece's, for the tail
         // The gains of automated surround pieces (AudioPiece::surroundAt) the last trackInput() worked out, which
         // `surround` and its output point into until the next call; `carried` keeps the last of them over the call.
-        std::list<SpeakerGains> automated; // a list: its elements stay put as it grows, and it moves noexcept
+        std::list<SpeakerGains> automated; // a list: its elements stay put as it grows
         SpeakerGains carried{};
+        // Move-only, said outright: MSVC's std::list does not move noexcept, so std::vector would otherwise try to copy
+        // a Chain (and its unique_ptrs) when it grows.
+        Chain() = default;
+        Chain(Chain&&) = default;
+        Chain& operator=(Chain&&) = default;
+        Chain(const Chain&) = delete;
+        Chain& operator=(const Chain&) = delete;
+        ~Chain() = default;
     };
     // The track's pieces from `start`, summed in mono with their gains, and the pan of each sample,
     // into `bus`, `left` and `right` (resized to `count`); `surround` holds each sample's surround

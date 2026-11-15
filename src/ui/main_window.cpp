@@ -19,6 +19,7 @@
 #include "lumenis/ui/ancdata_import_dialog.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/display_color.h"
 #include "lumenis/media/target_mask.h"
 #include "lumenis/media/color_transform.h"
@@ -3832,8 +3833,30 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
     if (!doc || paths.isEmpty()) return {};
     int skipped = 0;
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const QList<model::BinItem> items = media::linkFiles(paths, linkOptions(), &skipped);
+    QList<model::BinItem> items = media::linkFiles(paths, linkOptions(), &skipped);
     QApplication::restoreOverrideCursor();
+    // The Link setting's AIS Metadata tab (Support for DPX, p.1204-1205): the Labroll, Camroll, DPX and Start columns
+    // of linked DPX files, as a Dynamic Media Folder profile's AIS options fill them (media::applyAisColumns; ours: DPX
+    // files only, as the tab's title says, the reel from the folder the files are in).
+    if (settings_) {
+        media::DmfLinkSettings ais;
+        const QString link = QStringLiteral("Link");
+        ais.reel = settings_->text(link, QStringLiteral("reelName")) == QLatin1String("folderName") ? media::DmfLinkSettings::Reel::FolderName
+                                                                                                  : media::DmfLinkSettings::Reel::FileName;
+        const QString count = settings_->text(link, QStringLiteral("frameCount"));
+        ais.frameCount = count == QLatin1String("one")        ? media::DmfLinkSettings::FrameCount::FromOne
+                         : count == QLatin1String("timecode") ? media::DmfLinkSettings::FrameCount::Timecode
+                         : count == QLatin1String("fileName") ? media::DmfLinkSettings::FrameCount::FileName
+                                                              : media::DmfLinkSettings::FrameCount::FromZero;
+        ais.timecode = settings_->text(link, QStringLiteral("startTimecode")) == QLatin1String("fileName")
+                           ? media::DmfLinkSettings::Timecode::FileName
+                           : media::DmfLinkSettings::Timecode::Embedded;
+        for (model::BinItem& item : items) {
+            const auto l = media::linkOf(item);
+            const QString file = l ? l->file() : QString();
+            if (QFileInfo(file).suffix().compare(QLatin1String("dpx"), Qt::CaseInsensitive) == 0) media::applyAisColumns(item, file, ais);
+        }
+    }
     QStringList ids;
     for (const model::BinItem& item : items) {
         // A file with alpha appears "in your bin as a Matte Key effect" (p.318) unless the Alpha Channel option is

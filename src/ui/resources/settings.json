@@ -917,11 +917,11 @@
         {
           "name": "AIS Metadata",
           "options": [
-            {"key": "reelName", "type": "choice", "style": "radio", "label": "Reel name for Labroll column based on", "default": "fileName", "page": 1204, "later": true,
+            {"key": "reelName", "type": "choice", "style": "radio", "label": "Reel name for Labroll column based on", "default": "fileName", "page": 1204,
              "choices": [{"value": "fileName", "label": "Source file name"}, {"value": "folderName", "label": "Source folder name"}]},
-            {"key": "frameCount", "type": "choice", "style": "radio", "label": "Frame Count for DPX column", "default": "zero", "page": 1204, "later": true,
+            {"key": "frameCount", "type": "choice", "style": "radio", "label": "Frame Count for DPX column", "default": "zero", "page": 1204,
              "choices": [{"value": "zero", "label": "Start frame count at 0"}, {"value": "one", "label": "Start frame count at 1"}, {"value": "timecode", "label": "Convert timecode to frames"}, {"value": "fileName", "label": "From the File name"}]},
-            {"key": "startTimecode", "type": "choice", "style": "radio", "label": "Timecode for Start column", "default": "embedded", "page": 1205, "later": true,
+            {"key": "startTimecode", "type": "choice", "style": "radio", "label": "Timecode for Start column", "default": "embedded", "page": 1205,
              "choices": [{"value": "embedded", "label": "Embedded in source file"}, {"value": "fileName", "label": "From file name"}]}
           ]
         }

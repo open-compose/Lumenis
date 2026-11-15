@@ -1920,9 +1920,13 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   undoable marks, docs/spec/composer-edit.md); 11.4f3,
   the Export setting's Tab Delimited (done: `interop::ale::ExportOptions::tabDelimited`; docs/spec/ale.md; tests
   `tst_ale exportChoices`, `tst_interchange shotLogs`; DPX's Set to highest scaling quality waits for a scaling option
-  in the Media Creation setting, p.891); 11.4f4, the Link setting's Quality preferences and AIS Metadata options, and
-  the General setting's Use Windows compatible file names for project and bin names (p.1192, p.988 "Do not use the
-  following characters").
+  in the Media Creation setting, p.891); 11.4f4, the Link setting's AIS Metadata tab (done: `media::applyAisColumns` for
+  linked DPX files in `MainWindow::linkFiles`; docs/spec/ui-inventory.md "Link settings"; test `tst_background_services
+  linkSettingAisColumns`), so 11.4f is, as far as it goes. Still marked `"later"`: the options that need capture or
+  output hardware, a GPU, OMFI, AVI or Windows Media, Avid services or shared storage, and Resize Monitor to Image (with
+  Hide Video and the pop-up monitors), Undo Only Record Events (with undoable marks), the Quality tab's preferences
+  (with linking several resolutions of a source), DPX's highest scaling quality (with a Media Creation scaling option)
+  and Use Windows compatible file names (p.1192, p.988), so 11.4 is done.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

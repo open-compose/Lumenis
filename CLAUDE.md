@@ -1151,7 +1151,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   importImageOptions`), is done. 11.4f2, ToolTips Delay and Automatically Launch Last Project at Startup
   (`ui::setToolTipDelay`, `model::readLastProject`/`writeLastProject` used by app/main.cpp; tests `tst_interface_colors`,
   `tst_project_store lastProject`), is done. 11.4f3, Export As Tab Delimited (`interop::ale::ExportOptions::tabDelimited`;
-  tests `tst_ale exportChoices`, `tst_interchange shotLogs`), is done. 10.6 is an update check that only tells the user (no
+  tests `tst_ale exportChoices`, `tst_interchange shotLogs`), is done. 11.4f4, the Link setting's AIS Metadata tab
+  (`media::applyAisColumns` from `MainWindow::linkFiles` for DPX files; test `tst_background_services
+  linkSettingAisColumns`), is done, so 11.4f and 11.4 are (what stays "later" is listed in ROADMAP 11.4f). 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

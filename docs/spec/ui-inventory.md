@@ -2688,16 +2688,23 @@ p.610–640, ch. 13 p.432–434).**
 * **Offline:** a clip whose file is gone shows "Media Offline" on black
   (p.347).
 * **Link settings (p.1202–1205):** Quality, Volume Mounting, Link Options
-  and AIS Metadata tabs. Only "Always use 16:9 aspect ratio for SD clips"
-  works now. The rest come with relinking, volumes and multichannel audio.
+  and AIS Metadata tabs. "Always use 16:9 aspect ratio for SD clips", the
+  colour and alpha options and the AIS Metadata tab work. The AIS Metadata
+  tab (11.4f4, p.1204–1205): linked DPX files get the Labroll column from
+  the source file's name or folder (the folder the files are in; ours:
+  the guide's folder menu is not in the setting), Camroll from the DPX
+  Input Device field, the DPX column's count (from 0, from 1, the Start
+  as frames, or the file name's number, after the Labroll prefix) and,
+  From file name, Start from the name (`media::applyAisColumns`, as
+  Dynamic Media Folders use it; ours: DPX files only, the tab being
+  "Support for DPX"). The Quality tab's preferences wait for linking
+  that offers more than one resolution of a source.
 * **Not yet:**
   * File > Input > Link to Volume for Export (AS-02, p.328).
   * Automatic linking of mounted volumes (p.311).
   * Multichannel audio mapping (p.330).
   * Live Link (p.319).
   * The Media Cache settings (p.1205).
-  * The AIS Metadata options for DPX reel names and frame counts
-    (p.1204–1205).
 
 ### Image sequences (p.325–328)
 * **Grouping:** numbered stills (DPX, OpenEXR, TIFF, PNG, JPEG, TGA, BMP,

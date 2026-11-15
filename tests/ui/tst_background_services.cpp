@@ -3,6 +3,8 @@
 // indicator and Tools > Background Services with its options kept in the user's settings.
 #include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/movie_export.h"
+#include "lumenis/model/project_store.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/background_services.h"
 #include "lumenis/ui/bin_container.h"
@@ -122,6 +124,43 @@ private slots:
         q.waitForIdle();
         QCOMPARE(q.jobs().first().state, BackgroundQueue::State::Cancelled);
         QCOMPARE(q.jobs().last().state, BackgroundQueue::State::Completed);
+    }
+
+    // The Link setting's AIS Metadata tab (p.1204-1205): linked DPX files get the Labroll, Camroll and DPX columns it
+    // says, as Dynamic Media Folders' profiles fill them.
+    void linkSettingAisColumns() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(24);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        const QString reel = dir.filePath(QStringLiteral("Roll_C"));
+        QVERIFY(QDir().mkpath(reel));
+        QImage picture(64, 36, QImage::Format_RGB32);
+        picture.fill(Qt::blue);
+        media::StillOptions o;
+        o.format = media::StillFormat::Dpx;
+        o.depth = 10;
+        o.dpxInputDevice = QStringLiteral("Scanner 3");
+        const QString file = reel + QStringLiteral("/C001_0000042.dpx");
+        QVERIFY(media::writeStill(file, picture, o));
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("reelName"), QStringLiteral("folderName"));
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("frameCount"), QStringLiteral("fileName"));
+        const QString binId = window.binContainer().newBin();
+        const QStringList ids = window.linkFiles(binId, {file});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem* clip = window.binContainer().document(binId)->bin().item(ids.first());
+        QVERIFY(clip);
+        QCOMPARE(clip->fields.value(QStringLiteral("Labroll")), QStringLiteral("Roll_C"));
+        QCOMPARE(clip->fields.value(QStringLiteral("Camroll")), QStringLiteral("Scanner 3"));
+        QCOMPARE(clip->fields.value(QStringLiteral("DPX")), QStringLiteral("Roll_C0000042"));
     }
 
     void queueFollowsTheServices() {
