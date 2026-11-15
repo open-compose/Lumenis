@@ -8045,6 +8045,10 @@
         <source>Completed</source>
         <translation type="unfinished">Críochnaithe</translation>
     </message>
+    <message>
+        <source>Suspended</source>
+        <translation type="unfinished">Curtha ar fionraí</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BackgroundQueueWindow</name>
@@ -8062,7 +8066,7 @@
     </message>
     <message>
         <source>Not available yet</source>
-        <translation type="unfinished">Níl sé ar fáil fós</translation>
+        <translation type="obsolete">Níl sé ar fáil fós</translation>
     </message>
     <message>
         <source>Jobs</source>
@@ -8083,6 +8087,18 @@
     <message>
         <source>Low Priority</source>
         <translation type="unfinished">Tosaíocht Íseal</translation>
+    </message>
+    <message>
+        <source>Other Jobs</source>
+        <translation type="unfinished">Jabanna Eile</translation>
+    </message>
+    <message>
+        <source>No Jobs</source>
+        <translation type="unfinished">Gan Jabanna</translation>
+    </message>
+    <message>
+        <source>Resume</source>
+        <translation type="unfinished">Atosaigh</translation>
     </message>
 </context>
 <context>
@@ -14459,6 +14475,26 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>Export to File: nothing was exported.</source>
         <translation type="unfinished">Easpórtáil go Comhad: níor easpórtáladh aon rud.</translation>
+    </message>
+    <message>
+        <source>Render</source>
+        <translation type="unfinished">Rindreáil</translation>
+    </message>
+    <message>
+        <source>Transcode</source>
+        <translation type="unfinished">Traschódaigh</translation>
+    </message>
+    <message>
+        <source>Consolidate</source>
+        <translation type="unfinished">Comhdhlúthaigh</translation>
+    </message>
+    <message>
+        <source>Proxies</source>
+        <translation type="unfinished">Ionadaigh</translation>
+    </message>
+    <message>
+        <source>Transcription</source>
+        <translation type="unfinished">Tras-scríobh</translation>
     </message>
 </context>
 <context>

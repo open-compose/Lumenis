@@ -3073,9 +3073,14 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   * The Priority menu doesn't affect a running job (p.357).
 * When a job finishes, its clips go in the bin as `.new.01` (p.356).
   Sequences are relinked, as when not in the background.
-* Later:
-  * offline placeholders in the bin while a job runs (p.356);
-  * Resume for suspended jobs; Show Job Groups.
+* Job groups (11.4e; ours: a group for each kind of work, Consolidate,
+  Transcode, Render, Transcription, Proxies, Dynamic Media Folders): each
+  group's jobs under its name; Tool menu > Show Job Groups, a check box per
+  group to show or hide its jobs (p.357).
+* Resume (11.4e, p.357): a job suspended by stopping the background services
+  shows Resume in place of Cancel and starts over
+  (docs/spec/background-services.md).
+* Later: offline placeholders in the bin while a job runs (p.356).
 
 ## 18. AAF import and export (p.547, p.861-870, p.1173-1177)
 

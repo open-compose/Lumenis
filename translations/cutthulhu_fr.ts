@@ -8043,6 +8043,10 @@
         <source>Completed</source>
         <translation type="unfinished">Terminé</translation>
     </message>
+    <message>
+        <source>Suspended</source>
+        <translation type="unfinished">Suspendu</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::BackgroundQueueWindow</name>
@@ -8060,7 +8064,7 @@
     </message>
     <message>
         <source>Not available yet</source>
-        <translation type="unfinished">Pas encore disponible</translation>
+        <translation type="obsolete">Pas encore disponible</translation>
     </message>
     <message>
         <source>Jobs</source>
@@ -8081,6 +8085,18 @@
     <message>
         <source>Low Priority</source>
         <translation type="unfinished">Priorité basse</translation>
+    </message>
+    <message>
+        <source>Other Jobs</source>
+        <translation type="unfinished">Autres tâches</translation>
+    </message>
+    <message>
+        <source>No Jobs</source>
+        <translation type="unfinished">Aucune tâche</translation>
+    </message>
+    <message>
+        <source>Resume</source>
+        <translation type="unfinished">Reprendre</translation>
     </message>
 </context>
 <context>
@@ -14416,6 +14432,26 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>Export to File: nothing was exported.</source>
         <translation type="unfinished">Exporter vers un fichier : rien n&apos;a été exporté.</translation>
+    </message>
+    <message>
+        <source>Render</source>
+        <translation type="unfinished">Rendu</translation>
+    </message>
+    <message>
+        <source>Transcode</source>
+        <translation type="unfinished">Transcoder</translation>
+    </message>
+    <message>
+        <source>Consolidate</source>
+        <translation type="unfinished">Consolider</translation>
+    </message>
+    <message>
+        <source>Proxies</source>
+        <translation type="unfinished">Proxys</translation>
+    </message>
+    <message>
+        <source>Transcription</source>
+        <translation type="unfinished">Transcription</translation>
     </message>
 </context>
 <context>

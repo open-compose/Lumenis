@@ -1906,7 +1906,17 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `53-surround-pan-automation.json`); 11.4d2b, the Audio Mixer's Auto mode on the Pan grids (done:
   `Timeline::surroundPansAt`/`setSurroundAutomation`/`writeSurroundAutomation`, `AudioMixer::autoSurroundPan`, the Fast
   menu's Pan on Track commands on surround pans; test `tst_surround_ui autoModeGrids`), so 11.4d is. Live mode on
-  surround pans stays for later.
+  surround pans stays for later. 11.4e, the Background Queue's Resume and job groups (done: `BackgroundQueue::State::
+  Suspended` from Stop Services and `resume`, `Job::group` with each kind of work's group, the window's headings and Show
+  Job Groups; docs/spec/background-services.md; test `tst_background_services suspendResumeAndGroups`). 11.4f, the
+  settings options marked `"later"`, by setting (83 at its start; those that need capture or output hardware, a GPU,
+  OMFI, AVI or Windows Media stay marked): 11.4f1, the Import setting's Image tab (done: Image Size Adjustment's
+  Image sized for current format, Crop/Pad for DV scan line difference and Do not resize smaller images, Scale from
+  Full Range to Legal Range through `MediaCreation::imageSize`/`fullToLegal` and `media::importedPictureRect`;
+  docs/spec/graphics-import.md; test `tst_media importImageOptions`); 11.4f2, the General and Composer settings (Tool
+  Tip Delay, Automatically Launch Last Project at Startup, Resize Monitor to Image, Undo Only Record Events); 11.4f3,
+  the Export setting's Tab Delimited and DPX's highest scaling quality, and the Project setting's Windows compatible
+  file names; 11.4f4, the Link setting's Quality preferences and AIS Metadata options.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

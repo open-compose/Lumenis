@@ -1,6 +1,7 @@
 #include "lumenis/ui/background_queue.h"
 
 #include <QComboBox>
+#include <QFont>
 #include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -58,6 +59,12 @@ void BackgroundQueue::startServices() {
 }
 
 void BackgroundQueue::stopServices() {
+    // The running job is stopped and suspended (p.357: "a Resume button (for suspended transcodes)").
+    if (Entry* e = running_ >= 0 ? find(running_) : nullptr) {
+        e->suspending = true;
+        e->stop->store(true);
+        emit changed();
+    }
     active_ = false;
     paused_ = false;
     pauseTimer_.stop();
@@ -101,10 +108,12 @@ BackgroundQueue::~BackgroundQueue() {
     if (worker_.joinable()) worker_.join();
 }
 
-int BackgroundQueue::add(const QString& name, const QString& binId, Work work, Priority priority, Done done) {
+int BackgroundQueue::add(const QString& name, const QString& binId, Work work, Priority priority, Done done,
+                         const QString& group) {
     Entry e;
     e.job.id = nextId_++;
     e.job.name = name;
+    e.job.group = group;
     e.job.binId = binId;
     e.job.priority = priority;
     e.work = std::move(work);
@@ -127,12 +136,30 @@ BackgroundQueue::Entry* BackgroundQueue::find(int id) {
 void BackgroundQueue::cancel(int id) {
     Entry* e = find(id);
     if (!e) return;
-    if (e->job.state == State::Waiting) {
+    if (e->job.state == State::Waiting || e->job.state == State::Suspended) {
+        e->work = {};
         e->job.state = State::Cancelled;
         e->job.message = tr("Cancelled");
     } else if (e->job.state == State::Running) {
         e->stop->store(true);
     }
+    emit changed();
+}
+
+void BackgroundQueue::resume(int id) {
+    Entry* e = find(id);
+    if (!e || e->job.state != State::Suspended || !e->work) return;
+    // A fresh start: what the thread shared is new, so the stopped run cannot touch it.
+    e->permille = std::make_shared<std::atomic<int>>(0);
+    e->stop = std::make_shared<std::atomic<bool>>(false);
+    e->stopped = std::make_shared<std::atomic<bool>>(false);
+    e->done = std::make_shared<std::atomic<bool>>(false);
+    e->result = std::make_shared<media::ConsolidateResult>();
+    e->suspending = false;
+    e->job.state = State::Waiting;
+    e->job.progress = 0;
+    e->job.message.clear();
+    startNext();
     emit changed();
 }
 
@@ -146,7 +173,8 @@ void BackgroundQueue::setPriority(int id, Priority priority) {
 void BackgroundQueue::clearInactive() {
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
                                   [](const Entry& e) {
-                                      return e.job.state != State::Waiting && e.job.state != State::Running;
+                                      return e.job.state != State::Waiting && e.job.state != State::Running &&
+                                             e.job.state != State::Suspended;
                                   }),
                    entries_.end());
     emit changed();
@@ -226,6 +254,19 @@ void BackgroundQueue::poll() {
     if (e && e->done->load()) {
         if (worker_.joinable()) worker_.join();
         const media::ConsolidateResult result = *e->result;
+        // Suspended by Stop Services when the work was told to stop, or stopped with an error: it keeps its work to run
+        // again, and what it made is not handed on. Finished before the stop reached it, it completes.
+        if (e->suspending && (e->stopped->load() || !result.error.isEmpty())) {
+            e->job.state = State::Suspended;
+            e->job.progress = 0;
+            e->job.message = tr("Suspended");
+            e->suspending = false;
+            running_ = -1;
+            startNext();
+            emit changed();
+            return;
+        }
+        e->suspending = false;
         if (e->stopped->load() || (e->stop->load() && !result.error.isEmpty())) {
             e->job.state = State::Cancelled;
             e->job.message = tr("Cancelled");
@@ -271,10 +312,26 @@ BackgroundQueueWindow::BackgroundQueueWindow(BackgroundQueue& queue, QWidget* pa
     tool->setText(tr("Tool"));
     tool->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(tool);
+    toolMenu_ = menu;
     menu->addAction(tr("Clear Inactive Jobs"), &queue_, &BackgroundQueue::clearInactive);
-    QAction* groups = menu->addAction(tr("Show Job Groups"));
-    groups->setEnabled(false);
-    groups->setToolTip(tr("Not available yet"));
+    // Show Job Groups: "allows you to display or hide specific job groups listed in the menu" (p.357), a check box
+    // for each group the queue has, made when the menu opens.
+    groupsMenu_ = menu->addMenu(tr("Show Job Groups"));
+    groupsMenu_->setObjectName(QStringLiteral("showJobGroups"));
+    connect(groupsMenu_, &QMenu::aboutToShow, this, [this] {
+        groupsMenu_->clear();
+        QStringList groups;
+        for (const BackgroundQueue::Job& job : queue_.jobs()) {
+            if (!groups.contains(job.group)) groups << job.group;
+        }
+        for (const QString& group : groups) {
+            QAction* a = groupsMenu_->addAction(group.isEmpty() ? tr("Other Jobs") : group);
+            a->setCheckable(true);
+            a->setChecked(groupShown(group));
+            connect(a, &QAction::toggled, this, [this, group](bool on) { setGroupShown(group, on); });
+        }
+        if (groups.isEmpty()) groupsMenu_->addAction(tr("No Jobs"))->setEnabled(false);
+    });
     tool->setMenu(menu);
     layout->addWidget(tool, 0, Qt::AlignLeft);
     auto* scroll = new QScrollArea(this);
@@ -289,10 +346,28 @@ BackgroundQueueWindow::BackgroundQueueWindow(BackgroundQueue& queue, QWidget* pa
     refresh();
 }
 
+void BackgroundQueueWindow::setGroupShown(const QString& group, bool shown) {
+    if (shown) hidden_.removeAll(group);
+    else if (!hidden_.contains(group)) hidden_ << group;
+    refresh();
+}
+
 void BackgroundQueueWindow::refresh() {
     // Rows are rebuilt; the progress bars update in place when the jobs
-    // are the same.
-    const QList<BackgroundQueue::Job> jobs = queue_.jobs();
+    // are the same. The jobs of hidden groups are left out; the others are listed by group, each group under its
+    // heading, in the order the groups first came.
+    QList<BackgroundQueue::Job> all = queue_.jobs();
+    QStringList groups;
+    for (const BackgroundQueue::Job& job : all) {
+        if (!groups.contains(job.group)) groups << job.group;
+    }
+    QList<BackgroundQueue::Job> jobs;
+    for (const QString& group : groups) {
+        if (!groupShown(group)) continue;
+        for (const BackgroundQueue::Job& job : all) {
+            if (job.group == group) jobs << job;
+        }
+    }
     const QList<QWidget*> existing = findChildren<QWidget*>(QStringLiteral("backgroundJob"));
     if (existing.size() == jobs.size()) {
         for (int i = 0; i < jobs.size(); ++i) {
@@ -312,8 +387,25 @@ void BackgroundQueueWindow::refresh() {
         w->hide();
         w->deleteLater();
     }
+    for (QLabel* heading : findChildren<QLabel*>(QStringLiteral("jobGroup"))) {
+        heading->setObjectName(QString());
+        heading->hide();
+        heading->deleteLater();
+    }
+    QString lastGroup;
     // A row: name, Cancel (active jobs), progress, Priority (waiting jobs) and the message (inactive).
-    for (const BackgroundQueue::Job& job : jobs) {
+    for (qsizetype n = 0; n < jobs.size(); ++n) {
+        const BackgroundQueue::Job& job = jobs.at(n);
+        // The group's heading above its first job (a job without a group has none).
+        if ((n == 0 || job.group != lastGroup) && !job.group.isEmpty()) {
+            auto* heading = new QLabel(job.group);
+            heading->setObjectName(QStringLiteral("jobGroup"));
+            QFont bold = heading->font();
+            bold.setBold(true);
+            heading->setFont(bold);
+            rows_->insertWidget(rows_->count() - 1, heading);
+        }
+        lastGroup = job.group;
         auto* row = new QWidget;
         row->setObjectName(QStringLiteral("backgroundJob"));
         row->setProperty("jobId", job.id);
@@ -322,8 +414,15 @@ void BackgroundQueueWindow::refresh() {
         h->setContentsMargins(0, 0, 0, 0);
         h->addWidget(new QLabel(job.name, row), 1);
         const bool active = job.state == BackgroundQueue::State::Waiting || job.state == BackgroundQueue::State::Running;
+        if (job.state == BackgroundQueue::State::Suspended) {
+            // "Changes from a Cancel button ... to a Resume button (for suspended transcodes)" (p.357).
+            auto* resume = new QPushButton(tr("Resume"), row);
+            resume->setObjectName(QStringLiteral("resumeJob"));
+            const int id = job.id;
+            connect(resume, &QPushButton::clicked, &queue_, [this, id] { queue_.resume(id); });
+            h->addWidget(resume);
+        }
         if (active) {
-            // Cancel; Resume, for suspended jobs, comes later (p.357).
             auto* cancel = new QPushButton(tr("Cancel"), row);
             cancel->setObjectName(QStringLiteral("cancelJob"));
             const int id = job.id;

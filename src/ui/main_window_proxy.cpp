@@ -215,7 +215,7 @@ int MainWindow::makeProxies(const QString& drive, bool background) {
                     model::BinItem changed = *item;
                     model::setProxy(changed, **proxy);
                     storeClip(bin, changed);
-                });
+                }, tr("Proxies"));
             ++made;
             continue;
         }

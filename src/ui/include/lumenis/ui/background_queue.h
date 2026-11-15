@@ -14,6 +14,7 @@
 #include <memory>
 #include <thread>
 
+class QMenu;
 class QVBoxLayout;
 
 namespace lumenis::ui {
@@ -36,8 +37,10 @@ class BackgroundQueue : public QObject {
 public:
     // In the order of the Priority menu; a lower value runs first.
     enum class Priority { High, Normal, Low };
-    // Completed, Failed and Cancelled are inactive (clearInactive()).
-    enum class State { Waiting, Running, Completed, Failed, Cancelled };
+    // Completed, Failed and Cancelled are inactive (clearInactive()). Suspended: stopped by Stop Services while it ran
+    // (p.377: "Stop: Immediately stops the background services"); its Cancel button is Resume (p.357), which queues it
+    // again to start over (ours: what it made before it was stopped is left out).
+    enum class State { Waiting, Running, Completed, Failed, Cancelled, Suspended };
     // The work: it reports progress, which returns false when it should
     // stop. Progress is a fraction, 0 to 1. It runs on the worker thread, so it must not touch
     // widgets or the bins; it captures copies of what it needs.
@@ -51,6 +54,9 @@ public:
         State state = State::Waiting;
         double progress = 0; // 0 to 1
         QString message;     // "Completed", "Cancelled" or the error, once inactive
+        // Its job group (Show Job Groups, p.357): the kind of work, "Transcode", "Consolidate", "Render" ... (ours);
+        // empty for none.
+        QString group;
     };
 
     explicit BackgroundQueue(QObject* parent = nullptr);
@@ -63,12 +69,15 @@ public:
 
     // Queues `work` for the bin `binId` and starts it if nothing runs. Returns the job's id. With
     // `done`, the result goes there rather than to finished().
-    int add(const QString& name, const QString& binId, Work work, Priority priority = Priority::Normal, Done done = {});
+    int add(const QString& name, const QString& binId, Work work, Priority priority = Priority::Normal, Done done = {},
+            const QString& group = {});
     // The Cancel button: a waiting job is dropped, a running one stops.
     void cancel(int id);
+    // The Resume button: a suspended job waits to start again from the beginning.
+    void resume(int id);
     // The Priority menu; a running job is not affected (p.357).
     void setPriority(int id, Priority priority);
-    // Tool menu > Clear Inactive Jobs: all jobs not running or waiting.
+    // Tool menu > Clear Inactive Jobs: all jobs not running, waiting or suspended.
     void clearInactive();
     // Every job, in the order added, with the running one's progress as of now.
     QList<Job> jobs() const;
@@ -118,6 +127,7 @@ private:
         std::shared_ptr<std::atomic<bool>> stopped = std::make_shared<std::atomic<bool>>(false); // the work was told
         std::shared_ptr<std::atomic<bool>> done = std::make_shared<std::atomic<bool>>(false);
         std::shared_ptr<media::ConsolidateResult> result = std::make_shared<media::ConsolidateResult>();
+        bool suspending = false; // stopped by Stop Services: Suspended, not Cancelled, when its thread ends
     };
     // Checks whether the running job is done; if so records its result, emits finished() and
     // starts the next one.
@@ -141,9 +151,9 @@ private:
     bool canStart() const;
 };
 
-// Tools > Background Queue Window (p.356-357): each job's name, a Cancel
-// button, its progress, its Priority menu and Completed when done; the Tool
-// menu's Clear Inactive Jobs.
+// Tools > Background Queue Window (p.356-357): each job's name, a Cancel (or, suspended, Resume) button, its progress,
+// its Priority menu and Completed when done, under its job group's heading; the Tool menu's Clear Inactive Jobs and
+// Show Job Groups, a check box for each group to show or hide.
 class BackgroundQueueWindow : public QWidget {
     Q_OBJECT
 
@@ -153,10 +163,18 @@ public:
     explicit BackgroundQueueWindow(BackgroundQueue& queue, QWidget* parent = nullptr);
     // Shows the queue's jobs, one row each.
     void refresh();
+    // Show Job Groups: whether `group`'s jobs are listed (all are, at first).
+    void setGroupShown(const QString& group, bool shown);
+    bool groupShown(const QString& group) const { return !hidden_.contains(group); }
+    // The Tool menu.
+    QMenu* toolMenu() const { return toolMenu_; }
 
 private:
     BackgroundQueue& queue_;
     QVBoxLayout* rows_ = nullptr;
+    QMenu* toolMenu_ = nullptr;
+    QMenu* groupsMenu_ = nullptr;
+    QStringList hidden_;
 };
 
 } // namespace lumenis::ui

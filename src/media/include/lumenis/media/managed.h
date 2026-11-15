@@ -195,7 +195,23 @@ struct MediaCreation {
     // box and Reformat) applied to each frame, so the new media holds the framed picture. Unset: the picture fitted as
     // it is.
     std::optional<model::SpatialAdapter> spatial;
+    // The Import setting's Image tab (p.1194-1195; 11.4f1), for imports: Image Size Adjustment and Color Scaling.
+    //  - Fit: "Resize image to fit format raster ... maintains the file's aspect ratio" (fitPictureRect()), the default;
+    //  - Current: "Image sized for current format": the pixels converted "so that the image fills the screen";
+    //  - CropPad: "Crop/Pad for DV scan line difference": 480 lines into 486 padded by six, 486 into 480 with "the top
+    //    four and bottom two scan lines" cropped, line for line; other sizes as Current;
+    //  - NoResize: "Do not resize smaller images": a picture smaller than the raster keeps its pixels, centred; larger
+    //    ones fitted.
+    // `fullToLegal`, "Scale from Full Range to Legal Range": RGB 0-255 remapped to 16-235.
+    enum class ImageSize { Fit, Current, CropPad, NoResize };
+    ImageSize imageSize = ImageSize::Fit;
+    bool fullToLegal = false;
 };
+// Where an imported picture of `image` pixels (shown `pixelAspect` wide) goes in `raster` under `mode`
+// (MediaCreation::ImageSize).
+QRectF importedPictureRect(QSize image, double pixelAspect, QSize raster, MediaCreation::ImageSize mode);
+// "Scale from Full Range to Legal Range" (p.1195): each RGB value v becomes 16 + v * 219 / 255.
+QImage fullToLegalRange(const QImage& image);
 // Whether `rate` is a pullup or pulldown of `nominal` (times 1001/1000 or 1000/1001, to the sample):
 // 48048 and 47952 for 48 kHz, 44144 and 44056 for 44.1 kHz.
 bool isPullRate(int rate, int nominal);

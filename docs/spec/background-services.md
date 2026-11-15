@@ -10,7 +10,10 @@ Folders window, the Profile Editor and Acquire.
 service. These services are off by default." Ours: the services are the Background Queue's state
 (`BackgroundQueue::ServiceState`), in the application; there is no separate service process and no taskbar or menu bar
 icon (the guide's "Avid Background Services Manager"). Jobs (background Consolidate/Transcode, renders, transcription,
-later Dynamic Media Folders) start only while the services are Active; a job already running finishes.
+Dynamic Media Folders) start only while the services are Active. Stop ("Immediately stops the background services")
+suspends a job that is running (11.4e): its work is told to stop, and the Background Queue Window shows it Suspended
+with a Resume button in place of Cancel (p.357); Resume queues it to start over (ours: what the stopped run made is
+left out, and Clear Inactive Jobs keeps suspended jobs). A pause lets a running job finish.
 
 * Tools > Background Services (`BackgroundServicesDialog`, `MainWindow::backgroundServices`): the state ("Active,
   Inactive or Paused"), Start ("Immediately starts the background services if they are currently stopped"), Stop, Pause
@@ -93,7 +96,8 @@ until you generate an error report").
 
 * `tst_dmf`: the folders and profiles through JSON, new entries, bin names, timecode in file names, a DPX folder as one
   clip with its AIS columns, Copy to Folder with and without Auto Relink, Multichannel, Transcode and cancelling.
-* `tst_background_services`: jobs waiting while stopped and paused, a timed pause ending, the pause extended during play,
+* `tst_background_services`: jobs waiting while stopped and paused, a running job suspended by Stop and resumed, job
+  groups' headings and Show Job Groups (`suspendResumeAndGroups`), a timed pause ending, the pause extended during play,
   Enable Pausing off, the error report; the indicator's states; Tools > Background Services in the application with its
   options kept and applied for the next user's settings; an enabled folder's file linked and copied in the
   application, kept beside the user's settings, the green dot and a failing entry's error; the window's +, Enable,

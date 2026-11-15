@@ -6911,7 +6911,8 @@ QJsonObject MainWindow::importSettingsSnapshot() const {
     // The Import setting's options that importClipMedia() reads (p.1196-1199).
     QJsonObject o;
     for (const char* key : {"frameImportDuration", "convertSampleRate", "skipPullRates", "convertBitDepth", "bwfAlignment",
-                            "centerPanMono", "alphaChannel", "dilateFill", "applyGain", "importGain", "cdOnly"}) {
+                            "centerPanMono", "alphaChannel", "dilateFill", "applyGain", "importGain", "cdOnly", "imageSize",
+                            "colorScaling"}) {
         const QString k = QString::fromLatin1(key);
         o.insert(k, settings_->value(QStringLiteral("Import"), k));
     }
@@ -6929,6 +6930,13 @@ std::optional<model::BinItem> MainWindow::importClipMedia(model::BinItem clip, c
         clip.durationFrames =
             std::max<std::int64_t>(1, seconds * editRate.num() / std::max<std::int64_t>(editRate.den(), 1));
     }
+    // The Image tab's Image Size Adjustment and Color Scaling (p.1194-1195).
+    const QString size = importSettings.value(QStringLiteral("imageSize")).toString();
+    creation.imageSize = size == QLatin1String("current")   ? media::MediaCreation::ImageSize::Current
+                         : size == QLatin1String("cropPad")  ? media::MediaCreation::ImageSize::CropPad
+                         : size == QLatin1String("noResize") ? media::MediaCreation::ImageSize::NoResize
+                                                             : media::MediaCreation::ImageSize::Fit;
+    creation.fullToLegal = importSettings.value(QStringLiteral("colorScaling")).toString() == QLatin1String("full");
     // The Audio tab (p.1198-1199), clip by clip.
     creation.relabelPullRates = false;
     creation.audioShift = 0;
@@ -7561,7 +7569,7 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
                               applyBackgroundRenders(binId, sequenceId, *made);
                               if (!result.error.isEmpty()) reportFailure(this, tr("Render Effect: %1").arg(result.error));
                               renderFinished(result.error.isEmpty());
-                          });
+                          }, tr("Render"));
     // Console only: how many effects were queued.
     ConsoleLog::instance().append(tr("Render Effect: %n effect(s) queued in the background.", "", static_cast<int>(targets.size())));
 }
@@ -8702,7 +8710,7 @@ void MainWindow::consolidateTranscode() {
                     return *it;
                 };
                 return media::consolidate({item}, binId, lookup, taken, o);
-            });
+            }, BackgroundQueue::Priority::Normal, {}, dialog.isTranscode() ? tr("Transcode") : tr("Consolidate"));
         }
         showTool(QStringLiteral("BackgroundQueue"));
         return;

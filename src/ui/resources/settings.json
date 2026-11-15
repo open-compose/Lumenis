@@ -642,9 +642,9 @@
           "name": "Image",
           "options": [
             {"key": "imageSize", "type": "choice", "style": "radio", "label": "Image Size Adjustment", "default": "fit", "page": 1194,
-             "choices": [{"value": "current", "label": "Image sized for current format", "later": true}, {"value": "cropPad", "label": "Crop/Pad for DV scan line difference", "later": true}, {"value": "noResize", "label": "Do not resize smaller images", "later": true}, {"value": "fit", "label": "Resize image to fit format raster"}]},
+             "choices": [{"value": "current", "label": "Image sized for current format"}, {"value": "cropPad", "label": "Crop/Pad for DV scan line difference"}, {"value": "noResize", "label": "Do not resize smaller images"}, {"value": "fit", "label": "Resize image to fit format raster"}]},
             {"key": "colorScaling", "type": "choice", "style": "radio", "label": "Color Scaling", "default": "legal", "page": 1195,
-             "choices": [{"value": "legal", "label": "Do not modify, treat as Legal Range"}, {"value": "full", "label": "Scale from Full Range to Legal Range", "later": true}]},
+             "choices": [{"value": "legal", "label": "Do not modify, treat as Legal Range"}, {"value": "full", "label": "Scale from Full Range to Legal Range"}]},
             {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "ignore", "page": 1196,
              "choices": [{"value": "invert", "label": "Invert on import (white = opaque)"}, {"value": "noInvert", "label": "Do not invert (black = opaque)"}, {"value": "ignore", "label": "Ignore"}]},
             {"key": "dilateFill", "type": "bool", "label": "Dilate Fill", "default": false, "page": 1196},

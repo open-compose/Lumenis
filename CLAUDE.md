@@ -1143,7 +1143,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `model::surroundPanAt`, `AudioPiece::surroundAt`; tests `tst_automation surroundPans`, `tst_surround
   automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario `53-surround-pan-automation.json`), is done.
   11.4d2b, the Audio Mixer's Auto mode on the Pan grids (`Timeline::setSurroundAutomation`/`writeSurroundAutomation`,
-  `AudioMixer::autoSurroundPan`; test `tst_surround_ui autoModeGrids`), is done, so 11.4d is. 10.6 is an update check that only tells the user (no
+  `AudioMixer::autoSurroundPan`; test `tst_surround_ui autoModeGrids`), is done, so 11.4d is. 11.4e, the Background
+  Queue's Resume and job groups (docs/spec/background-services.md: `BackgroundQueue::State::Suspended` from Stop Services,
+  `resume`, `Job::group`, Show Job Groups; test `tst_background_services suspendResumeAndGroups`), is done. 11.4f, the
+  settings options marked "later", is in four parts (ROADMAP). 11.4f1, the Import setting's Image tab (docs/spec/
+  graphics-import.md: `MediaCreation::imageSize`/`fullToLegal`, `media::importedPictureRect`; test `tst_media
+  importImageOptions`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

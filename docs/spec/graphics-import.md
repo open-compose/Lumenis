@@ -78,13 +78,30 @@ Ours: p.318 says "The Alpha Channel options in the Import Settings Image tab app
 the Link setting has its own Alpha Channel, which "Controls how Media Composer handles the alpha channel in linked
 images" (p.1204); we follow the Link setting.
 
+## Image Size Adjustment and Color Scaling (p.1194-1195; 11.4f1)
+
+Every import that is transcoded (graphics and movies, `MainWindow::importClipMedia`) places its picture in the project's
+raster as the Image tab says (`MediaCreation::imageSize`, `media::importedPictureRect`):
+
+| Choice | Ours |
+|---|---|
+| Image sized for current format | The pixels stretched to fill the frame ("converts the existing pixel dimensions, if necessary, so that the image fills the screen"); a picture of another shape is distorted, as the guide warns. |
+| Crop/Pad for DV scan line difference | 720 x 480 in a 486-line raster, line for line with four lines of black above and two below; 720 x 486 in a 480-line raster with "the top four and bottom two scan lines" cropped. Other sizes as the first choice. |
+| Do not resize smaller images | A picture smaller than the raster keeps its pixels, centred on black; a larger one is fitted. |
+| Resize image to fit format raster | Fitted with its shape kept, the default (as before). |
+
+**Scale from Full Range to Legal Range** remaps each RGB value v to 16 + v x 219 / 255 (`media::fullToLegalRange`);
+Do not modify keeps the values. The pictures go through a painted frame then, not straight from the decoder.
+Dither image colors and Field Ordering in File stay out (not in the setting).
+
 ## Not yet
 
 * Batch Import of Matte Key clips (docs/spec/batch-import.md).
 
 ## Tests
 
-`tst_graphics_import`: the fill and matte (Invert, Do not invert, Dilate Fill), which files have alpha, a PNG as a Matte
+`tst_media importImageOptions`: where each Image Size Adjustment puts a picture, full to legal range, and a small picture
+kept at its size through a transcode. `tst_graphics_import`: the fill and matte (Invert, Do not invert, Dilate Fill), which files have alpha, a PNG as a Matte
 Key clip keyed in the Source monitor and shown by the Frame view, Ignore as a master clip, PICT files with and without
 alpha, a movie's alpha frames. `tst_psd_import`: the Photoshop reader with raw and PackBits channels and the modes it
 refuses; Sequence of Layers, Select Layers, Cancel and Flattened Image; the 24-track limit. Fuzz target `psd`. `tst_graphics_import linking`: a linked PNG as a Matte Key clip keyed from its link, Do not invert,

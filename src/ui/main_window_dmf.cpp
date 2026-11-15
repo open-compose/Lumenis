@@ -156,7 +156,7 @@ void MainWindow::queueDmfEntry(const QString& folder, const QString& entry, cons
                                   saveDynamicMediaFolders();
                               }
                               refreshDmfAssets();
-                          });
+                          }, tr("Dynamic Media Folders"));
 }
 
 void MainWindow::refreshDmfAssets() {

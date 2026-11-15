@@ -18,6 +18,8 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QLabel>
+#include <QMenu>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QToolButton>
@@ -26,6 +28,10 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <thread>
 #include <vector>
 
 using namespace lumenis;
@@ -43,6 +49,23 @@ BackgroundQueue::Work quick(bool fail = false) {
     };
 }
 
+// Work that runs until told to stop (or a few seconds), counting its runs.
+BackgroundQueue::Work slow(std::shared_ptr<std::atomic<int>> runs) {
+    return [runs](const std::function<bool(double)>& progress) {
+        ++*runs;
+        media::ConsolidateResult r;
+        for (int i = 0; i < 300; ++i) {
+            if (!progress(i / 300.0)) {
+                r.error = QStringLiteral("stopped");
+                return r;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        r.added << model::BinItem{};
+        return r;
+    };
+}
+
 } // namespace
 
 class TestBackgroundServices : public QObject {
@@ -50,6 +73,56 @@ class TestBackgroundServices : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+
+    // Stop Services suspends the running job; Resume (in place of its Cancel button, p.357) runs it again from the
+    // start. Show Job Groups hides and shows each group's jobs, listed under their headings.
+    void suspendResumeAndGroups() {
+        BackgroundQueue q;
+        auto runs = std::make_shared<std::atomic<int>>(0);
+        int finished = 0;
+        connect(&q, &BackgroundQueue::finished, this, [&](const QString&, const media::ConsolidateResult&) { ++finished; });
+        const int id = q.add(QStringLiteral("Interview"), {}, slow(runs), BackgroundQueue::Priority::Normal, {},
+                             QStringLiteral("Transcode"));
+        q.add(QStringLiteral("Render: Story"), {}, quick(), BackgroundQueue::Priority::Low, {}, QStringLiteral("Render"));
+        QTRY_VERIFY(q.jobs().first().state == BackgroundQueue::State::Running && runs->load() == 1);
+        q.stopServices();
+        QTRY_COMPARE(q.jobs().first().state, BackgroundQueue::State::Suspended);
+        QCOMPARE(finished, 0); // nothing handed on
+        QCOMPARE(q.jobs().last().state, BackgroundQueue::State::Waiting);
+        QVERIFY(!q.isBusy() || q.jobs().last().state == BackgroundQueue::State::Waiting);
+        // Clear Inactive Jobs keeps it.
+        q.clearInactive();
+        QCOMPARE(q.jobs().size(), 2);
+
+        BackgroundQueueWindow window(q);
+        window.show();
+        QPushButton* resume = window.findChild<QPushButton*>(QStringLiteral("resumeJob"));
+        QVERIFY(resume);
+        QStringList headings;
+        for (QLabel* l : window.findChildren<QLabel*>(QStringLiteral("jobGroup"))) headings << l->text();
+        QCOMPARE(headings, (QStringList{"Transcode", "Render"}));
+        // Show Job Groups lists the groups; hiding Render leaves its job out.
+        QMenu* groups = window.findChild<QMenu*>(QStringLiteral("showJobGroups"));
+        QVERIFY(groups);
+        emit groups->aboutToShow();
+        QCOMPARE(groups->actions().size(), 2);
+        QVERIFY(groups->actions().at(1)->isChecked());
+        groups->actions().at(1)->toggle();
+        QVERIFY(!window.groupShown(QStringLiteral("Render")));
+        QCOMPARE(window.findChildren<QWidget*>(QStringLiteral("backgroundJob")).size(), 1);
+        window.setGroupShown(QStringLiteral("Render"), true);
+        QCOMPARE(window.findChildren<QWidget*>(QStringLiteral("backgroundJob")).size(), 2);
+
+        // Resume: it waits, and runs again from the start once the services start.
+        window.findChild<QPushButton*>(QStringLiteral("resumeJob"))->click();
+        QCOMPARE(q.jobs().first().state, BackgroundQueue::State::Waiting);
+        q.startServices();
+        QTRY_COMPARE(runs->load(), 2);
+        q.cancel(id);
+        q.waitForIdle();
+        QCOMPARE(q.jobs().first().state, BackgroundQueue::State::Cancelled);
+        QCOMPARE(q.jobs().last().state, BackgroundQueue::State::Completed);
+    }
 
     void queueFollowsTheServices() {
         BackgroundQueue q;

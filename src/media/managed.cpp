@@ -306,9 +306,12 @@ public:
         const double sourcePixel = info.aspect.num() > 0 && info.width > 0 && info.height > 0
                                        ? info.aspect.toDouble() * info.height / info.width
                                        : 1.0;
-        const QRectF placed = fitPictureRect(QSize(info.width, info.height), sourcePixel, creation_.raster);
+        const QRectF placed = importedPictureRect(QSize(info.width, info.height), sourcePixel, creation_.raster, creation_.imageSize);
         const QRect target = placed.toAlignedRect().intersected(QRect(QPoint(0, 0), creation_.raster));
-        const bool direct = creation_.colorTransformations.isEmpty() && !creation_.spatial && stored() == creation_.raster;
+        // Placed outside the raster (cropped), the picture goes through a painted frame too.
+        const bool inside = QRectF(QPointF(0, 0), QSizeF(creation_.raster)).contains(placed);
+        const bool direct = creation_.colorTransformations.isEmpty() && !creation_.spatial && stored() == creation_.raster &&
+                            !creation_.fullToLegal && inside;
         for (std::int64_t f = in_; f < out_; ++f) {
             bool ok = false;
             if (direct) {
@@ -321,9 +324,10 @@ public:
                     shown.fill(Qt::black);
                     QPainter p(&shown);
                     p.setRenderHint(QPainter::SmoothPixmapTransform);
-                    const QImage coloured = creation_.colorTransformations.isEmpty()
-                                                ? frame
-                                                : applyColorTransformations(frame, creation_.colorTransformations);
+                    QImage coloured = creation_.colorTransformations.isEmpty()
+                                          ? frame
+                                          : applyColorTransformations(frame, creation_.colorTransformations);
+                    if (creation_.fullToLegal) coloured = fullToLegalRange(coloured);
                     // Framing applied (p.355): the box fills the raster as the segment shows it, else the picture fitted.
                     if (creation_.spatial) {
                         p.drawImage(QPoint(0, 0), spatialAdaptedImage(coloured, *creation_.spatial, creation_.raster, creation_.raster));
@@ -1253,6 +1257,44 @@ QRectF fitPictureRect(QSize image, double pixelAspect, QSize size) {
     }
     const double w = size.width() * shown / frame;
     return QRectF((size.width() - w) / 2, 0, w, size.height());
+}
+
+QRectF importedPictureRect(QSize image, double pixelAspect, QSize raster, MediaCreation::ImageSize mode) {
+    const QRectF whole(QPointF(0, 0), QSizeF(raster));
+    if (image.isEmpty() || raster.isEmpty()) return whole;
+    switch (mode) {
+    case MediaCreation::ImageSize::Fit: break;
+    case MediaCreation::ImageSize::Current: return whole;
+    case MediaCreation::ImageSize::CropPad:
+        // NTSC's 486 lines and DV's 480, the same width: line for line, four lines off the top (p.1195).
+        if (image.width() == raster.width() && image.height() == 480 && raster.height() == 486) {
+            return QRectF(0, 4, raster.width(), 480);
+        }
+        if (image.width() == raster.width() && image.height() == 486 && raster.height() == 480) {
+            return QRectF(0, -4, raster.width(), 486);
+        }
+        return whole;
+    case MediaCreation::ImageSize::NoResize:
+        if (image.width() <= raster.width() && image.height() <= raster.height()) {
+            return QRectF(QPointF((raster.width() - image.width()) / 2.0, (raster.height() - image.height()) / 2.0), QSizeF(image));
+        }
+        break;
+    }
+    return fitPictureRect(image, pixelAspect, raster);
+}
+
+QImage fullToLegalRange(const QImage& image) {
+    QImage out = image.convertToFormat(QImage::Format_RGBA8888);
+    for (int y = 0; y < out.height(); ++y) {
+        uchar* line = out.scanLine(y);
+        for (int x = 0; x < out.width(); ++x) {
+            for (int c = 0; c < 3; ++c) {
+                uchar& v = line[4 * x + c];
+                v = static_cast<uchar>(16 + (v * 219 + 127) / 255);
+            }
+        }
+    }
+    return out;
 }
 
 QImage fitPicture(const QImage& image, double pixelAspect, QSize size) {

@@ -195,7 +195,7 @@ bool MainWindow::queueTranscription(const QString& binId, const model::BinItem& 
     // "Foreground transcriptions will always pause the background transcription" (p.448). Ours: clips asked for go at
     // High priority, ahead of the Low background jobs; a background clip already running finishes first.
     backgroundQueue_->add(tr("Transcribe %1").arg(item.name), binId, work,
-                          now ? BackgroundQueue::Priority::High : BackgroundQueue::Priority::Low, done);
+                          now ? BackgroundQueue::Priority::High : BackgroundQueue::Priority::Low, done, tr("Transcription"));
     return true;
 }
 

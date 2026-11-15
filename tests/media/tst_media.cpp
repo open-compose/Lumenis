@@ -529,6 +529,71 @@ private slots:
         QVERIFY(canConsolidate(*made));
     }
 
+    // The Import setting's Image tab (p.1194-1195; 11.4f1): where an imported picture goes in the raster for each Image
+    // Size Adjustment, and Scale from Full Range to Legal Range, through an import's transcode.
+    void importImageOptions() {
+        using Size = MediaCreation::ImageSize;
+        const QSize hd(1920, 1080);
+        // Fit keeps the shape; Current fills the frame; Do not resize keeps a smaller picture's pixels, centred.
+        QCOMPARE(importedPictureRect(QSize(400, 400), 1.0, hd, Size::Fit), QRectF(420, 0, 1080, 1080));
+        QCOMPARE(importedPictureRect(QSize(400, 400), 1.0, hd, Size::Current), QRectF(0, 0, 1920, 1080));
+        QCOMPARE(importedPictureRect(QSize(400, 400), 1.0, hd, Size::NoResize), QRectF(760, 340, 400, 400));
+        QCOMPARE(importedPictureRect(QSize(3840, 2160), 1.0, hd, Size::NoResize), QRectF(0, 0, 1920, 1080));
+        // Crop/Pad: 720 x 480 padded by six lines into 486, and 486 cropped four lines at the top, two at the bottom.
+        QCOMPARE(importedPictureRect(QSize(720, 480), 0.9, QSize(720, 486), Size::CropPad), QRectF(0, 4, 720, 480));
+        QCOMPARE(importedPictureRect(QSize(720, 486), 0.9, QSize(720, 480), Size::CropPad), QRectF(0, -4, 720, 486));
+        // Full range to legal: 0 and 255 become 16 and 235.
+        QImage levels(2, 1, QImage::Format_RGBA8888);
+        levels.setPixelColor(0, 0, QColor(0, 0, 0));
+        levels.setPixelColor(1, 0, QColor(255, 255, 255));
+        const QImage legal = fullToLegalRange(levels);
+        QCOMPARE(legal.pixelColor(0, 0), QColor(16, 16, 16));
+        QCOMPARE(legal.pixelColor(1, 0), QColor(235, 235, 235));
+
+        // Through a transcode: a small white picture kept at its size in the middle, at legal white.
+        const auto lb = findResolution(QStringLiteral("dnx_lb"));
+        if (!lb) QSKIP("No DNx encoder in this FFmpeg");
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("logo.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        {
+            MediaWriter w;
+            QVERIFY(w.open(source, s));
+            QImage white(64, 36, QImage::Format_RGB32);
+            white.fill(Qt::white);
+            for (int f = 0; f < 3; ++f) QVERIFY(w.writeVideo(white));
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(256, 144);
+        c.resolution = *lb;
+        c.videoDrive = dir.path();
+        c.imageSize = Size::NoResize;
+        c.fullToLegal = true;
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        FrameCache cache;
+        const QImage frame = cache.frame(*made, 1);
+        QVERIFY(!frame.isNull());
+        const QColor middle = frame.pixelColor(frame.width() / 2, frame.height() / 2);
+        const QColor corner = frame.pixelColor(4, 4);
+        QVERIFY2(std::abs(middle.red() - 235) <= 8, qPrintable(QString::number(middle.red())));
+        QVERIFY2(corner.red() <= 24, qPrintable(QString::number(corner.red())));
+        // The picture is 64 pixels wide: a quarter of the way in is outside it.
+        QVERIFY(frame.pixelColor(frame.width() / 4 - 8, frame.height() / 2).red() <= 24);
+    }
+
     // XDCAM HD 50 and XDCAM EX 35 as managed media (p.1252-1269; 11.1c1): offered only in the project formats the guide's
     // tables give, MPEG-2 long GOP at its rate (the encoder's options reach the context: a 50 Mb/s file is that big),
     // interlaced in interlaced projects, and refused for a format it is not made for.
