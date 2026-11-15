@@ -1,3 +1,4 @@
+#include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/mask_margins.h"
 
@@ -27,6 +28,25 @@ class TestProjectStore : public QObject {
     Q_OBJECT
 
 private slots:
+    // "Automatically launch last project at startup" (p.69, p.1200): the user and project opened last, kept in the users
+    // folder; none at first, and none from a damaged file.
+    void lastProject() {
+        QTemporaryDir dir;
+        Locations l;
+        l.users = dir.filePath(QStringLiteral("Users"));
+        QVERIFY(!readLastProject(l));
+        QVERIFY(writeLastProject(l, {QStringLiteral("ed"), dir.filePath(QStringLiteral("Film/Film.cthproj"))}));
+        const auto last = readLastProject(l);
+        QVERIFY(last);
+        QCOMPARE(last->user, QStringLiteral("ed"));
+        QCOMPARE(last->file, dir.filePath(QStringLiteral("Film/Film.cthproj")));
+        QFile f(QDir(l.users).filePath(QStringLiteral("Last Project.json")));
+        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        f.write("not json");
+        f.close();
+        QVERIFY(!readLastProject(l));
+    }
+
     void createsListsAndReadsBack() {
         QTemporaryDir dir;
         const ProjectStore store(dir.filePath("Projects")); // root does not exist yet

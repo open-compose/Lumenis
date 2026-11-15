@@ -1,6 +1,7 @@
 #include "lumenis/ui/theme.h"
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <QApplication>
 #include <QColor>
@@ -177,6 +178,7 @@ public:
     int styleHint(StyleHint hint, const QStyleOption* option, const QWidget* widget,
                   QStyleHintReturn* returnData) const override {
         if (hint == SH_EtchDisabledText || hint == SH_DitherDisabledText) return 0;
+        if (hint == SH_ToolTip_WakeUpDelay) return toolTipDelay();
         return QProxyStyle::styleHint(hint, option, widget, returnData);
     }
 };
@@ -227,6 +229,13 @@ int rowHeightFor(const QFontMetrics& metrics) {
     const int base = QFontMetrics(QApplication::font()).height();
     return kRowHeight + std::max(0, metrics.height() - base);
 }
+
+namespace {
+std::atomic<int> toolTipDelayMs{700};
+} // namespace
+
+void setToolTipDelay(int milliseconds) { toolTipDelayMs.store(std::max(milliseconds, 0)); }
+int toolTipDelay() { return toolTipDelayMs.load(); }
 
 void applyTheme(QApplication& app) {
     QApplication::setStyle(new LumenisStyle);

@@ -13246,7 +13246,7 @@ Dáta Cruthaithe: %4</translation>
     </message>
     <message>
         <source>Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
-        <translation type="unfinished">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
+        <translation type="obsolete">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
     </message>
     <message>
         <source>Export to File: closed caption text comes from a sequence: select one.</source>
@@ -14495,6 +14495,14 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>Transcription</source>
         <translation type="unfinished">Tras-scríobh</translation>
+    </message>
+    <message>
+        <source>Tab-delimited text (*.txt)</source>
+        <translation type="unfinished">Téacs teormharcáilte le táib (*.txt)</translation>
+    </message>
+    <message>
+        <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
+        <translation type="unfinished">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, Teormharcáilte le Táib, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
     </message>
 </context>
 <context>

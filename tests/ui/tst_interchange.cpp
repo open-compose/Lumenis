@@ -362,6 +362,22 @@ private slots:
         QCOMPARE(user.entries.at(now).values.value(QStringLiteral("exportAs")).toString(), QStringLiteral("ale"));
         window.setExportOptionsHook({});
 
+        // Export As Tab Delimited (p.1174): the selection as tab-delimited text, the titles first.
+        window.settings().setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("tabDelimited"));
+        window.binContainer().viewFor(bin)->selectIds(ids);
+        const QString tabbed = dir.filePath(QStringLiteral("tabbed.txt"));
+        window.setExportHook([&](ExportAsDialog& dialog) {
+            proposed = dialog.pathEdit()->text();
+            dialog.setPath(tabbed);
+            return true;
+        });
+        s.commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY2(proposed.endsWith(QLatin1String(".txt")), qPrintable(proposed));
+        const QByteArray table = readFile(tabbed);
+        QVERIFY2(table.startsWith("Name\tTracks\tStart"), table.constData());
+        QVERIFY(table.contains("Take 1\tVA1A2\t10:00:00:00"));
+        QVERIFY(!table.contains("Heading"));
+
         // The Import setting's Shot Log tab (p.1197-1198): Merge events with known master clips puts the log's columns
         // on the selected take with the same tape, Start and End; the other event is added as logged.
         window.settings().setValue(QStringLiteral("Import"), QStringLiteral("shotLogEvents"), QStringLiteral("masters"));

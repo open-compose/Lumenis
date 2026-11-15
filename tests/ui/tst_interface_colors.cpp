@@ -17,6 +17,7 @@
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QDir>
+#include <QStyle>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
@@ -80,6 +81,14 @@ private slots:
         Settings& s = window.settings();
         const QString ui = QStringLiteral("Interface");
         BinContainer& bins = window.binContainer();
+
+        // ToolTips Delay (p.1200), in seconds, through the style's wake-up delay.
+        s.setValue(ui, QStringLiteral("toolTipDelay"), 3);
+        settle();
+        QCOMPARE(qApp->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay), 3000);
+        s.setValue(ui, QStringLiteral("toolTipDelay"), 0);
+        settle();
+        QCOMPARE(qApp->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay), 0);
 
         // The Sidebar (p.1201).
         s.setValue(ui, QStringLiteral("customSidebarBackground"), true);

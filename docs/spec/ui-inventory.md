@@ -2258,7 +2258,12 @@ p.610–640, ch. 13 p.432–434).**
     * **General:** Default Starting TC for new sequences.
     * **Interface:** Show ToolTips; Show Source/Record colors in
       Composer and in Timeline; When moving to a workspace; Show Labels in Tool Palette
-      (p.392, added in 1.5b).
+      (p.392, added in 1.5b). ToolTips Delay, in seconds (p.1200; 11.4f2: the style's
+      `SH_ToolTip_WakeUpDelay` through `ui::setToolTipDelay`). Automatically Launch Last
+      Project at Startup (p.69, p.1200; 11.4f2): the user and project opened last are kept
+      in the users folder (`model::readLastProject`/`writeLastProject`, "Last Project.json",
+      ours), and at start-up, without `--project`, that user's setting opens the project
+      straight away; a project that is gone, or the setting off, shows Select Project.
     * **Tool Palette** (p.1221): opens the Tool palette, whose mapped
       buttons it keeps (1.5b).
     * **Keyboard** (p.1202) and **Workspace View** (p.89–90, p.1136):
@@ -3271,7 +3276,7 @@ docs/spec/otio.md.
   Exchange (now working, p.1174): the selected master clips and subclips,
   to an `.ale`.
 * The Import setting's Shot Log tab (p.1197-1198) works (11.4c2; docs/spec/ale.md "Combining and merging events").
-* Later: Tab Delimited.
+* Tab Delimited (11.4f3, docs/spec/ale.md): the selection as tab-delimited text.
 
 ## 20. Audio Mixdown (p.731-732)
 Details: docs/spec/audio-mixdown.md.

@@ -13223,7 +13223,7 @@ Erstellungsdatum: %4</translation>
     </message>
     <message>
         <source>Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
-        <translation type="unfinished">In Datei exportieren: Bisher können nur AAF, Avid Log Exchange, Media Composer-Bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Grafik, DPX und OpenEXR exportiert werden (Exportieren als in der Export-Einstellung).</translation>
+        <translation type="obsolete">In Datei exportieren: Bisher können nur AAF, Avid Log Exchange, Media Composer-Bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Grafik, DPX und OpenEXR exportiert werden (Exportieren als in der Export-Einstellung).</translation>
     </message>
     <message>
         <source>Export to File: closed caption text comes from a sequence: select one.</source>
@@ -14452,6 +14452,14 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
     <message>
         <source>Transcription</source>
         <translation type="unfinished">Transkription</translation>
+    </message>
+    <message>
+        <source>Tab-delimited text (*.txt)</source>
+        <translation type="unfinished">Tabulatorgetrennter Text (*.txt)</translation>
+    </message>
+    <message>
+        <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
+        <translation type="unfinished">In Datei exportieren: Bisher können nur AAF, Avid Log Exchange, Tabulatorgetrennt, Media Composer-Bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Grafik, DPX und OpenEXR exportiert werden (Exportieren als in der Export-Einstellung).</translation>
     </message>
 </context>
 <context>

@@ -189,10 +189,10 @@ private slots:
 
     void unavailableOptionsKeepTheirDefaults() {
         Settings settings;
-        settings.setValue("Interface", "launchLastProject", true);   // later
+        settings.setValue("Interface", "classicCharacterMapping", true);   // later
         settings.setValue("Bin", "doubleClickLoads", QStringLiteral("popup")); // later choice
         settings.setValue("Bin", "autoSaveMinutes", QStringLiteral("x")); // wrong type
-        QCOMPARE(settings.flag("Interface", "launchLastProject"), false);
+        QCOMPARE(settings.flag("Interface", "classicCharacterMapping"), false);
         QCOMPARE(settings.text("Bin", "doubleClickLoads"), QStringLiteral("monitor"));
         QCOMPARE(settings.number("Bin", "autoSaveMinutes"), 15);
         QVERIFY(settings.value("Nope", "nothing").isNull());
@@ -299,9 +299,9 @@ private slots:
         QCOMPARE(v.value("doubleClickNesting").toBool(), true);
         // Options not available yet are dimmed and not stored.
         SettingsDialog iface(kind("Interface"), SettingEntry{QStringLiteral("Interface"), {}, true, {}});
-        QVERIFY(iface.editor("launchLastProject"));
-        QVERIFY(!iface.editor("launchLastProject")->isEnabledTo(&iface));
-        QVERIFY(!iface.values().contains("launchLastProject"));
+        QVERIFY(iface.editor("classicCharacterMapping"));
+        QVERIFY(!iface.editor("classicCharacterMapping")->isEnabledTo(&iface));
+        QVERIFY(!iface.values().contains("classicCharacterMapping"));
 
         // Number boxes, menus and timecodes.
         SettingsDialog bin(kind("Bin"), SettingEntry{QStringLiteral("Bin"), {}, true, {}});

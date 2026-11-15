@@ -108,7 +108,11 @@ The menus and dialogs are in ui-inventory.md §19.
   Log Exchange; the active bin's master clips with the bin's columns.
 * **File > Output > Export to File** with the Export setting's Export As at
   Avid Log Exchange (p.129-130, p.1174): the selected master clips and
-  subclips.
+  subclips. **Tab Delimited** (11.4f3; p.130, p.1174: "a shot log file in the
+  form of a tab-delimited ASCII text file") writes the same clips and columns
+  as a `.txt`: a line of the column titles, then a line per clip, without the
+  Heading, Column and Data sections (`ExportOptions::tabDelimited`; ours: the
+  guide does not give the layout).
 
 ## Combining and merging events (p.1197-1198)
 
@@ -134,7 +138,7 @@ to merge before selecting this option", p.1198).
   through a file), Export Bin's and Export to File's choices, 300 randomly
   damaged logs, which files are shot logs, and every OpenTimelineIO sample
   log read, written and read again the same; `shotLogEvents`, the Shot Log
-  tab's five choices.
+  tab's five choices; `exportChoices`, Tab Delimited too.
 * `tst_interchange` (UI): Import through `importFiles`, Export Bin and
   Export to File; merging onto a selected take and combining by scene.
 * `cutthulhu --import-ale FILE` prints the bin as a structure dump;
@@ -145,7 +149,6 @@ to merge before selecting this option", p.1198).
 
 * CDL values merged through the Shot Log tab onto clips' colour adapters
   (p.543, p.549): the columns are merged, not yet applied.
-* Tab Delimited export (p.130, p.1174).
 * Film titles carried as such (KN Start/End/Duration, Ink Number, Pullin,
   Pullout, Perf): kept as columns now.
 * SOUNDTC_FPS and AUDIO_FORMAT applied to clips; FILM_FORMAT.

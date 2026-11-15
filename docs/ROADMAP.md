@@ -1913,10 +1913,16 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   OMFI, AVI or Windows Media stay marked): 11.4f1, the Import setting's Image tab (done: Image Size Adjustment's
   Image sized for current format, Crop/Pad for DV scan line difference and Do not resize smaller images, Scale from
   Full Range to Legal Range through `MediaCreation::imageSize`/`fullToLegal` and `media::importedPictureRect`;
-  docs/spec/graphics-import.md; test `tst_media importImageOptions`); 11.4f2, the General and Composer settings (Tool
-  Tip Delay, Automatically Launch Last Project at Startup, Resize Monitor to Image, Undo Only Record Events); 11.4f3,
-  the Export setting's Tab Delimited and DPX's highest scaling quality, and the Project setting's Windows compatible
-  file names; 11.4f4, the Link setting's Quality preferences and AIS Metadata options.
+  docs/spec/graphics-import.md; test `tst_media importImageOptions`); 11.4f2, the Interface setting's ToolTips Delay and
+  Automatically Launch Last Project at Startup (done: `ui::setToolTipDelay`, `model::readLastProject`/
+  `writeLastProject` from app/main.cpp; tests `tst_interface_colors appliedFromTheSettings`, `tst_project_store
+  lastProject`; Resize Monitor to Image waits for Hide Video and the pop-up monitors, Undo Only Record Events for
+  undoable marks, docs/spec/composer-edit.md); 11.4f3,
+  the Export setting's Tab Delimited (done: `interop::ale::ExportOptions::tabDelimited`; docs/spec/ale.md; tests
+  `tst_ale exportChoices`, `tst_interchange shotLogs`; DPX's Set to highest scaling quality waits for a scaling option
+  in the Media Creation setting, p.891); 11.4f4, the Link setting's Quality preferences and AIS Metadata options, and
+  the General setting's Use Windows compatible file names for project and bin names (p.1192, p.988 "Do not use the
+  following characters").
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

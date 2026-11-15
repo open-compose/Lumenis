@@ -4710,6 +4710,7 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
                : exportAs == QLatin1String("dcp")    ? QStringLiteral("dcp")
                : exportAs == QLatin1String("ttml")   ? QStringLiteral("ttml")
                : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
+               : exportAs == QLatin1String("tabDelimited") ? QStringLiteral("txt")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
                : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
@@ -4725,6 +4726,7 @@ QString MainWindow::exportFilter(const QString& exportAs) {
                : exportAs == QLatin1String("dcp")    ? tr("Digital Cinema Package folder (*.dcp)")
                : exportAs == QLatin1String("ttml")   ? tr("Timed Text Markup Language (*.ttml)")
                : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
+               : exportAs == QLatin1String("tabDelimited") ? tr("Tab-delimited text (*.txt)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
                : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
                : exportAs == QLatin1String("graphic") || exportAs == QLatin1String("dpx") || exportAs == QLatin1String("openexr")
@@ -5704,9 +5706,9 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
                        format == QLatin1String("op1aLegacy") || format == QLatin1String("as11") || format == QLatin1String("dcp");
     const bool captionText = format == QLatin1String("scc") || format == QLatin1String("ttml");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
-        format != QLatin1String("fcpxml") && !movie && !captionText) {
+        format != QLatin1String("tabDelimited") && format != QLatin1String("fcpxml") && !movie && !captionText) {
         // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
-        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
+        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, "
                                          "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
         return false;
     }
@@ -5732,6 +5734,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
             old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0 ||
+            old.compare(QLatin1String("txt"), Qt::CaseInsensitive) == 0 ||
             old.compare(QLatin1String("scc"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("dcp"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("ttml"), Qt::CaseInsensitive) == 0 ||
             QStringList{QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("png"),
                         QStringLiteral("jpg"), QStringLiteral("tif"), QStringLiteral("bmp"), QStringLiteral("pct"), QStringLiteral("dpx"),
@@ -5791,11 +5794,12 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
             written = out.open(QIODevice::WriteOnly) && out.write(text.toUtf8()) >= 0 && out.commit();
             if (!written) error = tr("cannot write %1").arg(QDir::toNativeSeparators(path));
         }
-    } else if (format == QLatin1String("ale")) {
+    } else if (format == QLatin1String("ale") || format == QLatin1String("tabDelimited")) {
         // A shot log of the master clips and subclips selected (p.130, p.1174), with the bin's
-        // columns.
+        // columns; Tab Delimited, the same as tab-delimited text (p.1174).
         interop::ale::ExportOptions options;
         options.columns = doc.bin().display.columns + doc.bin().display.customColumns;
+        options.tabDelimited = format == QLatin1String("tabDelimited");
         const interop::ale::ExportResult result = interop::ale::exportFile(selected, path, options);
         written = result.ok;
         error = result.error;
@@ -9221,6 +9225,8 @@ void MainWindow::applySettings() {
     // Interface settings (p.1200-1201).
     const QString ui = QStringLiteral("Interface");
     toolTips_->enabled = s.flag(ui, QStringLiteral("showToolTips"));
+    // ToolTips Delay, in seconds (p.1200).
+    setToolTipDelay(s.value(ui, QStringLiteral("toolTipDelay")).toInt() * 1000);
     composer_->setSourceRecordColors(s.flag(ui, QStringLiteral("composerColors")));
     timeline_->setSourceRecordColors(s.flag(ui, QStringLiteral("timelineColors")));
     timeline_->setMismatchedRates(s.flag(QStringLiteral("Audio Project"), QStringLiteral("showMismatchedRates")), projectSampleRate());

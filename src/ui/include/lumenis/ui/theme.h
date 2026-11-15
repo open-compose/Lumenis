@@ -124,6 +124,10 @@ QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));
 // windows render the same on macOS, Windows and Linux (Phase 1 gate 1);
 // native pieces such as the macOS menu bar and file dialogs stay native.
 void applyTheme(QApplication& app);
+// The Interface setting's ToolTips Delay (p.1200): how long the pointer rests before a tooltip shows, through the
+// application style's SH_ToolTip_WakeUpDelay; Qt's own 700 ms until it is set.
+void setToolTipDelay(int milliseconds);
+int toolTipDelay();
 
 // The height of an item view's row for text in `metrics` (10.3d): kRowHeight for the application's font, and that
 // much taller as a font a user chose (Set Font, the Interface settings' bin and Sidebar sizes) is taller than it.

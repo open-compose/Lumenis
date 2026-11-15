@@ -2,6 +2,8 @@
 
 #include <QString>
 
+#include <optional>
+
 namespace lumenis::model {
 
 // Where projects and user profiles live. The defaults mirror the layout the
@@ -27,5 +29,16 @@ struct Locations {
     // The defaults for this platform, from the table above. The folders are not created here.
     static Locations defaults();
 };
+
+// "Automatically launch last project at startup" (the Interface setting, p.1200; "To open a project automatically",
+// p.69): the user and the project file opened last, kept in the users folder as "Last Project.json" ({"user",
+// "project"}; ours). Nothing when there is none or it cannot be read.
+struct LastProject {
+    QString user;
+    QString file;
+};
+std::optional<LastProject> readLastProject(const Locations& locations);
+// Writes it, making the users folder if need be; false when it cannot be written.
+bool writeLastProject(const Locations& locations, const LastProject& last);
 
 } // namespace lumenis::model

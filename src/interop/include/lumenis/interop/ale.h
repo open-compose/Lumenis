@@ -61,6 +61,10 @@ struct ExportOptions {
     // VIDEO_FORMAT and AUDIO_FORMAT; from the first clip's Format column, and 48kHz, when empty.
     QString videoFormat;
     QString audioFormat;
+    // Export As Tab Delimited (p.130, p.1174: "the selected bin as a shot log file in the form of a tab-delimited ASCII
+    // text file"): the same columns and clips, as a line of the column titles and a line per clip, without the Heading,
+    // Column and Data sections (ours: the guide does not give the layout).
+    bool tabDelimited = false;
 };
 
 // What an export made.

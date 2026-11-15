@@ -3,6 +3,10 @@
 #include "lumenis/core/branding.h"
 
 #include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 // The default project, user and site settings folders (locations.h). The Select Project window
@@ -37,6 +41,32 @@ Locations Locations::defaults() {
     l.siteSettings = QDir::cleanPath(QDir(l.users).filePath(QStringLiteral("../Settings")));
     l.attic = QDir::cleanPath(QDir(l.users).filePath(QStringLiteral("../%1 Attic").arg(product)));
     return l;
+}
+
+namespace {
+
+QString lastProjectPath(const Locations& locations) {
+    return QDir(locations.users).filePath(QStringLiteral("Last Project.json"));
+}
+
+} // namespace
+
+std::optional<LastProject> readLastProject(const Locations& locations) {
+    QFile f(lastProjectPath(locations));
+    if (!f.open(QIODevice::ReadOnly)) return std::nullopt; // none yet
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    LastProject last{o.value(QStringLiteral("user")).toString(), o.value(QStringLiteral("project")).toString()};
+    if (last.user.isEmpty() || last.file.isEmpty()) return std::nullopt;
+    return last;
+}
+
+bool writeLastProject(const Locations& locations, const LastProject& last) {
+    if (!QDir().mkpath(locations.users)) return false;
+    QSaveFile f(lastProjectPath(locations));
+    if (!f.open(QIODevice::WriteOnly)) return false;
+    const QJsonObject o{{QStringLiteral("user"), last.user}, {QStringLiteral("project"), last.file}};
+    f.write(QJsonDocument(o).toJson());
+    return f.commit();
 }
 
 } // namespace lumenis::model

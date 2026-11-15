@@ -241,6 +241,20 @@ void TestAle::exportChoices() {
     master.fields.insert(QStringLiteral("Take"), QStringLiteral("2"));
     model::BinItem sub = clip(QStringLiteral("M.Sub.01"), QStringLiteral("01:00:00:10"), 5, QStringLiteral("V1"));
     sub.kind = model::BinItemKind::Subclip;
+    // Tab Delimited (p.1174): the column titles, then a line per clip; no Heading, Column or Data sections.
+    {
+        ale::ExportOptions tab;
+        tab.tabDelimited = true;
+        tab.columns = {QStringLiteral("Scene"), QStringLiteral("Take")};
+        const auto text = ale::exportText({master, sub}, tab);
+        QVERIFY(text.ok);
+        const QStringList lines = text.text.split(QStringLiteral("\r\n"), Qt::SkipEmptyParts);
+        QCOMPARE(lines.size(), 3);
+        QCOMPARE(lines.first(), QStringLiteral("Name\tTracks\tStart\tEnd\tDuration\tScene\tTake"));
+        QVERIFY(lines.at(1).startsWith(QStringLiteral("M\tV\t01:00:00:00\t01:00:01:00")));
+        QVERIFY(lines.at(1).endsWith(QStringLiteral("\t4\t2")));
+        QVERIFY(!text.text.contains(QStringLiteral("Heading")));
+    }
     // Export Bin: master clips only (p.130).
     ale::ExportOptions o;
     o.subclips = false;

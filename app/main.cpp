@@ -1767,6 +1767,11 @@ int main(int argc, char** argv) {
             if (result == QDialog::Accepted) window.settings().setUser(locations.users, dialog->userProfile());
             if (result != QDialog::Accepted || !openProjectFile(dialog->selectedProjectFile())) {
                 QApplication::quit();
+                return;
+            }
+            // Kept for "Automatically launch last project at startup" (p.69, p.1200).
+            if (!lumenis::model::writeLastProject(locations, {dialog->userProfile(), dialog->selectedProjectFile()})) {
+                std::fprintf(stderr, "cannot remember the last project in %s\n", qPrintable(locations.users));
             }
         });
         dialog->show();
@@ -1783,7 +1788,17 @@ int main(int argc, char** argv) {
             return 1;
         }
     } else {
-        showSelectProject();
+        // "Automatically launch last project at startup": the last user's Interface setting decides (p.69: "The next
+        // time you start Media Composer, it opens your last project").
+        const auto last = lumenis::model::readLastProject(locations);
+        bool launched = false;
+        if (last && QFileInfo::exists(last->file)) {
+            window.settings().setUser(locations.users, last->user);
+            if (window.settings().flag(QStringLiteral("Interface"), QStringLiteral("launchLastProject"))) {
+                launched = openProjectFile(last->file);
+            }
+        }
+        if (!launched) showSelectProject();
     }
     return app->exec();
 }

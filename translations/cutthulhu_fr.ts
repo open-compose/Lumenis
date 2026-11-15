@@ -13223,7 +13223,7 @@ Date de création: %4</translation>
     </message>
     <message>
         <source>Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
-        <translation type="unfinished">Exporter vers un fichier: seuls AAF, Avid Log Exchange, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
+        <translation type="obsolete">Exporter vers un fichier: seuls AAF, Avid Log Exchange, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
     </message>
     <message>
         <source>Export to File: closed caption text comes from a sequence: select one.</source>
@@ -14452,6 +14452,14 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>Transcription</source>
         <translation type="unfinished">Transcription</translation>
+    </message>
+    <message>
+        <source>Tab-delimited text (*.txt)</source>
+        <translation type="unfinished">Texte délimité par tabulations (*.txt)</translation>
+    </message>
+    <message>
+        <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
+        <translation type="unfinished">Exporter vers un fichier: seuls AAF, Avid Log Exchange, Délimité par tabulations, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
     </message>
 </context>
 <context>

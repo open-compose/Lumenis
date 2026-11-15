@@ -413,13 +413,17 @@ ExportResult exportText(const QList<model::BinItem>& items, const ExportOptions&
     if (titles.size() + 4 > 64) notes.add(QStringLiteral("more than 64 titles (the limit, p.106)"));
 
     QStringList lines;
-    lines << QStringLiteral("Heading") << QStringLiteral("FIELD_DELIM\tTABS")
-          << QStringLiteral("VIDEO_FORMAT\t%1")
-                 .arg(options.videoFormat.isEmpty() ? videoFormatOf(clips.first()->fields.value(QStringLiteral("Format")))
-                                                    : options.videoFormat)
-          << QStringLiteral("AUDIO_FORMAT\t%1").arg(options.audioFormat.isEmpty() ? QStringLiteral("48kHz") : options.audioFormat)
-          << QStringLiteral("FPS\t%1").arg(fpsText(rate)) << QString() << QStringLiteral("Column") << titles.join(QLatin1Char('\t'))
-          << QString() << QStringLiteral("Data");
+    if (options.tabDelimited) {
+        lines << titles.join(QLatin1Char('\t'));
+    } else {
+        lines << QStringLiteral("Heading") << QStringLiteral("FIELD_DELIM\tTABS")
+              << QStringLiteral("VIDEO_FORMAT\t%1")
+                     .arg(options.videoFormat.isEmpty() ? videoFormatOf(clips.first()->fields.value(QStringLiteral("Format")))
+                                                        : options.videoFormat)
+              << QStringLiteral("AUDIO_FORMAT\t%1").arg(options.audioFormat.isEmpty() ? QStringLiteral("48kHz") : options.audioFormat)
+              << QStringLiteral("FPS\t%1").arg(fpsText(rate)) << QString() << QStringLiteral("Column")
+              << titles.join(QLatin1Char('\t')) << QString() << QStringLiteral("Data");
+    }
     for (const model::BinItem* c : clips) {
         bool drop = false;
         const std::int64_t start = detail::timecodeFrames(c->fields.value(QStringLiteral("Start")), c->editRate, &drop).value_or(0);
