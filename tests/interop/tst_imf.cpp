@@ -177,7 +177,7 @@ private slots:
             return nullptr;
         };
         QStringList seqWarnings;
-        const model::BinItem item = imf::compositionSequence(supp->compositions.first(), clipOf, QDateTime::currentDateTimeUtc(), &seqWarnings);
+        const model::BinItem item = imf::compositionSequence(supp->compositions.first(), clipOf, QStringLiteral("b1"), QDateTime::currentDateTimeUtc(), &seqWarnings);
         QVERIFY(seqWarnings.isEmpty());
         QCOMPARE(item.name, QStringLiteral("Show edit"));
         QCOMPARE(item.editRate, Rational(24));
@@ -194,10 +194,11 @@ private slots:
         // 200000 samples at 48 kHz are 100 frames at 24.
         QCOMPARE(seq.track(QStringLiteral("A1"))->length(), 100);
         QCOMPARE(seq.track(QStringLiteral("A2"))->segments.first().sourceTrack, QStringLiteral("A2"));
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.first().binId, QStringLiteral("b1")); // the clips' bin
         // A track file that is not linked is filler, with a warning.
         const model::BinItem partial = imf::compositionSequence(supp->compositions.first(), [&](const QUuid& id) -> const model::BinItem* {
             return id == kInsert ? nullptr : clipOf(id);
-        }, QDateTime::currentDateTimeUtc(), &seqWarnings);
+        }, QStringLiteral("b1"), QDateTime::currentDateTimeUtc(), &seqWarnings);
         QCOMPARE(seqWarnings.size(), 1);
         QVERIFY(model::Sequence::fromItem(partial).track(QStringLiteral("V1"))->segments.at(1).isFiller());
 

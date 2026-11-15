@@ -324,6 +324,7 @@ void Package::addAssets(const Package& other) {
 }
 
 model::BinItem compositionSequence(const Composition& composition, const std::function<const model::BinItem*(const QUuid&)>& clipOf,
+                                   const QString& binId,
                                    const QDateTime& when, QStringList* warnings) {
     auto warn = [&](const QString& text) {
         if (warnings && !warnings->contains(text)) *warnings << text;
@@ -381,6 +382,7 @@ model::BinItem compositionSequence(const Composition& composition, const std::fu
                     const int tracks = q.isImage() ? 1 : std::max(model::audioChannelsOf(*clip), 1);
                     for (int k = 0; k < tracks; ++k) {
                         model::Segment s;
+                        s.binId = binId;
                         s.clipId = clip->id;
                         s.sourceMob = model::mobIdOf(*clip);
                         s.name = clip->name;

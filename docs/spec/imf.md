@@ -45,10 +45,48 @@ Tools > IMF Window (p.335):
   Edit Rate, Duration, the segments, virtual tracks and track files, Issuer, Creator, Issue Date and Annotation (ours:
   the guide says "Additional structural and descriptive metadata").
 
+## New IMF and Export (11.5c2)
+
+* **New IMF > IMF Original** (p.334, p.337): "A new untitled folder appears in the sidebar (though it is not yet
+  written to disk)", with an untitled IMP. Sequences dragged from a bin onto it (or onto the empty sidebar, which
+  starts a new Original) are its CPLs, named "CPL_<Content Title>", the Content Title starting as the sequence's
+  name. The first drag fills the untitled IMP; each later one makes a new IMP (p.337-338). IMF Supplemental is
+  dimmed until 11.5c3. Deleting a draft's root takes it off the sidebar.
+* **The right pane**, editable for a draft: the root's IMF Name, Directory (with Browse...), Issuer, Creator and
+  Annotation; the IMP's Issuer, Creator and Annotation (its name "untitled" until written, p.335); the CPL's Content
+  Title (the sidebar follows), Encoding Profile (J2K IMF YCrCb, J2K IMF RGB 12 bit, J2K IMF RGB 10 bit: the IMF
+  resolutions of p.1256-1257), Content Kind (ST 429-7's kinds, ours), Issuer, Creator and Annotation. "Completing
+  Issuer and Creator automatically populate the IMP and root folder required fields. You can change these
+  independently" (p.336): they follow the CPL while they are empty or hold what it held.
+* **Statuses** (p.334): red while required fields are missing (the tooltip names them), yellow when ready, green on
+  disk. Ours, the required fields: the root's name, Directory, Issuer and Creator; an IMP's Issuer and Creator; a
+  CPL's Content Title, Issuer and Creator, and the project's format in the IMF Supported Formats table (p.340-341:
+  HD, 2K and UHD at 23.976 to 60p, 4K RGB only up to 30p; `media::imfFormatSupported`).
+* **Export** (p.334) is enabled when the selected draft is ready; `MainWindow::exportImfDraft` writes it as the
+  folder `<Directory>/<IMF Name>`, which must not exist, then lists the package on disk in the draft's place.
+
+### What is written (ours)
+
+* Each CPL's sequence as any export composes and mixes it (`exportMovieFile`'s sink), with "the tracks enabled"
+  (p.336: the Timeline's selection for the sequence in the Record monitor, every track otherwise).
+* The picture: one track file, JPEG 2000 in MXF OP1a at the project's raster, by FFmpeg's own `jpeg2000` encoder in
+  4:2:2 10-bit Y'CbCr or 12- or 10-bit RGB as the profile says (`media::writeImfTrackFiles`, `src/media/imf_export.*`).
+* The sound: the stereo mix as one 24-bit 48 kHz track file, wrapped by bmx's `raw2bmx -t op1a --audio-layout imf --track-map singlemca`
+  (`LUMENIS_RAW2BMX`, beside the application, or PATH; BUILDING.md "IMF export"). FFmpeg's MXF muxer takes no
+  sound-only file. Without raw2bmx a sequence with sound is not exported and the message says why.
+* The documents (`interop::imf::writePackageDocuments`, `src/interop/imf_writer.*`), in the 2016 namespaces: a CPL
+  per sequence with one segment holding each track file whole (sound in samples, "48000 1"), a PKL per IMP with
+  each asset's SHA-1 in base64, size and original file name, and ASSETMAP.xml. The track files' ids are ours, not
+  read from the MXF files' packages.
+
+## Watch
+
+* Neither the track files nor the documents are validated against ST 2067-2/3/5 or by a checker (Photon): what we
+  check is that our reader and FFmpeg's IMF reader (`ffprobe -f imf`) take them.
+* The guide lists "J2L IMF RGB 10 bit" once beside "J2K IMF RGB 10 bit"; we take the latter.
+
 ## Later
 
-* 11.5c2: New IMF, the metadata to complete, the yellow and red statuses and Export: an IMF Original written from a
-  sequence (track files, CPL, PKL, asset map).
 * 11.5c3: Supplementals (a sequence dragged onto an existing package), MultiChannel Audio Mapping and MCA descriptive
   metadata (p.338-340), the supported formats table (p.340-341).
 
@@ -56,4 +94,6 @@ Tools > IMF Window (p.335):
 
 `tst_imf` (an Original and a Supplemental read, a composition into a sequence with repeats, sound in samples, missing
 track files), `tst_imf_ui` (Tools > IMF Window, Explore, the sidebar and its metadata, a CPL dragged and imported into a
-bin as linked clips and a sequence, removing a package).
+bin as linked clips and a sequence, removing a package), `tst_imf_ui formatsAndProfiles` and `newOriginalAndExport`
+(a draft from New IMF and a drop, its statuses and fields, Export, the package read back and by `ffprobe -f imf`, a
+second IMP with sound through a stand-in raw2bmx).

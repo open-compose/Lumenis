@@ -1,18 +1,29 @@
 // The IMF window and CPLs into bins (11.5c1; docs/spec/imf.md; Editing Guide p.333-337): a package of MXF track files
 // explored, its root, IMP and CPL in the sidebar with their metadata, and the CPL dropped into a bin as a sequence of
-// clips linked to its track files.
+// clips linked to its track files. New IMF (11.5c2): sequences dropped on a draft, its red and yellow statuses, the
+// Issuer and Creator filling the IMP and root, Export writing the package, read back green and into a bin again.
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/imf.h"
+#include "lumenis/interop/imf_writer.h"
+#include "lumenis/media/imf_export.h"
+#include "lumenis/model/auto_sequence.h"
 #include "lumenis/media/media.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/imf_window.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/ui/tool_windows.h"
 
 #include <QAction>
+#include <QDropEvent>
+#include <QLineEdit>
+#include <QMenu>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QDir>
 #include <QFile>
 #include <QMimeData>
@@ -105,6 +116,15 @@ QString makePackage(const QString& root, const QUuid& cplId) {
                    asset(cplId, QStringLiteral("CPL_promo.xml"), false), asset(video, QStringLiteral("video.mxf"), false),
                    asset(audio, QStringLiteral("audio.wav"), false)));
     return root + QStringLiteral("/CPL_promo.xml");
+}
+
+// A sequence for a draft, as MainWindow::addImfSequences makes it.
+ImfDraftCpl draftCpl(const QString& binId, const QString& itemId, const QString& name) {
+    ImfDraftCpl c;
+    c.binId = binId;
+    c.itemId = itemId;
+    c.sequenceName = name;
+    return c;
 }
 
 } // namespace
@@ -201,6 +221,232 @@ private slots:
         QString error;
         QVERIFY(!imf->addPackage(dir.filePath(QStringLiteral("Film")), &error));
         QVERIFY(!error.isEmpty());
+    }
+
+    void formatsAndProfiles() {
+        // The IMF Supported Formats (p.340-341) and the encoding profiles (p.1256-1257).
+        QCOMPARE(media::imfEncodingProfiles().size(), 3);
+        QVERIFY(media::imfFormatSupported(QSize(1920, 1080), Rational(24000, 1001), false, QStringLiteral("J2K IMF YCrCb")));
+        QVERIFY(media::imfFormatSupported(QSize(3840, 2160), Rational(60), false, QStringLiteral("J2K IMF YCrCb")));
+        QVERIFY(media::imfFormatSupported(QSize(4096, 2160), Rational(24), false, QStringLiteral("J2K IMF RGB 12 bit")));
+        QString why;
+        QVERIFY(!media::imfFormatSupported(QSize(4096, 2160), Rational(24), false, QStringLiteral("J2K IMF YCrCb"), &why));
+        QVERIFY(!why.isEmpty());
+        QVERIFY(!media::imfFormatSupported(QSize(4096, 2160), Rational(60), false, QStringLiteral("J2K IMF RGB 12 bit")));
+        QVERIFY(!media::imfFormatSupported(QSize(1920, 1080), Rational(30000, 1001), true, QStringLiteral("J2K IMF YCrCb")));
+        QVERIFY(!media::imfFormatSupported(QSize(1280, 720), Rational(24), false, QStringLiteral("J2K IMF YCrCb")));
+    }
+
+    void newOriginalAndExport() {
+        QTemporaryDir dir;
+        const QString cpl = makePackage(dir.filePath(QStringLiteral("Source_IMF")), QUuid::createUuid());
+        // On POSIX a stand-in for raw2bmx: it keeps its arguments and copies the WAVE input to the output.
+#ifndef Q_OS_WIN
+        const QString tool = dir.filePath(QStringLiteral("raw2bmx"));
+        {
+            QFile f(tool);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("#!/bin/sh\n"
+                    "echo \"$@\" > \"$(dirname \"$0\")/raw2bmx.args\"\n"
+                    "out=''; wav=''\n"
+                    "while [ $# -gt 0 ]; do case \"$1\" in -o) out=\"$2\"; shift;; --wave) wav=\"$2\"; shift;; esac; shift; done\n"
+                    "cp \"$wav\" \"$out\"\n");
+            f.close();
+            f.setPermissions(f.permissions() | QFileDevice::ExeOwner);
+        }
+        qputenv("LUMENIS_RAW2BMX", tool.toUtf8());
+#endif
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(24); // HD 1080p/24: in the IMF Supported Formats
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        commands.action(QStringLiteral("tools.imf_window"))->trigger();
+        ImfWindow* imf = window.imfWindow();
+        QVERIFY(imf);
+
+        // A bin with the imported Promo (picture and sound) and a picture-only sequence of its video clip.
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.importFiles(binId, {cpl});
+        QCOMPARE(ids.size(), 3);
+        const model::BinItem* videoClip = bin->bin().item(ids.first());
+        QVERIFY(videoClip);
+        const model::AutoSequenceResult made = model::autoSequence({*videoClip}, binId, false);
+        QVERIFY(made.ok());
+        model::BinItem pictureOnly = model::newSequence(bin->bin(), Rational(24), QDateTime::currentDateTimeUtc(), QStringLiteral("01:00:00:00"));
+        pictureOnly.name = QStringLiteral("Picture Only");
+        made.sequence.storeIn(pictureOnly);
+        bin->addItem(pictureOnly);
+
+        // New IMF > IMF Original: an untitled root and IMP, red (p.337).
+        QVERIFY(imf->newImfButton()->menu());
+        const QList<QAction*> choices = imf->newImfButton()->menu()->actions();
+        QCOMPARE(choices.size(), 2);
+        QVERIFY(!choices.at(1)->isEnabled()); // IMF Supplemental, 11.5c3
+        choices.at(0)->trigger();
+        QCOMPARE(imf->drafts().size(), 1);
+        QTreeWidget* tree = imf->sidebar();
+        QTreeWidgetItem* draftRoot = tree->topLevelItem(0);
+        QVERIFY(draftRoot);
+        QCOMPARE(draftRoot->text(0), QStringLiteral("untitled"));
+        QCOMPARE(ImfWindow::statusColor(draftRoot), ImfWindow::red());
+        QVERIFY(!imf->exportButton()->isEnabled());
+
+        // The picture-only sequence dropped on the draft's root: a CPL "CPL_Picture Only" in its IMP (p.336-337).
+        {
+            QMimeData mime;
+            mime.setData(binItemsMime(), QStringLiteral("%1\n%2").arg(binId, pictureOnly.id).toUtf8());
+            const QPoint at = tree->visualItemRect(draftRoot).center();
+            QDragEnterEvent enter(at, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(), &enter);
+            QVERIFY(enter.isAccepted());
+            QDropEvent drop(QPointF(at), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(tree->viewport(), &drop);
+        }
+        QCOMPARE(imf->drafts().at(0).imps.size(), 1);
+        QCOMPARE(imf->drafts().size(), 1);
+        QCOMPARE(imf->drafts().at(0).imps.at(0).cpls.size(), 1);
+        draftRoot = tree->topLevelItem(0);
+        QVERIFY(draftRoot);
+        QTreeWidgetItem* impItem = draftRoot->child(0);
+        QVERIFY(impItem);
+        QTreeWidgetItem* cplItem = impItem->child(0);
+        QVERIFY(cplItem);
+        QCOMPARE(cplItem->text(0), QStringLiteral("CPL_Picture Only"));
+        QCOMPARE(ImfWindow::statusColor(cplItem), ImfWindow::red());
+        // Something other than a sequence is refused.
+        QCOMPARE(window.addImfSequences(binId, {ids.first()}, 0), 0);
+
+        // The CPL's fields typed in the right pane: Issuer and Creator fill the IMP's and the root's (p.336).
+        QVERIFY(imf->selectDraft(0, 0, 0));
+        auto* issuer = imf->findChild<QLineEdit*>(QStringLiteral("imfField_issuer"));
+        QVERIFY(issuer);
+        QTest::keyClicks(issuer, QStringLiteral("Studio"));
+        auto* creator = imf->findChild<QLineEdit*>(QStringLiteral("imfField_creator"));
+        QVERIFY(creator);
+        QTest::keyClicks(creator, QStringLiteral("Editor"));
+        auto* title = imf->findChild<QLineEdit*>(QStringLiteral("imfField_contentTitle"));
+        QVERIFY(title);
+        title->selectAll();
+        QTest::keyClicks(title, QStringLiteral("Feature"));
+        QCOMPARE(cplItem->text(0), QStringLiteral("CPL_Feature"));
+        QCOMPARE(ImfWindow::statusColor(cplItem), ImfWindow::yellow());
+        QCOMPARE(imf->drafts().at(0).imps.at(0).issuer, QStringLiteral("Studio"));
+        QCOMPARE(imf->drafts().at(0).creator, QStringLiteral("Editor"));
+        // The root still needs its directory: red, Export dimmed.
+        QCOMPARE(ImfWindow::statusColor(tree->topLevelItem(0)), ImfWindow::red());
+        QVERIFY(imf->missingFields(0).contains(QStringLiteral("Directory")));
+        QVERIFY(!imf->exportButton()->isEnabled());
+        QVERIFY(imf->selectDraft(0));
+        imf->setDirectoryChooser([&] { return dir.filePath(QStringLiteral("Out")); });
+        QDir().mkpath(dir.filePath(QStringLiteral("Out")));
+        auto* browse = imf->findChild<QPushButton*>(QStringLiteral("imfBrowse"));
+        QVERIFY(browse);
+        browse->click();
+        imf->setDraftField(0, -1, -1, QStringLiteral("name"), QStringLiteral("Feature_IMF"));
+        imf->setDraftField(0, -1, -1, QStringLiteral("annotation"), QStringLiteral("Feature package"));
+        QCOMPARE(tree->topLevelItem(0)->text(0), QStringLiteral("Feature_IMF"));
+        QCOMPARE(ImfWindow::statusColor(tree->topLevelItem(0)), ImfWindow::yellow());
+        QVERIFY(imf->draftReady(0));
+        QVERIFY(imf->exportButton()->isEnabled());
+
+        // Export: the package on disk, listed green in the draft's place (p.334, p.337).
+        imf->exportButton()->click();
+        QCOMPARE(imf->drafts().size(), 0);
+        const QString root = dir.filePath(QStringLiteral("Out/Feature_IMF"));
+        QVERIFY(QFileInfo::exists(root + QStringLiteral("/ASSETMAP.xml")));
+        QCOMPARE(imf->packages().size(), 1);
+        QCOMPARE(ImfWindow::statusColor(tree->topLevelItem(0)), ImfWindow::green());
+        QString error;
+        const auto package = interop::imf::readPackage(root, &error);
+        QVERIFY2(package, qPrintable(error));
+        QCOMPARE(package->annotation, QStringLiteral("Feature package"));
+        QCOMPARE(package->imps.size(), 1);
+        QCOMPARE(package->imps.at(0).issuer, QStringLiteral("Studio"));
+        QCOMPARE(package->compositions.size(), 1);
+        const interop::imf::Composition& c = package->compositions.at(0);
+        QCOMPARE(c.contentTitle, QStringLiteral("Feature"));
+        QCOMPARE(c.creator, QStringLiteral("Editor"));
+        QCOMPARE(c.trackFiles().size(), 1);
+        // Each asset's hash in the packing list is its file's.
+        for (const interop::imf::PackingList::Entry& e : package->imps.at(0).assets) {
+            QCOMPARE(e.hash, interop::imf::fileHash(package->assets.value(e.id)));
+        }
+        // The picture track file: JPEG 2000 at the project's raster, 12 frames.
+        const QString picture = package->assets.value(c.trackFiles().at(0));
+        media::VideoReader reader;
+        QVERIFY(reader.open(picture));
+        QCOMPARE(reader.info().width, 1920);
+        QCOMPARE(reader.frameCount(), std::int64_t{12});
+        // FFmpeg's own IMF reader takes the composition, when ffprobe is installed (an outside check, ours).
+        if (const QString ffprobe = QStandardPaths::findExecutable(QStringLiteral("ffprobe")); !ffprobe.isEmpty()) {
+            QProcess probe;
+            probe.start(ffprobe, {QStringLiteral("-v"), QStringLiteral("error"), QStringLiteral("-f"), QStringLiteral("imf"),
+                                  QStringLiteral("-show_entries"), QStringLiteral("format=duration"), QStringLiteral("-of"),
+                                  QStringLiteral("csv=p=0"), c.file});
+            QVERIFY(probe.waitForFinished(60000));
+            const QString out = QString::fromUtf8(probe.readAllStandardOutput()).trimmed();
+            QVERIFY2(probe.exitCode() == 0, qPrintable(QString::fromUtf8(probe.readAllStandardError())));
+            QVERIFY2(std::abs(out.toDouble() - 0.5) < 0.01, qPrintable(out));
+        }
+        // The CPL into a bin again: a 12-frame sequence.
+        const QStringList again = window.importFiles(binId, {c.file});
+        QCOMPARE(again.size(), 2);
+        QCOMPARE(model::Sequence::fromItem(*bin->bin().item(again.last())).track(QStringLiteral("V1"))->length(), 12);
+        // A second export to the same folder is refused: it exists.
+        imf->addSequences(-1, {draftCpl(binId, pictureOnly.id, QStringLiteral("Picture Only"))});
+        QCOMPARE(imf->drafts().size(), 1);
+        for (const QString& field : {QStringLiteral("issuer"), QStringLiteral("creator")}) imf->setDraftField(0, 0, 0, field, QStringLiteral("x"));
+        imf->setDraftField(0, -1, -1, QStringLiteral("directory"), dir.filePath(QStringLiteral("Out")));
+        imf->setDraftField(0, -1, -1, QStringLiteral("name"), QStringLiteral("Feature_IMF"));
+        QVERIFY(imf->draftReady(0));
+        QVERIFY(window.exportImfDraft(0).isEmpty());
+        QCOMPARE(imf->drafts().size(), 1);
+
+#ifndef Q_OS_WIN
+        // With sound (the imported Promo): the mix as one track file through raw2bmx, a MainAudioSequence in samples.
+        imf->setDraftField(0, -1, -1, QStringLiteral("name"), QStringLiteral("Promo_Out"));
+        imf->addSequences(0, {draftCpl(binId, ids.last(), QStringLiteral("Promo"))});
+        QCOMPARE(imf->drafts().at(0).imps.size(), 2); // a later drag makes a new IMP (p.337-338)
+        for (const QString& field : {QStringLiteral("issuer"), QStringLiteral("creator")}) {
+            imf->setDraftField(0, 1, -1, field, QStringLiteral("y"));
+            imf->setDraftField(0, 1, 0, field, QStringLiteral("y"));
+        }
+        const QString written = window.exportImfDraft(0);
+        QVERIFY2(!written.isEmpty(), qPrintable(ConsoleLog::instance().lines().join(QLatin1Char('\n')).right(800)));
+        QVERIFY(QFileInfo::exists(dir.filePath(QStringLiteral("raw2bmx.args"))));
+        QFile args(dir.filePath(QStringLiteral("raw2bmx.args")));
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        const QString used = QString::fromUtf8(args.readAll());
+        QVERIFY2(used.contains(QStringLiteral("-t op1a --audio-layout imf")) && used.contains(QStringLiteral("-f 24/1")), qPrintable(used));
+        const auto two = interop::imf::readPackage(written, &error);
+        QVERIFY2(two, qPrintable(error));
+        QCOMPARE(two->imps.size(), 2);
+        QCOMPARE(two->compositions.size(), 2);
+        const interop::imf::Composition* promo = nullptr;
+        for (const interop::imf::Composition& p : two->compositions) {
+            if (p.contentTitle == QLatin1String("Promo")) promo = &p;
+        }
+        QVERIFY(promo);
+        QCOMPARE(promo->segments.size(), 1);
+        QCOMPARE(promo->segments.at(0).sequences.size(), 2);
+        const interop::imf::Sequence& sound = promo->segments.at(0).sequences.at(1);
+        QVERIFY(sound.isAudio());
+        QCOMPARE(sound.resources.at(0).editRate, Rational(48000));
+        QCOMPARE(sound.resources.at(0).sourceDuration, std::int64_t{24000});
+        qunsetenv("LUMENIS_RAW2BMX");
+#endif
     }
 };
 

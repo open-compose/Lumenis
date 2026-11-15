@@ -98,8 +98,9 @@ is used only by the checks.
 
 [bmx](https://github.com/bbc/bmx) (BSD-3-Clause, Copyright British Broadcasting
 Corporation): its `bmxtranswrap` program rewraps our MXF OP1a as AS-11 and AS-02
-(docs/spec/as11.md). It is found on PATH, beside the application or through
-`LUMENIS_BMXTRANSWRAP`, and is not distributed yet; a package that ships it adds
+(docs/spec/as11.md), and its `raw2bmx` wraps an IMF package's sound as track files
+(docs/spec/imf.md). They are found on PATH, beside the application or through
+`LUMENIS_BMXTRANSWRAP` and `LUMENIS_RAW2BMX`, and are not distributed yet; a package that ships it adds
 bmx's licence text with it (`cmake/Packaging.cmake`).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT, Copyright The ggml

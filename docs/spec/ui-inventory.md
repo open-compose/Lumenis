@@ -2767,8 +2767,9 @@ p.610–640, ch. 13 p.432–434).**
 ### IMF packages (p.333-340)
 * Tools > IMF Window: Explore, the sidebar of root folders, IMPs and CPLs with
   their status, the read-only metadata pane, CPLs dragged into bins as
-  sequences (11.5c1). Details: docs/spec/imf.md. New IMF, Export and the audio
-  mapping are 11.5c2-c3.
+  sequences (11.5c1); New IMF > IMF Original, sequences dragged onto it, the
+  editable metadata with red and yellow statuses, Export (11.5c2). Details:
+  docs/spec/imf.md. Supplementals and the audio mapping are 11.5c3.
 
 ## 16. Playback (p.389–404, p.627)
 

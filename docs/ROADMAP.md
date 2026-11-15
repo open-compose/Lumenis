@@ -1938,7 +1938,11 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   the IMF window (done: `src/interop/imf.*` reading asset maps, packing lists and composition playlists and
   `compositionSequence`; `src/ui/imf_window.*` with Explore, the sidebar and its metadata; CPLs dropped or imported
   into bins through `MainWindow::importImfComposition`; tests `tst_imf`, `tst_imf_ui`); 11.5c2, New IMF and Export of
-  an IMF Original; 11.5c3, Supplementals, MultiChannel Audio Mapping and MCA metadata.
+  an IMF Original (done: drafts in `ImfWindow` with editable metadata, red/yellow statuses and Export;
+  `media::writeImfTrackFiles` in `src/media/imf_export.*` with JPEG 2000 MXF through FFmpeg and raw2bmx for sound;
+  `src/interop/imf_writer.*` with the CPL, PKL and asset map; `MainWindow::addImfSequences`/`exportImfDraft`; test
+  `tst_imf_ui newOriginalAndExport`, checked by FFmpeg's IMF reader); 11.5c3, Supplementals, MultiChannel Audio
+  Mapping and MCA metadata.
 
 ## 6. Immediate next steps
 

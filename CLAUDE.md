@@ -1159,7 +1159,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_closed_captions_ui dataTrackCommands`), is done. 11.5b, Show Track > Film and Show Every Frame
   (`src/ui/timeline_film.cpp`; test `tst_timeline_views filmTrack`), is done. 11.5c1, linking IMF packages and the IMF
   window (docs/spec/imf.md: `src/interop/imf.*`, `src/ui/imf_window.*`, `MainWindow::importImfComposition`; tests
-  `tst_imf`, `tst_imf_ui`), is done. 10.6 is an update check that only tells the user (no
+  `tst_imf`, `tst_imf_ui`), is done. 11.5c2, New IMF and Export of an IMF Original (drafts in `ImfWindow`, the track
+  files through `media::writeImfTrackFiles` with bmx's raw2bmx for sound `LUMENIS_RAW2BMX`, the documents through
+  `interop::imf::writePackageDocuments`, `MainWindow::exportImfDraft`; test `tst_imf_ui newOriginalAndExport`), is
+  done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

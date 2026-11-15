@@ -1457,6 +1457,66 @@
         <source>%1: the media of a group of groups is not made new; consolidate its groups.</source>
         <translation type="unfinished">%1: Die Medien einer Gruppe aus Gruppen werden nicht neu erstellt; konsolidieren Sie ihre Gruppen.</translation>
     </message>
+    <message>
+        <source>%1 could not be read.</source>
+        <translation type="unfinished">%1 konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <source>The composition playlist could not be written.</source>
+        <translation type="unfinished">Die Composition Playlist konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <source>The composition playlist could not be read.</source>
+        <translation type="unfinished">Die Composition Playlist konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <source>The packing list could not be written.</source>
+        <translation type="unfinished">Die Packing List konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <source>The asset map could not be written.</source>
+        <translation type="unfinished">Die Asset Map konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
+        <source>IMF takes progressive formats only.</source>
+        <translation type="unfinished">IMF nimmt nur progressive Formate.</translation>
+    </message>
+    <message>
+        <source>IMF takes HD, 2K, UHD and 4K rasters only (this project is %1 x %2).</source>
+        <translation type="unfinished">IMF nimmt nur HD-, 2K-, UHD- und 4K-Raster (dieses Projekt hat %1 x %2).</translation>
+    </message>
+    <message>
+        <source>IMF does not take this project&apos;s frame rate in this raster.</source>
+        <translation type="unfinished">IMF nimmt die Bildrate dieses Projekts in diesem Raster nicht.</translation>
+    </message>
+    <message>
+        <source>IMF takes 4K in RGB only.</source>
+        <translation type="unfinished">IMF nimmt 4K nur in RGB.</translation>
+    </message>
+    <message>
+        <source>The picture&apos;s track file could not be finished.</source>
+        <translation type="unfinished">Die Track-Datei des Bildes konnte nicht abgeschlossen werden.</translation>
+    </message>
+    <message>
+        <source>No temporary folder for the sound.</source>
+        <translation type="unfinished">Kein temporärer Ordner für den Ton.</translation>
+    </message>
+    <message>
+        <source>raw2bmx could not be started.</source>
+        <translation type="unfinished">raw2bmx konnte nicht gestartet werden.</translation>
+    </message>
+    <message>
+        <source>raw2bmx failed: %1</source>
+        <translation type="unfinished">raw2bmx ist fehlgeschlagen: %1</translation>
+    </message>
+    <message>
+        <source>The sound&apos;s track file could not be moved into the package.</source>
+        <translation type="unfinished">Die Track-Datei des Tons konnte nicht in das Paket verschoben werden.</translation>
+    </message>
+    <message>
+        <source>IMF export of sound needs bmx&apos;s raw2bmx, which was not found (BUILDING.md, &quot;IMF export&quot;).</source>
+        <translation type="unfinished">Der IMF-Export von Ton braucht raw2bmx von bmx, das nicht gefunden wurde (BUILDING.md, &quot;IMF export&quot;).</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -11818,6 +11878,78 @@ Erstellungsdatum: %4</translation>
         <source>Issue Date</source>
         <translation type="unfinished">Ausgabedatum</translation>
     </message>
+    <message>
+        <source>New IMF</source>
+        <translation type="unfinished">Neues IMF</translation>
+    </message>
+    <message>
+        <source>IMF Original</source>
+        <translation type="unfinished">IMF-Original</translation>
+    </message>
+    <message>
+        <source>IMF Supplemental</source>
+        <translation type="unfinished">IMF-Supplemental</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation type="unfinished">Exportieren</translation>
+    </message>
+    <message>
+        <source>untitled</source>
+        <translation type="unfinished">unbenannt</translation>
+    </message>
+    <message>
+        <source>Ready to be exported</source>
+        <translation type="unfinished">Bereit zum Exportieren</translation>
+    </message>
+    <message>
+        <source>Required: %1</source>
+        <translation type="unfinished">Erforderlich: %1</translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation type="unfinished">Durchsuchen...</translation>
+    </message>
+    <message>
+        <source>Sequence</source>
+        <translation type="unfinished">Sequenz</translation>
+    </message>
+    <message>
+        <source>Encoding Profile</source>
+        <translation type="unfinished">Codierungsprofil</translation>
+    </message>
+    <message>
+        <source>Feature</source>
+        <translation type="unfinished">Spielfilm</translation>
+    </message>
+    <message>
+        <source>Trailer</source>
+        <translation type="unfinished">Trailer</translation>
+    </message>
+    <message>
+        <source>Short</source>
+        <translation type="unfinished">Kurzfilm</translation>
+    </message>
+    <message>
+        <source>Teaser</source>
+        <translation type="unfinished">Teaser</translation>
+    </message>
+    <message>
+        <source>Advertisement</source>
+        <translation type="unfinished">Werbung</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation type="unfinished">Test</translation>
+    </message>
+    <message>
+        <source>Episode</source>
+        <translation type="unfinished">Episode</translation>
+    </message>
+    <message>
+        <source>Promotion</source>
+        <translation type="unfinished">Promotion</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ImportEdlDialog</name>
@@ -14649,6 +14781,30 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
     <message>
         <source>IMF: %1: %2</source>
         <translation type="unfinished">IMF: %1: %2</translation>
+    </message>
+    <message>
+        <source>Open a project</source>
+        <translation type="unfinished">Ein Projekt öffnen</translation>
+    </message>
+    <message>
+        <source>IMF: a sequence added to a package on disk makes a Supplemental, which this version cannot write yet.</source>
+        <translation type="unfinished">IMF: Eine Sequenz, die einem Paket auf dem Datenträger hinzugefügt wird, ergibt ein Supplemental, das diese Version noch nicht schreiben kann.</translation>
+    </message>
+    <message>
+        <source>IMF: only sequences go into an IMF package.</source>
+        <translation type="unfinished">IMF: In ein IMF-Paket kommen nur Sequenzen.</translation>
+    </message>
+    <message>
+        <source>%1 already exists.</source>
+        <translation type="unfinished">%1 ist bereits vorhanden.</translation>
+    </message>
+    <message>
+        <source>%1 could not be made.</source>
+        <translation type="unfinished">%1 konnte nicht erstellt werden.</translation>
+    </message>
+    <message>
+        <source>the sequence %1 is no longer in its bin.</source>
+        <translation type="unfinished">die Sequenz %1 ist nicht mehr in ihrem Bin.</translation>
     </message>
 </context>
 <context>

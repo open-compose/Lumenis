@@ -53,6 +53,7 @@ add_library(lumenis_media STATIC
     xdcam_disk.cpp
     as11.cpp
     dcp.cpp
+    imf_export.cpp
     tape_deck.cpp
     test_patterns.cpp
     subcap.cpp

@@ -137,7 +137,8 @@ headers in `include/lumenis/<library>/`.
   as `.avb` (the import's inverse, built with `avb_writer.*`). `edl.*` reads and writes edit
   decision lists (CMX 3600, File_129) and `ale.*` Avid Log Exchange shot logs (what their events become on import, the Shot Log tab, is `src/model/shot_log.*`); the text helpers they
   share are in `text_common.h`. `cut_list.*` makes the List Tool's film cut lists (docs/spec/cut-lists.md). `otio.*` reads and writes OpenTimelineIO's `.otio` JSON, and `fcp_xml.*` FCP 7 XML through it. `imf.*` reads IMF packages (asset maps, packing lists and composition playlists)
-  and makes a composition a sequence (docs/spec/imf.md; the window is `src/ui/imf_window.*`, MainWindow's side
+  and makes a composition a sequence; `imf_writer.*` writes them for a new package (its track files are
+  `src/media/imf_export.*`) (docs/spec/imf.md; the window is `src/ui/imf_window.*`, MainWindow's side
   `main_window_imf.cpp`). The native model they read into and write from is
   described in docs/spec/native-model.md. In the UI, `list_tool.*` is Tools > List Tool and
   `interchange_dialogs.*` the Import EDL and Export Bin As dialogs. File > Output > Export to File runs through

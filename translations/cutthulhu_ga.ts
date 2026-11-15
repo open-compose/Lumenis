@@ -1458,6 +1458,66 @@
         <source>%1: the media of a group of groups is not made new; consolidate its groups.</source>
         <translation type="unfinished">%1: ní dhéantar meáin Ghrúpa Grúpaí as an nua; comhdhlúthaigh a ghrúpaí.</translation>
     </message>
+    <message>
+        <source>%1 could not be read.</source>
+        <translation type="unfinished">Níorbh fhéidir %1 a léamh.</translation>
+    </message>
+    <message>
+        <source>The composition playlist could not be written.</source>
+        <translation type="unfinished">Níorbh fhéidir an composition playlist a scríobh.</translation>
+    </message>
+    <message>
+        <source>The composition playlist could not be read.</source>
+        <translation type="unfinished">Níorbh fhéidir an composition playlist a léamh.</translation>
+    </message>
+    <message>
+        <source>The packing list could not be written.</source>
+        <translation type="unfinished">Níorbh fhéidir an packing list a scríobh.</translation>
+    </message>
+    <message>
+        <source>The asset map could not be written.</source>
+        <translation type="unfinished">Níorbh fhéidir an asset map a scríobh.</translation>
+    </message>
+    <message>
+        <source>IMF takes progressive formats only.</source>
+        <translation type="unfinished">Ní ghlacann IMF ach le formáidí forásacha.</translation>
+    </message>
+    <message>
+        <source>IMF takes HD, 2K, UHD and 4K rasters only (this project is %1 x %2).</source>
+        <translation type="unfinished">Ní ghlacann IMF ach le rastair HD, 2K, UHD agus 4K (%1 x %2 atá sa tionscadal seo).</translation>
+    </message>
+    <message>
+        <source>IMF does not take this project&apos;s frame rate in this raster.</source>
+        <translation type="unfinished">Ní ghlacann IMF le ráta frámaí an tionscadail seo sa rastar seo.</translation>
+    </message>
+    <message>
+        <source>IMF takes 4K in RGB only.</source>
+        <translation type="unfinished">Ní ghlacann IMF le 4K ach in RGB.</translation>
+    </message>
+    <message>
+        <source>The picture&apos;s track file could not be finished.</source>
+        <translation type="unfinished">Níorbh fhéidir comhad riain an phictiúir a chríochnú.</translation>
+    </message>
+    <message>
+        <source>No temporary folder for the sound.</source>
+        <translation type="unfinished">Níl fillteán sealadach ann don fhuaim.</translation>
+    </message>
+    <message>
+        <source>raw2bmx could not be started.</source>
+        <translation type="unfinished">Níorbh fhéidir raw2bmx a thosú.</translation>
+    </message>
+    <message>
+        <source>raw2bmx failed: %1</source>
+        <translation type="unfinished">Theip ar raw2bmx: %1</translation>
+    </message>
+    <message>
+        <source>The sound&apos;s track file could not be moved into the package.</source>
+        <translation type="unfinished">Níorbh fhéidir comhad riain na fuaime a bhogadh isteach sa phacáiste.</translation>
+    </message>
+    <message>
+        <source>IMF export of sound needs bmx&apos;s raw2bmx, which was not found (BUILDING.md, &quot;IMF export&quot;).</source>
+        <translation type="unfinished">Tá raw2bmx ó bmx ag teastáil chun fuaim a easpórtáil mar IMF, agus níor aimsíodh é (BUILDING.md, &quot;IMF export&quot;).</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -11827,6 +11887,78 @@ Dáta Cruthaithe: %4</translation>
         <source>Issue Date</source>
         <translation type="unfinished">Dáta Eisiúna</translation>
     </message>
+    <message>
+        <source>New IMF</source>
+        <translation type="unfinished">IMF Nua</translation>
+    </message>
+    <message>
+        <source>IMF Original</source>
+        <translation type="unfinished">Bunleagan IMF</translation>
+    </message>
+    <message>
+        <source>IMF Supplemental</source>
+        <translation type="unfinished">Forlíonadh IMF</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation type="unfinished">Easpórtáil</translation>
+    </message>
+    <message>
+        <source>untitled</source>
+        <translation type="unfinished">gan teideal</translation>
+    </message>
+    <message>
+        <source>Ready to be exported</source>
+        <translation type="unfinished">Réidh le heaspórtáil</translation>
+    </message>
+    <message>
+        <source>Required: %1</source>
+        <translation type="unfinished">Riachtanach: %1</translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation type="unfinished">Brabhsáil...</translation>
+    </message>
+    <message>
+        <source>Sequence</source>
+        <translation type="unfinished">Seicheamh</translation>
+    </message>
+    <message>
+        <source>Encoding Profile</source>
+        <translation type="unfinished">Próifíl Ionchódaithe</translation>
+    </message>
+    <message>
+        <source>Feature</source>
+        <translation type="unfinished">Príomhscannán</translation>
+    </message>
+    <message>
+        <source>Trailer</source>
+        <translation type="unfinished">Réamhbhlaiseadh</translation>
+    </message>
+    <message>
+        <source>Short</source>
+        <translation type="unfinished">Gearrscannán</translation>
+    </message>
+    <message>
+        <source>Teaser</source>
+        <translation type="unfinished">Mealladh</translation>
+    </message>
+    <message>
+        <source>Advertisement</source>
+        <translation type="unfinished">Fógra</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation type="unfinished">Tástáil</translation>
+    </message>
+    <message>
+        <source>Episode</source>
+        <translation type="unfinished">Eipeasóid</translation>
+    </message>
+    <message>
+        <source>Promotion</source>
+        <translation type="unfinished">Cur Chun Cinn</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ImportEdlDialog</name>
@@ -14694,6 +14826,30 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>IMF: %1: %2</source>
         <translation type="unfinished">IMF: %1: %2</translation>
+    </message>
+    <message>
+        <source>Open a project</source>
+        <translation type="unfinished">Oscail tionscadal</translation>
+    </message>
+    <message>
+        <source>IMF: a sequence added to a package on disk makes a Supplemental, which this version cannot write yet.</source>
+        <translation type="unfinished">IMF: déanann seicheamh a chuirtear le pacáiste ar an diosca Forlíonadh, nach féidir leis an leagan seo a scríobh fós.</translation>
+    </message>
+    <message>
+        <source>IMF: only sequences go into an IMF package.</source>
+        <translation type="unfinished">IMF: ní théann ach seichimh isteach i bpacáiste IMF.</translation>
+    </message>
+    <message>
+        <source>%1 already exists.</source>
+        <translation type="unfinished">Tá %1 ann cheana.</translation>
+    </message>
+    <message>
+        <source>%1 could not be made.</source>
+        <translation type="unfinished">Níorbh fhéidir %1 a dhéanamh.</translation>
+    </message>
+    <message>
+        <source>the sequence %1 is no longer in its bin.</source>
+        <translation type="unfinished">níl an seicheamh %1 ina bhosca a thuilleadh.</translation>
     </message>
 </context>
 <context>

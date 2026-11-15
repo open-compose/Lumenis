@@ -1176,6 +1176,11 @@ the build folder (`build/<preset>`) and configure again.
   `bmx/build/apps/bmxtranswrap/bmxtranswrap` onto PATH, beside the
   application, or name it in `LUMENIS_BMXTRANSWRAP`. Without it those
   exports say so in the Console; `tst_movie_export as11` skips its rewrap.
+* **IMF export** (11.5c2, docs/spec/imf.md) writes the picture itself (JPEG 2000 in
+  MXF through FFmpeg) and runs bmx's `raw2bmx` (`-t op1a --audio-layout imf`) for each sound track file,
+  built with `mxf2raw` above: copy `bmx/build/apps/raw2bmx/raw2bmx` onto PATH, beside the
+  application, or name it in `LUMENIS_RAW2BMX`. Without it a sequence with sound is not
+  exported and the message says why; `tst_imf_ui` uses a stand-in script (not on Windows).
 * **Transcripts** (8.2, docs/spec/transcripts.md) run whisper.cpp's `whisper-cli`
   (https://github.com/ggml-org/whisper.cpp, MIT; Homebrew's `whisper-cpp`, or built with
   its CMake files) with a ggml model file from the same project (`ggml-base.bin`; a

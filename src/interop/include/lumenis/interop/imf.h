@@ -112,9 +112,9 @@ bool isComposition(const QString& path);
 // The native sequence of a composition (docs/spec/imf.md, "Into a bin"): MainImageSequence resources one after another
 // on V1, each MainAudioSequence (a virtual track) on audio tracks from A1, a track per channel of its track files'
 // clips. `clipOf` gives the clip linked to a track file (null when it is not linked: the resource becomes filler, with
-// a warning). The sequence is at the composition's edit rate.
+// a warning); the clips are in the bin `binId`, which the segments name. The sequence is at the composition's edit rate.
 model::BinItem compositionSequence(const Composition& composition, const std::function<const model::BinItem*(const QUuid&)>& clipOf,
-                                   const QDateTime& when, QStringList* warnings = nullptr);
+                                   const QString& binId, const QDateTime& when, QStringList* warnings = nullptr);
 
 // "urn:uuid:..." to a UUID and back.
 QUuid uuidOf(const QString& text);

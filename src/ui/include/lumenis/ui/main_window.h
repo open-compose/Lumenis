@@ -1065,6 +1065,14 @@ public:
     // Supplemental's Original), and the composition as a sequence of them (interop::imf::compositionSequence). A CPL
     // whose package the window does not list is read from its own folder. Returns the new items' ids, the sequence last.
     QStringList importImfComposition(const QString& binId, const QString& cplFile);
+    // Bin items dropped on the IMF window (11.5c2, p.336-337): the sequences among them become CPLs of the draft (-1:
+    // a new Original). The number of sequences taken.
+    int addImfSequences(const QString& binId, const QStringList& itemIds, int draft, const QString& packageRoot = {});
+    // Export of a ready draft (p.334, p.337): its root folder made in its Directory, each CPL's sequence written as
+    // track files (media::writeImfTrackFiles, through exportMovieFile's "sink" so it is composed and mixed as any
+    // export), then the CPLs, PKLs and asset map (interop::imf::writePackageDocuments). The root, empty on failure
+    // (said in a message, the folder removed).
+    QString exportImfDraft(int draft);
     bool editDmfProfile(const QString& folder, const QString& profile);
     void setDmfProfileEditorHook(std::function<bool(DmfProfileEditor&)> hook) { dmfProfileEditorHook_ = std::move(hook); }
     QString acquireDmfAssets(const QString& folder);
