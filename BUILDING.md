@@ -1127,7 +1127,9 @@ deprecated`.** Newer compilers and Qt versions warn about things older ones
 accept, and the `ci` preset turns warnings into errors. Update your checkout:
 these are fixed, and CI now builds on Ubuntu 26.04 too, so new ones are
 caught there. If you meet one first, report it with the full message; the
-`debug` and `release` presets build anyway.
+`debug` and `release` presets build anyway. Qt 6.10 declares `QFile::open`
+`[[nodiscard]]`, which Qt 6.4 does not: ctest `unchecked_open`
+(`scripts/check-unchecked-open.py`) finds a dropped `open()` result on any Qt.
 
 **WSL: windows respond slowly.** WSLg draws Linux windows on Windows through
 a remote desktop connection, with software rendering, so every repaint

@@ -426,8 +426,7 @@ void TestAaf::embeddedMedia() {
     }
     auto save = [&](const QString& name, const QByteArray& bytes) {
         QFile f(dir.filePath(name));
-        f.open(QIODevice::WriteOnly);
-        f.write(bytes);
+        if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size()) qFatal("cannot write %s", qPrintable(f.fileName()));
         return f.fileName();
     };
     const QString dnxFile = save(QStringLiteral("v.dnxhd"), frames);

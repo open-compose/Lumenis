@@ -859,8 +859,7 @@ bool Writer::write(QIODevice& device, QString* error) const {
 QByteArray Writer::toBytes(QString* error) const {
     QByteArray bytes;
     QBuffer buffer(&bytes);
-    buffer.open(QIODevice::WriteOnly);
-    if (!write(buffer, error)) return {};
+    if (!buffer.open(QIODevice::WriteOnly) || !write(buffer, error)) return {};
     return bytes;
 }
 

@@ -39,6 +39,15 @@ if(Python3_Interpreter_FOUND)
         PASS_REGULAR_EXPRESSION "failure messages: every Console line" TIMEOUT 60)
 endif()
 
+# Opened files are checked (scripts/check-unchecked-open.py): Qt 6.10's [[nodiscard]] QFile::open breaks the Ubuntu 26.04
+# build where Qt 6.4 says nothing.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME unchecked_open
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-unchecked-open.py)
+    set_tests_properties(unchecked_open PROPERTIES
+        PASS_REGULAR_EXPRESSION "unchecked open: every open.. result is used" TIMEOUT 60)
+endif()
+
 # The trademark check (ROADMAP 9.8): no user-visible string names a feature with one of Avid's marks
 # (tests/data/trademarks.json, scripts/check-trademarks.py, docs/spec/trademarks.md).
 if(Python3_Interpreter_FOUND)
