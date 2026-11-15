@@ -17,7 +17,10 @@
 #include <QLabel>
 #include <QSlider>
 #include <QTest>
+#include <QMenu>
 #include <QToolButton>
+
+#include <memory>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -132,6 +135,38 @@ private slots:
         QVERIFY(rig.mixer.setSequenceMixFormat(AudioFormat::Stereo));
         QVERIFY(visible(mono->panKnob()));
         QVERIFY(!visible(mono->panGrid(0)));
+    }
+
+    // The Timeline's Clip Volume/Pan menu in a 5.1 sequence (p.679-680): Pan L and, for stereo, Pan R > Front, Rear, Front
+    // and Rear, Center %; the 5.1 track keeps Pan. A keyframe added on the graph shown is a surround pan keyframe.
+    void timelineSurroundGraphs() {
+        Rig rig;
+        auto submenus = [&](const QString& track) {
+            std::unique_ptr<QMenu> menu(rig.timeline.trackAudioDataMenu(track, false, nullptr));
+            QStringList out;
+            for (QAction* a : menu->actions()) out << (a->menu() ? a->text() + QStringLiteral(">") : a->text());
+            return out;
+        };
+        QCOMPARE(submenus(QStringLiteral("A1")), (QStringList{"Clip Volume", "Volume", "Pan L>"}));
+        QCOMPARE(submenus(QStringLiteral("A2")), (QStringList{"Clip Volume", "Volume", "Pan L>", "Pan R>"}));
+        QCOMPARE(submenus(QStringLiteral("A3")), (QStringList{"Clip Volume", "Volume", "Pan"}));
+        std::unique_ptr<QMenu> menu(rig.timeline.trackAudioDataMenu(QStringLiteral("A2"), false, nullptr));
+        QMenu* right = menu->actions().last()->menu();
+        QStringList layouts;
+        for (QAction* a : right->actions()) layouts << a->text();
+        QCOMPARE(layouts, (QStringList{"Front", "Rear", "Front and Rear", "Center %"}));
+        right->actions().at(1)->trigger();
+        const model::Sequence seq = rig.shown();
+        QCOMPARE(rig.timeline.automationShown(*seq.track(QStringLiteral("A2"))), model::AutomationParam::RearR);
+        QCOMPARE(seq.track(QStringLiteral("A2"))->showSurround, QStringLiteral("R.rear"));
+        // Add Keyframe there holds the pan that plays: the R channel's rear at the right.
+        QVERIFY2(rig.timeline.addKeyframeAt(QStringLiteral("A2"), 5), qPrintable(rig.timeline.lastMessage()));
+        const model::Segment s = rig.shown().track(QStringLiteral("A2"))->segments.first();
+        QCOMPARE(s.surroundKeys.size(), 2);
+        QCOMPARE(s.surroundKeys.at(1).rear, (QList<model::AudioKey>{{5, 100}}));
+        // Its value as the mixer reads it.
+        rig.composer.moveTo(MonitorId::Record, 5);
+        QCOMPARE(rig.timeline.automationAt(QStringLiteral("A2"), model::AutomationParam::RearR), 100.0);
     }
 
     // A finished drag stores the pan as one undo step; Stereo Link moves the other channel.

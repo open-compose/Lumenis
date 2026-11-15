@@ -109,7 +109,6 @@ Code:
 
 ## Later
 
-* Pan L and Pan R > [speaker layout] in the Clip Volume/Pan menu for surround sequences (p.679-680).
 * Dragging an effect from the Effect Palette onto an insert button (p.792).
 * Ctrl+Bypass turning the insert buttons blue (p.794).
 * Inactive video tracks.

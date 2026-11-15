@@ -320,6 +320,43 @@ private slots:
         near(play(stereo, MonitorMix::SmpteDs71), {value(0), 0, 0, 0, 0, value(1), 0, 0});
     }
 
+    // Surround pan automation as it plays (p.715-716): a mono track moved from the left front to the left rear over its
+    // ten frames, the gains following the keyframes.
+    void automatedPlayback() {
+        model::BinItem item = sequenceOf(AudioFormat::Surround51, AudioFormat::Mono, QStringLiteral("A2"));
+        model::Sequence seq = model::Sequence::fromItem(item);
+        model::Segment& seg = seq.track(QStringLiteral("A1"))->segments[0];
+        model::SurroundKeys keys;
+        keys.front = {{0, -100}};
+        keys.rear = {{0, -100}};
+        keys.frontRear = {{0, 100}, {10, -100}};
+        seg.surroundKeys = {keys};
+        seq.storeIn(item);
+        AudioMix mix(audioPieces(item, lookup()), trackInserts(item));
+        mix.setOutput(AudioFormat::Surround51, MonitorMix::ProTools51);
+        const int ch = mix.channels();
+        QCOMPARE(ch, 6);
+        std::vector<float> out(static_cast<std::size_t>(ch) * 19200);
+        mix.render(0, 19200, out.data());
+        auto sample = [&](int at, int channel) { return static_cast<double>(out[static_cast<std::size_t>(ch * at + channel)]); };
+        // Pro Tools 5.1: L C R Ls Rs LFE. At the start the left front, at the end (frame 9.9) almost all the left rear.
+        QVERIFY2(std::abs(sample(10, 0) - value(1)) < 1e-3, qPrintable(QString::number(sample(10, 0))));
+        QVERIFY(std::abs(sample(10, 3)) < 1e-3);
+        QVERIFY(sample(19000, 3) > value(1) * 0.99);
+        QVERIFY(sample(19000, 0) < value(1) * 0.1);
+        // Halfway, between them with the power kept.
+        const double l = sample(9600, 0), ls = sample(9600, 3);
+        QVERIFY(l > 0.01 && ls > 0.01);
+        QVERIFY2(std::abs(l * l + ls * ls - value(1) * value(1)) < 1e-3, qPrintable(QStringLiteral("%1 %2").arg(l).arg(ls)));
+        // An inactive track plays without it (p.602): at its pan, the front.
+        seq.track(QStringLiteral("A1"))->inactive = true;
+        seq.storeIn(item);
+        AudioMix still(audioPieces(item, lookup()), trackInserts(item));
+        still.setOutput(AudioFormat::Surround51, MonitorMix::ProTools51);
+        still.render(0, 19200, out.data());
+        QVERIFY(std::abs(sample(19000, 3)) < 1e-3);
+    }
+
     // The model's side: defaults, JSON, links, and Split Track to Mono marking the LFE channel (p.710).
     void panModel() {
         using model::SurroundPan;

@@ -15,10 +15,31 @@
 // (sub-frame keyframes, p.720-721).
 namespace lumenis::model {
 
-enum class AutomationParam { Volume, Pan };
+// Volume, the stereo pan, and the surround pan's members of channel L (a mono segment's only channel) and R (p.679-680:
+// "Pan L > [speaker layout]", "Pan R > [speaker layout]"), as Segment::surroundKeys keeps them.
+enum class AutomationParam { Volume, Pan, FrontL, RearL, FrontRearL, CenterL, FrontR, RearR, FrontRearR, CenterR };
+enum class SurroundAxis { Front, Rear, FrontRear, Center };
+// The surround parameter of `channel` (0: L, 1: R) and `axis`, and back: the channel and axis of a surround parameter,
+// nothing for Volume and Pan.
+AutomationParam surroundParam(int channel, SurroundAxis axis);
+struct SurroundParamRef {
+    int channel = 0;
+    SurroundAxis axis = SurroundAxis::Front;
+};
+std::optional<SurroundParamRef> surroundParamOf(AutomationParam param);
+inline bool isSurroundParam(AutomationParam param) { return surroundParamOf(param).has_value(); }
+// A parameter as text, kept in Timeline views and per track settings: "volume", "pan", "L.front", "L.rear",
+// "L.frontRear", "L.center", "R.front" ...; and back (nothing for other text).
+QString automationKey(AutomationParam param);
+std::optional<AutomationParam> automationFromKey(const QString& key);
+// A parameter's range: volume clampGain's, pans ±kPanMax, Center 0 to 100.
+double clampAutomation(AutomationParam param, double value);
 
+// A segment's keyframes of `param`. The mutable one makes room in Segment::surroundKeys for the channel; trimSurroundKeys
+// drops the empty entries that leaves.
 const QList<AudioKey>& keysOf(const Segment& segment, AutomationParam param);
 QList<AudioKey>& keysOf(Segment& segment, AutomationParam param);
+void trimSurroundKeys(Segment& segment);
 
 // A -∞ keyframe counts as this many dB in the ramps to and from it, so a fade
 // to silence is heard as one (ours: the guide does not say how such a ramp
@@ -43,7 +64,12 @@ double volumeAt(const Segment& segment, double frame);
 double panAt(const Segment& segment, double frame, int side);
 // The automation's own value at `frame`, as the Timeline and the Auto mode faders show it: volume
 // automation (0 dB without keyframes) or the pan panAt() gives.
-double automationValue(const Segment& segment, AutomationParam param, double frame, int side);
+// A surround parameter's value is the channel's pan member (surroundPanAt) on a track of `format`.
+double automationValue(const Segment& segment, AutomationParam param, double frame, int side,
+                       AudioFormat format = AudioFormat::Mono);
+// The surround pan channel `channel` of a mono or stereo segment on a track of `format` plays at source frame `frame`:
+// its pan (surroundPansOf, with `stereoPan`), each member with keyframes taking their value there (rounded).
+SurroundPan surroundPanAt(const Segment& segment, AudioFormat format, int stereoPan, int channel, double frame);
 
 // A keyframe, by its track and its place in the sequence: the record frame it falls on, with any
 // fraction.

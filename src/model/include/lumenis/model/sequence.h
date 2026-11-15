@@ -14,6 +14,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
@@ -173,6 +174,19 @@ struct AudioSuiteEffect {
 // a discrete centre channel or, lower, to a phantom centre between L and R; Side percentage (7.1)
 // does the same for the side surrounds; LFE (0-100) is the share sent to the LFE channel. The
 // defaults put the cursor at the front centre.
+// Surround pan automation (p.679-680, p.715-716; docs/spec/automation.md, "Surround pans"): keyframes on one channel's
+// surround pan, one list for each of the Timeline's speaker layouts, "Front speaker position", "Rear speaker position",
+// "Front and rear speaker positions" and "Center speaker position, displayed as a percentage" (p.679). They count in the
+// clip's frames as AudioKey does; each overrides its member of the channel's SurroundPan where it has keyframes.
+struct SurroundKeys {
+    QList<AudioKey> front;     // SurroundPan::front, -100 to 100
+    QList<AudioKey> rear;      // SurroundPan::rear, -100 to 100
+    QList<AudioKey> frontRear; // SurroundPan::frontRear, 100 (front) to -100 (rear)
+    QList<AudioKey> center;    // SurroundPan::center, 0 to 100 percent
+    bool isEmpty() const { return front.isEmpty() && rear.isEmpty() && frontRear.isEmpty() && center.isEmpty(); }
+    bool operator==(const SurroundKeys&) const = default;
+};
+
 struct SurroundPan {
     int front = 0;
     int rear = 0;
@@ -261,6 +275,12 @@ struct Segment {
     // Surround pans (p.704-710), one for each channel of a mono or stereo segment; empty for the
     // default (lumenis/model/surround_pan.h: surroundPansOf). Used in 5.1 and 7.1 sequences only.
     QList<SurroundPan> surround;
+    // Surround pan automation, one entry for each channel (0 for a mono segment, 0 and 1 for a stereo one's L and R);
+    // empty, or empty entries, for none. Used in 5.1 and 7.1 sequences only (lumenis/model/automation.h).
+    QList<SurroundKeys> surroundKeys;
+    bool hasSurroundAutomation() const {
+        return std::any_of(surroundKeys.begin(), surroundKeys.end(), [](const SurroundKeys& k) { return !k.isEmpty(); });
+    }
     // Set Local Clip Color (p.597-598): "#rrggbb", empty for none. Shown when the Clip Color dialog's
     // Timeline Local is on (lumenis/model/clip_coloring.h).
     QString localColor;
@@ -315,7 +335,7 @@ struct Segment {
         if (hasNest()) nestIn += by;
     }
     bool hasEffects() const { return effect || transition; }
-    bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
+    bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty() || hasSurroundAutomation(); }
     bool isFiller() const { return clipId.isEmpty(); }
     // The MobID the segment refers to: sourceMob, else the one derived from clipId; null for filler.
     MobId sourceMobId() const;
@@ -368,6 +388,9 @@ struct Track {
     bool showClipVolume = false;
     bool showVolume = false;
     bool showPan = false;
+    // The surround pan graph shown instead (p.679-680, "Pan L > [speaker layout]"): a model::automationKey such as
+    // "L.front"; empty for none. One of showVolume, showPan and this at a time.
+    QString showSurround{};
     // Inactive (p.602): "play back your sequence without processing the plug-in effects or
     // automation for the inactive track". Audio tracks only.
     bool inactive = false;
@@ -410,7 +433,7 @@ public:
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
     // lfeOnly?, inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
-    // volumeKeys?, panKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
+    // volumeKeys?, panKeys?, surroundKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
     // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type, interlaced?}}, and nest? (a composition like this one)
     // with nestIn? on any segment for

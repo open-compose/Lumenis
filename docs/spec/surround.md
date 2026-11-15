@@ -114,7 +114,8 @@ the Audio Project setting's Mix Mode Selection (p.1150). The menu:
   * So the Position controls are heard "from just those two speakers"
     (p.707), and grid pans in the middle reach more.
   * The gains have unit power; LFE adds its percentage to the LFE channel.
-  * Pan automation and Live mode do not apply to surround pans yet.
+  * Surround pan automation (11.4d2a, docs/spec/automation.md "Surround
+    pans") moves the pans over time; Live mode does not apply to them yet.
     Volume automation does.
 * **The Pan grid (p.705-706).** In a 5.1 or 7.1 sequence each mono or
   stereo track's mixer strip shows a small grid for each channel, with the

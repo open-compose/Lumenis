@@ -130,11 +130,42 @@ output samples. `AudioMix` then works out the gains sample by sample:
 * the equal-power pan law.
 A mono mixdown takes the volume alone.
 
+## Surround pans (11.4d2a)
+
+"You can view the volume and pan automation values in the Timeline, including surround sound pan values for sequences
+using a surround sound mix" (p.679). In a 5.1 or 7.1 sequence the Clip Volume/Pan menu of a mono or stereo track has, in
+place of Pan, "Pan L > [speaker layout]" and, for a stereo track, "Pan R > [speaker layout]" (p.680), with the layouts
+of p.679:
+
+| Layout | Member of the channel's pan (`model::SurroundPan`) | Graph |
+|---|---|---|
+| Front speaker position | `front`, -100 (left) to 100 | left at the top, as Pan |
+| Rear speaker position | `rear`, -100 to 100 | the same |
+| Front and rear speaker positions | `frontRear`, 100 (front) to -100 (rear) | the front at the top |
+| Center speaker position, displayed as a percentage | `center`, 0 to 100 % | 100 % at the top |
+
+* **Ours:** a mono track's one channel is "Pan L" (the guide names L and R only); a 5.1 or 7.1 track keeps Pan, its
+  channels having their own speakers.
+* **The model:** `Segment::surroundKeys`, a `SurroundKeys` per channel with a keyframe list per layout, counted in
+  the clip's frames as the other keyframes. They are `AutomationParam`s FrontL ... CenterR, so Add Keyframe, drags,
+  Delete, Remove, Adjust, Filter and Remove Hidden on Track work on them as on Pan ("If you add a keyframe for pan, the
+  keyframe applies only to the automation value displayed in the Timeline", p.716). A new keyframe holds the member's
+  value that plays there. `model::surroundPanAt` gives the channel's pan at a frame: each member with keyframes takes
+  their straight-line value; the others keep the segment's pan.
+* **The sound:** `AudioPiece::surroundKeys` and `surroundAt`; the speaker gains (`media::surroundGains`) are worked
+  out every 32 samples. An inactive track plays without them (p.602).
+* Kept in Timeline views and per track settings by `model::automationKey` ("L.front", "R.center" ...;
+  `Track::showSurround`).
+* **Not yet (11.4d2b):** the Audio Mixer's Auto mode on the Pan grids (recording surround pans and the Fast menu's pan
+  commands for them), Live mode, and copying and pasting surround keyframes.
+
 ## Checks
 
 * `tst_automation` covers the model: ramps, sub-frames, -∞, keyframes
   through splices, Add Edit and saving, moves, deletes, and the Fast menu
-  commands, hidden keyframes, and copy and paste.
+  commands, hidden keyframes, and copy and paste; `surroundPans` the surround parameters.
+* `tst_surround automatedPlayback` plays a pan moved from the left front to the left rear;
+  `tst_surround_ui timelineSurroundGraphs` the Clip Volume/Pan menu's Pan L and Pan R and Add Keyframe on them.
 * `tst_automation_ui` covers the Timeline and the mixer:
   * Add Keyframe and Audio Data;
   * the mouse (hit test, drag, Ctrl+Shift+click);
@@ -147,7 +178,8 @@ A mono mixdown takes the volume alone.
   apart from the model's code. The residual is about -137 dBFS.
 * Edit scenarios (`tests/scenarios/07-volume-automation.json`):
   * keyframes stay with their material through a splice;
-  * Add Edit, twin drags, and time moves of the visible keyframe only.
+  * Add Edit, twin drags, and time moves of the visible keyframe only;
+  * `53-surround-pan-automation.json`: Front and Rear keyframes through a splice.
 
 ## Later
 
@@ -155,7 +187,7 @@ A mono mixdown takes the volume alone.
   waveforms and Enlarge/Reduce Track.
 * Lassoing keyframes (p.722).
 * Delete Hidden Left/Right on a transition's right-click menu (p.723).
-* Surround pan parameters (p.715). Tracks hold one channel each.
+* Surround pans in the Audio Mixer's Auto and Live modes (11.4d2b).
 * Live Mix mode's Set Live Mix to Automation / as Automation (p.725-726).
 * Avid controllers and fader hardware (p.718).
 * Keyframes in AAF, OTIO, FCP XML and `.avb` interchange. They are not

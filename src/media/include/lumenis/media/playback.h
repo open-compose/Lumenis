@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -70,6 +71,16 @@ struct AudioPiece {
     // A mono or stereo channel's surround pan in a 5.1 or 7.1 sequence (surroundGains()): its gain on
     // each speaker of the bus, times its volume (`left`, `right` 0); `speaker` is then -1.
     std::optional<SpeakerGains> surround;
+    // Surround pan automation of the piece's channel (lumenis/model/automation.h; p.715-716), with AudioKey::frame in
+    // output samples from `at`, over the pan `surroundPan` in the mix `surroundMix`: `surround` then follows it, worked out
+    // every kSurroundBlock samples (surroundAt).
+    model::SurroundKeys surroundKeys;
+    model::SurroundPan surroundPan;
+    model::AudioFormat surroundMix = model::AudioFormat::Stereo;
+    bool surroundAutomated() const { return surround && !surroundKeys.isEmpty(); }
+    // The speaker gains `offset` output samples into the piece.
+    SpeakerGains surroundAt(double offset) const;
+    static constexpr int kSurroundBlock = 32;
     // The Audio Tool's calibration tone (Play Calibration Tone, p.920): the piece plays this from its
     // sourceStart instead of reading `path`.
     std::optional<Tone> tone;
@@ -176,6 +187,10 @@ private:
         float left = 0.70710678f;
         float right = 0.70710678f;
         const SpeakerGains* surround = nullptr; // the last piece's, for the tail
+        // The gains of automated surround pieces (AudioPiece::surroundAt) the last trackInput() worked out, which
+        // `surround` and its output point into until the next call; `carried` keeps the last of them over the call.
+        std::list<SpeakerGains> automated; // a list: its elements stay put as it grows, and it moves noexcept
+        SpeakerGains carried{};
     };
     // The track's pieces from `start`, summed in mono with their gains, and the pan of each sample,
     // into `bus`, `left` and `right` (resized to `count`); `surround` holds each sample's surround

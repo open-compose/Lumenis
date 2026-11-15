@@ -41,7 +41,29 @@ namespace {
 constexpr int kChunk = 1024;                         // samples rendered at a time
 constexpr std::size_t kRingFrames = kPlaybackRate / 4; // a quarter second ahead
 
+// A channel's surround keyframes, from source frames to output samples from the segment's start.
+model::SurroundKeys inSamples(const model::SurroundKeys& keys, std::int64_t sourceIn, double perFrame) {
+    auto move = [&](const QList<model::AudioKey>& from) {
+        QList<model::AudioKey> out;
+        for (const model::AudioKey& k : from) out << model::AudioKey{(k.frame - static_cast<double>(sourceIn)) * perFrame, k.value};
+        return out;
+    };
+    return {move(keys.front), move(keys.rear), move(keys.frontRear), move(keys.center)};
+}
+
 } // namespace
+
+SpeakerGains AudioPiece::surroundAt(double offset) const {
+    model::SurroundPan p = surroundPan;
+    auto keyed = [offset](const QList<model::AudioKey>& keys, int& member) {
+        if (const auto v = model::automationAt(keys, offset)) member = static_cast<int>(std::lround(*v));
+    };
+    keyed(surroundKeys.front, p.front);
+    keyed(surroundKeys.rear, p.rear);
+    keyed(surroundKeys.frontRear, p.frontRear);
+    keyed(surroundKeys.center, p.center);
+    return surroundGains(p, surroundMix);
+}
 
 void panGains(int pan, double gainDb, float* left, float* right) {
     panGains(static_cast<double>(pan), gainDb, left, right);
@@ -150,7 +172,10 @@ void multichannelPieces(const model::Track& track, const model::Segment& s, std:
             // On its speaker at the segment's gain: no pan, and not the stereo placement's 3 dB. A
             // stereo track's channels follow their surround pans instead (p.704-706).
             if (track.format == model::AudioFormat::Stereo) {
-                p->surround = surroundGains(model::surroundPansOf(s, track.format, 0).at(k), mix);
+                p->surroundPan = model::surroundPansOf(s, track.format, 0).at(k);
+                p->surround = surroundGains(p->surroundPan, mix);
+                p->surroundMix = mix;
+                if (!track.inactive && k < s.surroundKeys.size()) p->surroundKeys = inSamples(s.surroundKeys.at(k), s.sourceIn, perFrame);
             } else {
                 p->speaker = static_cast<int>(speakers.at(k));
             }
@@ -285,7 +310,14 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
                 if (track.lfeOnly) {
                     p->speaker = static_cast<int>(Speaker::Lfe);
                 } else {
-                    p->surround = surroundGains(model::surroundPansOf(s, track.format, static_cast<int>(p->pan)).at(0), seq.mixFormat());
+                    p->surroundPan = model::surroundPansOf(s, track.format, static_cast<int>(p->pan)).at(0);
+                    p->surround = surroundGains(p->surroundPan, seq.mixFormat());
+                    p->surroundMix = seq.mixFormat();
+                    if (!track.inactive && !s.surroundKeys.isEmpty()) {
+                        const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
+                                                static_cast<double>(rate.num());
+                        p->surroundKeys = inSamples(s.surroundKeys.first(), s.sourceIn, perFrame);
+                    }
                 }
             }
             // Keyframes in the clip's frames, as output samples from the segment's start.
@@ -450,8 +482,15 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
         float* dest = bus + kSpeakers * (from - start);
         // A surround-panned piece spreads its volume (left) over the speakers.
         if (piece.surround) {
-            const SpeakerGains& g = *piece.surround;
+            SpeakerGains automated{};
+            const SpeakerGains* gains = &*piece.surround;
             for (int i = 0; i < n; ++i) {
+                // Surround pan automation: the gains every kSurroundBlock samples.
+                if (piece.surroundAutomated() && (i == 0 || (from - piece.at + i) % AudioPiece::kSurroundBlock == 0)) {
+                    automated = piece.surroundAt(static_cast<double>(from - piece.at + i));
+                    gains = &automated;
+                }
+                const SpeakerGains& g = *gains;
                 float l = piece.left;
                 if (piece.automated()) {
                     float r = 0;
@@ -501,6 +540,12 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
     left.assign(n, -1.0f); // -1: no piece there
     right.assign(n, 0.0f);
     surround.assign(n, nullptr);
+    // What the last call left `surround` pointing to is kept over this call, whose automated gains replace the last's.
+    if (chain.surround) {
+        chain.carried = *chain.surround;
+        chain.surround = &chain.carried;
+    }
+    chain.automated.clear();
     const std::int64_t end = start + count;
     for (std::size_t index = 0; index < pieces_.size(); ++index) {
         const AudioPiece& piece = pieces_[index];
@@ -512,7 +557,12 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
         std::vector<float> src = samples(piece, from - piece.at, k);
         if (src.empty()) continue;
         if (piece.equalised()) equalise(index, from - piece.at, src);
+        const SpeakerGains* gains = piece.surround ? &*piece.surround : nullptr;
         for (int i = 0; i < k; ++i) {
+            if (piece.surroundAutomated() && (i == 0 || (from - piece.at + i) % AudioPiece::kSurroundBlock == 0)) {
+                chain.automated.push_back(piece.surroundAt(static_cast<double>(from - piece.at + i)));
+                gains = &chain.automated.back();
+            }
             float l = piece.left;
             float r = piece.right;
             if (piece.automated()) automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &r);
@@ -522,7 +572,7 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
             if (g > 0) {
                 left[at] = l / g;
                 right[at] = r / g;
-                surround[at] = piece.surround ? &*piece.surround : nullptr;
+                surround[at] = gains;
             }
         }
     }

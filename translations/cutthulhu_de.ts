@@ -18600,6 +18600,30 @@ Mediendateien werden nicht gelöscht.</translation>
         <source>Dynamic Relink Settings...</source>
         <translation type="unfinished">Einstellungen für dynamisches Neuverknüpfen...</translation>
     </message>
+    <message>
+        <source>Pan L</source>
+        <translation type="unfinished">Pan L</translation>
+    </message>
+    <message>
+        <source>Pan R</source>
+        <translation type="unfinished">Pan R</translation>
+    </message>
+    <message>
+        <source>Front</source>
+        <translation type="unfinished">Vorne</translation>
+    </message>
+    <message>
+        <source>Rear</source>
+        <translation type="unfinished">Hinten</translation>
+    </message>
+    <message>
+        <source>Front and Rear</source>
+        <translation type="unfinished">Vorne und hinten</translation>
+    </message>
+    <message>
+        <source>Center %</source>
+        <translation type="unfinished">Center %</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

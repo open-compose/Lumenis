@@ -98,6 +98,59 @@ private slots:
         QCOMPARE(addKeyframes(seq, {QStringLiteral("A1")}, 40, AutomationParam::Volume), 0);
     }
 
+    // Surround pan automation (p.679-680, p.715-716): keyframes on one channel's Front, Rear, Front and Rear and Center %
+    // through the same operations, their values the pan that plays, kept with the sequence.
+    void surroundPans() {
+        QCOMPARE(surroundParam(1, SurroundAxis::Center), AutomationParam::CenterR);
+        QCOMPARE(surroundParamOf(AutomationParam::FrontRearL)->axis, SurroundAxis::FrontRear);
+        QVERIFY(!surroundParamOf(AutomationParam::Pan));
+        QCOMPARE(automationKey(AutomationParam::RearR), QStringLiteral("R.rear"));
+        QCOMPARE(automationFromKey(QStringLiteral("L.center")), AutomationParam::CenterL);
+        QCOMPARE(automationFromKey(QStringLiteral("pan")), AutomationParam::Pan);
+        QVERIFY(!automationFromKey(QStringLiteral("L.side")));
+        QCOMPARE(clampAutomation(AutomationParam::CenterL, -5), 0.0);
+        QCOMPARE(clampAutomation(AutomationParam::FrontL, -150), -100.0);
+
+        Sequence seq = sequence();
+        seq.setMixFormat(AudioFormat::Surround51);
+        // A mono segment panned to the right: its default surround pan is there at the front (surroundPansOf).
+        seq.track(QStringLiteral("A2"))->segments[0].pan = 60;
+        QCOMPARE(addKeyframes(seq, {QStringLiteral("A2")}, 10, AutomationParam::FrontL, false), 1);
+        QCOMPARE(addKeyframes(seq, {QStringLiteral("A2")}, 10, AutomationParam::FrontRearL, false), 1);
+        Segment s = at(seq, QStringLiteral("A2"), 10);
+        QCOMPARE(s.surroundKeys.size(), 1);
+        QCOMPARE(s.surroundKeys.first().front, (QList<AudioKey>{{10, 60}}));
+        QCOMPARE(s.surroundKeys.first().frontRear, (QList<AudioKey>{{10, 100}}));
+        QVERIFY(s.hasAutomation());
+        // To the rear by frame 30: halfway at 20.
+        QCOMPARE(addKeyframes(seq, {QStringLiteral("A2")}, 30, AutomationParam::FrontRearL, false), 1);
+        QCOMPARE(setKeyframes(seq, {{QStringLiteral("A2"), 30}}, AutomationParam::FrontRearL, -100), 1);
+        s = at(seq, QStringLiteral("A2"), 10);
+        QCOMPARE(surroundPanAt(s, AudioFormat::Mono, 60, 0, 20).frontRear, 0);
+        QCOMPARE(surroundPanAt(s, AudioFormat::Mono, 60, 0, 40).frontRear, -100);
+        QCOMPARE(surroundPanAt(s, AudioFormat::Mono, 60, 0, 40).front, 60);
+        QCOMPARE(automationValue(s, AutomationParam::FrontRearL, 25, 0, AudioFormat::Mono), -50.0);
+        // Center % holds 100 by default.
+        QCOMPARE(automationValue(s, AutomationParam::CenterL, 25, 0, AudioFormat::Mono), 100.0);
+        QCOMPARE(keyframesIn(seq, {QStringLiteral("A2")}, 0, 60, AutomationParam::FrontRearL).size(), 2);
+        // Kept with the sequence.
+        const Sequence back = Sequence::fromJson(seq.toJson());
+        QCOMPARE(at(back, QStringLiteral("A2"), 10).surroundKeys, s.surroundKeys);
+        // Removing them all leaves no empty channel behind.
+        QVERIFY(removeAutomation(seq, {QStringLiteral("A2")}, 0, 60, AutomationParam::FrontRearL) > 0);
+        QVERIFY(removeAutomation(seq, {QStringLiteral("A2")}, 0, 60, AutomationParam::FrontL) > 0);
+        QVERIFY(at(seq, QStringLiteral("A2"), 10).surroundKeys.isEmpty());
+        // A stereo segment's R channel.
+        Sequence stereo;
+        stereo.setMixFormat(AudioFormat::Surround51);
+        stereo.ensureTrack(QStringLiteral("A1"), AudioFormat::Stereo)->segments = {clip(QStringLiteral("c"), 0, 20)};
+        QCOMPARE(addKeyframes(stereo, {QStringLiteral("A1")}, 5, AutomationParam::RearR), 1);
+        const Segment r = at(stereo, QStringLiteral("A1"), 5);
+        QCOMPARE(r.surroundKeys.size(), 2);
+        QVERIFY(r.surroundKeys.first().isEmpty());
+        QCOMPARE(r.surroundKeys.at(1).rear, (QList<AudioKey>{{5, 100}}));
+    }
+
     void keyframesFollowTheMaterial() {
         Sequence seq = sequence();
         addKeyframes(seq, {QStringLiteral("A1")}, 20, AutomationParam::Volume);

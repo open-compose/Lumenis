@@ -1138,7 +1138,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/model/shot_log.*`; tests `tst_ale shotLogEvents`, `tst_interchange shotLogs`), is done, so 11.4c is. 11.4d1,
   Extended Audio Punch-In past the end and Remove Extra Filler After Punchin (docs/spec/punch-in.md:
   `MonitorState::setExtension`, `Timeline::punchIn`'s `extendTo`; test `tst_audio_punch_in pastTheEnd`, scenario
-  `52-extended-punch-in.json`), is done. 10.6 is an update check that only tells the user (no
+  `52-extended-punch-in.json`), is done. 11.4d2a, surround pan keyframes and the Timeline's Pan L/R > [speaker layout]
+  graphs (docs/spec/automation.md "Surround pans": `Segment::surroundKeys`, `AutomationParam` FrontL ... CenterR,
+  `model::surroundPanAt`, `AudioPiece::surroundAt`; tests `tst_automation surroundPans`, `tst_surround
+  automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario `53-surround-pan-automation.json`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

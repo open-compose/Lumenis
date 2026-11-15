@@ -575,9 +575,11 @@ struct Run {
             return fail(QStringLiteral("Change Source Track does not offer %1").arg(a.at(2).toString()));
         }
         if (o.contains(QStringLiteral("audio_data"))) {
-            // The graph keyframe steps act on (Audio Data, p.715): "volume" or "pan".
-            const bool pan = o.value(QStringLiteral("audio_data")).toString() == QLatin1String("pan");
-            timeline.setAudioData(false, pan ? model::AutomationParam::Pan : model::AutomationParam::Volume);
+            // The graph keyframe steps act on (Audio Data, p.715): "volume", "pan", or a surround pan's member
+            // ("L.front", "R.center" ..., model::automationKey; p.679-680).
+            const auto param = model::automationFromKey(o.value(QStringLiteral("audio_data")).toString());
+            if (!param) return fail(QStringLiteral("no such graph"));
+            timeline.setAudioData(false, param);
             return true;
         }
         if (o.contains(QStringLiteral("key_drag"))) {
@@ -895,6 +897,15 @@ struct Run {
                         QJsonArray list;
                         for (const model::AudioKey& k : *keys) list.append(QJsonArray{k.frame, k.value});
                         extra.insert(QLatin1String(name), list);
+                    }
+                    // Surround pan keyframes under their parameter's key ("L.frontRear": [[clip frame, value], ...]).
+                    for (int p = static_cast<int>(model::AutomationParam::FrontL); p <= static_cast<int>(model::AutomationParam::CenterR); ++p) {
+                        const auto param = static_cast<model::AutomationParam>(p);
+                        const QList<model::AudioKey>& keys = model::keysOf(g, param);
+                        if (keys.isEmpty()) continue;
+                        QJsonArray list;
+                        for (const model::AudioKey& k : keys) list.append(QJsonArray{k.frame, k.value});
+                        extra.insert(model::automationKey(param), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
                     // A group clip's segment: the angle it shows (group_clip.h).

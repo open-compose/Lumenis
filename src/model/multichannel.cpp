@@ -225,6 +225,7 @@ bool splitToMono(Sequence& sequence, const QString& name, QString* error) {
                 s.pan = mono.number % 2 == 1 ? -kPanMax : kPanMax;
                 s.panKeys.clear();
                 s.surround.clear(); // a stereo segment's pans were for both channels
+                s.surroundKeys.clear();
             }
             sequence.restoreTrack(mono);
         }

@@ -7848,6 +7848,9 @@ std::optional<model::AutomationParam> Timeline::automationShown(const model::Tra
     if (track.kind != model::TrackKind::Audio) return std::nullopt;
     if (display_.perTrack && track.showVolume) return model::AutomationParam::Volume;
     if (display_.perTrack && track.showPan) return model::AutomationParam::Pan;
+    if (display_.perTrack && !track.showSurround.isEmpty()) {
+        if (const auto p = model::automationFromKey(track.showSurround)) return p;
+    }
     return display_.automation;
 }
 
@@ -7898,13 +7901,16 @@ void Timeline::setTrackAudioData(const QString& track, bool clipVolume, std::opt
         t.showClipVolume = clipVolume;
         t.showVolume = automation == model::AutomationParam::Volume;
         t.showPan = automation == model::AutomationParam::Pan;
+        t.showSurround = automation && model::isSurroundParam(*automation) ? model::automationKey(*automation) : QString();
     });
     view_->update();
 }
 
 // "Click the Clip Volume/Pan button ... and select Clip Volume or Volume"; "repeat the previous step
 // and select an additional volume value" shows both (p.679-680). Volume and Pan are one or the
-// other. Pan L and Pan R > [speaker layout] for surround sequences are not offered yet.
+// other. In a 5.1 or 7.1 sequence a mono or stereo track's Pan is "Pan L > [speaker layout]" and, for stereo, "Pan R >
+// [speaker layout]" with the layouts of p.679: Front, Rear, Front and Rear, and Center %. (Ours: a mono track's one
+// channel is "Pan L".)
 QMenu* Timeline::trackAudioDataMenu(const QString& track, bool all, QWidget* parent) {
     auto* menu = new QMenu(parent);
     const model::Sequence seq = recordSequenceOf(composer_);
@@ -7914,8 +7920,10 @@ QMenu* Timeline::trackAudioDataMenu(const QString& track, bool all, QWidget* par
     std::optional<model::AutomationParam> automation;
     if (perTrack && t->showVolume) automation = model::AutomationParam::Volume;
     if (perTrack && t->showPan) automation = model::AutomationParam::Pan;
+    if (perTrack && !t->showSurround.isEmpty()) automation = model::automationFromKey(t->showSurround);
+    QMenu* into = menu;
     auto item = [&](const QString& text, bool on, std::function<void()> apply) {
-        QAction* a = menu->addAction(text);
+        QAction* a = into->addAction(text);
         a->setCheckable(true);
         a->setChecked(on);
         connect(a, &QAction::triggered, this, std::move(apply));
@@ -7925,10 +7933,26 @@ QMenu* Timeline::trackAudioDataMenu(const QString& track, bool all, QWidget* par
         const bool on = automation == model::AutomationParam::Volume;
         setTrackAudioData(track, clip, on ? std::nullopt : std::optional(model::AutomationParam::Volume), all);
     });
-    item(tr("Pan"), automation == model::AutomationParam::Pan, [=, this] {
-        const bool on = automation == model::AutomationParam::Pan;
-        setTrackAudioData(track, clip, on ? std::nullopt : std::optional(model::AutomationParam::Pan), all);
-    });
+    const bool surround = seq.mixFormat() == model::AudioFormat::Surround51 || seq.mixFormat() == model::AudioFormat::Surround71;
+    const int channels = !t ? 0 : t->format == model::AudioFormat::Mono ? 1 : t->format == model::AudioFormat::Stereo ? 2 : 0;
+    if (!surround || channels == 0) {
+        item(tr("Pan"), automation == model::AutomationParam::Pan, [=, this] {
+            const bool on = automation == model::AutomationParam::Pan;
+            setTrackAudioData(track, clip, on ? std::nullopt : std::optional(model::AutomationParam::Pan), all);
+        });
+        return menu;
+    }
+    for (int channel = 0; channel < channels; ++channel) {
+        into = menu->addMenu(channel == 0 ? tr("Pan L") : tr("Pan R"));
+        for (const auto& [axis, text] : {std::pair{model::SurroundAxis::Front, tr("Front")}, std::pair{model::SurroundAxis::Rear, tr("Rear")},
+                                         std::pair{model::SurroundAxis::FrontRear, tr("Front and Rear")},
+                                         std::pair{model::SurroundAxis::Center, tr("Center %")}}) {
+            const model::AutomationParam param = model::surroundParam(channel, axis);
+            item(text, automation == param, [=, this] {
+                setTrackAudioData(track, clip, automation == param ? std::nullopt : std::optional(param), all);
+            });
+        }
+    }
     return menu;
 }
 
@@ -8062,8 +8086,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
                                                                                : QStringLiteral("partial")},
     };
     if (d.automation) {
-        o.insert(QStringLiteral("automation"),
-                 *d.automation == model::AutomationParam::Volume ? QStringLiteral("volume") : QStringLiteral("pan"));
+        o.insert(QStringLiteral("automation"), model::automationKey(*d.automation));
     }
     QJsonArray hidden;
     QStringList markers(d.hiddenMarkers.begin(), d.hiddenMarkers.end());
@@ -8122,8 +8145,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
                                                       : RenderRanges::PartialOnly;
     d.waveformZoom = std::clamp(o.value(QStringLiteral("waveformZoom")).toInt(), -3, 4);
     const QString automation = o.value(QStringLiteral("automation")).toString();
-    if (automation == QLatin1String("volume")) d.automation = model::AutomationParam::Volume;
-    if (automation == QLatin1String("pan")) d.automation = model::AutomationParam::Pan;
+    d.automation = model::automationFromKey(automation);
     static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
     for (auto [key, field] : {std::pair{"segmentSelectionColor", &d.segmentSelectionColor}, std::pair{"markIOColor", &d.markIOColor}}) {
         const QString c = o.value(QLatin1String(key)).toString();

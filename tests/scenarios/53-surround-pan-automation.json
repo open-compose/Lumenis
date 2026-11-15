@@ -1,0 +1,24 @@
+[
+  {
+    "name": "surround pan keyframes on a mono track of a 5.1 sequence: Front and Rear from the front to the rear, kept with the material through a splice",
+    "guide": "p.679-680, p.715-716",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 50]]}},
+    "steps": [
+      {"mix_format": "5.1"},
+      {"record_tracks": ["A1"]},
+      {"audio_data": "L.frontRear"},
+      {"position": "record", "frame": 10},
+      {"command": "fx.add_keyframe"},
+      {"position": "record", "frame": 30},
+      {"command": "fx.add_keyframe"},
+      {"key_drag": ["A1", 30, 0, -200]},
+      {"load": "source", "clip": "B"},
+      {"mark": "source", "in": 0, "out": 4},
+      {"source_tracks": ["A1"]},
+      {"mark": "record", "at": 0},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {"A1": [["B", 0, 5], ["A", 0, 50, {"L.frontRear": [[10, 100], [30, -100]]}]]}
+  }
+]

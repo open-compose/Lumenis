@@ -197,6 +197,19 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.ownPan()) o.insert(QStringLiteral("pan"), s.pan);
     if (!s.volumeKeys.isEmpty()) o.insert(QStringLiteral("volumeKeys"), keysToJson(s.volumeKeys));
     if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
+    if (s.hasSurroundAutomation()) {
+        // [{front?, rear?, fr?, center?}, ...], a channel each.
+        QJsonArray channels;
+        for (const SurroundKeys& k : s.surroundKeys) {
+            QJsonObject c;
+            if (!k.front.isEmpty()) c.insert(QStringLiteral("front"), keysToJson(k.front));
+            if (!k.rear.isEmpty()) c.insert(QStringLiteral("rear"), keysToJson(k.rear));
+            if (!k.frontRear.isEmpty()) c.insert(QStringLiteral("fr"), keysToJson(k.frontRear));
+            if (!k.center.isEmpty()) c.insert(QStringLiteral("center"), keysToJson(k.center));
+            channels.append(c);
+        }
+        o.insert(QStringLiteral("surroundKeys"), channels);
+    }
     if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
     if (s.audioSuite) o.insert(QStringLiteral("audioSuite"), audioSuiteToJson(*s.audioSuite));
     if (s.audioSuite && !s.nestedAudioSuites.isEmpty()) {
@@ -320,6 +333,17 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.hasPan = o.contains(QStringLiteral("pan"));
     s.volumeKeys = keysFromJson(o.value(QStringLiteral("volumeKeys")), false);
     s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
+    for (const QJsonValue& v : o.value(QStringLiteral("surroundKeys")).toArray()) {
+        if (s.isFiller() || s.surroundKeys.size() >= 2) break;
+        const QJsonObject c = v.toObject();
+        SurroundKeys k;
+        k.front = keysFromJson(c.value(QStringLiteral("front")), true);
+        k.rear = keysFromJson(c.value(QStringLiteral("rear")), true);
+        k.frontRear = keysFromJson(c.value(QStringLiteral("fr")), true);
+        k.center = keysFromJson(c.value(QStringLiteral("center")), true);
+        for (AudioKey& key : k.center) key.value = std::clamp(key.value, 0.0, 100.0);
+        s.surroundKeys << k;
+    }
     if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
     if (o.contains(QStringLiteral("audioSuite"))) s.audioSuite = audioSuiteFromJson(o.value(QStringLiteral("audioSuite")).toObject());
     if (s.audioSuite) {
@@ -486,6 +510,7 @@ QJsonObject Sequence::toJson() const {
         if (t.showClipVolume) display.insert(QStringLiteral("clipVolume"), true);
         if (t.showVolume) display.insert(QStringLiteral("volume"), true);
         if (t.showPan) display.insert(QStringLiteral("pan"), true);
+        if (!t.showSurround.isEmpty()) display.insert(QStringLiteral("surround"), t.showSurround);
         if (t.heightStep != 0) display.insert(QStringLiteral("height"), t.heightStep);
         if (!t.color.isEmpty()) display.insert(QStringLiteral("color"), t.color);
         if (!display.isEmpty()) o.insert(QStringLiteral("display"), display);
@@ -554,6 +579,7 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
         t.showClipVolume = audio && display.value(QStringLiteral("clipVolume")).toBool();
         t.showVolume = audio && display.value(QStringLiteral("volume")).toBool();
         t.showPan = audio && !t.showVolume && display.value(QStringLiteral("pan")).toBool();
+        if (audio && !t.showVolume && !t.showPan) t.showSurround = display.value(QStringLiteral("surround")).toString();
         t.heightStep = std::clamp(display.value(QStringLiteral("height")).toInt(), -kTrackHeightSteps / 2, kTrackHeightSteps);
         t.color = display.value(QStringLiteral("color")).toString();
         static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
@@ -1314,6 +1340,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // Halves of one segment keep the same keyframes (counted in the clip's frames), so an Add Edit
     // between them is still a match frame; other keyframes keep the edit.
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
+    if (before.surroundKeys != after.surroundKeys) return false;
     if (before.eq != after.eq || before.localColor != after.localColor || before.surround != after.surround) return false;
     if (before.sourceCorrection != after.sourceCorrection || before.programCorrection != after.programCorrection) return false;
     if (before.sourceRelationship != after.sourceRelationship || before.programRelationship != after.programRelationship) return false;
@@ -1359,6 +1386,7 @@ Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::in
         copy.inserts = {}; // the Clipboard holds material, not the track's effects or display
         copy.inactive = false;
         copy.showWaveform = copy.showClipVolume = copy.showVolume = copy.showPan = false;
+        copy.showSurround.clear();
         copy.color.clear();
         copy.heightStep = 0;
         copy.customName.clear();

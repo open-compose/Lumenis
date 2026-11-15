@@ -18647,6 +18647,30 @@ Ní scriostar comhaid mheán.</translation>
         <source>Dynamic Relink Settings...</source>
         <translation type="unfinished">Socruithe Athnasctha Dhinimiciúil...</translation>
     </message>
+    <message>
+        <source>Pan L</source>
+        <translation type="unfinished">Panáil C</translation>
+    </message>
+    <message>
+        <source>Pan R</source>
+        <translation type="unfinished">Panáil D</translation>
+    </message>
+    <message>
+        <source>Front</source>
+        <translation type="unfinished">Tosach</translation>
+    </message>
+    <message>
+        <source>Rear</source>
+        <translation type="unfinished">Cúl</translation>
+    </message>
+    <message>
+        <source>Front and Rear</source>
+        <translation type="unfinished">Tosach agus cúl</translation>
+    </message>
+    <message>
+        <source>Center %</source>
+        <translation type="unfinished">Lár %</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

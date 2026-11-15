@@ -1898,8 +1898,12 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `tst_ale shotLogEvents`, `tst_interchange shotLogs`), so 11.4c is. 11.4d is in two parts: 11.4d1, Extended Audio
   Punch-In past the end of the sequence and Remove Extra Filler After Punchin (done: `MonitorState::setExtension`,
   `Timeline::punchIn`'s `extendTo`, `AudioPunchInTool::setRemoveExtraFiller`; docs/spec/punch-in.md; test
-  `tst_audio_punch_in pastTheEnd`, scenario `52-extended-punch-in.json`); 11.4d2, surround pan automation (the Pan L/R
-  > speaker layout displays of p.679-680, keyframes per channel, Auto mode on the Pan grids).
+  `tst_audio_punch_in pastTheEnd`, scenario `52-extended-punch-in.json`); 11.4d2, surround pan automation, in two parts:
+  11.4d2a, keyframes per channel and layout and the Timeline's Pan L/R > [speaker layout] graphs (done:
+  `Segment::surroundKeys`, `AutomationParam` FrontL ... CenterR, `model::surroundPanAt`, `AudioPiece::surroundAt`,
+  `Timeline::trackAudioDataMenu`; docs/spec/automation.md "Surround pans"; tests `tst_automation surroundPans`,
+  `tst_surround automatedPlayback`, `tst_surround_ui timelineSurroundGraphs`, scenario
+  `53-surround-pan-automation.json`); 11.4d2b, the Audio Mixer's Auto mode and Live mode on the Pan grids.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

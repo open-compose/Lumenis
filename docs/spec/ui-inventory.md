@@ -1991,6 +1991,9 @@ p.610–640, ch. 13 p.432–434).**
   production metadata (p.595-596).
 * **Volume and pan automation** (p.714-723; docs/spec/automation.md).
   * Fast menu > Audio Data: Clip Volume, plus Volume or Pan.
+  * The Track Control panel's Clip Volume/Pan menu in a 5.1 or 7.1 sequence:
+    Pan L and (stereo tracks) Pan R > Front, Rear, Front and Rear, Center %
+    (p.679-680; 11.4d2a, docs/spec/automation.md "Surround pans").
   * Keyframes: Add Keyframe (the ' key), click/Shift-click, drag
     (Ctrl snaps, Alt in time), Ctrl+Shift+click, Delete, and
     Ctrl+Shift+arrows.

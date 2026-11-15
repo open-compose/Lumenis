@@ -33,7 +33,8 @@ constexpr int kKeyHit = 5;                // pixels around a keyframe that grab 
 // The lines of the scale a Ctrl-drag snaps to (p.716): the fader's marks (picture on p.693), or
 // the pan's L100, L50, MID, R50, R100 (ours).
 QList<double> scaleLines(AutomationParam param) {
-    if (param == AutomationParam::Pan) return {-100, -50, 0, 50, 100};
+    if (const auto s = model::surroundParamOf(param); s && s->axis == model::SurroundAxis::Center) return {0, 25, 50, 75, 100};
+    if (param != AutomationParam::Volume) return {-100, -50, 0, 50, 100};
     return {12, 9, 6, 3, 0, -3, -7, -11, -15, -30, -45};
 }
 
@@ -61,6 +62,17 @@ std::optional<double> keyValue(const model::Sequence& seq, const KeyRef& ref, Au
     return std::nullopt;
 }
 
+// Where `value` sits between the graph's bottom (0) and top (1): valueForY's inverse.
+double valueFraction(AutomationParam param, double value) {
+    if (param == AutomationParam::Volume) return static_cast<double>(fader::position(value)) / fader::kRange;
+    const double v = std::clamp(value, -double(model::kPanMax), double(model::kPanMax));
+    if (const auto s = model::surroundParamOf(param)) {
+        if (s->axis == model::SurroundAxis::Center) return std::clamp(value, 0.0, 100.0) / 100.0;
+        if (s->axis == model::SurroundAxis::FrontRear) return (v + model::kPanMax) / (2.0 * model::kPanMax);
+    }
+    return (model::kPanMax - v) / (2.0 * model::kPanMax);
+}
+
 bool isAudio(const QString& track) {
     const auto ref = model::parseTrackName(track);
     return ref && ref->kind == model::TrackKind::Audio;
@@ -73,11 +85,7 @@ bool isAudio(const QString& track) {
 double TimelineView::yForValue(const Row& row, AutomationParam param, double value) const {
     const double top = row.top + 3;
     const double bottom = row.top + row.height - 4;
-    const double frac = param == AutomationParam::Volume
-                            ? static_cast<double>(fader::position(value)) / fader::kRange
-                            : (model::kPanMax - std::clamp(value, -double(model::kPanMax), double(model::kPanMax))) /
-                                  (2.0 * model::kPanMax);
-    return bottom - frac * (bottom - top);
+    return bottom - valueFraction(param, value) * (bottom - top);
 }
 
 double TimelineView::valueForY(const Row& row, AutomationParam param, double y) const {
@@ -85,6 +93,12 @@ double TimelineView::valueForY(const Row& row, AutomationParam param, double y) 
     const double bottom = row.top + row.height - 4;
     const double frac = bottom > top ? std::clamp((bottom - y) / (bottom - top), 0.0, 1.0) : 0.0;
     if (param == AutomationParam::Volume) return fader::gain(static_cast<int>(std::lround(frac * fader::kRange)));
+    // Surround pans (p.679): Center 0 % at the bottom to 100 % at the top; Front and Rear left at the top as the pan;
+    // Front and Rear's front at the top.
+    if (const auto s = model::surroundParamOf(param)) {
+        if (s->axis == model::SurroundAxis::Center) return std::round(frac * 100.0);
+        if (s->axis == model::SurroundAxis::FrontRear) return std::round(frac * 2.0 * model::kPanMax - model::kPanMax);
+    }
     return std::round(model::kPanMax - frac * 2.0 * model::kPanMax);
 }
 
@@ -153,7 +167,7 @@ void TimelineView::paintAudioData(QPainter& p, const Row& r, const model::Track&
         const AutomationParam param = *automation;
         auto xOf = [&](double sourceFrame) { return x0 + (sourceFrame - static_cast<double>(s.sourceIn)) * scale; };
         auto yOf = [&](double sourceFrame) {
-            return yForValue(r, param, model::automationValue(s, param, sourceFrame, side));
+            return yForValue(r, param, model::automationValue(s, param, sourceFrame, side, t.format));
         };
         const double first = static_cast<double>(s.sourceIn);
         const double last = static_cast<double>(s.sourceIn + s.length);
@@ -353,7 +367,8 @@ bool Timeline::editAutomation(AutomationEdit edit, std::optional<AutomationParam
     if (param) {
         params << *param;
     } else {
-        params << AutomationParam::Volume << AutomationParam::Pan;
+        // Every parameter: volume, the pan and the surround pans' members.
+        for (int k = 0; k <= static_cast<int>(AutomationParam::CenterR); ++k) params << static_cast<AutomationParam>(k);
     }
     QString description;
     for (AutomationParam p : params) {
@@ -391,7 +406,7 @@ std::optional<double> Timeline::automationAt(const QString& track, AutomationPar
     if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
     const model::Segment& s = t->segments.at(i);
     return model::automationValue(s, param, static_cast<double>(s.sourceIn + (position - start)),
-                                  model::sidePan(t->number, alternatingPan_));
+                                  model::sidePan(t->number, alternatingPan_), t->format);
 }
 
 bool Timeline::setAutomationValue(const QString& track, AutomationParam param, double value) {
@@ -407,7 +422,7 @@ bool Timeline::setAutomationValue(const QString& track, AutomationParam param, d
     const model::Segment s = t->segments.at(i);
     const double here = static_cast<double>(position);
     const double sourceHere = static_cast<double>(s.sourceIn + (position - start));
-    const double current = model::automationValue(s, param, sourceHere, model::sidePan(t->number, alternatingPan_));
+    const double current = model::automationValue(s, param, sourceHere, model::sidePan(t->number, alternatingPan_), t->format);
     const double by = value - current;
     const QString description = param == AutomationParam::Volume ? tr("Volume Automation") : tr("Pan Automation");
     // The keyframe at the position.

@@ -18600,6 +18600,30 @@ Les fichiers média ne sont pas supprimés.</translation>
         <source>Dynamic Relink Settings...</source>
         <translation type="unfinished">Réglages de reliaison dynamique...</translation>
     </message>
+    <message>
+        <source>Pan L</source>
+        <translation type="unfinished">Pan G</translation>
+    </message>
+    <message>
+        <source>Pan R</source>
+        <translation type="unfinished">Pan D</translation>
+    </message>
+    <message>
+        <source>Front</source>
+        <translation type="unfinished">Avant</translation>
+    </message>
+    <message>
+        <source>Rear</source>
+        <translation type="unfinished">Arrière</translation>
+    </message>
+    <message>
+        <source>Front and Rear</source>
+        <translation type="unfinished">Avant et arrière</translation>
+    </message>
+    <message>
+        <source>Center %</source>
+        <translation type="unfinished">Centre %</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::TimelineAccessible</name>

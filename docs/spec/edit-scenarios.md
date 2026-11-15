@@ -56,7 +56,9 @@ Each file is a JSON list of scenarios:
   * `{"lock": track}` locks a track (p.633);
   * `{"source_track": [track, start, source track]}`: the segment's
     right-click Change Source Track (p.595; 2026.8 guide p.507);
-  * `{"audio_data": "volume"|"pan"}` picks the automation graph, and
+  * `{"audio_data": "volume"|"pan"|surround key}` picks the automation graph
+    (a surround pan's member as `model::automationKey` writes it, "L.front",
+    "R.center" ...; expected as `{"L.front": [[clip frame, value], ...]}`), and
     `{"key_drag": [track, record frame, frames, by]}` drags a keyframe
     (p.716); Add Keyframe is `{"command": "fx.add_keyframe"}`;
   * `{"eq": {...}}` sets the Audio EQ tool's values (those not given at

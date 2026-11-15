@@ -1,5 +1,7 @@
 #include "lumenis/model/automation.h"
 
+#include "lumenis/model/surround_pan.h"
+
 #include <QHash>
 #include <QSet>
 
@@ -17,8 +19,17 @@ namespace {
 // Keyframes this close (in frames) are the same keyframe.
 constexpr double kSame = 1e-6;
 
-double clampValue(AutomationParam param, double value) {
-    return param == AutomationParam::Volume ? clampGain(value) : std::clamp(value, -double(kPanMax), double(kPanMax));
+double clampValue(AutomationParam param, double value) { return clampAutomation(param, value); }
+
+// A surround pan member as a number.
+double memberOf(const SurroundPan& p, SurroundAxis axis) {
+    switch (axis) {
+    case SurroundAxis::Front: return p.front;
+    case SurroundAxis::Rear: return p.rear;
+    case SurroundAxis::FrontRear: return p.frontRear;
+    case SurroundAxis::Center: return p.center;
+    }
+    return 0;
 }
 
 bool wanted(const Track& t, const QStringList& tracks) {
@@ -35,7 +46,10 @@ void eachSegment(Sequence& sequence, const QStringList& tracks, bool skipLocked,
         for (Segment& s : t->segments) {
             const std::int64_t start = at;
             at += s.length;
-            if (!s.isFiller()) f(*t, s, start);
+            if (!s.isFiller()) {
+                f(*t, s, start);
+                trimSurroundKeys(s);
+            }
         }
     }
 }
@@ -119,12 +133,75 @@ bool overlaps(const Segment& s, std::int64_t start, double from, double to) {
 
 } // namespace
 
+AutomationParam surroundParam(int channel, SurroundAxis axis) {
+    const int base = channel == 1 ? static_cast<int>(AutomationParam::FrontR) : static_cast<int>(AutomationParam::FrontL);
+    return static_cast<AutomationParam>(base + static_cast<int>(axis));
+}
+
+std::optional<SurroundParamRef> surroundParamOf(AutomationParam param) {
+    const int p = static_cast<int>(param);
+    const int left = static_cast<int>(AutomationParam::FrontL);
+    const int right = static_cast<int>(AutomationParam::FrontR);
+    if (p >= left && p < right) return SurroundParamRef{0, static_cast<SurroundAxis>(p - left)};
+    if (p >= right && p <= static_cast<int>(AutomationParam::CenterR)) return SurroundParamRef{1, static_cast<SurroundAxis>(p - right)};
+    return std::nullopt;
+}
+
+QString automationKey(AutomationParam param) {
+    if (param == AutomationParam::Volume) return QStringLiteral("volume");
+    if (param == AutomationParam::Pan) return QStringLiteral("pan");
+    const SurroundParamRef s = *surroundParamOf(param);
+    static const char* axes[] = {"front", "rear", "frontRear", "center"};
+    return QStringLiteral("%1.%2").arg(s.channel == 0 ? QLatin1Char('L') : QLatin1Char('R')).arg(QLatin1String(axes[static_cast<int>(s.axis)]));
+}
+
+std::optional<AutomationParam> automationFromKey(const QString& key) {
+    for (int p = 0; p <= static_cast<int>(AutomationParam::CenterR); ++p) {
+        if (automationKey(static_cast<AutomationParam>(p)) == key) return static_cast<AutomationParam>(p);
+    }
+    return std::nullopt;
+}
+
+double clampAutomation(AutomationParam param, double value) {
+    if (param == AutomationParam::Volume) return clampGain(value);
+    if (const auto s = surroundParamOf(param); s && s->axis == SurroundAxis::Center) return std::clamp(value, 0.0, 100.0);
+    return std::clamp(value, -double(kPanMax), double(kPanMax));
+}
+
+namespace {
+
+template <typename Keys>
+auto& surroundList(Keys& k, SurroundAxis axis) {
+    switch (axis) {
+    case SurroundAxis::Front: return k.front;
+    case SurroundAxis::Rear: return k.rear;
+    case SurroundAxis::FrontRear: return k.frontRear;
+    case SurroundAxis::Center: break;
+    }
+    return k.center;
+}
+
+} // namespace
+
 const QList<AudioKey>& keysOf(const Segment& segment, AutomationParam param) {
+    if (const auto s = surroundParamOf(param)) {
+        static const QList<AudioKey> none;
+        if (s->channel >= segment.surroundKeys.size()) return none;
+        return surroundList(segment.surroundKeys.at(s->channel), s->axis);
+    }
     return param == AutomationParam::Volume ? segment.volumeKeys : segment.panKeys;
 }
 
 QList<AudioKey>& keysOf(Segment& segment, AutomationParam param) {
+    if (const auto s = surroundParamOf(param)) {
+        while (segment.surroundKeys.size() <= s->channel) segment.surroundKeys << SurroundKeys{};
+        return surroundList(segment.surroundKeys[s->channel], s->axis);
+    }
     return param == AutomationParam::Volume ? segment.volumeKeys : segment.panKeys;
+}
+
+void trimSurroundKeys(Segment& segment) {
+    while (!segment.surroundKeys.isEmpty() && segment.surroundKeys.last().isEmpty()) segment.surroundKeys.removeLast();
 }
 
 std::optional<double> automationAt(const QList<AudioKey>& keys, double frame) {
@@ -164,8 +241,29 @@ double panAt(const Segment& segment, double frame, int side) {
     return segment.panOr(side);
 }
 
-double automationValue(const Segment& segment, AutomationParam param, double frame, int side) {
+SurroundPan surroundPanAt(const Segment& segment, AudioFormat format, int stereoPan, int channel, double frame) {
+    const QList<SurroundPan> pans = surroundPansOf(segment, format, stereoPan);
+    if (channel < 0 || channel >= pans.size()) return {};
+    SurroundPan p = pans.at(channel);
+    if (channel >= segment.surroundKeys.size()) return p;
+    const SurroundKeys& k = segment.surroundKeys.at(channel);
+    auto at = [frame](const QList<AudioKey>& keys, int& member) {
+        if (const auto v = automationAt(keys, frame)) member = static_cast<int>(std::lround(*v));
+    };
+    at(k.front, p.front);
+    at(k.rear, p.rear);
+    at(k.frontRear, p.frontRear);
+    at(k.center, p.center);
+    return p;
+}
+
+double automationValue(const Segment& segment, AutomationParam param, double frame, int side, AudioFormat format) {
     if (param == AutomationParam::Pan) return panAt(segment, frame, side);
+    if (const auto s = surroundParamOf(param)) {
+        // Between keyframes the exact value, not the rounded one the pan plays at.
+        if (const auto v = automationAt(keysOf(segment, param), frame)) return *v;
+        return memberOf(surroundPanAt(segment, format, segment.panOr(side), s->channel, frame), s->axis);
+    }
     const int i = indexAt(segment.volumeKeys, frame);
     if (i >= 0) return segment.volumeKeys.at(i).value;
     return automationAt(segment.volumeKeys, frame).value_or(0.0);
@@ -192,7 +290,7 @@ int addKeyframes(Sequence& sequence, const QStringList& tracks, double frame, Au
         const double at = sourceFrame(s, start, frame);
         QList<AudioKey>& keys = keysOf(s, param);
         if (indexAt(keys, at) >= 0) return;
-        put(keys, AudioKey{at, clampValue(param, automationValue(s, param, at, sidePan(t.number, alternatingPan)))});
+        put(keys, AudioKey{at, clampValue(param, automationValue(s, param, at, sidePan(t.number, alternatingPan), t.format))});
         ++added;
     });
     return added;
@@ -279,7 +377,7 @@ int adjustAutomation(Sequence& sequence, const QStringList& tracks, double from,
         QList<AudioKey>& list = keysOf(s, param);
         if (list.isEmpty()) {
             const double at = static_cast<double>(s.sourceIn);
-            list << AudioKey{at, clampValue(param, automationValue(s, param, at, sidePan(t.number, alternatingPan)) + by)};
+            list << AudioKey{at, clampValue(param, automationValue(s, param, at, sidePan(t.number, alternatingPan), t.format) + by)};
             ++changed;
             return;
         }
@@ -307,8 +405,8 @@ int setAutomationTo(Sequence& sequence, const QString& track, double from, doubl
         if (b < a) return;
         const bool rampIn = ramps && a > static_cast<double>(start);
         const bool rampOut = ramps && b < static_cast<double>(start + s.length - 1);
-        const double holdIn = automationValue(s, param, sourceFrame(s, start, a), side);
-        const double holdOut = automationValue(s, param, sourceFrame(s, start, b), side);
+        const double holdIn = automationValue(s, param, sourceFrame(s, start, a), side, t.format);
+        const double holdOut = automationValue(s, param, sourceFrame(s, start, b), side, t.format);
         QList<AudioKey>& keys = keysOf(s, param);
         keys.removeIf([&](const AudioKey& k) {
             const double r = recordFrame(s, start, k.frame);
@@ -323,6 +421,7 @@ int setAutomationTo(Sequence& sequence, const QString& track, double from, doubl
             put(keys, AudioKey{sourceFrame(s, start, first), value});
             put(keys, AudioKey{sourceFrame(s, start, last), value});
         }
+        trimSurroundKeys(s);
         if (!(s == before)) ++changed;
     });
     return changed;
