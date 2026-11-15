@@ -14283,6 +14283,73 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
         <source>Speaker Cut: no speaker with a camera angle speaks in the selected segments.</source>
         <translation type="unfinished">Montage par intervenant: aucun intervenant associé à un angle de caméra ne parle dans les segments sélectionnés.</translation>
     </message>
+    <message numerus="yes">
+        <source>Import: %1: embedded media read for %n clip(s)</source>
+        <translation type="unfinished">
+            <numerusform>Importer : %1 : médias incorporés lus pour %n clip</numerusform>
+            <numerusform>Importer : %1 : médias incorporés lus pour %n clips</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>There is no temporary folder for the embedded media.</source>
+        <translation type="unfinished">Il n&apos;y a pas de dossier temporaire pour les médias incorporés.</translation>
+    </message>
+    <message>
+        <source>The embedded media cannot be read out: no temporary folder.</source>
+        <translation type="unfinished">Les médias incorporés ne peuvent pas être extraits : aucun dossier temporaire.</translation>
+    </message>
+    <message>
+        <source>%1 media is not read yet</source>
+        <translation type="unfinished">les médias %1 ne sont pas encore lus</translation>
+    </message>
+    <message>
+        <source>its sound cannot be read</source>
+        <translation type="unfinished">son audio ne peut pas être lu</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: %2</source>
+        <translation type="unfinished">%1 : les médias incorporés n&apos;ont pas été lus : %2</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: no media drive is chosen.</source>
+        <translation type="unfinished">%1 : les médias incorporés n&apos;ont pas été lus : aucun lecteur de médias n&apos;est choisi.</translation>
+    </message>
+    <message>
+        <source>The media of %1 is %2, not the current import resolution, %3. Which resolution should the imported media have?</source>
+        <translation type="unfinished">Les médias de %1 sont en %2, et non dans la résolution d&apos;importation actuelle, %3. Quelle résolution les médias importés doivent-ils avoir ?</translation>
+    </message>
+    <message>
+        <source>another resolution</source>
+        <translation type="unfinished">une autre résolution</translation>
+    </message>
+    <message>
+        <source>Source Resolution</source>
+        <translation type="unfinished">Résolution source</translation>
+    </message>
+    <message>
+        <source>Current Import Resolution</source>
+        <translation type="unfinished">Résolution d&apos;importation actuelle</translation>
+    </message>
+    <message>
+        <source>%1: only Avid DNx pictures are embedded; the picture stays linked</source>
+        <translation type="unfinished">%1 : seules les images Avid DNx sont incorporées ; l&apos;image reste liée</translation>
+    </message>
+    <message>
+        <source>%1: the picture could not be embedded: %2</source>
+        <translation type="unfinished">%1 : l&apos;image n&apos;a pas pu être incorporée : %2</translation>
+    </message>
+    <message>
+        <source>%1: the sound could not be embedded: %2</source>
+        <translation type="unfinished">%1 : l&apos;audio n&apos;a pas pu être incorporé : %2</translation>
+    </message>
+    <message>
+        <source>%1: linked to %2 instead of embedded</source>
+        <translation type="unfinished">%1 : lié à %2 au lieu d&apos;être incorporé</translation>
+    </message>
+    <message>
+        <source>%1: its media could not be embedded or kept</source>
+        <translation type="unfinished">%1 : ses médias n&apos;ont pu être ni incorporés ni conservés</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -23787,6 +23854,10 @@ Les fichiers média ne sont pas supprimés.</translation>
     <message>
         <source>Single/Dual Drives Mode</source>
         <translation type="unfinished">Mode un/deux disques</translation>
+    </message>
+    <message>
+        <source>Embedded in AAF</source>
+        <translation type="unfinished">Incorporé dans AAF</translation>
     </message>
 </context>
 <context>

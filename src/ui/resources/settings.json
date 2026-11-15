@@ -450,7 +450,8 @@
           "name": "Media Destinations",
           "options": [
             {"key": "mediaDestination", "type": "choice", "style": "radio", "label": "", "default": "folder", "page": 1177,
-             "choices": [{"value": "drive", "label": "Media Drive", "later": true}, {"value": "folder", "label": "Folder"}]},
+             "choices": [{"value": "drive", "label": "Media Drive", "later": true}, {"value": "folder", "label": "Folder"},
+                         {"value": "embedded", "label": "Embedded in AAF"}]},
             {"key": "useAafFolder", "type": "bool", "label": "Use Same Folder as AAF File", "default": true, "page": 1177},
             {"key": "mediaFolder", "type": "text", "label": "Folder", "default": "", "page": 1177}
           ]
@@ -656,7 +657,7 @@
         {
           "name": "OMFI/AAF",
           "options": [
-            {"key": "omfResolution", "type": "choice", "style": "radio", "label": "Resolution", "default": "source", "page": 1197, "later": true,
+            {"key": "omfResolution", "type": "choice", "style": "radio", "label": "Resolution", "default": "source", "page": 1197,
              "choices": [{"value": "source", "label": "Use the source file's resolution."}, {"value": "current", "label": "Use the current import resolution."}, {"value": "ask", "label": "Ask me to set the resolution for each file that is different from the current import resolution setting."}]},
             {"key": "popupReport", "type": "bool", "label": "Popup Report on AAF Import", "default": false, "page": 237},
             {"key": "reportFormat", "type": "choice", "style": "radio", "label": "", "default": "text", "page": 238,

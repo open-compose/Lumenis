@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_essence.h"
 #include "lumenis/model/bin.h"
 
 #include <QDateTime>
@@ -31,6 +32,9 @@ struct ImportResult {
     QStringList customColumns;
     // What was read only in part, once each ("3 effects named ...").
     QStringList warnings;
+    // The media embedded in the file (EssenceData), each naming the file source mob a clip's File source has as
+    // its `mob`; those sources have no path. extractEssence() reads one out while the file is open.
+    QList<Essence> essence;
 };
 
 // Reads the file's mobs into bin items (Created and Modified default to now when `options.when` is not

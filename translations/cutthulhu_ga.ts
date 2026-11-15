@@ -14324,6 +14324,74 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
         <source>Speaker Cut: no speaker with a camera angle speaks in the selected segments.</source>
         <translation type="unfinished">Gearradh de réir Cainteora: ní labhraíonn aon chainteoir a bhfuil uillinn cheamara aige sna deighleáin roghnaithe.</translation>
     </message>
+    <message numerus="yes">
+        <source>Import: %1: embedded media read for %n clip(s)</source>
+        <translation type="unfinished">
+            <numerusform>Iompórtáil: %1: meáin leabaithe léite do %n ghearrthóg</numerusform>
+            <numerusform>Iompórtáil: %1: meáin leabaithe léite do %n ghearrthóg</numerusform>
+            <numerusform>Iompórtáil: %1: meáin leabaithe léite do %n gearrthóg</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>There is no temporary folder for the embedded media.</source>
+        <translation type="unfinished">Níl fillteán sealadach ann do na meáin leabaithe.</translation>
+    </message>
+    <message>
+        <source>The embedded media cannot be read out: no temporary folder.</source>
+        <translation type="unfinished">Ní féidir na meáin leabaithe a léamh amach: níl fillteán sealadach ann.</translation>
+    </message>
+    <message>
+        <source>%1 media is not read yet</source>
+        <translation type="unfinished">ní léitear meáin %1 fós</translation>
+    </message>
+    <message>
+        <source>its sound cannot be read</source>
+        <translation type="unfinished">ní féidir a fhuaim a léamh</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: %2</source>
+        <translation type="unfinished">%1: níor léadh na meáin leabaithe: %2</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: no media drive is chosen.</source>
+        <translation type="unfinished">%1: níor léadh na meáin leabaithe: níl tiomántán meán roghnaithe.</translation>
+    </message>
+    <message>
+        <source>The media of %1 is %2, not the current import resolution, %3. Which resolution should the imported media have?</source>
+        <translation type="unfinished">Is %2 iad meáin %1, ní an taifeach iompórtála reatha, %3. Cén taifeach ba chóir a bheith ag na meáin iompórtáilte?</translation>
+    </message>
+    <message>
+        <source>another resolution</source>
+        <translation type="unfinished">taifeach eile</translation>
+    </message>
+    <message>
+        <source>Source Resolution</source>
+        <translation type="unfinished">Taifeach na Foinse</translation>
+    </message>
+    <message>
+        <source>Current Import Resolution</source>
+        <translation type="unfinished">Taifeach Iompórtála Reatha</translation>
+    </message>
+    <message>
+        <source>%1: only Avid DNx pictures are embedded; the picture stays linked</source>
+        <translation type="unfinished">%1: ní leabaítear ach pictiúir Avid DNx; fanann an pictiúr nasctha</translation>
+    </message>
+    <message>
+        <source>%1: the picture could not be embedded: %2</source>
+        <translation type="unfinished">%1: níorbh fhéidir an pictiúr a leabú: %2</translation>
+    </message>
+    <message>
+        <source>%1: the sound could not be embedded: %2</source>
+        <translation type="unfinished">%1: níorbh fhéidir an fhuaim a leabú: %2</translation>
+    </message>
+    <message>
+        <source>%1: linked to %2 instead of embedded</source>
+        <translation type="unfinished">%1: nasctha le %2 in ionad a bheith leabaithe</translation>
+    </message>
+    <message>
+        <source>%1: its media could not be embedded or kept</source>
+        <translation type="unfinished">%1: níorbh fhéidir a mheáin a leabú ná a choinneáil</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -23833,6 +23901,10 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Single/Dual Drives Mode</source>
         <translation type="unfinished">Mód tiomántán aonair/dúbailte</translation>
+    </message>
+    <message>
+        <source>Embedded in AAF</source>
+        <translation type="unfinished">Leabaithe in AAF</translation>
     </message>
 </context>
 <context>

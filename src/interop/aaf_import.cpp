@@ -704,7 +704,16 @@ private:
 ImportResult importMobs(const File& file, const ImportOptions& options) {
     ImportOptions o = options;
     if (!o.when.isValid()) o.when = QDateTime::currentDateTimeUtc();
-    return Importer(file, o).run();
+    ImportResult result = Importer(file, o).run();
+    // The embedded media, for the caller to read out (aaf_essence.h); what ours cannot read is said once.
+    QStringList notes;
+    result.essence = embeddedEssence(file, &notes);
+    int unsupported = 0;
+    for (const Essence& e : result.essence) unsupported += e.kind == Essence::Kind::Unsupported ? 1 : 0;
+    if (unsupported > 0) notes << QStringLiteral("%1 embedded media file(s) in a form not read yet").arg(unsupported);
+    notes.removeDuplicates();
+    result.warnings << notes;
+    return result;
 }
 
 std::optional<ImportResult> importFile(const QString& path, const ImportOptions& options, QString* error) {

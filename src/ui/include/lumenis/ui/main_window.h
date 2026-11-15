@@ -43,6 +43,7 @@
 #include <QSet>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -64,6 +65,12 @@ struct AudioPiece;
 
 namespace lumenis::model {
 struct LoadedClip;
+}
+
+namespace lumenis::interop::aaf {
+class File;
+struct ImportResult;
+struct Essence;
 }
 
 namespace lumenis::ext {
@@ -515,9 +522,12 @@ public:
     // Video Mixdown into the Media Destinations folder; the Simplified AAF's Mixdown Video/Effects to V1, Flatten Audio
     // Tracks that Contain Effects and the number of audio tracks (7.1c3, p.884-885), and Export Media Difference Between
     // Sequences (p.885-886). `items` is what the AAF then holds: the sequences and the clips, naming the new media.
+    // With `embedFolder` (Media Destinations' Embedded in AAF, p.871) the media is made there, to be embedded, in Avid DNx
+    // when the Transcode resolution is another codec, and the Simplified AAF's mixdown clips are not added to the bin.
     // False with the reason in `error`.
     bool prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
-                         const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error);
+                         const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error,
+                         const QString& embedFolder = {});
     // File > Output > Export to Device > XDCAM or P2 (7.2b; docs/spec/export-device.md; p.883-884, p.901): the Record
     // monitor's sequence, or else the bin's selected clips and sequences, as MXF OP1a clips on a disk or card of an
     // export device (ext::ExportDeviceProvider, the built-in media::XdcamDiskProvider among them). `kind` "xdcam" or
@@ -570,6 +580,11 @@ public:
     // Stands in for the Exclude Media Referenced from Sequence pulldown (p.886): it gets the sequences to choose from
     // and returns the chosen one's index, or -1 to cancel (tests).
     void setExcludeSequenceHook(std::function<int(const QList<model::BinItem>&)> hook) { excludeSequenceHook_ = std::move(hook); }
+    // Answers the Import setting's "Ask me to set the resolution" question for a clip of an AAF file with embedded
+    // media (p.1197): true for the source's resolution (named; empty when unknown), false for the current import
+    // resolution. Tests and the soak set it; unset, a message asks.
+    using EmbeddedResolutionHook = std::function<bool(const model::BinItem& clip, const QString& source, const QString& current)>;
+    void setEmbeddedResolutionHook(EmbeddedResolutionHook hook) { embeddedResolutionHook_ = std::move(hook); }
     // The Graphic, DPX and OpenEXR exports' stills (7.1b) of `source` (frames `start` to `end` of the item): one frame,
     // an image sequence, or the frames with markers, as the Export setting says.
     bool exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem, const media::MovieSource& source,
@@ -1233,6 +1248,21 @@ private:
     // An imported master or audio clip whose MobID the media database knows
     // is linked to that media (importAaf, openBinFile). True when it was.
     bool linkByMobId(model::BinItem& item) const;
+    // An AAF file's embedded media (main_window_embedded.cpp, docs/spec/aaf.md "Embedded media"): the clips of
+    // `imported` whose file source mobs have media in `file` (still open) get managed media of it, with their own
+    // MobIDs, at the Import setting's OMFI/AAF Resolution (p.1197). What could not be read goes to `warnings`.
+    // Returns how many clips got media.
+    int readEmbeddedMedia(const interop::aaf::File& file, interop::aaf::ImportResult& imported, QStringList& warnings);
+    // Media Destinations' Embedded in AAF (p.871): the media of `clip`'s File source `source` written into
+    // `folder` as an AAF EssenceData takes it (raw DNx frames, or 24-bit PCM of the track's channel); nothing, with
+    // a line in `warnings` when it is a picture that is not DNx, for media to stay linked.
+    std::optional<interop::aaf::Essence> essenceToEmbed(const model::BinItem& clip, const model::ClipSource& source,
+                                                        const QString& folder, QStringList& warnings);
+    // The media made in `folder` for an AAF with embedded media (prepareAafMedia): each File source of `items` there
+    // gets its essence (`essences`, by the file mob's MobID). Media that cannot be embedded is moved into
+    // `fallback` (the AAF file's folder) and linked there, with a line in `warnings`.
+    void embedMedia(QList<model::BinItem>& items, const QString& folder, const QString& fallback,
+                    std::map<MobId, interop::aaf::Essence>& essences, QStringList& warnings);
     // importOtio() and importFcpXml(): each file read with the OTIO or the FCP XML importer.
     QStringList importTimelines(const QString& binId, const QStringList& paths, bool fcp);
 
@@ -1535,6 +1565,7 @@ private:
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(SettingsDialog&)> exportOptionsHook_;
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
+    EmbeddedResolutionHook embeddedResolutionHook_;
     std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
     std::function<bool(ExportVolumeDialog&)> exportVolumeHook_;
     std::function<QString(bool)> subcapFileHook_;

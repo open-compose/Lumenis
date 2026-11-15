@@ -1826,7 +1826,9 @@ bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::i
     if (!ost || avcodec_parameters_copy(ost->codecpar, ist->codecpar) < 0) return failed(QStringLiteral("out of memory"));
     // Let the muxer pick its own tag for the codec: the input container's may not fit.
     ost->codecpar->codec_tag = 0;
-    const AVRational rate = videoRate(ist);
+    const AVRational rate = settings.sourceRate && settings.sourceRate->num() > 0
+                                ? AVRational{static_cast<int>(settings.sourceRate->num()), static_cast<int>(settings.sourceRate->den())}
+                                : videoRate(ist);
     ost->time_base = inverse(rate);
     ost->avg_frame_rate = rate;
     if (!(out->oformat->flags & AVFMT_NOFILE)) {

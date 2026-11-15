@@ -1,4 +1,5 @@
 #include "lumenis/ext/provider.h"
+#include "lumenis/interop/aaf_essence.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/link.h"
@@ -586,6 +587,152 @@ private slots:
     // AAF export's Export Methods (7.1c1, p.870-872, p.1175-1177): Copy All Media copies the clip's files next to the
     // AAF and the AAF names the copies; Consolidate Media makes new media of the used part with its handles; Video
     // Mixdown replaces the video tracks with one "Video Mixdown" track of a new clip.
+    // Media embedded in AAF (docs/spec/aaf.md, "Embedded media"): Media Destinations' Embedded in AAF puts the media the
+    // export methods copy into the AAF file itself (p.871), nothing beside it; imported where that media is not, the
+    // clips get managed media of their own, at the OMFI/AAF tab's Resolution (p.1197), and come online with the same
+    // pictures and sound.
+    void aafEmbeddedMedia() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A005.mov"));
+        QVERIFY(writeMovie(movie, 10));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        Settings& settings = window.settings();
+        settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.importFiles(binId, {movie}, QStringLiteral("dnx_lb")).size(), 1);
+        const model::BinItem clip = bin->bin().items.first();
+        window.binContainer().saveAll();
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds({clip.id});
+
+        // Exported with Copy All Media, embedded: the AAF holds the picture's DNx frames and each channel as PCM.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("aaf"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("copy"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("copy"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("mediaDestination"), QStringLiteral("embedded"));
+        const QString folder = dir.filePath(QStringLiteral("Out"));
+        QDir().mkpath(folder);
+        const QString aaf = QDir(folder).filePath(QStringLiteral("A005.aaf"));
+        window.setExportHook([aaf](ExportAsDialog& dialog) {
+            dialog.setPath(aaf);
+            return true;
+        });
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY(QFileInfo::exists(aaf));
+        QCOMPARE(QDir(folder).entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot), QStringList{QStringLiteral("A005.aaf")});
+        {
+            interop::aaf::File file;
+            QVERIFY(file.open(aaf));
+            const QList<interop::aaf::Essence> essence = interop::aaf::embeddedEssence(file);
+            QCOMPARE(essence.size(), 3);
+            int dnx = 0, pcm = 0;
+            for (const interop::aaf::Essence& e : essence) {
+                if (e.kind == interop::aaf::Essence::Kind::Dnx) {
+                    ++dnx;
+                    QCOMPARE(e.length, std::int64_t{10});
+                    QCOMPARE(e.rate, Rational(25));
+                } else if (e.kind == interop::aaf::Essence::Kind::Pcm) {
+                    ++pcm;
+                    QCOMPARE(e.channels, 1);
+                    QCOMPARE(e.sampleRate, 48000);
+                    QCOMPARE(e.length, std::int64_t{19200});
+                }
+            }
+            QCOMPARE(dnx, 1);
+            QCOMPARE(pcm, 2);
+        }
+
+        // Imported where its media is not (another drive): the clip's media read out, the source's resolution kept,
+        // its own MobID in the files.
+        auto importOn = [&](const QString& name) -> std::optional<model::BinItem> {
+            const QString other = dir.filePath(name);
+            QDir().mkpath(other);
+            media::setExtraMediaDrives({other});
+            settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), other);
+            settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("importAudioDrive"), other);
+            const QString into = window.binContainer().newBin();
+            BinDocument* doc = window.binContainer().openBin(into);
+            if (!doc) return std::nullopt;
+            window.importAaf(into, {aaf});
+            for (const model::BinItem& i : doc->bin().items) {
+                if (i.kind == model::BinItemKind::MasterClip) return i;
+            }
+            return std::nullopt;
+        };
+        auto check = [&](const model::BinItem& got, const QString& drive2) {
+            const auto link = media::linkOf(got);
+            QVERIFY(link && link->isManaged());
+            QVERIFY(QFileInfo(link->path).absoluteFilePath().startsWith(QDir(drive2).absolutePath()));
+            QCOMPARE(got.mobId, clip.mobId);
+            QCOMPARE(got.durationFrames, std::int64_t{10});
+            media::VideoReader video;
+            QVERIFY(video.open(link->path));
+            for (int f : {0, 4, 9}) QVERIFY(near(video.frame(f), colourOf(f)));
+            QCOMPARE(link->audioPaths.size(), 2);
+            media::AudioReader sound;
+            QVERIFY(sound.open(link->audioFile(1)));
+            const std::vector<float> s = sound.samples(1000, 10);
+            QVERIFY(!s.empty());
+            QVERIFY(std::abs(s.front() - 0.25f) < 1e-3f);
+        };
+        settings.setValue(QStringLiteral("Import"), QStringLiteral("omfResolution"), QStringLiteral("source"));
+        auto kept = importOn(QStringLiteral("Media2"));
+        QVERIFY(kept);
+        check(*kept, dir.filePath(QStringLiteral("Media2")));
+        QCOMPARE(kept->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
+
+        // "Use the current import resolution": made anew at the Media Creation setting's Import resolution.
+        settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("importResolution"), QStringLiteral("dnx_sq"));
+        settings.setValue(QStringLiteral("Import"), QStringLiteral("omfResolution"), QStringLiteral("current"));
+        auto current = importOn(QStringLiteral("Media3"));
+        QVERIFY(current);
+        check(*current, dir.filePath(QStringLiteral("Media3")));
+        QCOMPARE(current->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
+
+        // "Ask me ..." asks for a file whose resolution differs, naming both; the answer decides.
+        settings.setValue(QStringLiteral("Import"), QStringLiteral("omfResolution"), QStringLiteral("ask"));
+        QStringList asked;
+        window.setEmbeddedResolutionHook([&](const model::BinItem& c, const QString& source, const QString& now) {
+            asked << c.name << source << now;
+            return true;
+        });
+        auto answered = importOn(QStringLiteral("Media4"));
+        QVERIFY(answered);
+        QCOMPARE(asked, (QStringList{clip.name, QStringLiteral("Avid DNx LB"), QStringLiteral("Avid DNx SQ")}));
+        QCOMPARE(answered->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
+
+        // Imported again where its media already is, nothing is read out: the clip finds it by MobID.
+        asked.clear();
+        auto again = importOn(QStringLiteral("Media4"));
+        QVERIFY(again);
+        QVERIFY(asked.isEmpty());
+        QVERIFY(media::linkOf(*again));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("mediaDestination"), QStringLiteral("folder"));
+        media::setExtraMediaDrives({});
+    }
+
     void aafExportMethods() {
         if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;

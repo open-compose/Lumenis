@@ -30,6 +30,8 @@ const QUuid kSound = auidFromText("01030202-0200-0000-060e-2b3404010101");
 const QUuid kTimecode = auidFromText("01030201-0100-0000-060e-2b3404010101");
 const QUuid kVideoDissolve = auidFromText("0c3bea40-fc05-11d2-8a29-0050040ef7d2");
 const QUuid kAudioDissolve = auidFromText("0c3bea41-fc05-11d2-8a29-0050040ef7d2");
+// ContainerDef_AAF: the media is in this AAF file (embedded).
+const QUuid kContainerAaf = auidFromText("4313b571-d8ba-11d2-809b-006008143e6f");
 // Identification's ProductID, and the namespace of the AUIDs made for effects: name-based (version 5)
 // UUIDs, the same on every export.
 const QUuid kProductId = QUuid::createUuidV5(QUuid(QStringLiteral("{5d7b4c1e-3f0a-4a8e-9c2d-6b1f0e7a9d34}")),
@@ -133,6 +135,18 @@ private:
             defined_.insert(auid);
         }
         return auid;
+    }
+    // ContainerDef_AAF, entered in the Dictionary once (embedded media's ContainerFormat).
+    QUuid containerAaf() {
+        if (!defined_.count(kContainerAaf)) {
+            const Ref d = b_.create(QStringLiteral("ContainerDefinition"));
+            b_.set(d, QStringLiteral("Identification"), kContainerAaf);
+            b_.set(d, QStringLiteral("Name"), QStringLiteral("AAF"));
+            b_.set(d, QStringLiteral("Description"), QString());
+            b_.append(b_.dictionary(), QStringLiteral("ContainerDefinitions"), d);
+            defined_.insert(kContainerAaf);
+        }
+        return kContainerAaf;
     }
     QUuid picture() { return dataDef(kPicture, QStringLiteral("Picture")); }
     QUuid sound() { return dataDef(kSound, QStringLiteral("Sound")); }
@@ -265,6 +279,52 @@ private:
         return d;
     }
 
+    // The descriptor of embedded media and its EssenceData in the ContentStorage, its Data the essence's file
+    // (Builder::setStream copies it when the AAF file is written). PCM as a PCMDescriptor of the samples; DNx as a
+    // CDCIDescriptor with the frame header's size, depth, scan and compression label (as pyaaf2's
+    // import_dnxhd_essence and import_audio_essence write them). The descriptor; -1, with nothing made, for other
+    // kinds.
+    Ref embedded(const MobId& id, const Essence& e, const model::BinItem& item) {
+        Ref d = -1;
+        if (e.kind == Essence::Kind::Pcm && e.channels > 0 && e.sampleRate > 0 && e.bits > 0) {
+            d = b_.create(QStringLiteral("PCMDescriptor"));
+            const int block = e.channels * ((e.bits + 7) / 8);
+            b_.set(d, QStringLiteral("SampleRate"), rational(e.rate));
+            b_.set(d, QStringLiteral("Length"), static_cast<qint64>(e.length));
+            b_.set(d, QStringLiteral("AudioSamplingRate"), rational(Rational(e.sampleRate)));
+            b_.set(d, QStringLiteral("Channels"), e.channels);
+            b_.set(d, QStringLiteral("QuantizationBits"), e.bits);
+            b_.set(d, QStringLiteral("BlockAlign"), block);
+            b_.set(d, QStringLiteral("AverageBPS"), e.sampleRate * block);
+        } else if (e.kind == Essence::Kind::Dnx && e.dnx.width > 0) {
+            d = b_.create(QStringLiteral("CDCIDescriptor"));
+            b_.set(d, QStringLiteral("SampleRate"), rational(e.rate));
+            b_.set(d, QStringLiteral("Length"), static_cast<qint64>(e.length));
+            b_.set(d, QStringLiteral("StoredWidth"), e.dnx.width);
+            // A field's lines when the frames are interlaced (SeparateFields), as Media Composer describes them.
+            b_.set(d, QStringLiteral("StoredHeight"), e.dnx.interlaced ? e.dnx.height / 2 : e.dnx.height);
+            b_.set(d, QStringLiteral("FrameLayout"), e.dnx.interlaced ? QStringLiteral("SeparateFields") : QStringLiteral("FullFrame"));
+            b_.set(d, QStringLiteral("VideoLineMap"), QVariantList{e.dnx.interlaced ? 21 : 42, e.dnx.interlaced ? 584 : 0});
+            const detail::PictureSize size = detail::pictureSizeOf(item.fields.value(QStringLiteral("Format")));
+            const bool wide = e.dnx.width * 9 >= e.dnx.height * 16 || size.wide;
+            b_.set(d, QStringLiteral("ImageAspectRatio"), rational(wide ? Rational(16, 9) : Rational(4, 3)));
+            b_.set(d, QStringLiteral("ComponentWidth"), e.dnx.bitDepth);
+            b_.set(d, QStringLiteral("HorizontalSubsampling"), 2);
+            if (const QUuid c = dnxCompression(e.dnx.cid); !c.isNull()) b_.set(d, QStringLiteral("Compression"), c);
+            if (e.length > 0 && e.bytes % static_cast<std::uint64_t>(e.length) == 0) {
+                b_.set(d, QStringLiteral("FrameSampleSize"), static_cast<qint64>(e.bytes / static_cast<std::uint64_t>(e.length)));
+            }
+        } else {
+            return -1;
+        }
+        b_.setWeak(d, QStringLiteral("ContainerFormat"), containerAaf());
+        const Ref data = b_.create(QStringLiteral("EssenceData"));
+        b_.set(data, QStringLiteral("MobID"), QVariant::fromValue(id));
+        b_.setStream(data, QStringLiteral("Data"), {}, e.file);
+        b_.append(b_.content(), QStringLiteral("EssenceData"), data);
+        return d;
+    }
+
     // The columns that are not standard headings, as TaggedValue user comments holding strings, sorted by
     // name.
     void userComments(Ref m, const model::BinItem& item) {
@@ -334,8 +394,13 @@ private:
             const auto first = model::parseTrackName(fileTracks.first());
             const bool video = first && first->kind == model::TrackKind::Video;
             const Ref m = mob(QStringLiteral("SourceMob"), fileId, s->name, item.created, item.modified);
-            const Ref d = video ? pictureDescriptor(item, item.durationFrames) : soundDescriptor(item, item.durationFrames);
-            locator(d, s->path);
+            // Embedded in AAF: the descriptor says what the media is, an EssenceData holds it (no locator).
+            const std::optional<Essence> essence = options_.embed ? options_.embed(item, *s) : std::nullopt;
+            Ref d = essence ? embedded(fileId, *essence, item) : -1;
+            if (d < 0) {
+                d = video ? pictureDescriptor(item, item.durationFrames) : soundDescriptor(item, item.durationFrames);
+                locator(d, s->path);
+            }
             b_.setObject(m, QStringLiteral("EssenceDescription"), d);
             int n = 1;
             for (const QString& t : fileTracks) {

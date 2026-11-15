@@ -27,6 +27,7 @@ Avid's AAF SDK is not used: its licence is doubtful for us (ROADMAP §3).
 | Import into bins: mobs to clips, sources and sequences | `src/interop/aaf_import.*` | 3.2c, done |
 | Export and round trips | `src/interop/aaf_writer.*`, `aaf_export.*` | 3.2d, done |
 | File > Import and Export, from the Editing Guide | `main_window.cpp`, `export_dialog.*` | 3.2e, done |
+| Embedded media: EssenceData in and out | `src/interop/aaf_essence.*`, `main_window_embedded.cpp` | 11.3d, done |
 
 ## The compound file (3.2a)
 
@@ -354,9 +355,10 @@ is written:
   Video Mixdown" in the folder. Mixdown with Video Edits (a mixdown track
   beside the edit tracks) later.
 * **Media Destinations:** Folder, with Use Same Folder as AAF File on by
-  default (p.871, p.1177); Media Drive later.
+  default (p.871, p.1177), or Embedded in AAF ("Embedded media", below);
+  Media Drive later.
 
-Not yet: Embedded in AAF, Split Tracks to Mono and Remove Track Effects
+Not yet: Split Tracks to Mono and Remove Track Effects
 (our AAF export writes no track effects), Convert Audio Sample Rate, Bit
 Depth and File Format, Add Audio Mixdown Track, Render Video Effects.
 Test: `tst_managed_media aafExportMethods`.
@@ -398,3 +400,53 @@ and their clips keep linking to them (ours: the guide says only which clips
 are exported). Cancelling the choice cancels the export.
 
 Tests: `tst_sequence simplifiedAafSpans`, `tst_managed_media aafExportMethods`.
+
+## Embedded media (11.3d)
+
+"Media Composer can export an AAF file that contains all the editing information for the selected master clip or
+sequence along with the video and audio media files" (p.871, AAF Export Method 2), and "If you transferred an OMFI or
+an AAF file with embedded media, you can create a new project and bin and import the OMFI or the AAF file. The sequence
+automatically links to the media" (p.991). The layout is the AAF Object Specification's, read in pyaaf2 (essence.py,
+mobs.py): the ContentStorage's EssenceData set holds an object per file source mob with media in the file, keyed by
+the mob's MobID, its Data a stream of the compound file; the mob's descriptor says what the bytes are, its
+ContainerFormat is ContainerDef_AAF and it has no locator.
+
+* **What is read** (`aaf::embeddedEssence`, `aaf::Essence`): PCMDescriptor (and the older SoundDescriptor) as
+  interleaved little-endian samples of its Channels, QuantizationBits and AudioSamplingRate; WAVEDescriptor and
+  AIFCDescriptor as a whole WAVE or AIFF-C file, the header taken from the descriptor's Summary when the data starts
+  without one; a CDCIDescriptor whose stream starts with an Avid DNx frame header (SMPTE ST 2019-1, read by
+  `aaf::readDnxHeader`: compression ID, size, depth, scan; an interlaced header counts a field's lines) as the frames
+  one after another. Other media (uncompressed, JPEG, MPEG) is listed as Unsupported and said once in the import's
+  warnings.
+* **Import** (`MainWindow::readEmbeddedMedia`, while the file is open): a clip whose media is already on the drives (the
+  same MobID) uses it as before. Otherwise each File source's media is read out (`aaf::extractEssence`, a megabyte at a
+  time: sound as a WAVE file, DNx as a raw stream wrapped in a QuickTime file at the descriptor's rate, since a raw
+  stream has none: `WriterSettings::sourceRate`), and the clip gets managed media of its own with its own MobID as the
+  files' material package, so sequences naming it come online. The Import setting's OMFI/AAF tab (p.1197) chooses the
+  resolution: Use the source file's resolution copies the DNx frames as they are (Consolidate; the Video column the
+  probed resolution); Use the current import resolution transcodes to the Media Creation setting's Import resolution;
+  Ask me ... asks for each clip whose picture is at another resolution than that, naming both (ours: "Source
+  Resolution" or "Current Import Resolution"; `MainWindow::setEmbeddedResolutionHook` answers in tests). A picture that
+  cannot be copied is transcoded; sound is written as PCM, which loses nothing.
+* **Export** (Media Destinations' Embedded in AAF, p.871, p.1176): the export methods (Copy All Media, Consolidate
+  Media, Video Mixdown, the Simplified AAF's mixdowns) make their media in a temporary folder, in Avid DNx when the
+  Transcode resolution is another codec; then each File source there is embedded (`MainWindow::embedMedia`,
+  `essenceToEmbed`): an Avid DNx picture's frames copied out as they are into a PCMDescriptor's or CDCIDescriptor's
+  EssenceData (the descriptor with the frame header's size, depth, scan, the compression label of SMPTE RP 224 and
+  FrameSampleSize when the frames are of one size), sound decoded and written as 24-bit PCM of the track's channel.
+  Link to (Don't Export) Media embeds nothing ("Media Composer does not embed media in the file", p.1175). A picture
+  that is not DNx (ours: the guide's Transcode Video to, which would make it DNx, is later) is moved beside the AAF file
+  and linked there, said in the Console. The Simplified AAF's new clips are not added to the bin when embedded: their
+  media is in the AAF only (ours).
+* **Writing large media**: `cfb::Writer::addFileStream` keeps a stream's bytes in a file, copied a sector at a time when
+  the compound file is saved straight to disk (`Writer::write` to a seekable device, the header last), and
+  `aaf::Builder::setStream` names that file for a stream property; so an AAF with embedded media never has to fit in
+  memory.
+
+Checks: `tst_cfb fileStreams` (file streams large and small, the same bytes as from memory, a missing file refusing the
+save), `tst_aaf embeddedMedia` (DNx headers and labels; PCM and DNx embedded through `ExportOptions::embed`, read
+back, the PCM as a canonical WAVE file), `tst_managed_media aafEmbeddedMedia` (Export to File with Copy All Media and
+Embedded in AAF leaves nothing beside the AAF; imported on other drives the clip has managed media with its MobID, the
+same frames and sound, at the source resolution, the current import resolution, or as asked; imported again where
+the media is, nothing is read out). By hand: pyaaf2 reads our embedded AAF (its descriptors, streams and
+`export_audio`), and an AAF pyaaf2 makes with `import_dnxhd_essence` and `import_audio_essence` reads out byte for byte.

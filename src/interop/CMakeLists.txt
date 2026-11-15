@@ -8,6 +8,7 @@ add_library(lumenis_interop STATIC
     aaf_import.cpp
     aaf_writer.cpp
     aaf_export.cpp
+    aaf_essence.cpp
     aaf_model.inc
     avb.cpp
     avb_import.cpp
@@ -25,6 +26,7 @@ add_library(lumenis_interop STATIC
     include/lumenis/interop/aaf_import.h
     include/lumenis/interop/aaf_writer.h
     include/lumenis/interop/aaf_export.h
+    include/lumenis/interop/aaf_essence.h
     include/lumenis/interop/avb.h
     include/lumenis/interop/avb_import.h
     include/lumenis/interop/avb_writer.h

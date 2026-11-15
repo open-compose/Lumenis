@@ -236,6 +236,9 @@ struct WriterSettings {
     // file). Null: FFmpeg's own, which differ in every file.
     MobId materialPackage;
     MobId filePackage;
+    // copyVideoFrames(): the input's frame rate when it has none of its own, a raw stream (AAF's embedded DNx frames
+    // read out, aaf_essence.h); unset: the input's.
+    std::optional<Rational> sourceRate;
 };
 
 // Not thread-safe. Errors are reported by returning false, with the reason in lastError() (and, for
@@ -308,7 +311,7 @@ private:
 // Copies frames [first, first + count) of a file's video stream into a new
 // file of `format` without decoding them; for codecs whose every frame is a
 // keyframe (DNx, ProRes). `settings` gives the format, metadata and options;
-// its codec fields are ignored. mxf_opatom files get the clip-wrapped label
+// its codec fields are ignored but sourceRate. mxf_opatom files get the clip-wrapped label
 // and the settings' materialPackage and filePackage, as MediaWriter's do.
 bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
                      const WriterSettings& settings, QString* error = nullptr);

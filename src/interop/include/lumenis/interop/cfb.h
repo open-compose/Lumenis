@@ -185,10 +185,20 @@ public:
     int addStream(int parent, const QString& name, const QByteArray& data, QString* error = nullptr);
     // Replaces a stream's data; ignored for storages.
     void setData(int stream, const QByteArray& data);
+    // A stream whose bytes are the file at `path`, read only when the compound file is written (save()
+    // copies it a sector at a time). -1, with `error` set, when the file cannot be read or the name is
+    // not valid or taken.
+    int addFileStream(int parent, const QString& name, const QString& path, QString* error = nullptr);
+    // A stream's size in bytes.
+    std::uint64_t size(int stream) const;
+
+    // Writes the whole file to `device`, which must be open for writing and seekable (the header is
+    // written last); false, with `error` set, when it cannot be written or a file stream cannot be read.
+    bool write(QIODevice& device, QString* error = nullptr) const;
 
     // The whole file; empty, with `error` set, when it cannot be written.
     QByteArray toBytes(QString* error = nullptr) const;
-    // Writes toBytes() to `path` through QSaveFile, so a failed write leaves any old file as it was.
+    // Writes the file to `path` through QSaveFile, so a failed write leaves any old file as it was.
     bool save(const QString& path, QString* error = nullptr) const;
 
 private:
@@ -199,6 +209,7 @@ private:
         int parent = -1;
         QList<int> children;
         QByteArray data;
+        QString file; // addFileStream's file, when the data lives there
     };
     // Adds a child of `type` under `parent`, which must be a storage; -1, with `error` set, when the name
     // is not valid or a sibling already has it (case does not matter).

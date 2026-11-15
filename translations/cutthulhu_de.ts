@@ -14283,6 +14283,73 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
         <source>Speaker Cut: no speaker with a camera angle speaks in the selected segments.</source>
         <translation type="unfinished">Sprecherschnitt: In den ausgewählten Segmenten spricht kein Sprecher mit Kamerawinkel.</translation>
     </message>
+    <message numerus="yes">
+        <source>Import: %1: embedded media read for %n clip(s)</source>
+        <translation type="unfinished">
+            <numerusform>Import: %1: eingebettete Medien für %n Clip gelesen</numerusform>
+            <numerusform>Import: %1: eingebettete Medien für %n Clips gelesen</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>There is no temporary folder for the embedded media.</source>
+        <translation type="unfinished">Es gibt keinen temporären Ordner für die eingebetteten Medien.</translation>
+    </message>
+    <message>
+        <source>The embedded media cannot be read out: no temporary folder.</source>
+        <translation type="unfinished">Die eingebetteten Medien können nicht ausgelesen werden: kein temporärer Ordner.</translation>
+    </message>
+    <message>
+        <source>%1 media is not read yet</source>
+        <translation type="unfinished">%1-Medien werden noch nicht gelesen</translation>
+    </message>
+    <message>
+        <source>its sound cannot be read</source>
+        <translation type="unfinished">sein Ton kann nicht gelesen werden</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: %2</source>
+        <translation type="unfinished">%1: Die eingebetteten Medien wurden nicht gelesen: %2</translation>
+    </message>
+    <message>
+        <source>%1: the embedded media was not read: no media drive is chosen.</source>
+        <translation type="unfinished">%1: Die eingebetteten Medien wurden nicht gelesen: Es ist kein Medienlaufwerk gewählt.</translation>
+    </message>
+    <message>
+        <source>The media of %1 is %2, not the current import resolution, %3. Which resolution should the imported media have?</source>
+        <translation type="unfinished">Die Medien von %1 sind %2, nicht die aktuelle Importauflösung %3. Welche Auflösung sollen die importierten Medien haben?</translation>
+    </message>
+    <message>
+        <source>another resolution</source>
+        <translation type="unfinished">eine andere Auflösung</translation>
+    </message>
+    <message>
+        <source>Source Resolution</source>
+        <translation type="unfinished">Quellauflösung</translation>
+    </message>
+    <message>
+        <source>Current Import Resolution</source>
+        <translation type="unfinished">Aktuelle Importauflösung</translation>
+    </message>
+    <message>
+        <source>%1: only Avid DNx pictures are embedded; the picture stays linked</source>
+        <translation type="unfinished">%1: Nur Avid-DNx-Bilder werden eingebettet; das Bild bleibt verknüpft</translation>
+    </message>
+    <message>
+        <source>%1: the picture could not be embedded: %2</source>
+        <translation type="unfinished">%1: Das Bild konnte nicht eingebettet werden: %2</translation>
+    </message>
+    <message>
+        <source>%1: the sound could not be embedded: %2</source>
+        <translation type="unfinished">%1: Der Ton konnte nicht eingebettet werden: %2</translation>
+    </message>
+    <message>
+        <source>%1: linked to %2 instead of embedded</source>
+        <translation type="unfinished">%1: mit %2 verknüpft statt eingebettet</translation>
+    </message>
+    <message>
+        <source>%1: its media could not be embedded or kept</source>
+        <translation type="unfinished">%1: Seine Medien konnten weder eingebettet noch behalten werden</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -23787,6 +23854,10 @@ Mediendateien werden nicht gelöscht.</translation>
     <message>
         <source>Single/Dual Drives Mode</source>
         <translation type="unfinished">Einzel-/Doppellaufwerksmodus</translation>
+    </message>
+    <message>
+        <source>Embedded in AAF</source>
+        <translation type="unfinished">In AAF eingebettet</translation>
     </message>
 </context>
 <context>

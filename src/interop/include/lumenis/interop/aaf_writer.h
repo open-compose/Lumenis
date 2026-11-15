@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/cfb.h"
 
 #include <QByteArray>
 #include <QList>
@@ -41,6 +42,9 @@ public:
     // given as ints. False, with an error kept, when the class has no such
     // property or the value does not fit its type.
     bool set(Ref object, const QString& property, const QVariant& value);
+    // A stream property (EssenceData's Data: embedded media): `data`, or when `file` is given the bytes of
+    // that file, read only when the AAF file is written (save() copies them without holding them).
+    bool setStream(Ref object, const QString& property, const QByteArray& data, const QString& file = {});
     // An indirect property's value, of the named type.
     bool setIndirect(Ref object, const QString& property, const QString& typeName, const QVariant& value);
     // A strong reference to `child`, or one more in a strong reference
@@ -70,12 +74,13 @@ public:
     // MetaDictionary defining every class and type of the model, which is made anew on each call. Empty,
     // with `error` set, when any call has failed or a reference cannot be written.
     QByteArray toBytes(QString* error = nullptr);
-    // Writes toBytes() to `path` through QSaveFile.
+    // Writes the file to `path` through QSaveFile, straight to the file (stream properties kept in files
+    // are never held in memory).
     bool save(const QString& path, QString* error = nullptr);
 
 private:
     // How a property is stored: data, or a strong or weak reference, vector or set.
-    enum class Kind { Data, Strong, StrongVector, StrongSet, Weak, WeakVector, WeakSet };
+    enum class Kind { Data, Stream, Strong, StrongVector, StrongSet, Weak, WeakVector, WeakSet };
     // A property set on an object being built: data's bytes, already encoded, or the objects (strong) or
     // keys (weak) it references.
     struct Property {
@@ -85,6 +90,7 @@ private:
         QList<Ref> children;
         QList<QByteArray> keys; // weak references' targets
         QUuid type;             // the property's type
+        QString file;           // a stream's file, when its bytes are there (setStream)
     };
     // An object being built: its class, its properties by pid (so they are written in pid order), and the
     // object that references it.
@@ -112,6 +118,9 @@ private:
     QByteArray uniqueKey(Ref object) const;
     // The pid and size of the key of the class a reference type names.
     std::pair<int, int> keyOf(const QUuid& referenceType) const;
+    // Lays every object out in `w` (toBytes() and save()); false, with `error` set, when a call has failed or
+    // a reference cannot be written.
+    bool build(cfb::Writer& w, QString* error);
     // Adds a ClassDefinition for every class (but Root) and a TypeDefinition for every type to `meta`.
     void addMetaDictionary(Ref meta);
 

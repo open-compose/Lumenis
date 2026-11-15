@@ -1,5 +1,8 @@
 #include "lumenis/interop/cfb.h"
 
+#include <QBuffer>
+#include <QFile>
+#include <QFileInfo>
 #include <QSaveFile>
 #include <QtEndian>
 
@@ -570,7 +573,28 @@ void Writer::setData(int stream, const QByteArray& data) {
     Node& n = nodes_[static_cast<std::size_t>(stream)];
     if (!n.entry.isStream()) return;
     n.data = data;
+    n.file.clear();
     n.entry.size = static_cast<std::uint64_t>(data.size());
+}
+
+// The file's size now; it is read when the compound file is written (AAF's embedded media, which may not
+// fit in memory).
+int Writer::addFileStream(int parent, const QString& name, const QString& path, QString* error) {
+    const QFileInfo info(path);
+    if (!info.isFile() || !info.isReadable()) {
+        if (error) *error = QStringLiteral("%1: cannot read %2").arg(name, path);
+        return -1;
+    }
+    const int id = add(parent, name, EntryType::Stream, error);
+    if (id < 0) return -1;
+    Node& n = nodes_[static_cast<std::size_t>(id)];
+    n.file = info.absoluteFilePath();
+    n.entry.size = static_cast<std::uint64_t>(info.size());
+    return id;
+}
+
+std::uint64_t Writer::size(int stream) const {
+    return nodes_[static_cast<std::size_t>(stream)].entry.size;
 }
 
 // Lays the whole file out in memory. `out` starts with one sector's room for the header (512 bytes of it
@@ -578,14 +602,20 @@ void Writer::setData(int stream, const QByteArray& data) {
 // `fat` gets one entry for each sector appended. The order is: streams of 4096 bytes or more, the mini
 // stream (the root's chain), the mini FAT, the directory, then the FAT and the DIFAT; the header is
 // filled in last, when every count and first sector is known.
-QByteArray Writer::toBytes(QString* error) const {
+bool Writer::write(QIODevice& device, QString* error) const {
     const std::uint32_t ss = sectorSize_;
     const std::uint32_t perSector = ss / 4;
     // For files past 2 GB with 4096-byte sectors, the sector holding byte
     // 0x7FFFFF00 is the range lock sector: kept out of every chain.
     const std::uint32_t rangeLock = ss == 4096 ? 0x7FFFFF00u / ss - 1 : kMaxRegular;
     std::vector<std::uint32_t> fat;
-    QByteArray out(static_cast<qsizetype>(ss), '\0'); // the header, filled in last
+    // Bytes go to the device as they are laid out; the first sector is the header's room, filled in last.
+    bool failedWrite = false;
+    auto emitBytes = [&](const char* data, qint64 size) {
+        if (!failedWrite && device.write(data, size) != size) failedWrite = true;
+    };
+    const QByteArray zeros(static_cast<qsizetype>(ss), '\0');
+    emitBytes(zeros.constData(), ss);
 
     // The next sector's number, its FAT entry ENDOFCHAIN until a chain links it on. The range lock sector
     // is skipped: left zeroed, marked ENDOFCHAIN, and part of no chain. ENDOFCHAIN (not FREESECT) is what
@@ -595,7 +625,7 @@ QByteArray Writer::toBytes(QString* error) const {
         auto s = static_cast<std::uint32_t>(fat.size());
         if (s == rangeLock) {
             fat.push_back(kEndOfChain);
-            out.append(QByteArray(static_cast<qsizetype>(ss), '\0'));
+            emitBytes(zeros.constData(), ss);
             ++s;
         }
         fat.push_back(kEndOfChain);
@@ -610,11 +640,36 @@ QByteArray Writer::toBytes(QString* error) const {
             if (previous == kEndOfChain) first = s;
             else fat[previous] = s;
             previous = s;
-            QByteArray sector = data.mid(at, ss);
-            sector.append(QByteArray(static_cast<qsizetype>(ss) - sector.size(), '\0'));
-            out.append(sector);
+            const qsizetype n = std::min<qsizetype>(ss, data.size() - at);
+            emitBytes(data.constData() + at, n);
+            if (n < static_cast<qsizetype>(ss)) emitBytes(zeros.constData(), static_cast<qint64>(ss) - n);
         }
         return first;
+    };
+    // The same for a stream kept in a file, read a sector at a time; false when it cannot be read whole.
+    auto writeFileChain = [&](const QString& path, std::uint64_t size, std::uint32_t* first) {
+        *first = kEndOfChain;
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        std::uint32_t previous = kEndOfChain;
+        QByteArray sector(static_cast<qsizetype>(ss), '\0');
+        for (std::uint64_t at = 0; at < size; at += ss) {
+            const std::uint32_t s = nextSector();
+            if (previous == kEndOfChain) *first = s;
+            else fat[previous] = s;
+            previous = s;
+            const auto want = static_cast<qint64>(std::min<std::uint64_t>(ss, size - at));
+            if (f.read(sector.data(), want) != want) return false;
+            std::memset(sector.data() + want, 0, static_cast<std::size_t>(ss - static_cast<std::uint64_t>(want)));
+            emitBytes(sector.constData(), ss);
+        }
+        return true;
+    };
+    // A small stream's bytes, from memory or its file.
+    auto dataOf = [&](const Node& n) {
+        if (n.file.isEmpty()) return n.data;
+        QFile f(n.file);
+        return f.open(QIODevice::ReadOnly) ? f.read(static_cast<qint64>(n.entry.size)) : QByteArray();
     };
 
     std::vector<Entry> entries(nodes_.size());
@@ -626,9 +681,15 @@ QByteArray Writer::toBytes(QString* error) const {
         if (!e.isStream()) continue;
         if (sectorSize_ == 512 && e.size > 0xFFFFFFFFu) {
             if (error) *error = QStringLiteral("%1: a stream larger than 4 GB needs 4096-byte sectors").arg(e.name);
-            return {};
+            return false;
         }
-        if (e.size >= kMiniCutoff) e.start = writeChain(nodes_[i].data);
+        if (e.size < kMiniCutoff) continue;
+        if (nodes_[i].file.isEmpty()) {
+            e.start = writeChain(nodes_[i].data);
+        } else if (!writeFileChain(nodes_[i].file, e.size, &e.start)) {
+            if (error) *error = QStringLiteral("%1: cannot read %2").arg(e.name, nodes_[i].file);
+            return false;
+        }
     }
     // Small streams in the mini stream, 64 bytes at a time.
     QByteArray mini;
@@ -637,7 +698,11 @@ QByteArray Writer::toBytes(QString* error) const {
         Entry& e = entries[i];
         if (!e.isStream() || e.size >= kMiniCutoff) continue;
         e.start = kEndOfChain;
-        const QByteArray& data = nodes_[i].data;
+        const QByteArray data = dataOf(nodes_[i]);
+        if (static_cast<std::uint64_t>(data.size()) != e.size) {
+            if (error) *error = QStringLiteral("%1: cannot read %2").arg(e.name, nodes_[i].file);
+            return false;
+        }
         for (qsizetype at = 0; at < data.size(); at += kMiniSector) {
             const auto m = static_cast<std::uint32_t>(miniFat.size());
             if (at == 0) e.start = m;
@@ -745,7 +810,7 @@ QByteArray Writer::toBytes(QString* error) const {
     for (std::size_t i = 0; i < static_cast<std::size_t>(fatCount) * perSector; ++i) {
         put32(fatBytes, static_cast<qsizetype>(4 * i), i < fat.size() ? fat[i] : kFreeSect);
     }
-    out.append(fatBytes);
+    emitBytes(fatBytes.constData(), fatBytes.size());
     // DIFAT sectors: the FAT sector numbers from the 110th on, then the next DIFAT sector (ENDOFCHAIN in
     // the last one).
     for (std::uint32_t d = 0; d < difatCount; ++d) {
@@ -755,11 +820,11 @@ QByteArray Writer::toBytes(QString* error) const {
             put32(sector, 4 * static_cast<qsizetype>(k), f < fatSectors.size() ? fatSectors[f] : kFreeSect);
         }
         put32(sector, 4 * static_cast<qsizetype>(perSector - 1), d + 1 < difatCount ? difatSectors[d + 1] : kEndOfChain);
-        out.append(sector);
+        emitBytes(sector.constData(), sector.size());
     }
 
     // The header ([MS-CFB] 2.2).
-    QByteArray& h = out;
+    QByteArray h(static_cast<qsizetype>(ss), '\0');
     std::memcpy(h.data(), kSignature.data(), kSignature.size());
     std::memcpy(h.data() + 8, headerClsid_.data(), headerClsid_.size());
     // The minor version (0x3E) at 24, the version and the sector shift, the mini sector shift at 32, and
@@ -783,16 +848,34 @@ QByteArray Writer::toBytes(QString* error) const {
         const auto k = static_cast<std::size_t>(i);
         put32(h, 76 + 4 * i, k < fatSectors.size() ? fatSectors[k] : kFreeSect);
     }
-    return out;
+    if (!failedWrite && (!device.seek(0) || device.write(h) != h.size())) failedWrite = true;
+    if (failedWrite) {
+        if (error) *error = device.errorString().isEmpty() ? QStringLiteral("cannot write the file") : device.errorString();
+        return false;
+    }
+    return true;
 }
 
-// Writes atomically: the file is replaced only when every byte is written.
+QByteArray Writer::toBytes(QString* error) const {
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    if (!write(buffer, error)) return {};
+    return bytes;
+}
+
+
+// Writes atomically: the file is replaced only when every byte is written. Straight to the file, so
+// streams kept in files (addFileStream) never have to fit in memory.
 bool Writer::save(const QString& path, QString* error) const {
-    const QByteArray bytes = toBytes(error);
-    if (bytes.isEmpty()) return false;
     QSaveFile file(path);
-    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+    if (!file.open(QIODevice::WriteOnly)) {
         if (error) *error = QStringLiteral("%1: %2").arg(path, file.errorString());
+        return false;
+    }
+    QString why;
+    if (!write(file, &why) || !file.commit()) {
+        if (error) *error = QStringLiteral("%1: %2").arg(path, why.isEmpty() ? file.errorString() : why);
         return false;
     }
     return true;

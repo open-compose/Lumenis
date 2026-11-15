@@ -54,6 +54,7 @@ private slots:
     void manyEntries();
     void difat();
     void readsPartly();
+    void fileStreams();
     void damaged();
     void hugeStreamSize();
     void corpus();
@@ -204,6 +205,47 @@ void TestCfb::readsPartly() {
         QCOMPARE(reader.read(s, offset, length), small.mid(static_cast<qsizetype>(offset), static_cast<qsizetype>(length)));
     }
     QVERIFY(reader.read(s, 5000, 10).isEmpty());
+}
+
+// Streams kept in files (AAF's embedded media, addFileStream): copied a sector at a time when the file is saved, the
+// same bytes as streams from memory, large and small; a file gone by then fails the save, leaving no file.
+void TestCfb::fileStreams() {
+    QTemporaryDir dir;
+    const QByteArray big = pattern(5 * 1000 * 1000 + 17, 5);
+    const QByteArray small = pattern(1000, 6);
+    auto source = [&](const QString& name, const QByteArray& bytes) {
+        QFile f(dir.filePath(name));
+        f.open(QIODevice::WriteOnly);
+        f.write(bytes);
+        return f.fileName();
+    };
+    cfb::Writer writer;
+    const int storage = writer.addStorage(cfb::Writer::root(), QStringLiteral("Essence"));
+    QVERIFY(writer.addFileStream(storage, QStringLiteral("Data"), source(QStringLiteral("big.bin"), big)) > 0);
+    QVERIFY(writer.addFileStream(cfb::Writer::root(), QStringLiteral("small"), source(QStringLiteral("small.bin"), small)) > 0);
+    writer.addStream(cfb::Writer::root(), QStringLiteral("memory"), pattern(5000, 7));
+    QCOMPARE(writer.addFileStream(cfb::Writer::root(), QStringLiteral("none"), dir.filePath(QStringLiteral("missing.bin"))), -1);
+    const QString path = dir.filePath(QStringLiteral("f.cfb"));
+    QString error;
+    QVERIFY2(writer.save(path, &error), qPrintable(error));
+    cfb::Reader reader;
+    QVERIFY(reader.open(path));
+    QCOMPARE(reader.readAll(reader.find(QStringLiteral("Essence/Data"))), big);
+    QCOMPARE(reader.readAll(reader.find(QStringLiteral("small"))), small);
+    QCOMPARE(reader.readAll(reader.find(QStringLiteral("memory"))), pattern(5000, 7));
+    // In memory too, the same file.
+    QFile saved(path);
+    QVERIFY(saved.open(QIODevice::ReadOnly));
+    QCOMPARE(writer.toBytes(), saved.readAll());
+    // The source file removed before the save: refused, nothing written.
+    cfb::Writer gone;
+    const QString temp = source(QStringLiteral("temp.bin"), big);
+    gone.addFileStream(cfb::Writer::root(), QStringLiteral("Data"), temp);
+    QFile::remove(temp);
+    const QString none = dir.filePath(QStringLiteral("none.cfb"));
+    QVERIFY(!gone.save(none, &error));
+    QVERIFY(!error.isEmpty());
+    QVERIFY(!QFileInfo::exists(none));
 }
 
 // Damaged files are refused, not read past their end or round in loops.

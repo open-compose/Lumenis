@@ -79,6 +79,7 @@ add_library(lumenis_ui STATIC
     main_window_print.cpp
     main_window_batch_import.cpp
     main_window_graphics.cpp
+    main_window_embedded.cpp
     main_window_report.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp

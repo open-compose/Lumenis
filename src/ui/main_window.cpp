@@ -4,6 +4,7 @@
 #include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/interop/avb_export.h"
+#include "lumenis/interop/aaf_essence.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/ofx_inputs_dialog.h"
@@ -4424,12 +4425,30 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
         interop::aaf::ImportOptions options;
         options.binId = doc->nodeId();
         options.when = QDateTime::currentDateTimeUtc();
-        const auto imported = interop::aaf::importFile(path, options, &error);
+        // The file stays open while its embedded media is read out (readEmbeddedMedia).
+        interop::aaf::File file;
+        std::optional<interop::aaf::ImportResult> imported;
+        if (file.open(path, &error)) {
+            try {
+                imported = interop::aaf::importMobs(file, options);
+            } catch (const std::exception& e) {
+                error = QStringLiteral("%1: %2").arg(path, QString::fromUtf8(e.what()));
+            }
+        }
         if (!imported) {
             reportFailure(this, tr("Import: %1").arg(error));
             continue;
         }
-        int online = 0;
+        int read = 0;
+        if (!imported->essence.isEmpty()) {
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            read = readEmbeddedMedia(file, *imported, imported->warnings);
+            QApplication::restoreOverrideCursor();
+            // Console only: how many clips' embedded media was read.
+            ConsoleLog::instance().append(tr("Import: %1: embedded media read for %n clip(s)", "", read).arg(QFileInfo(path).fileName()));
+        }
+        file.close();
+        int online = read; // the clips given media of their own
         for (model::BinItem item : imported->items) {
             if (linkByMobId(item)) ++online;
             doc->addItem(item);
@@ -5770,10 +5789,26 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         // down into the destination folder first, the AAF naming it.
         QList<model::BinItem> items = selected + clips;
         QString why;
-        if (!prepareAafMedia(selected, clips, doc.nodeId(), path, items, warnings, &why)) {
+        // Media Destinations' Embedded in AAF (p.871): the media the export methods make goes into a folder of its own,
+        // then into the AAF file (essenceToEmbed); the folder goes when the export is done.
+        const bool embed = exportValue(QStringLiteral("mediaDestination")) == QLatin1String("embedded");
+        QTemporaryDir embedDir;
+        if (embed && !embedDir.isValid()) {
+            written = false;
+            error = tr("There is no temporary folder for the embedded media.");
+        } else if (!prepareAafMedia(selected, clips, doc.nodeId(), path, items, warnings, &why, embed ? embedDir.path() : QString())) {
             written = false;
             error = why;
         } else {
+            std::map<MobId, interop::aaf::Essence> essences;
+            if (embed) embedMedia(items, embedDir.path(), QFileInfo(path).absolutePath(), essences, warnings);
+            if (!essences.empty()) {
+                options.embed = [&essences](const model::BinItem&, const model::ClipSource& s) -> std::optional<interop::aaf::Essence> {
+                    const auto it = essences.find(s.mob);
+                    if (it == essences.end()) return std::nullopt;
+                    return it->second;
+                };
+            }
             const interop::aaf::ExportResult result = interop::aaf::exportItems(items, path, options);
             written = result.ok;
             error = result.error;
@@ -6035,7 +6070,8 @@ QStringList MainWindow::importEdl() {
 // The bin's Text view columns and custom columns go out, so the log holds what the bin shows (p.129
 // step 1: "click the Text tab to display all clip information").
 bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
-                                 const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error) {
+                                 const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error,
+                                 const QString& embedFolder) {
     auto text = [&](const char* key) { return exportValue(QLatin1String(key)); };
     const QString videoMethod = text("videoExportMethod");
     const QString audioMethod = text("audioExportMethod");
@@ -6055,10 +6091,11 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     }
     // Media Destinations, Folder: "If you select Folder and then check Use Same Folder as AAF File, Media Composer stores
     // the media in the same folder as the exported AAF files" (p.871); otherwise the folder named (p.1177).
+    // Embedded in AAF (p.871): made in the folder the export embeds from.
     const QString chosen = text("mediaFolder");
-    const QString folder = exportFlag(QStringLiteral("useAafFolder")) || chosen.isEmpty()
-                               ? QFileInfo(aafPath).absolutePath()
-                               : chosen;
+    const QString folder = !embedFolder.isEmpty()                                       ? embedFolder
+                           : exportFlag(QStringLiteral("useAafFolder")) || chosen.isEmpty() ? QFileInfo(aafPath).absolutePath()
+                                                                                         : chosen;
     if (!QDir().mkpath(folder)) {
         if (error) *error = tr("The media folder %1 cannot be made.").arg(QDir::toNativeSeparators(folder));
         return false;
@@ -6067,6 +6104,8 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     creation.videoDrive = folder;
     creation.audioDrive = folder;
     creation.raster = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    // Only Avid DNx pictures are embedded (essenceToEmbed), so mixdowns for an AAF with embedded media are made in it.
+    if (!embedFolder.isEmpty() && creation.resolution.codec != QLatin1String("dnxhd")) creation.resolution = media::defaultResolution();
     QProgressDialog progress(tr("Preparing the media..."), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("exportProgress"));
     creation.progress = progressOn(progress);
@@ -6118,8 +6157,9 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     QList<model::BinItem> madeClips; // the Simplified AAF's mixdown clips
     if (simplifyVideo || flattenAudio || audioLimit > 0) {
         BinDocument* doc = binContainer_ ? binContainer_->document(binId) : nullptr;
+        // Embedded, the media is in the AAF only: a clip in the bin would have none (ours).
         auto addClip = [&](const model::BinItem& clip) {
-            if (doc) doc->addItem(clip);
+            if (doc && embedFolder.isEmpty()) doc->addItem(clip);
             madeClips << clip;
         };
         for (model::BinItem& item : simplified) {

@@ -1,5 +1,6 @@
 #include "corpus.h"
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_essence.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/aaf_writer.h"
@@ -15,8 +16,10 @@
 #include <QRandomGenerator>
 #include <QTemporaryDir>
 #include <QTimeZone>
+#include <QtEndian>
 #include <QtTest>
 
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <stdexcept>
@@ -43,6 +46,7 @@ private slots:
     void objects();
     void importsBin();
     void exportRoundTrip();
+    void embeddedMedia();
     void notAaf();
     void damaged();
     void builderUnchangedByWrite();
@@ -382,6 +386,149 @@ void TestAaf::exportRoundTrip() {
     QCOMPARE(back.sources[3].mob, tape.mob);
     QCOMPARE(back.fields.value(QStringLiteral("Tape")), QStringLiteral("A001"));
     QCOMPARE(back.created, when);
+}
+
+// Embedded media (aaf_essence.h; docs/spec/aaf.md, "Embedded media"): an export with ExportOptions::embed writes the
+// file mobs' media into EssenceData objects with PCM and CDCI descriptors and no locators; the import lists them by
+// file mob, and extractEssence() gives the PCM back as a WAVE file and the DNx frames as they were.
+void TestAaf::embeddedMedia() {
+    // A DNx frame header (SMPTE ST 2019-1): DNxHD's prefix, 1080 lines (540 a field when interlaced), 1920 samples,
+    // 8 bits, compression ID 1253 (DNxHD 36).
+    auto dnxFrame = [](bool interlaced, char fill) {
+        QByteArray f(4096, fill);
+        const char prefix[] = {0, 0, 0x02, static_cast<char>(0x80), 0x01};
+        std::memcpy(f.data(), prefix, 5);
+        f[5] = interlaced ? 2 : 0;
+        qToBigEndian<quint16>(interlaced ? 540 : 1080, f.data() + 24);
+        qToBigEndian<quint16>(1920, f.data() + 26);
+        f[33] = static_cast<char>(1 << 5);
+        qToBigEndian<quint32>(1253, f.data() + 40);
+        return f;
+    };
+    const auto header = interop::aaf::readDnxHeader(dnxFrame(true, 'x'));
+    QVERIFY(header);
+    QCOMPARE(header->cid, 1253);
+    QCOMPARE(header->width, 1920);
+    QCOMPARE(header->height, 1080);
+    QVERIFY(header->interlaced);
+    QCOMPARE(header->bitDepth, 8);
+    QVERIFY(!interop::aaf::readDnxHeader(QByteArray(4096, 'x')));
+    QVERIFY(!interop::aaf::readDnxHeader(dnxFrame(false, 'x').left(100)));
+    QCOMPARE(interop::aaf::dnxCompression(1253), interop::aaf::auidFromText("04010202-7113-0000-060e-2b340401010a"));
+    QVERIFY(interop::aaf::dnxCompression(9999).isNull());
+
+    QTemporaryDir dir;
+    const QByteArray frames = dnxFrame(false, 'a') + dnxFrame(false, 'b') + dnxFrame(false, 'c');
+    QByteArray pcm;
+    for (int i = 0; i < 4800; ++i) {
+        const qint32 v = (i * 977) % 8388607 - 4000000;
+        pcm.append(static_cast<char>(v & 0xFF)).append(static_cast<char>((v >> 8) & 0xFF)).append(static_cast<char>((v >> 16) & 0xFF));
+    }
+    auto save = [&](const QString& name, const QByteArray& bytes) {
+        QFile f(dir.filePath(name));
+        f.open(QIODevice::WriteOnly);
+        f.write(bytes);
+        return f.fileName();
+    };
+    const QString dnxFile = save(QStringLiteral("v.dnxhd"), frames);
+    const QString pcmFile = save(QStringLiteral("a.pcm"), pcm);
+
+    model::BinItem clip;
+    clip.id = model::newItemId();
+    clip.mobId = MobId::generate();
+    clip.kind = model::BinItemKind::MasterClip;
+    clip.name = QStringLiteral("Embedded");
+    clip.editRate = Rational(25);
+    clip.durationFrames = 3;
+    clip.fields = {{QStringLiteral("Tracks"), QStringLiteral("V1 A1")}};
+    const MobId video = MobId::generate();
+    const MobId audio = MobId::generate();
+    clip.sources << model::ClipSource{model::ClipSource::Kind::File, video, QStringLiteral("V1"), QStringLiteral("v.mxf"),
+                                      QStringLiteral("/media/v.mxf"), {}, 0, {}};
+    clip.sources << model::ClipSource{model::ClipSource::Kind::File, audio, QStringLiteral("A1"), QStringLiteral("a.mxf"),
+                                      QStringLiteral("/media/a.mxf"), {}, 0, {}};
+    interop::aaf::ExportOptions options;
+    options.embed = [&](const model::BinItem&, const model::ClipSource& s) -> std::optional<interop::aaf::Essence> {
+        interop::aaf::Essence e;
+        e.mob = s.mob;
+        if (s.track == QLatin1String("V1")) {
+            e.kind = interop::aaf::Essence::Kind::Dnx;
+            e.dnx = *interop::aaf::readDnxHeader(frames);
+            e.rate = Rational(25);
+            e.length = 3;
+            e.file = dnxFile;
+            e.bytes = static_cast<std::uint64_t>(frames.size());
+        } else {
+            e.kind = interop::aaf::Essence::Kind::Pcm;
+            e.channels = 1;
+            e.sampleRate = 48000;
+            e.bits = 24;
+            e.rate = Rational(48000);
+            e.length = 4800;
+            e.file = pcmFile;
+            e.bytes = static_cast<std::uint64_t>(pcm.size());
+        }
+        return e;
+    };
+    const QString path = dir.filePath(QStringLiteral("embedded.aaf"));
+    const interop::aaf::ExportResult written = interop::aaf::exportItems({clip}, path, options);
+    QVERIFY2(written.ok, qPrintable(written.error));
+
+    interop::aaf::File file;
+    QVERIFY(file.open(path));
+    const auto imported = interop::aaf::importMobs(file);
+    QCOMPARE(imported.essence.size(), 2);
+    for (const interop::aaf::Essence& e : imported.essence) {
+        const QString out = dir.filePath(QStringLiteral("out.") + interop::aaf::essenceSuffix(e));
+        QString error;
+        QVERIFY2(interop::aaf::extractEssence(file, e, out, &error), qPrintable(error));
+        QFile f(out);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray bytes = f.readAll();
+        if (e.mob == video) {
+            QCOMPARE(e.kind, interop::aaf::Essence::Kind::Dnx);
+            QCOMPARE(e.descriptor, QStringLiteral("CDCIDescriptor"));
+            QCOMPARE(e.length, std::int64_t{3});
+            QCOMPARE(e.dnx.cid, 1253);
+            QCOMPARE(interop::aaf::essenceSuffix(e), QStringLiteral("dnxhd"));
+            QCOMPARE(bytes, frames);
+        } else {
+            QCOMPARE(e.mob, audio);
+            QCOMPARE(e.kind, interop::aaf::Essence::Kind::Pcm);
+            QCOMPARE(e.channels, 1);
+            QCOMPARE(e.sampleRate, 48000);
+            QCOMPARE(e.bits, 24);
+            QCOMPARE(e.length, std::int64_t{4800});
+            // A canonical WAVE file: its 44-byte header, then the samples as they were.
+            QVERIFY(bytes.startsWith("RIFF"));
+            QCOMPARE(bytes.mid(8, 8), QByteArray("WAVEfmt "));
+            QCOMPARE(qFromLittleEndian<quint16>(bytes.constData() + 22), quint16{1});
+            QCOMPARE(qFromLittleEndian<quint32>(bytes.constData() + 24), quint32{48000});
+            QCOMPARE(qFromLittleEndian<quint16>(bytes.constData() + 34), quint16{24});
+            QCOMPARE(qFromLittleEndian<quint32>(bytes.constData() + 40), static_cast<quint32>(pcm.size()));
+            QCOMPARE(bytes.mid(44), pcm);
+        }
+    }
+    // The file mobs carry no locators: the media is in the file; the clip's File sources name them, without paths.
+    const model::BinItem* master = nullptr;
+    for (const model::BinItem& i : imported.items) {
+        if (i.kind == model::BinItemKind::MasterClip) master = &i;
+    }
+    QVERIFY(master);
+    int files = 0;
+    for (const model::ClipSource& s : master->sources) {
+        if (s.kind != model::ClipSource::Kind::File) continue;
+        ++files;
+        QVERIFY(s.path.isEmpty());
+        QVERIFY(s.mob == video || s.mob == audio);
+    }
+    QCOMPARE(files, 2);
+    // Without the callback nothing is embedded, as before.
+    const QString linked = dir.filePath(QStringLiteral("linked.aaf"));
+    QVERIFY(interop::aaf::exportItems({clip}, linked).ok);
+    interop::aaf::File plain;
+    QVERIFY(plain.open(linked));
+    QVERIFY(interop::aaf::embeddedEssence(plain).isEmpty());
 }
 
 void TestAaf::notAaf() {

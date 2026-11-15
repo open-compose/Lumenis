@@ -3041,8 +3041,13 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * Columns the AAF carries that are not standard headings become the bin's
   custom columns. The Console lists each file's items and what was read
   only in part.
-* Later: the sequence report (Popup Report on AAF Import, p.237), and the
-  Import setting's OMFI/AAF tab (p.1197), which is about media.
+* The sequence report (Popup Report on AAF Import, p.237) came in 9.2c
+  (docs/spec/sequence-report.md). Media embedded in the file (p.991) is
+  read out into managed media at the Import setting's OMFI/AAF tab's
+  Resolution (p.1197): the source's, the current import resolution, or
+  asked for each clip at another resolution (docs/spec/aaf.md, "Embedded
+  media"). The Export setting's Media Destinations offer Embedded in AAF
+  (p.871).
 
 ### Export to File (p.868-869)
 * Select the clips or sequences in a bin, then File > Output > Export to

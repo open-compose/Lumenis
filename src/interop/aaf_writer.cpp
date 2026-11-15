@@ -1,6 +1,5 @@
 #include "lumenis/interop/aaf_writer.h"
 
-#include <QSaveFile>
 #include <QtEndian>
 
 #include <algorithm>
@@ -244,6 +243,18 @@ QByteArray Builder::encode(const QUuid& type, const QVariant& value, bool* ok) c
     return {};
 }
 
+// A stream property: the bytes, or a file's (copied when the file is written).
+bool Builder::setStream(Ref object, const QString& name, const QByteArray& data, const QString& file) {
+    const PropertyDef* p = property(object, name);
+    if (!p) return false;
+    const TypeDef* t = resolved(meta_, p->type);
+    if (!t || t->kind != TypeKind::Stream) return fail(QStringLiteral("%1.%2 is not a stream").arg(className(object), name));
+    Property prop{Kind::Stream, name, data, {}, {}, p->type, {}};
+    prop.file = file;
+    objects_[object].properties[p->pid] = prop;
+    return true;
+}
+
 // A data property. References, streams and indirect values have their own setters; arrays of references
 // are refused here too.
 bool Builder::set(Ref object, const QString& name, const QVariant& value) {
@@ -264,7 +275,7 @@ bool Builder::set(Ref object, const QString& name, const QVariant& value) {
     const QByteArray data = encode(p->type, value, &ok);
     if (!ok) return fail(QStringLiteral("%1.%2: %3 does not fit its type").arg(className(object), name, value.toString()));
     Property& prop = objects_[object].properties[p->pid];
-    prop = Property{Kind::Data, name, data, {}, {}, p->type};
+    prop = Property{Kind::Data, name, data, {}, {}, p->type, {}};
     return true;
 }
 
@@ -283,7 +294,7 @@ bool Builder::setIndirect(Ref object, const QString& name, const QString& typeNa
     QByteArray out;
     out.append(static_cast<char>(kLittleEndian));
     out += auidBytes(inner->auid) + data;
-    objects_[object].properties[p->pid] = Property{Kind::Data, name, out, {}, {}, p->type};
+    objects_[object].properties[p->pid] = Property{Kind::Data, name, out, {}, {}, p->type, {}};
     return true;
 }
 
@@ -309,7 +320,7 @@ Builder::Property* Builder::referenceProperty(Ref object, const QString& name, K
         return nullptr;
     }
     Property& prop = objects_[object].properties[p->pid];
-    if (prop.name.isEmpty() || prop.kind != kind) prop = Property{kind, name, {}, {}, {}, element};
+    if (prop.name.isEmpty() || prop.kind != kind) prop = Property{kind, name, {}, {}, {}, element, {}};
     return &prop;
 }
 
@@ -563,6 +574,20 @@ void Builder::addMetaDictionary(Ref meta) {
 // metadictionary objects, the Root's reference to them, the tables and any errors made here are dropped
 // again (`restore`), so that the builder is left as it was and can be written more than once.
 QByteArray Builder::toBytes(QString* error) {
+    cfb::Writer w(4096);
+    if (!build(w, error)) return {};
+    return w.toBytes(error);
+}
+
+// Straight to the file through cfb::Writer::save, so stream properties kept in files (embedded media) are
+// copied a sector at a time and never held in memory.
+bool Builder::save(const QString& path, QString* error) {
+    cfb::Writer w(4096);
+    if (!build(w, error)) return false;
+    return w.save(path, error);
+}
+
+bool Builder::build(cfb::Writer& w, QString* error) {
     const qsizetype errorsBefore = errors_.size();
     const Ref meta = create(QStringLiteral("MetaDictionary"));
     auto restore = [&] {
@@ -576,10 +601,9 @@ QByteArray Builder::toBytes(QString* error) {
     if (!errors_.isEmpty()) {
         if (error) *error = errors_.join(QLatin1Char('\n'));
         restore();
-        return {};
+        return false;
     }
 
-    cfb::Writer w(4096);
     w.setHeaderClsid(clsidOf(kHeaderClsid));
     QString failure;
     // One object into `storage`: the class ID, the child storages and index streams of its references,
@@ -604,6 +628,15 @@ QByteArray Builder::toBytes(QString* error) {
                 form = static_cast<quint16>(StoredForm::Data);
                 data = p.data;
                 break;
+            case Kind::Stream: {
+                // A byte order (0x55, unspecified) and the name of the stream beside `properties` (see
+                // Object::streamEntry in aaf.cpp); the stream holds the bytes, or the file's.
+                form = static_cast<quint16>(StoredForm::Stream);
+                data = QByteArray(1, '\x55') + utf16z(name);
+                if (p.file.isEmpty()) w.addStream(storage, name, p.data, &failure);
+                else w.addFileStream(storage, name, p.file, &failure);
+                break;
+            }
             case Kind::Strong: {
                 form = static_cast<quint16>(StoredForm::StrongRef);
                 data = utf16z(name);
@@ -715,17 +748,6 @@ QByteArray Builder::toBytes(QString* error) {
     restore();
     if (!failure.isEmpty()) {
         if (error) *error = failure;
-        return {};
-    }
-    return w.toBytes(error);
-}
-
-bool Builder::save(const QString& path, QString* error) {
-    const QByteArray bytes = toBytes(error);
-    if (bytes.isEmpty()) return false;
-    QSaveFile out(path);
-    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) {
-        if (error) *error = QStringLiteral("%1: %2").arg(path, out.errorString());
         return false;
     }
     return true;
