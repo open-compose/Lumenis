@@ -82,7 +82,9 @@ add_library(lumenis_ui STATIC
     main_window_embedded.cpp
     main_window_data.cpp
     main_window_imf.cpp
+    main_window_updates.cpp
     imf_window.cpp
+    update_check.cpp
     export_drag.cpp
     main_window_report.cpp
     main_window_proxy.cpp
@@ -138,6 +140,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/background_services.h
     include/lumenis/ui/dynamic_media_folders_window.h
     include/lumenis/ui/imf_window.h
+    include/lumenis/ui/update_check.h
     include/lumenis/ui/source_settings_dialog.h
     include/lumenis/ui/proxy_dialogs.h
     include/lumenis/ui/bin_container.h
@@ -269,7 +272,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
 )
 
 target_include_directories(lumenis_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets Qt6::PrintSupport lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
+target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets Qt6::PrintSupport Qt6::Network lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
 # The soak's process figures on Windows (soak.cpp): working set (psapi) and GDI/USER objects (user32).
 if(WIN32)
     target_link_libraries(lumenis_ui PRIVATE psapi user32)

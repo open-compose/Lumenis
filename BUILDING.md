@@ -1456,6 +1456,17 @@ answers (as `MainWindow::setRenderHook`), or answer it in `Soak::nextStep`.
 **`stalled`:** no cycle finished for ten minutes; the run ends with exit 1. Attach a debugger (or take a stack sample,
 "Profiling" above) before it ends to see where it waits.
 
+## Update check
+
+Cutthulhu asks GitHub for its latest release at start-up and from Help > Check for Updates (ROADMAP 10.6;
+docs/spec/update-check.md). It only tells: nothing is downloaded. The Interface setting's Check for Updates at Startup
+turns the start-up check off, and `LUMENIS_NO_UPDATE_CHECK=1` skips it (ctest sets it for every test). The check goes
+over HTTPS through Qt's TLS plug-in (`plugins/tls`). If it says "No secure connection is available", the package lacks
+that plug-in: windeployqt and macdeployqt bundle it, and `packaging/linux/make-appimage.sh` copies it and stops when
+Qt has none (install Qt's TLS backends, on Debian and Ubuntu part of `libqt6network6`; the OpenSSL one needs the
+system's libssl). Until the repository has a release (or while it is private), the check answers "There is no release
+to compare with yet".
+
 ## Crash reports
 
 A crash writes a report (ROADMAP 10.5; docs/spec/crash-reports.md) into "Crash Reports" in the application's local

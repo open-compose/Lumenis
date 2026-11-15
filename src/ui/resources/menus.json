@@ -431,6 +431,7 @@
         "help.about",
         "help.shortcuts",
         "help.find_command",
+        "help.check_updates",
         "help.about_qt"
       ]
     }

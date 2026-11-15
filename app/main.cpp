@@ -1800,5 +1800,11 @@ int main(int argc, char** argv) {
         }
         if (!launched) showSelectProject();
     }
+    // The update check (ROADMAP 10.6, docs/spec/update-check.md): a few seconds after start-up, when the Interface
+    // setting's "Check for Updates at Startup" is on; LUMENIS_NO_UPDATE_CHECK=1 skips it (every ctest, the soak).
+    if (qEnvironmentVariableIntValue("LUMENIS_NO_UPDATE_CHECK") == 0 &&
+        window.settings().flag(QStringLiteral("Interface"), QStringLiteral("checkForUpdates"))) {
+        QTimer::singleShot(5000, &window, [&window] { window.checkForUpdates(false); });
+    }
     return app->exec();
 }

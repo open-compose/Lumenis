@@ -1593,6 +1593,29 @@
     </message>
 </context>
 <context>
+    <name>UpdateCheck</name>
+    <message>
+        <source>GitHub&apos;s answer could not be read.</source>
+        <translation type="unfinished">Die Antwort von GitHub konnte nicht gelesen werden.</translation>
+    </message>
+    <message>
+        <source>GitHub&apos;s answer names no release.</source>
+        <translation type="unfinished">Die Antwort von GitHub nennt keine Version.</translation>
+    </message>
+    <message>
+        <source>GitHub answered %1.</source>
+        <translation type="unfinished">GitHub antwortete mit %1.</translation>
+    </message>
+    <message>
+        <source>This build names no GitHub project to check.</source>
+        <translation type="unfinished">Dieser Build nennt kein GitHub-Projekt zum Prüfen.</translation>
+    </message>
+    <message>
+        <source>No secure connection is available (Qt&apos;s TLS plug-in is missing).</source>
+        <translation type="unfinished">Keine sichere Verbindung verfügbar (das TLS-Plug-in von Qt fehlt).</translation>
+    </message>
+</context>
+<context>
     <name>binColumns</name>
     <message>
         <source>Name</source>
@@ -3785,6 +3808,10 @@
     <message>
         <source>W12</source>
         <translation type="unfinished">W12</translation>
+    </message>
+    <message>
+        <source>Check for Updates...</source>
+        <translation type="unfinished">Nach Updates suchen...</translation>
     </message>
 </context>
 <context>
@@ -14916,6 +14943,50 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
         <source>%1: an IMF audio track has no enabled tracks to mix.</source>
         <translation type="unfinished">%1: Eine IMF-Audiospur hat keine aktivierten Spuren zum Mischen.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation type="unfinished">Nach Updates suchen</translation>
+    </message>
+    <message>
+        <source>%1 %2 is available. You have %3.</source>
+        <translation type="unfinished">%1 %2 ist verfügbar. Sie haben %3.</translation>
+    </message>
+    <message>
+        <source>Nothing is downloaded or installed: the release page has the packages and what is new.</source>
+        <translation type="unfinished">Es wird nichts heruntergeladen oder installiert: Die Seite der Version enthält die Pakete und die Neuerungen.</translation>
+    </message>
+    <message>
+        <source>Open Release Page</source>
+        <translation type="unfinished">Seite der Version öffnen</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation type="unfinished">Später</translation>
+    </message>
+    <message>
+        <source>Update check: %1 is available (%2).</source>
+        <translation type="unfinished">Update-Prüfung: %1 ist verfügbar (%2).</translation>
+    </message>
+    <message>
+        <source>You have the latest version, %1.</source>
+        <translation type="unfinished">Sie haben die neueste Version, %1.</translation>
+    </message>
+    <message>
+        <source>There is no release to compare with yet; you have %1.</source>
+        <translation type="unfinished">Es gibt noch keine Version zum Vergleichen; Sie haben %1.</translation>
+    </message>
+    <message>
+        <source>Update check: no newer release than %1.</source>
+        <translation type="unfinished">Update-Prüfung: keine neuere Version als %1.</translation>
+    </message>
+    <message>
+        <source>Check for Updates: %1</source>
+        <translation type="unfinished">Nach Updates suchen: %1</translation>
+    </message>
+    <message>
+        <source>Update check: %1</source>
+        <translation type="unfinished">Update-Prüfung: %1</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -24472,6 +24543,10 @@ Mediendateien werden nicht gelöscht.</translation>
     <message>
         <source>Embedded in AAF</source>
         <translation type="unfinished">In AAF eingebettet</translation>
+    </message>
+    <message>
+        <source>Check for Updates at Startup</source>
+        <translation type="unfinished">Beim Start nach Updates suchen</translation>
     </message>
 </context>
 <context>

@@ -1959,6 +1959,24 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
 Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 100, the settings options still marked
 `"later"` (11.4f), Live mode on surround pans (11.4d), and Time Shift's Formant shift and Follow (11.2).
 
+### Phase 12 — Finishing Phase 10
+
+The owner's choice (2026-11-15), after Phase 11: finish Phase 10's open steps before anything new. 10.0, going public,
+stays the owner's to do where it is theirs (the history rewrite, deleting old runs, GitHub's settings); 10.1b/c and the
+owner's soak and screen-reader runs carry on as before.
+
+* 12.1, the update check, 10.6 (done: docs/spec/update-check.md; `src/ui/update_check.*` reading GitHub's
+  releases/latest over Qt Network, `MainWindow::checkForUpdates` at start-up behind the Interface setting's Check for
+  Updates at Startup and from Help > Check for Updates; the AppImage's TLS plug-ins; `LUMENIS_NO_UPDATE_CHECK` in every
+  ctest; test `tst_update_check`).
+* 12.2, the release pipeline without signing, 10.7 (the owner's answer: no certificates): a release workflow run by
+  hand that builds with Qt 6.8 LTS and `LUMENIS_PATENT_CODECS` off on the hosted runners, makes the .dmg (ad-hoc
+  signed), .msi and .zip, AppImage, .deb and .tar.gz, writes SHA-256 checksums, and makes a draft GitHub Release with
+  them and the symbols; INSTALL.md with each OS's steps for unsigned binaries and turning patent codecs on where the law
+  allows; an installer gate that checks the checksums.
+* 12.3, the release gate, 10.8: a checklist (docs/checklists/release-gate.md) of 10.1-10.7 on each platform, the
+  phases' deferred gates with their reasons, and the owner's tries of a release candidate on each OS.
+
 ## 6. Immediate next steps
 
 1. Decide §2.2 (module exception and/or CLA) before accepting outside

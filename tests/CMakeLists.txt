@@ -39,7 +39,9 @@ function(lumenis_isolate_media_drives)
         set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT
             "LUMENIS_NO_SYSTEM_DRIVES=1" "LUMENIS_MEDIA_DRIVES=${drive}"
             # Transcripts (lumenis/model/transcript.h) in the test's folder, never the user's.
-            "LUMENIS_TRANSCRIPTS=${drive}/Transcripts")
+            "LUMENIS_TRANSCRIPTS=${drive}/Transcripts"
+            # No update check reaching GitHub from a test (docs/spec/update-check.md).
+            "LUMENIS_NO_UPDATE_CHECK=1")
         set_property(TEST ${test} APPEND PROPERTY FIXTURES_REQUIRED test_media_drives)
     endforeach()
 endfunction()

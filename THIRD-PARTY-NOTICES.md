@@ -6,7 +6,7 @@ commercial distribution.
 
 | Component | Version | Licence | Use |
 |---|---|---|---|
-| [Qt](https://www.qt.io) | 6.8 (6.4+ on Linux distributions) | LGPL-3.0, linked dynamically | GUI toolkit (Core, Gui, Widgets, Print Support) |
+| [Qt](https://www.qt.io) | 6.8 (6.4+ on Linux distributions) | LGPL-3.0, linked dynamically | GUI toolkit (Core, Gui, Widgets, Print Support, Network) |
 | [Inter](https://github.com/rsms/inter) | 4.1 | SIL Open Font License 1.1 (`src/ui/resources/fonts/Inter-LICENSE.txt`) | Interface font, embedded as a resource |
 | [FFmpeg](https://ffmpeg.org) | 6.0 or later | LGPL-2.1-or-later (`packaging/licenses/FFmpeg-LGPL-2.1.txt`), linked dynamically | Reading and writing media (Phase 2) |
 | [CLAP](https://github.com/free-audio/clap) | 1.2.9 | MIT (`packaging/licenses/clap-LICENSE.txt`); headers built in from `third_party/clap` | Hosting CLAP audio plug-ins (Phase 5.5b) |

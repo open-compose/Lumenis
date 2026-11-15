@@ -1193,7 +1193,9 @@ The full inventory, with a page for every item, is
 * **Avid Link** (p.59) is excluded, because it is Avid's licensing service.
 * **macOS** also has the application menu, which holds Quit and About.
 * **Item order within each menu, and separators:** unverified.
-* **Additions not in Media Composer:** *Help > About Qt* (Qt's LGPL notice).
+* **Additions not in Media Composer:** *Help > About Qt* (Qt's LGPL notice);
+  *Help > Check for Updates...* (ROADMAP 10.6, docs/spec/update-check.md) and the
+  Interface setting's *Check for Updates at Startup*.
 * **Renamed:** *Tools > Avid Titler+* (FX p.303) is called *Titler+*, because
   "Avid" is a trademark.
 * **Where the two guides differ, the Editing Guide's spelling is used:**

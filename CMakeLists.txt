@@ -28,7 +28,7 @@ option(LUMENIS_FUZZ "Build the libFuzzer targets in fuzz/" OFF)
 # Qt 6.4 is the oldest supported (Ubuntu 24.04 system Qt). Release builds use
 # the Qt 6.8 LTS series.
 set(LUMENIS_QT_MIN_VERSION 6.4)
-find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets PrintSupport)
+find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets PrintSupport Network)
 # Qt's Linguist tools compile the interface's translations (ROADMAP 10.4; translations/, docs/spec/localisation.md).
 # Optional for a development build, which is then in English only; release builds need them (LUMENIS_REQUIRE_TRANSLATIONS).
 option(LUMENIS_REQUIRE_TRANSLATIONS "Fail if Qt's Linguist tools are missing" OFF)

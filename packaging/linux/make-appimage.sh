@@ -82,6 +82,19 @@ if compgen -G "$appdir/usr/plugins/platforms/libqwayland*.so" >/dev/null; then
     fi
 fi
 
+# The update check's HTTPS (docs/spec/update-check.md) goes through Qt's TLS backends, which Qt loads as plugins
+# (the OpenSSL one opens the system's libssl at run time). Bundle them, and stop if there are none: the check would
+# only ever say "No secure connection is available".
+if [[ -d "$qt_plugins/tls" ]]; then
+    mkdir -p "$appdir/usr/plugins/tls"
+    cp -a "$qt_plugins/tls/." "$appdir/usr/plugins/tls/"
+    deps_only+=(--deploy-deps-only "$appdir/usr/plugins/tls")
+fi
+if ! compgen -G "$appdir/usr/plugins/tls/*.so" >/dev/null; then
+    echo "make-appimage: no Qt TLS plugin in $qt_plugins/tls (BUILDING.md \"Update check\")" >&2
+    exit 1
+fi
+
 (cd "$build_dir" && PATH="$tools:$PATH" "$tools/linuxdeploy" \
     --appdir "$appdir" "${deps_only[@]}" --output appimage)
 echo "AppImage written to $build_dir"

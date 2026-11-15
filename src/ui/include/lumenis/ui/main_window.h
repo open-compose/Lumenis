@@ -26,6 +26,7 @@
 #include "lumenis/model/script.h"
 #include "lumenis/model/script_sync.h"
 #include "lumenis/ui/batch_import_dialog.h"
+#include "lumenis/ui/update_check.h"
 #include "lumenis/ui/background_services.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
@@ -1231,6 +1232,17 @@ public:
     // may change the printer (its output file, page layout) and says whether to go on.
     using PrintDialogHook = std::function<bool(QPrinter& printer, bool pageSetup)>;
     void setPrintDialogHook(PrintDialogHook hook) { printDialogHook_ = std::move(hook); }
+    // The update check (ROADMAP 10.6, docs/spec/update-check.md): at start-up (`fromMenu` false: only a newer release
+    // is said, in a notice that does not block; the rest goes to the Console) and from Help > Check for Updates (every
+    // answer said). The notice links to the release's page; nothing is downloaded. The fetcher answers for tests, the
+    // notice hook takes the place of the message boxes (tests, the soak).
+    void checkForUpdates(bool fromMenu);
+    void setUpdateFetcher(std::function<void(const QUrl&, const std::function<void(int, QByteArray, QString)>&)> fetcher) {
+        updateFetcher_ = std::move(fetcher);
+    }
+    void setUpdateNoticeHook(std::function<void(const UpdateResult&, bool fromMenu)> hook) { updateNoticeHook_ = std::move(hook); }
+    // The release page the last notice offered (tests).
+    QUrl lastUpdatePage() const { return lastUpdatePage_; }
     // Tools > Project's first size; the guide gives none.
     static constexpr int kProjectWidth = 300;
     static constexpr int kProjectHeight = 460;
@@ -1627,6 +1639,10 @@ private:
     // The last captions decoded for each monitor, by their data (Show Captions asks for every frame painted).
     // An IMF audio track of a group without the Master Fader (p.338) is mixed without the Audio Mixer's master gain.
     bool withoutMasterFader_ = false;
+    std::function<void(const QUrl&, const std::function<void(int, QByteArray, QString)>&)> updateFetcher_;
+    std::function<void(const UpdateResult&, bool)> updateNoticeHook_;
+    QUrl lastUpdatePage_;
+    void showUpdateResult(const UpdateResult& result, bool fromMenu);
     mutable QByteArray captionData_[2];
     mutable QList<model::ShownCaption> captionShown_[2];
     // Send To's template values while it exports (7.1c2); empty otherwise.

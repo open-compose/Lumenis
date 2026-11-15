@@ -285,6 +285,9 @@ The interface's languages (`src/ui/translation.*`, `translations/`; docs/spec/lo
 compiled in as resources; JSON resources' texts are translated where they are shown (`translatedResource`,
 `model::shownName`), since they are often also identifiers. `tst_untranslated` finds texts that skip translation.
 
+The update check (`src/ui/update_check.*`, `main_window_updates.cpp`, docs/spec/update-check.md) asks GitHub's
+releases API for the latest release and only says whether it is newer.
+
 Crash reports (`app/crash_report.*`, docs/spec/crash-reports.md) are the operating systems' own: a minidump and a
 text report on Windows, a signal handler's report on Linux and macOS; the next start says where they are.
 

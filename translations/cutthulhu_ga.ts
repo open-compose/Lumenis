@@ -1594,6 +1594,29 @@
     </message>
 </context>
 <context>
+    <name>UpdateCheck</name>
+    <message>
+        <source>GitHub&apos;s answer could not be read.</source>
+        <translation type="unfinished">Níorbh fhéidir freagra GitHub a léamh.</translation>
+    </message>
+    <message>
+        <source>GitHub&apos;s answer names no release.</source>
+        <translation type="unfinished">Ní ainmníonn freagra GitHub aon eisiúint.</translation>
+    </message>
+    <message>
+        <source>GitHub answered %1.</source>
+        <translation type="unfinished">D&apos;fhreagair GitHub %1.</translation>
+    </message>
+    <message>
+        <source>This build names no GitHub project to check.</source>
+        <translation type="unfinished">Ní ainmníonn an tógáil seo aon tionscadal GitHub le seiceáil.</translation>
+    </message>
+    <message>
+        <source>No secure connection is available (Qt&apos;s TLS plug-in is missing).</source>
+        <translation type="unfinished">Níl aon cheangal slán ar fáil (tá breiseán TLS Qt in easnamh).</translation>
+    </message>
+</context>
+<context>
     <name>binColumns</name>
     <message>
         <source>Name</source>
@@ -3786,6 +3809,10 @@
     <message>
         <source>W12</source>
         <translation type="unfinished">W12</translation>
+    </message>
+    <message>
+        <source>Check for Updates...</source>
+        <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe...</translation>
     </message>
 </context>
 <context>
@@ -14961,6 +14988,50 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
         <source>%1: an IMF audio track has no enabled tracks to mix.</source>
         <translation type="unfinished">%1: níl aon rian cumasaithe le meascadh ag rian fuaime IMF.</translation>
     </message>
+    <message>
+        <source>Check for Updates</source>
+        <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe</translation>
+    </message>
+    <message>
+        <source>%1 %2 is available. You have %3.</source>
+        <translation type="unfinished">Tá %1 %2 ar fáil. Tá %3 agat.</translation>
+    </message>
+    <message>
+        <source>Nothing is downloaded or installed: the release page has the packages and what is new.</source>
+        <translation type="unfinished">Ní íoslódáiltear ná ní shuiteáiltear aon rud: tá na pacáistí agus a bhfuil nua ar leathanach na heisiúna.</translation>
+    </message>
+    <message>
+        <source>Open Release Page</source>
+        <translation type="unfinished">Oscail Leathanach na hEisiúna</translation>
+    </message>
+    <message>
+        <source>Later</source>
+        <translation type="unfinished">Ar ball</translation>
+    </message>
+    <message>
+        <source>Update check: %1 is available (%2).</source>
+        <translation type="unfinished">Seiceáil nuashonruithe: tá %1 ar fáil (%2).</translation>
+    </message>
+    <message>
+        <source>You have the latest version, %1.</source>
+        <translation type="unfinished">Tá an leagan is déanaí agat, %1.</translation>
+    </message>
+    <message>
+        <source>There is no release to compare with yet; you have %1.</source>
+        <translation type="unfinished">Níl eisiúint ann fós le comparáid a dhéanamh léi; tá %1 agat.</translation>
+    </message>
+    <message>
+        <source>Update check: no newer release than %1.</source>
+        <translation type="unfinished">Seiceáil nuashonruithe: níl eisiúint níos nuaí ná %1.</translation>
+    </message>
+    <message>
+        <source>Check for Updates: %1</source>
+        <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe: %1</translation>
+    </message>
+    <message>
+        <source>Update check: %1</source>
+        <translation type="unfinished">Seiceáil nuashonruithe: %1</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -24522,6 +24593,10 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Embedded in AAF</source>
         <translation type="unfinished">Leabaithe in AAF</translation>
+    </message>
+    <message>
+        <source>Check for Updates at Startup</source>
+        <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe ag an Tosú</translation>
     </message>
 </context>
 <context>

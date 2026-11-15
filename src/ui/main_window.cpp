@@ -9312,6 +9312,7 @@ void MainWindow::installHandlers() {
     commands_.setHandler(QStringLiteral("file.exit"), [] { QApplication::closeAllWindows(); });
     commands_.setHandler(QStringLiteral("help.about"), [this] { showAbout(); });
     commands_.setHandler(QStringLiteral("help.about_qt"), [] { QApplication::aboutQt(); });
+    commands_.setHandler(QStringLiteral("help.check_updates"), [this] { checkForUpdates(true); });
 }
 
 // Handlers for commands that need the panels but not a project: workspaces, tools, media, windows,

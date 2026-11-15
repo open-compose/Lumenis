@@ -1238,6 +1238,10 @@
           "text": "Find Command...",
           "shortcut": "Ctrl+Shift+P",
           "reason": "Ours (ROADMAP 10.3c): every command by name from the keyboard, for those on buttons and palettes only."
+        },
+        {
+          "text": "Check for Updates...",
+          "reason": "Ours (ROADMAP 10.6): asks GitHub for the latest release and says whether it is newer; nothing is downloaded."
         }
       ]
     }

@@ -330,11 +330,12 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | About Cutthulhu |  |  | works | ☐ | | |
 | Shortcuts |  | p.97 | works | ☐ | | |
 | Find Command... | Ctrl+Shift+P |  | works | ☐ | | |
+| Check for Updates... |  |  | works | ☐ | | |
 | About Qt |  |  | works | ☐ | | |
 
 ## Summary
 
 * 19 windows.
-* 231 menu commands, 209 of them working with a project open; the
+* 232 menu commands, 210 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

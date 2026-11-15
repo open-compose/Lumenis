@@ -1170,6 +1170,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::imfPictureRuns`, `ImfAudioTrack` rows, `media::writeImfSoundFile` with raw2bmx's labels file; test
   `tst_imf_ui supplementalAndAudioMapping`), is done, so 11.5c and 11.5 are, and Phase 11 is (what stays is in the ROADMAP status line). 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
+  Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
+  (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from
+  `main_window_updates.cpp`, Help > Check for Updates, the Interface setting's Check for Updates at Startup, the
+  AppImage's TLS plug-ins; `LUMENIS_NO_UPDATE_CHECK=1` in every ctest; test `tst_update_check`), is done.
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
   encoders: `scripts/get-ffmpeg.ps1` now fetches BtbN's GPL build and checks libx264/libx265, CI requires them
