@@ -1449,6 +1449,10 @@
         <source>Decay Rate</source>
         <translation type="unfinished">Velocità di decadimento</translation>
     </message>
+    <message>
+        <source>%1 was relinked to its media on the target drive.</source>
+        <translation type="unfinished">%1 è stato ricollegato ai suoi media sull&apos;unità di destinazione.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -9363,6 +9367,26 @@ Data creazione: %4</translation>
         <source>Relink Master clips to media on the target drive</source>
         <translation type="unfinished">Ricollega le master clip ai media sull&apos;unità di destinazione</translation>
     </message>
+    <message>
+        <source>Convert to Project Frame Rate</source>
+        <translation type="unfinished">Converti alla frequenza fotogrammi del progetto</translation>
+    </message>
+    <message>
+        <source>32 kHz</source>
+        <translation type="unfinished">32 kHz</translation>
+    </message>
+    <message>
+        <source>44.1 kHz</source>
+        <translation type="unfinished">44.1 kHz</translation>
+    </message>
+    <message>
+        <source>88.2 kHz</source>
+        <translation type="unfinished">88.2 kHz</translation>
+    </message>
+    <message>
+        <source>96 kHz</source>
+        <translation type="unfinished">96 kHz</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::CopyMediaDialog</name>
@@ -14349,6 +14373,13 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
     <message>
         <source>%1: its media could not be embedded or kept</source>
         <translation type="unfinished">%1: i suoi media non hanno potuto essere né incorporati né conservati</translation>
+    </message>
+    <message numerus="yes">
+        <source>Consolidate/Transcode: %n original media file(s) deleted.</source>
+        <translation type="unfinished">
+            <numerusform>Consolida/Transcodifica: %n file media originale eliminato.</numerusform>
+            <numerusform>Consolida/Transcodifica: %n file media originali eliminati.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

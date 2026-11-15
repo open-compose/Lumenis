@@ -43,11 +43,13 @@ public:
     void setResolution(const QString& id);
     // The target audio bit depth: 16 for 16 or fewer, else 24.
     void setBitDepth(int bits);
+    // The Target Audio Sample Rate (p.352, p.355): the project's, when the menu has it.
+    void setSampleRate(int rate);
     // Processing Options: Background Process (p.352, p.356).
     void setBackground(bool background);
     bool isBackground() const;
 
-    // Everything but the project's raster and name, and the progress.
+    // Everything but the project's raster, name and frame rate, the media database's lookup and the progress.
     media::ConsolidateOptions options() const;
     // "In a MediaCentral Production Management environment, with Dynamic Relink enabled, select this option to create
     // new master clips for the transcoded media" (p.354-355): Create new clips is offered while Dynamic Relink is on
@@ -79,6 +81,12 @@ private:
     QCheckBox* linkedOnly_ = nullptr;
     QCheckBox* skipOnTarget_ = nullptr;
     QCheckBox* deleteOriginals_ = nullptr;
+    QCheckBox* relinkFirst_ = nullptr; // Relink selected clips to target drive before skipping (p.352)
+    QRadioButton* keepSourceRate_ = nullptr;
+    QRadioButton* convertProjectRate_ = nullptr;
+    QCheckBox* applyFraming_ = nullptr;
+    QCheckBox* convertSampleRate_ = nullptr;
+    QComboBox* sampleRate_ = nullptr;
     QCheckBox* convertBitDepth_ = nullptr;
     QComboBox* bitDepth_ = nullptr;
     QWidget* transcodeBox_ = nullptr;

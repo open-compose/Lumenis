@@ -2943,20 +2943,42 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   * Target Video Resolution;
   * Raster Dimensions: project, source, source 1/4, source 1/16 (p.355);
   * Convert Audio Bit Depth;
-  * Create new clips, offered with Dynamic Relink on (p.354-355; docs/spec/dynamic-relink.md).
+  * Create new clips, offered with Dynamic Relink on (p.354-355; docs/spec/dynamic-relink.md);
+  * Apply source transformations > Color encoding (p.355; docs/spec/color-adapters.md);
+  * Background Process and the Background Queue (p.356–357; docs/spec/background-services.md).
+* 11.4a1 (ROADMAP):
+  * Delete original media files when done (p.351): the clips take the
+    copies (the Copying Media Files question is not asked, and no `.old`
+    clips are made: their media is gone) and the managed files they played
+    are deleted once the bin has changed (`ConsolidateResult::deleteFiles`,
+    `deleteMediaFiles`). For a sequence, the files of the clips it used go:
+    those clips are then offline. Linked files, the user's own, are never
+    deleted (ours).
+  * Relink selected clips to target drive before skipping (p.352), shown
+    only with Skip media files already on the target drive: a selected
+    clip whose media (by its MobID, in the media database) is on the target
+    drive but which plays other media is linked to the target's and
+    skipped; the note says so.
+  * Keep Source's Frame Rate or Convert to Project Frame Rate (p.355),
+    Keep each time the dialog opens ("this option will be reset after each
+    transcode operation"). Converting makes selected master clips at the
+    project's rate, as long in seconds, frames and sound taken by time from
+    the same media; the clips a sequence uses keep their rate (ours: the
+    segments count their frames).
+  * Apply source transformations > Framing, the guide's Frame Flex (p.355;
+    9.8 for the name): the clip's FrameFlex box and Reformat, with its
+    pixels' shape, go into the new media (`MediaCreation::spatial`), and
+    the new sequences' segments drop their spatial adapters. Off, the new
+    clips have no FrameFlex of their own and the segments keep theirs.
+  * Convert Audio Sample Rate and Target Audio Sample Rate (p.352,
+    p.355): 32, 44.1, 48, 88.2 or 96 kHz, the project's rate to start
+    with (48 kHz is MXF, the others WAV; docs/spec/clip-audio.md). Off,
+    each clip keeps its own rate when media can be made at it.
 * Consolidate copies the picture without converting it. That works for DNx
   (managed media, or linked DNx files at the project's rate). Other media
   is skipped with a note in the Console: transcode it.
-* Later:
-  * Delete original media files;
-  * Relink selected clips before skipping;
-  * group clips;
-  * converting the sample rate and audio format;
-  * Keep Source's Frame Rate;
-  * source transformations;
-  * Background Process and the Background Queue (p.356–357);
-  * Distributed Processing;
-  * subclips.
+* Later: Consolidate all clips in a group edit (11.4a2); the audio format
+  (OMF WAVE and AIFF-C, p.352); Distributed Processing (p.356); subclips.
 
 ### Media database (p.358–359)
 * Read when a project opens. File > Media > Load Media Database and

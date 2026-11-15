@@ -591,6 +591,46 @@ private slots:
     // export methods copy into the AAF file itself (p.871), nothing beside it; imported where that media is not, the
     // clips get managed media of their own, at the OMFI/AAF tab's Resolution (p.1197), and come online with the same
     // pictures and sound.
+    // The Consolidate/Transcode dialog's options of 11.4a1 (p.351-356) map onto media::ConsolidateOptions; Relink before
+    // skipping appears with Skip media files, and the sample rate menu follows Convert Audio Sample Rate.
+    void consolidateDialogOptions() {
+        ConsolidateDialog dialog(Rational(25), true);
+        dialog.show();
+        auto* deleteOriginals = dialog.findChild<QCheckBox*>(QStringLiteral("deleteOriginals"));
+        auto* skip = dialog.findChild<QCheckBox*>(QStringLiteral("skipOnTarget"));
+        auto* relinkFirst = dialog.findChild<QCheckBox*>(QStringLiteral("relinkBeforeSkipping"));
+        QVERIFY(deleteOriginals && skip && relinkFirst);
+        QVERIFY(deleteOriginals->isEnabled());
+        QVERIFY(!relinkFirst->isVisible());
+        skip->setChecked(true);
+        QVERIFY(relinkFirst->isVisible());
+        relinkFirst->setChecked(true);
+        deleteOriginals->setChecked(true);
+        media::ConsolidateOptions o = dialog.options();
+        QVERIFY(o.skipOnTarget && o.relinkBeforeSkipping && o.deleteOriginals);
+        QVERIFY(!o.convertToProjectRate && !o.applyFraming);
+
+        dialog.setTranscode(true);
+        dialog.setSampleRate(44100);
+        auto* convert = dialog.findChild<QRadioButton*>(QStringLiteral("convertProjectRate"));
+        auto* keep = dialog.findChild<QRadioButton*>(QStringLiteral("keepSourceRate"));
+        auto* framing = dialog.findChild<QCheckBox*>(QStringLiteral("applyFraming"));
+        auto* convertRate = dialog.findChild<QCheckBox*>(QStringLiteral("convertSampleRate"));
+        auto* rate = dialog.findChild<QComboBox*>(QStringLiteral("targetSampleRate"));
+        QVERIFY(convert && keep && framing && convertRate && rate);
+        QVERIFY(keep->isChecked());
+        convert->setChecked(true);
+        framing->setChecked(true);
+        o = dialog.options();
+        QVERIFY(o.convertToProjectRate && o.applyFraming && o.convertSampleRate);
+        QCOMPARE(o.creation.sampleRate, 44100);
+        // Consolidate's own options do not reach a transcode.
+        QVERIFY(!o.deleteOriginals && !o.skipOnTarget);
+        convertRate->setChecked(false);
+        QVERIFY(!rate->isEnabled());
+        QVERIFY(!dialog.options().convertSampleRate);
+    }
+
     void aafEmbeddedMedia() {
         if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;

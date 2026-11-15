@@ -15,6 +15,8 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <utility>
+
 // The Consolidate/Transcode dialog and the Copying Media Files question (consolidate_dialog.h). The
 // options map onto media::ConsolidateOptions (src/media/consolidate.h); the drives and resolutions come
 // from src/media/managed.*. MainWindow (main_window.cpp) opens the dialog and runs the jobs.
@@ -123,14 +125,16 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     auto* cv = new QVBoxLayout(consolidateBox_);
     cv->setContentsMargins(0, 0, 0, 0);
     deleteOriginals_ = new QCheckBox(tr("Delete original media files when done"), consolidateBox_);
-    later(deleteOriginals_);
+    deleteOriginals_->setObjectName(QStringLiteral("deleteOriginals"));
     cv->addWidget(deleteOriginals_);
     skipOnTarget_ = new QCheckBox(tr("Skip media files already on the target drive"), consolidateBox_);
     skipOnTarget_->setObjectName(QStringLiteral("skipOnTarget"));
     cv->addWidget(skipOnTarget_);
-    auto* relinkFirst = new QCheckBox(tr("Relink selected clips to target drive before skipping"), consolidateBox_);
-    later(relinkFirst);
-    cv->addWidget(relinkFirst);
+    // "This option appears when you select Skip media files already on the target drive" (p.352).
+    relinkFirst_ = new QCheckBox(tr("Relink selected clips to target drive before skipping"), consolidateBox_);
+    relinkFirst_->setObjectName(QStringLiteral("relinkBeforeSkipping"));
+    cv->addWidget(relinkFirst_);
+    connect(skipOnTarget_, &QCheckBox::toggled, this, [this] { update(); });
     auto* groups = new QCheckBox(tr("Consolidate all clips in a group edit"), consolidateBox_);
     later(groups);
     cv->addWidget(groups);
@@ -160,19 +164,30 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     rasterRow->addWidget(raster_);
     rasterRow->addStretch();
     tv->addLayout(rasterRow);
-    auto* sourceRate = new QCheckBox(tr("Keep Source's Frame Rate"), transcodeBox_);
-    later(sourceRate);
-    tv->addWidget(sourceRate);
-    // Apply source transformations (p.544): Color encoding, and FrameFlex shown as
-    // Framing (9.8; ours: not yet, dimmed).
+    // Keep Source's Frame Rate or Convert to Project Frame Rate (p.355); "this option will be reset after each transcode
+    // operation": a new dialog starts with the source's.
+    auto* rateRow = new QHBoxLayout;
+    keepSourceRate_ = new QRadioButton(tr("Keep Source's Frame Rate"), transcodeBox_);
+    keepSourceRate_->setObjectName(QStringLiteral("keepSourceRate"));
+    keepSourceRate_->setChecked(true);
+    convertProjectRate_ = new QRadioButton(tr("Convert to Project Frame Rate"), transcodeBox_);
+    convertProjectRate_->setObjectName(QStringLiteral("convertProjectRate"));
+    auto* rateGroup = new QButtonGroup(transcodeBox_);
+    rateGroup->addButton(keepSourceRate_);
+    rateGroup->addButton(convertProjectRate_);
+    rateRow->addWidget(keepSourceRate_);
+    rateRow->addWidget(convertProjectRate_);
+    rateRow->addStretch();
+    tv->addLayout(rateRow);
+    // Apply source transformations (p.355, p.544): Color encoding, and Frame Flex shown as Framing (9.8).
     auto* transformsRow = new QHBoxLayout;
     transformsRow->addWidget(new QLabel(tr("Apply source transformations:"), transcodeBox_));
     applyColorEncoding_ = new QCheckBox(tr("Color encoding"), transcodeBox_);
     applyColorEncoding_->setObjectName(QStringLiteral("applyColorEncoding"));
     transformsRow->addWidget(applyColorEncoding_);
-    auto* frameFlex = new QCheckBox(tr("Framing"), transcodeBox_);
-    later(frameFlex);
-    transformsRow->addWidget(frameFlex);
+    applyFraming_ = new QCheckBox(tr("Framing"), transcodeBox_);
+    applyFraming_->setObjectName(QStringLiteral("applyFraming"));
+    transformsRow->addWidget(applyFraming_);
     transformsRow->addStretch();
     tv->addLayout(transformsRow);
     // Create new clips (p.354-355): on by default, as it is what happens without Dynamic Relink.
@@ -186,16 +201,24 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     // Audio: MXF OP-Atom PCM at 48 kHz; the bit depth can be chosen.
     auto* audio = new QGroupBox(tr("Audio"), this);
     auto* av = new QVBoxLayout(audio);
-    auto* rateRow = new QHBoxLayout;
-    auto* convertRate = new QCheckBox(tr("Convert Audio Sample Rate"), audio);
-    later(convertRate);
-    rateRow->addWidget(convertRate);
-    auto* rate = new QComboBox(audio);
-    rate->addItem(tr("48 kHz"));
-    later(rate);
-    rateRow->addWidget(rate);
-    rateRow->addStretch();
-    av->addLayout(rateRow);
+    // Convert Audio Sample Rate and Target Audio Sample Rate (p.352, p.355): the rates media is made at (isImportRate();
+    // 48 kHz as MXF, the others as WAV, docs/spec/clip-audio.md).
+    auto* sampleRow = new QHBoxLayout;
+    convertSampleRate_ = new QCheckBox(tr("Convert Audio Sample Rate"), audio);
+    convertSampleRate_->setObjectName(QStringLiteral("convertSampleRate"));
+    convertSampleRate_->setChecked(true);
+    sampleRow->addWidget(convertSampleRate_);
+    sampleRate_ = new QComboBox(audio);
+    sampleRate_->setObjectName(QStringLiteral("targetSampleRate"));
+    for (const auto& [rate, text] : {std::pair{32000, tr("32 kHz")}, std::pair{44100, tr("44.1 kHz")}, std::pair{48000, tr("48 kHz")},
+                                     std::pair{88200, tr("88.2 kHz")}, std::pair{96000, tr("96 kHz")}}) {
+        sampleRate_->addItem(text, rate);
+    }
+    sampleRate_->setCurrentIndex(sampleRate_->findData(media::kManagedSampleRate));
+    sampleRow->addWidget(sampleRate_);
+    sampleRow->addStretch();
+    av->addLayout(sampleRow);
+    connect(convertSampleRate_, &QCheckBox::toggled, sampleRate_, &QWidget::setEnabled);
     auto* depthRow = new QHBoxLayout;
     convertBitDepth_ = new QCheckBox(tr("Convert Audio Bit Depth"), audio);
     convertBitDepth_->setObjectName(QStringLiteral("convertBitDepth"));
@@ -261,6 +284,7 @@ void ConsolidateDialog::update() {
     go_->setText(transcode ? tr("Transcode") : tr("Consolidate"));
     transcodeBox_->setVisible(transcode);
     consolidateBox_->setVisible(!transcode);
+    relinkFirst_->setVisible(skipOnTarget_->isChecked());
     const bool separate = !sameDrive_->isChecked();
     audioLabel_->setVisible(separate);
     audioDrives_->setVisible(separate);
@@ -304,6 +328,11 @@ void ConsolidateDialog::setBitDepth(int bits) {
     bitDepth_->setCurrentIndex(bits <= 16 ? 0 : 1);
 }
 
+void ConsolidateDialog::setSampleRate(int rate) {
+    const int i = sampleRate_->findData(rate);
+    if (i >= 0) sampleRate_->setCurrentIndex(i);
+}
+
 // Options that do not apply are left off: new sequences without sequences, skipping files on the
 // target when transcoding, and a separate audio drive when both go on the same drive.
 media::ConsolidateOptions ConsolidateDialog::options() const {
@@ -314,6 +343,12 @@ media::ConsolidateOptions ConsolidateDialog::options() const {
     o.newSequences = newSequences_->isEnabled() && newSequences_->isChecked();
     o.linkedOnly = linkedOnly_->isChecked();
     o.skipOnTarget = !transcode_->isChecked() && skipOnTarget_->isChecked();
+    o.relinkBeforeSkipping = o.skipOnTarget && relinkFirst_->isChecked();
+    o.deleteOriginals = !transcode_->isChecked() && deleteOriginals_->isChecked();
+    o.convertToProjectRate = transcode_->isChecked() && convertProjectRate_->isChecked();
+    o.applyFraming = transcode_->isChecked() && applyFraming_->isChecked();
+    o.convertSampleRate = convertSampleRate_->isChecked();
+    o.creation.sampleRate = sampleRate_->currentData().toInt();
     o.raster = static_cast<media::ConsolidateOptions::Raster>(raster_->currentData().toInt());
     o.applyColorEncoding = transcode_->isChecked() && applyColorEncoding_->isChecked();
     o.newClips = !transcode_->isChecked() || !newClips_->isEnabled() || newClips_->isChecked();

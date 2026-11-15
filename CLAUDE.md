@@ -1121,7 +1121,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (`MainWindow::renderMotionClip`); 11.3d, media embedded in AAF files (docs/spec/aaf.md "Embedded media":
   `src/interop/aaf_essence.*`, `cfb::Writer::addFileStream` and `aaf::Builder::setStream` writing straight from files,
   `src/ui/main_window_embedded.cpp` with `readEmbeddedMedia` at the OMFI/AAF tab's Resolution and Media Destinations'
-  Embedded in AAF; tests `tst_cfb fileStreams`, `tst_aaf embeddedMedia`, `tst_managed_media aafEmbeddedMedia`). 10.6 is an update check that only tells the user (no
+  Embedded in AAF; tests `tst_cfb fileStreams`, `tst_aaf embeddedMedia`, `tst_managed_media aafEmbeddedMedia`).
+  11.4, the medium left-over items, is in six parts (ROADMAP). 11.4a1, the Consolidate/Transcode options (Delete
+  original media files, Relink before skipping, Convert to Project Frame Rate, Framing, Convert Audio Sample Rate:
+  `ConsolidateOptions`, `MediaCreation::spatial`, `ConsolidateResult::deleteFiles`; tests `tst_media
+  consolidateOptions`, `tst_managed_media consolidateDialogOptions`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

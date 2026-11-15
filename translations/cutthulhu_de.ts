@@ -1449,6 +1449,10 @@
         <source>Decay Rate</source>
         <translation type="unfinished">Abklingrate</translation>
     </message>
+    <message>
+        <source>%1 was relinked to its media on the target drive.</source>
+        <translation type="unfinished">%1 wurde mit seinen Medien auf dem Ziellaufwerk neu verknüpft.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -9363,6 +9367,26 @@ Erstellungsdatum: %4</translation>
         <source>Relink Master clips to media on the target drive</source>
         <translation type="unfinished">Masterclips mit den Medien auf dem Ziellaufwerk neu verknüpfen</translation>
     </message>
+    <message>
+        <source>Convert to Project Frame Rate</source>
+        <translation type="unfinished">In Projekt-Bildrate umwandeln</translation>
+    </message>
+    <message>
+        <source>32 kHz</source>
+        <translation type="unfinished">32 kHz</translation>
+    </message>
+    <message>
+        <source>44.1 kHz</source>
+        <translation type="unfinished">44.1 kHz</translation>
+    </message>
+    <message>
+        <source>88.2 kHz</source>
+        <translation type="unfinished">88.2 kHz</translation>
+    </message>
+    <message>
+        <source>96 kHz</source>
+        <translation type="unfinished">96 kHz</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::CopyMediaDialog</name>
@@ -14349,6 +14373,13 @@ Tun Sie das nur, wenn diese Station offline ist und nicht aktiv schreibt.</trans
     <message>
         <source>%1: its media could not be embedded or kept</source>
         <translation type="unfinished">%1: Seine Medien konnten weder eingebettet noch behalten werden</translation>
+    </message>
+    <message numerus="yes">
+        <source>Consolidate/Transcode: %n original media file(s) deleted.</source>
+        <translation type="unfinished">
+            <numerusform>Konsolidieren/Transkodieren: %n Original-Mediendatei gelöscht.</numerusform>
+            <numerusform>Konsolidieren/Transkodieren: %n Original-Mediendateien gelöscht.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

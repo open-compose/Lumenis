@@ -8,6 +8,7 @@
 #include "lumenis/media/playback.h"
 #include "lumenis/media/relink.h"
 #include "lumenis/model/color_adapter.h"
+#include "lumenis/model/frame_flex.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -853,6 +854,144 @@ private slots:
             {static_cast<double>(plain.redF()), static_cast<double>(plain.greenF()), static_cast<double>(plain.blueF())}, e.transformations);
         const QColor want = QColor::fromRgbF(static_cast<float>(graded[0]), static_cast<float>(graded[1]), static_cast<float>(graded[2]));
         QVERIFY(near(cache.frame(r.added.first(), 2), want, 14));
+    }
+
+    // The Consolidate/Transcode options of 11.4a1 (p.351-356): Delete original media files when done, Relink selected
+    // clips to target drive before skipping, Convert to Project Frame Rate, Framing (Frame Flex) and Convert Audio Sample
+    // Rate.
+    void consolidateOptions() {
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        // A 25 fps clip with sound at 44.1 kHz, its left half red and its right half blue.
+        const QString source = dir.filePath(QStringLiteral("Halves.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.audioCodec = QStringLiteral("pcm_s16le");
+        s.sampleRate = 44100;
+        s.channels = 1;
+        {
+            MediaWriter w;
+            QVERIFY(w.open(source, s));
+            const std::vector<float> sound(1764, 0.25f);
+            for (int i = 0; i < 50; ++i) {
+                QImage image(64, 36, QImage::Format_RGBA8888);
+                image.fill(Qt::blue);
+                QPainter p(&image);
+                p.fillRect(0, 0, 32, 36, Qt::red);
+                p.end();
+                QVERIFY(w.writeVideo(image));
+                QVERIFY(w.writeAudio(sound.data(), 1764));
+            }
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        auto linked = linkClip(*probe(source), o);
+        QVERIFY(linked);
+        const QString driveA = dir.filePath(QStringLiteral("A"));
+        const QString driveB = dir.filePath(QStringLiteral("B"));
+        QVERIFY(QDir().mkpath(driveA) && QDir().mkpath(driveB));
+        const ClipLookup none = [](const QString&, const QString&) { return std::optional<model::BinItem>(); };
+        auto colourAt = [](const model::BinItem& clip, std::int64_t frame, double x) {
+            FrameCache cache;
+            const QImage image = cache.frame(clip, frame);
+            return image.isNull() ? QColor() : image.pixelColor(static_cast<int>(x * image.width()), image.height() / 2);
+        };
+        auto redder = [](const QColor& c) { return c.red() > 180 && c.blue() < 80; };
+        auto bluer = [](const QColor& c) { return c.blue() > 180 && c.red() < 80; };
+
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        options.creation.raster = QSize(256, 144);
+        options.creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        options.creation.videoDrive = driveA;
+        options.creation.sampleRate = 48000;
+
+        // Keep Source's Frame Rate (the default) and Convert Audio Sample Rate to 48 kHz: MXF.
+        ConsolidateResult r = consolidate({*linked}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        const model::BinItem managed = r.added.first();
+        QCOMPARE(managed.editRate, Rational(25));
+        QCOMPARE(managed.durationFrames, std::int64_t{50});
+        QCOMPARE(managed.fields.value(QStringLiteral("Audio SR")), QStringLiteral("48000"));
+        QVERIFY(bluer(colourAt(managed, 5, 0.75)));
+
+        // Convert to Project Frame Rate: two seconds at 24 fps, frames taken by time; the sound not converted keeps 44.1.
+        options.convertToProjectRate = true;
+        options.projectRate = Rational(24);
+        options.convertSampleRate = false;
+        r = consolidate({*linked}, QStringLiteral("bin1"), none, {managed.name}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        const model::BinItem retimed = r.added.first();
+        QCOMPARE(retimed.editRate, Rational(24));
+        QCOMPARE(retimed.durationFrames, std::int64_t{48});
+        QCOMPARE(retimed.fields.value(QStringLiteral("Audio SR")), QStringLiteral("44100"));
+        QVERIFY(linkOf(retimed)->audioPaths.first().endsWith(QStringLiteral(".wav")));
+        options.convertToProjectRate = false;
+        options.convertSampleRate = true;
+
+        // Framing: the box on the left half fills the frame, so its right side is red too; without it, blue.
+        model::FrameFlex flex;
+        flex.imageSize = QSize(64, 36);
+        flex.size = 0.5;
+        flex.x = -16;
+        model::BinItem framed = *linked;
+        model::setFrameFlex(framed, flex);
+        options.applyFraming = true;
+        r = consolidate({framed}, QStringLiteral("bin1"), none, {managed.name, retimed.name}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(redder(colourAt(r.added.first(), 5, 0.75)));
+        QVERIFY(!model::frameFlexOf(r.added.first()));
+        options.applyFraming = false;
+        r = consolidate({framed}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY(bluer(colourAt(r.added.first(), 5, 0.75)));
+
+        // Relink selected clips to target drive before skipping: the managed clip's copy on B is found and linked to.
+        options.mode = ConsolidateOptions::Mode::Consolidate;
+        options.keepMastersLinked = true;
+        options.creation.videoDrive = driveB;
+        r = consolidate({managed}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        const Link onB = *linkOf(r.added.first());
+        options.skipOnTarget = true;
+        options.relinkBeforeSkipping = true;
+        options.mediaOnTarget = [&](const model::BinItem& clip, const QString& drive) -> std::optional<Link> {
+            if (clip.id == managed.id && drive == driveB) return onB;
+            return std::nullopt;
+        };
+        r = consolidate({managed}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(r.added.isEmpty());
+        QCOMPARE(r.changed.size(), 1);
+        QCOMPARE(linkOf(r.changed.first())->path, onB.path);
+        QCOMPARE(r.skipped.size(), 1);
+        // Without it, the clip is copied (its media is not on B by its own link).
+        options.relinkBeforeSkipping = false;
+        options.skipOnTarget = false;
+
+        // Delete original media files when done: the clip takes the copy, no ".old", its old files listed to delete.
+        const QStringList originals = linkOf(managed)->files();
+        options.deleteOriginals = true;
+        options.keepMastersLinked = true; // overridden: the clip must take the copy
+        r = consolidate({managed}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(r.added.isEmpty());
+        QCOMPARE(r.changed.size(), 1);
+        QVERIFY(linkOf(r.changed.first())->path.startsWith(driveB));
+        QCOMPARE(r.changed.first().mobId, managed.mobId);
+        QCOMPARE(QSet<QString>(r.deleteFiles.begin(), r.deleteFiles.end()), QSet<QString>(originals.begin(), originals.end()));
+        QCOMPARE(deleteMediaFiles(r.deleteFiles).size(), originals.size());
+        for (const QString& f : originals) QVERIFY(!QFileInfo::exists(f));
+        QVERIFY(bluer(colourAt(r.changed.first(), 5, 0.75)));
+        // Linked media is never deleted: the user's own file.
+        r = consolidate({*linked}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY(r.deleteFiles.isEmpty());
+        QVERIFY(QFileInfo::exists(source));
     }
 
     void consolidateSequences() {

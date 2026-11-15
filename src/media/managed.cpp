@@ -1,5 +1,7 @@
 #include "lumenis/media/managed.h"
 
+#include "lumenis/media/frame_flex.h"
+
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/color_transform.h"
 #include "lumenis/media/link.h"
@@ -306,7 +308,7 @@ public:
                                        : 1.0;
         const QRectF placed = fitPictureRect(QSize(info.width, info.height), sourcePixel, creation_.raster);
         const QRect target = placed.toAlignedRect().intersected(QRect(QPoint(0, 0), creation_.raster));
-        const bool direct = creation_.colorTransformations.isEmpty() && stored() == creation_.raster;
+        const bool direct = creation_.colorTransformations.isEmpty() && !creation_.spatial && stored() == creation_.raster;
         for (std::int64_t f = in_; f < out_; ++f) {
             bool ok = false;
             if (direct) {
@@ -319,9 +321,15 @@ public:
                     shown.fill(Qt::black);
                     QPainter p(&shown);
                     p.setRenderHint(QPainter::SmoothPixmapTransform);
-                    p.drawImage(placed, creation_.colorTransformations.isEmpty()
-                                            ? frame
-                                            : applyColorTransformations(frame, creation_.colorTransformations));
+                    const QImage coloured = creation_.colorTransformations.isEmpty()
+                                                ? frame
+                                                : applyColorTransformations(frame, creation_.colorTransformations);
+                    // Framing applied (p.355): the box fills the raster as the segment shows it, else the picture fitted.
+                    if (creation_.spatial) {
+                        p.drawImage(QPoint(0, 0), spatialAdaptedImage(coloured, *creation_.spatial, creation_.raster, creation_.raster));
+                    } else {
+                        p.drawImage(placed, coloured);
+                    }
                     p.end();
                     ok = writer.writeVideo(toStoredRaster(shown, stored()));
                 }

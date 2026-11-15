@@ -1449,6 +1449,10 @@
         <source>Decay Rate</source>
         <translation type="unfinished">Taux de décroissance</translation>
     </message>
+    <message>
+        <source>%1 was relinked to its media on the target drive.</source>
+        <translation type="unfinished">%1 a été relié à ses médias sur le lecteur cible.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -9363,6 +9367,26 @@ Date de création: %4</translation>
         <source>Relink Master clips to media on the target drive</source>
         <translation type="unfinished">Relier les plans maîtres aux médias du disque cible</translation>
     </message>
+    <message>
+        <source>Convert to Project Frame Rate</source>
+        <translation type="unfinished">Convertir à la fréquence d&apos;images du projet</translation>
+    </message>
+    <message>
+        <source>32 kHz</source>
+        <translation type="unfinished">32 kHz</translation>
+    </message>
+    <message>
+        <source>44.1 kHz</source>
+        <translation type="unfinished">44.1 kHz</translation>
+    </message>
+    <message>
+        <source>88.2 kHz</source>
+        <translation type="unfinished">88.2 kHz</translation>
+    </message>
+    <message>
+        <source>96 kHz</source>
+        <translation type="unfinished">96 kHz</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::CopyMediaDialog</name>
@@ -14349,6 +14373,13 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>%1: its media could not be embedded or kept</source>
         <translation type="unfinished">%1 : ses médias n&apos;ont pu être ni incorporés ni conservés</translation>
+    </message>
+    <message numerus="yes">
+        <source>Consolidate/Transcode: %n original media file(s) deleted.</source>
+        <translation type="unfinished">
+            <numerusform>Consolider/Transcoder : %n fichier de médias original supprimé.</numerusform>
+            <numerusform>Consolider/Transcoder : %n fichiers de médias originaux supprimés.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

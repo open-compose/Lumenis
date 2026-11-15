@@ -1873,7 +1873,15 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   aafEmbeddedMedia`; pyaaf2 reads ours and we read pyaaf2's, checked by hand). Left: drive groups and DisabledRes.txt.
 * 11.4, the medium ones: Consolidate/Transcode and Relink options, export from a monitor and by drag and drop, the
   List Tool's lists, the Shot Log tab, extended Punch-In, surround pan automation, the Background Queue's Resume and
-  job groups, the settings options marked `"later"`.
+  job groups, the settings options marked `"later"`. In parts: 11.4a, the Consolidate/Transcode and Relink dialogs'
+  options; 11.4b, export from a monitor and by drag and drop; 11.4c, the List Tool's lists and the Shot Log tab; 11.4d,
+  extended Punch-In and surround pan automation; 11.4e, the Background Queue's Resume and job groups; 11.4f, the
+  settings options marked `"later"` that need no hardware or Avid service. 11.4a is in three parts: 11.4a1, Delete
+  original media files, Relink before skipping, Keep Source's Frame Rate or Convert to Project Frame Rate, Framing and
+  Convert Audio Sample Rate (done: `ConsolidateOptions::deleteOriginals`/`relinkBeforeSkipping`/`mediaOnTarget`/
+  `convertToProjectRate`/`applyFraming`/`convertSampleRate`, `MediaCreation::spatial`, `ConsolidateResult::deleteFiles`;
+  docs/spec/ui-inventory.md "Consolidate/Transcode"; tests `tst_media consolidateOptions`, `tst_managed_media
+  consolidateDialogOptions`); 11.4a2, Consolidate all clips in a group edit; 11.4a3, the Relink dialog's options.
 * 11.5, the large ones: IMF packages, Show Every Frame (film projects), Extract DNxHD Data and data-track mixdown.
 
 ## 6. Immediate next steps

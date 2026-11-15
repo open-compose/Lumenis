@@ -1450,6 +1450,10 @@
         <source>Decay Rate</source>
         <translation type="unfinished">Ráta meatha</translation>
     </message>
+    <message>
+        <source>%1 was relinked to its media on the target drive.</source>
+        <translation type="unfinished">Athnascadh %1 lena mheáin ar an tiomántán sprice.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -9366,6 +9370,26 @@ Dáta Cruthaithe: %4</translation>
         <source>Relink Master clips to media on the target drive</source>
         <translation type="unfinished">Athnasc na máistirghearrthóga le meáin ar an tiomántán sprice</translation>
     </message>
+    <message>
+        <source>Convert to Project Frame Rate</source>
+        <translation type="unfinished">Tiontaigh go Ráta Fráma an Tionscadail</translation>
+    </message>
+    <message>
+        <source>32 kHz</source>
+        <translation type="unfinished">32 kHz</translation>
+    </message>
+    <message>
+        <source>44.1 kHz</source>
+        <translation type="unfinished">44.1 kHz</translation>
+    </message>
+    <message>
+        <source>88.2 kHz</source>
+        <translation type="unfinished">88.2 kHz</translation>
+    </message>
+    <message>
+        <source>96 kHz</source>
+        <translation type="unfinished">96 kHz</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::CopyMediaDialog</name>
@@ -14391,6 +14415,14 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>%1: its media could not be embedded or kept</source>
         <translation type="unfinished">%1: níorbh fhéidir a mheáin a leabú ná a choinneáil</translation>
+    </message>
+    <message numerus="yes">
+        <source>Consolidate/Transcode: %n original media file(s) deleted.</source>
+        <translation type="unfinished">
+            <numerusform>Comhdhlúthaigh/Traschódaigh: scriosadh %n chomhad meán bunaidh.</numerusform>
+            <numerusform>Comhdhlúthaigh/Traschódaigh: scriosadh %n chomhad meán bunaidh.</numerusform>
+            <numerusform>Comhdhlúthaigh/Traschódaigh: scriosadh %n comhad meán bunaidh.</numerusform>
+        </translation>
     </message>
 </context>
 <context>

@@ -5,6 +5,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/color_adapter.h"
+#include "lumenis/model/frame_flex.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -28,6 +29,30 @@ namespace {
 // Master clips and audio clips: the items that point at media themselves.
 bool isClip(const model::BinItem& item) {
     return item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
+}
+
+// The managed files a clip plays (deleteOriginals): only those under an "Avid MediaFiles" folder, never the user's own.
+QStringList managedFiles(const model::BinItem& clip) {
+    QStringList out;
+    const auto link = linkOf(clip);
+    if (!link || !link->isManaged()) return out;
+    for (const QString& f : link->files()) {
+        if (QDir::fromNativeSeparators(QFileInfo(f).absoluteFilePath()).contains(QStringLiteral("/Avid MediaFiles/"))) out << f;
+    }
+    return out;
+}
+
+// The sample rate a clip's sound is in: its Audio SR column, else its first audio file's.
+int clipSampleRate(const model::BinItem& clip) {
+    if (const int rate = clip.fields.value(QStringLiteral("Audio SR")).toInt(); rate > 0) return rate;
+    const auto link = linkOf(clip);
+    if (!link || link->channels <= 0) return 0;
+    if (const auto info = probe(link->audioFile(0))) {
+        for (const StreamInfo& st : info->streams) {
+            if (st.sampleRate > 0) return st.sampleRate;
+        }
+    }
+    return 0;
 }
 
 // Whether every file of a managed clip is on a drive already.
@@ -104,15 +129,27 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
     // transcoded at the raster the options choose for this clip.
     // The clip being transcoded is to keep the new media itself (Create new clips off).
     bool associating = false;
+    // The clip takes the copy itself (its files name it) unless masters stay linked; always when the originals go.
+    const bool takesCopy = !options.keepMastersLinked || options.deleteOriginals;
+    // The sound's rate (p.352, p.355): the creation's, or the clip's own when not converted and it can be made.
+    auto withRate = [&](MediaCreation creation, const model::BinItem& clip) {
+        if (!options.convertSampleRate) {
+            if (const int rate = clipSampleRate(clip); rate > 0 && isImportRate(rate)) creation.sampleRate = rate;
+        }
+        return creation;
+    };
     auto make = [&](const model::BinItem& clip, std::int64_t in, std::int64_t out, QString* error) {
         if (copy) {
-            // The clip itself takes the copy unless masters stay linked: the files then name it.
-            MediaCreation creation = options.creation;
-            if (!options.keepMastersLinked && in == 0 && out < 0) creation.master = clip.mobId;
+            MediaCreation creation = withRate(options.creation, clip);
+            if (takesCopy && in == 0 && out < 0) creation.master = clip.mobId;
             return consolidateClip(clip, in, out, creation, error);
         }
-        MediaCreation creation = options.creation;
+        MediaCreation creation = withRate(options.creation, clip);
         creation.raster = rasterFor(clip, options.raster, options.creation.raster);
+        // Frame Flex applied (p.355): the clip's box and Reformat, with its pixels' shape, into the media.
+        if (options.applyFraming) {
+            if (const auto adapter = model::spatialAdapterOf(clip)) creation.spatial = model::withPixelAspect(*adapter, clip);
+        }
         if (associating) creation.master = model::mobIdOf(clip);
         const auto encoding = model::colorAdapterOf(clip);
         if (options.applyColorEncoding && encoding) {
@@ -128,13 +165,35 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
     for (const model::BinItem& item : selection) {
         if (!result.error.isEmpty()) break;
         if (isClip(item)) {
+            // Relink before skipping (p.352): media of the clip's own on the target drive, which it does not play yet.
+            if (options.skipOnTarget && options.relinkBeforeSkipping && options.mediaOnTarget) {
+                const auto link = linkOf(item);
+                if (link && !(link->isManaged() && onDrive(*link, target))) {
+                    if (const auto there = options.mediaOnTarget(item, target); there && onDrive(*there, target)) {
+                        model::BinItem relinked = item;
+                        relinked.link = there->toJson();
+                        relinked.modified = QDateTime::currentDateTimeUtc();
+                        result.changed << relinked;
+                        result.skipped << QObject::tr("%1 was relinked to its media on the target drive.").arg(item.name);
+                        continue;
+                    }
+                }
+            }
             if (const QString why = refuse(item); !why.isEmpty()) {
                 result.skipped << why;
                 continue;
             }
             QString error;
             associating = !copy && !options.newClips;
-            auto made = make(item, 0, -1, &error);
+            // Convert to Project Frame Rate (p.355): the clip retimed to the project's rate, its frames and sound taken by
+            // time from the same media (Link::fileFrame), as long in seconds as it was.
+            model::BinItem source = item;
+            if (!copy && options.convertToProjectRate && options.projectRate.num() > 0 && !(item.editRate == options.projectRate)) {
+                source.editRate = options.projectRate;
+                source.durationFrames = std::max<std::int64_t>(
+                    1, (Rational(item.durationFrames) * options.projectRate / item.editRate).round());
+            }
+            auto made = make(source, 0, -1, &error);
             associating = false;
             if (!made) {
                 result.error = error;
@@ -146,16 +205,12 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 continue;
             }
             made->markers = item.markers;
-            if (copy && !options.keepMastersLinked) {
+            if (copy && takesCopy) {
+                if (options.deleteOriginals) result.deleteFiles << managedFiles(item);
                 // The clip takes the copy; ".old", a new master clip, keeps the media it had (p.349). The
                 // clip keeps its MobID, so the sequences that name it play the copy: the copy's files
                 // were made naming it (make()), and it takes their file sources. The old files still
                 // name the clip's MobID too; they hold the same frames.
-                model::BinItem old = item;
-                old.id = model::newItemId();
-                old.mobId = MobId::generate();
-                old.name = numberedName(item.name, QStringLiteral(".old"), names);
-                names << old.name;
                 model::BinItem relinked = item;
                 relinked.link = made->link;
                 relinked.fields = made->fields;
@@ -163,7 +218,15 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 if (relinked.mobId.isNull()) relinked.mobId = made->mobId; // a clip from before MobIDs
                 relinked.modified = made->modified;
                 result.changed << relinked;
-                result.added << old;
+                // Deleted originals leave no media for an ".old" clip.
+                if (!options.deleteOriginals) {
+                    model::BinItem old = item;
+                    old.id = model::newItemId();
+                    old.mobId = MobId::generate();
+                    old.name = numberedName(item.name, QStringLiteral(".old"), names);
+                    names << old.name;
+                    result.added << old;
+                }
             } else {
                 made->name = numberedName(item.name, QStringLiteral(".new"), names);
                 names << made->name;
@@ -229,6 +292,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 if (!listed) result.associated << *clip;
                 continue;
             }
+            // The clip's original files go too (p.351): the clip itself is then offline, as other sequences using it.
+            if (copy && options.deleteOriginals) result.deleteFiles << managedFiles(*clip);
             made->name = numberedName(clip->name, QStringLiteral(".new"), names);
             names << made->name;
             remap.insert(clipId, {made->id, made->mobId, from});
@@ -250,6 +315,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 s.sourceIn -= it->from;
                 // Colours transcoded into the media are not applied again (p.544).
                 if (!copy && options.applyColorEncoding) s.color.reset();
+                // So is the framing (p.355).
+                if (!copy && options.applyFraming) s.spatial.reset();
             }
         }
         model::BinItem relinked = item;
@@ -265,6 +332,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             result.changed << relinked;
         }
     }
+    result.deleteFiles.removeDuplicates();
     return result;
 }
 

@@ -3,6 +3,7 @@
 #include "lumenis/core/rational.h"
 #include "lumenis/media/link.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/frame_flex.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -190,6 +191,10 @@ struct MediaCreation {
     // Transcode's "Apply source transformations > Color encoding" (p.544; 8.5c2): the colour transformations
     // (media::applyColorTransformations) each frame goes through before it is written. Empty: the picture as it is.
     QStringList colorTransformations;
+    // Transcode's "Apply source transformations > Frame Flex" (p.355; 11.4a1): the clip's spatial adapter (its FrameFlex
+    // box and Reformat) applied to each frame, so the new media holds the framed picture. Unset: the picture fitted as
+    // it is.
+    std::optional<model::SpatialAdapter> spatial;
 };
 // Whether `rate` is a pullup or pulldown of `nominal` (times 1001/1000 or 1000/1001, to the sample):
 // 48048 and 47952 for 48 kHz, 44144 and 44056 for 44.1 kHz.

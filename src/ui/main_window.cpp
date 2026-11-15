@@ -8550,13 +8550,15 @@ void MainWindow::consolidateTranscode() {
     dialog.setDrive(transcode.videoDrive);
     dialog.setResolution(transcode.resolution.id);
     dialog.setBitDepth(transcode.bitDepth);
+    dialog.setSampleRate(projectSampleRate());
     dialog.setDynamicRelink(dynamicRelinkSettings().enabled);
     const bool ok = consolidateHook_ ? consolidateHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok) return;
     media::ConsolidateOptions options = dialog.options();
     const bool background = dialog.isBackground();
-    if (options.mode == media::ConsolidateOptions::Mode::Consolidate && masters) {
-        // The Copying Media Files dialog (p.352).
+    if (options.mode == media::ConsolidateOptions::Mode::Consolidate && masters && !options.deleteOriginals) {
+        // The Copying Media Files dialog (p.352); not with Delete original media files, where the clips must take the
+        // copies.
         const std::optional<bool> keep =
             copyingMediaHook_ ? copyingMediaHook_() : ConsolidateDialog::askKeepMastersLinked(this);
         if (!keep) return;
@@ -8564,7 +8566,28 @@ void MainWindow::consolidateTranscode() {
     }
     options.creation.raster = transcode.raster;
     options.creation.project = transcode.project;
+    options.projectRate = project_->settings.format.editRate;
     options.acesWorkingSpace = model::isAcesColorSpace(project_->settings.colorSpace);
+    // Relink selected clips to target drive before skipping (p.352): each selected clip's media on the target, found
+    // in the media database now (background jobs read this copy, not the database).
+    if (options.relinkBeforeSkipping) {
+        loadMediaDatabase();
+        auto onTarget = std::make_shared<QHash<QString, media::Link>>();
+        for (const model::BinItem& item : selection) {
+            for (const media::MediaSet& set : mediaDb_.setsOf(item.mobId)) {
+                const media::Link link = set.link();
+                const QString root = QDir::cleanPath(QFileInfo(media::mediaFilesFolder(options.creation.videoDrive)).absoluteFilePath());
+                if (QDir::cleanPath(QFileInfo(link.path).absoluteFilePath()).startsWith(root + QLatin1Char('/'))) {
+                    onTarget->insert(item.id, link);
+                }
+            }
+        }
+        options.mediaOnTarget = [onTarget](const model::BinItem& clip, const QString&) -> std::optional<media::Link> {
+            const auto it = onTarget->constFind(clip.id);
+            if (it == onTarget->constEnd()) return std::nullopt;
+            return *it;
+        };
+    }
     options.creation.when = QDateTime::currentDateTimeUtc();
     QStringList taken;
     for (const model::BinItem& item : doc.bin().items) taken << item.name;
@@ -8641,6 +8664,12 @@ void MainWindow::applyConsolidate(const QString& binId, const media::Consolidate
                 dynamicRelinkClip(binId, clip, relink);
             }
         }
+    }
+    // Delete original media files when done (p.351): the clips play their copies now.
+    if (!result.deleteFiles.isEmpty()) {
+        const QStringList deleted = media::deleteMediaFiles(result.deleteFiles, &mediaDb_);
+        // Console only: what the option removed, which it was asked to.
+        ConsoleLog::instance().append(tr("Consolidate/Transcode: %n original media file(s) deleted.", "", static_cast<int>(deleted.size())));
     }
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     for (const QString& why : result.skipped) reportFailure(this, tr("Consolidate/Transcode: %1").arg(why));

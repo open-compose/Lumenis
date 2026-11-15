@@ -10,6 +10,8 @@
 #include <QStringList>
 
 #include <cstdint>
+#include <functional>
+#include <optional>
 
 // Clip > Consolidate/Transcode (Editing Guide p.349-356): new media for the
 // selected clips and sequences, and the clips that use it.
@@ -29,6 +31,16 @@ struct ConsolidateOptions {
     bool linkedOnly = false;
     // Skip media files already on the target drive (p.351).
     bool skipOnTarget = false;
+    // "Relink selected clips to target drive before skipping. Select to ensure that all selected clips are linked to
+    // media on the target drive. This option appears when you select Skip media files already on the target drive"
+    // (p.352; 11.4a1): a clip whose media (by its MobID) is on the target drive but which plays other media is linked
+    // to the target's, and skipped. `mediaOnTarget` finds that media (the media database, in the UI).
+    bool relinkBeforeSkipping = false;
+    std::function<std::optional<Link>(const model::BinItem& clip, const QString& drive)> mediaOnTarget;
+    // "Delete original media files when done" (p.351; 11.4a1): the clips take the copies (no ".old" clips: their media
+    // is gone) and the managed files they played are listed in ConsolidateResult::deleteFiles for the caller to delete
+    // (deleteMediaFiles()). Linked files, the user's own, are never deleted (ours). Consolidate only.
+    bool deleteOriginals = false;
     // The Copying Media Files dialog (p.352): master clips keep their media
     // and new ones (".new") take the copies; or they take the copies and
     // new ones (".old") keep the old media (p.349).
@@ -51,6 +63,20 @@ struct ConsolidateOptions {
     // clip then name its MobID (MultiRez, p.1099-1101; 8.6a) and no ".new" clip is made; a sequence's clips keep the
     // media of the ranges it uses (with handles), partly online at that resolution (p.1118; 8.6c).
     bool newClips = true;
+    // Transcode's "Keep Source's Frame Rate" or "Convert to Project Frame Rate" (p.355; 11.4a1): with
+    // `convertToProjectRate`, selected master clips at another rate are made at `projectRate`, their frames and sound
+    // taken by time (Link::fileFrame); the clips a sequence uses keep their rate (ours: the segments count their
+    // frames).
+    bool convertToProjectRate = false;
+    Rational projectRate{24000, 1001};
+    // "Apply source transformations > Frame Flex - Select this option if you want to transcode clips with FrameFlex
+    // formatting" (p.355; 11.4a1): the clips' spatial adapters go into the new media (MediaCreation::spatial), and the
+    // new clips and the new sequences' segments have none. Off, the new clips have no FrameFlex of their own and the
+    // segments keep theirs.
+    bool applyFraming = false;
+    // "Convert Audio Sample Rate" (p.352, p.355; 11.4a1): the sound is made at creation.sampleRate. Off, each clip's
+    // sound keeps its own rate when the media can be made at it (isImportRate()), else the creation's.
+    bool convertSampleRate = true;
     MediaCreation creation; // its raster is the project's
 };
 
@@ -72,6 +98,8 @@ struct ConsolidateResult {
     // Master clips that have media at one more resolution (newClips off): Dynamic Relink chooses which they play.
     QList<model::BinItem> associated;
     QStringList skipped;           // why items or clips were left as they were
+    // deleteOriginals: the managed media files the consolidated clips played, to delete once the bin has changed.
+    QStringList deleteFiles;
     QString error;                 // what stopped it (cancelled too)
 };
 
