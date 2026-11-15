@@ -60,6 +60,9 @@ struct StreamInfo {
     // FFmpeg's name for the transfer characteristic ("bt709", "linear", "iec61966-2-1" ...); empty when unspecified.
     QString colorTransfer;
     bool interlaced = false;
+    // The stream's bits a second as the file says, else the whole file's when it is the file's only video stream
+    // (MXF does not give a stream's); 0 when unknown. DNxHD media is named by it (link.cpp, ROADMAP 11.1d).
+    std::int64_t bitRate = 0;
     // Interlaced: whether the first field in time is on the even lines (FFmpeg's field order tt or tb);
     // true when the media does not say.
     bool topFieldFirst = true;

@@ -662,6 +662,140 @@ private slots:
         setProjectFormat({}, Rational(), false);
     }
 
+    // The DNxHD bit-rate resolutions (p.1121; 11.1d): named by their rate at the project's frame rate, offered in the
+    // formats that rate belongs to, made at it (interlaced in 1080i, the 1440 x 1080 thin raster for -TR), and linked
+    // DNxHD media named the same.
+    void transcodeDnxhd() {
+        auto offered = [](const QString& name) {
+            const QList<Resolution> list = resolutions();
+            return std::any_of(list.begin(), list.end(), [&](const Resolution& r) { return r.name == name; });
+        };
+        setProjectFormat(QSize(1920, 1080), Rational(25), false);
+        for (const char* name : {"DNxHD 36", "DNxHD 120", "DNxHD 185", "DNxHD 185x"}) QVERIFY2(offered(QLatin1String(name)), name);
+        for (const char* name : {"DNxHD 145", "DNxHD 220", "DNxHD 175", "DNxHD 120-TR"}) QVERIFY2(!offered(QLatin1String(name)), name);
+        QVERIFY(offered(QStringLiteral("Avid DNx HQ"))); // DNxHR stays in every format
+        setProjectFormat(QSize(1920, 1080), Rational(30000, 1001), true);
+        for (const char* name : {"DNxHD 145", "DNxHD 220", "DNxHD 220x", "DNxHD 145-TR"}) QVERIFY2(offered(QLatin1String(name)), name);
+        QVERIFY(!offered(QStringLiteral("DNxHD 45"))); // 1080p only
+        setProjectFormat(QSize(1280, 720), Rational(24000, 1001), false);
+        QVERIFY(offered(QStringLiteral("DNxHD 90x")));
+        setProjectFormat(QSize(3840, 2160), Rational(25), false);
+        QVERIFY(!offered(QStringLiteral("DNxHD 120")));
+
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Market.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 25));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        // DNxHD 185x in a 1080i/25 project: 10-bit, interlaced, at 185 Mb/s.
+        setProjectFormat(QSize(1920, 1080), Rational(25), true);
+        MediaCreation c;
+        c.raster = QSize(1920, 1080);
+        c.resolution = *findResolution(QStringLiteral("DNxHD 185x"));
+        c.videoDrive = dir.path();
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("DNxHD 185x"));
+        const auto link = linkOf(*made);
+        QVERIFY(link);
+        const auto v1 = probe(link->path);
+        QVERIFY(v1 && v1->firstVideo());
+        const StreamInfo& video = *v1->firstVideo();
+        QCOMPARE(video.codec, QStringLiteral("dnxhd"));
+        QCOMPARE(video.profile, QStringLiteral("DNXHD"));
+        QCOMPARE(video.bitsPerSample, 10);
+        QVERIFY(video.interlaced);
+        QVERIFY2(std::abs(static_cast<double>(video.bitRate) / 185e6 - 1.0) < 0.08, qPrintable(QString::number(video.bitRate)));
+        // Linked as it is, the file is named for its rate.
+        LinkOptions lo;
+        lo.editRate = Rational(25);
+        const auto relinked = linkClip(*v1, lo);
+        QVERIFY(relinked);
+        QCOMPARE(relinked->fields.value(QStringLiteral("Video")), QStringLiteral("DNxHD 185x"));
+        // DNxHD 120-TR: stored 1440 x 1080, pixels 4:3 wide, named back the same.
+        c.resolution = *findResolution(QStringLiteral("DNxHD 120-TR"));
+        const auto thin = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(thin, qPrintable(error));
+        const auto tr = probe(linkOf(*thin)->path);
+        QVERIFY(tr && tr->firstVideo());
+        QCOMPARE(tr->firstVideo()->width, 1440);
+        QCOMPARE(linkClip(*tr, lo)->fields.value(QStringLiteral("Video")), QStringLiteral("DNxHD 120-TR"));
+        // Not in a 1080p/25 project.
+        setProjectFormat(QSize(1920, 1080), Rational(25), false);
+        QVERIFY(!transcodeClip(*clip, 0, -1, c, &error));
+        setProjectFormat({}, Rational(), false);
+    }
+
+    // AVC-Intra 100 and 50 (p.1252-1270; 11.1b): x264's classes in the formats the tables give, 100 in the full raster
+    // (4:2:2 10-bit, High 4:2:2 Intra) and 50 in the thin one (1440 x 1080, 960 x 720), named back from their profile.
+    void transcodeAvcIntra() {
+        if (!findResolution(QStringLiteral("avc_intra100"))) QSKIP("No libx264 in this build (LUMENIS_PATENT_CODECS)");
+        auto offered = [](const QString& id) {
+            const QList<Resolution> list = resolutions();
+            return std::any_of(list.begin(), list.end(), [&](const Resolution& r) { return r.id == id; });
+        };
+        setProjectFormat(QSize(1920, 1080), Rational(30000, 1001), true);
+        QVERIFY(offered(QStringLiteral("avc_intra100")));
+        QVERIFY(offered(QStringLiteral("avc_intra50")));
+        setProjectFormat(QSize(3840, 2160), Rational(25), false);
+        QVERIFY(!offered(QStringLiteral("avc_intra100")));
+        setProjectFormat(QSize(1920, 1080), Rational(30000, 1001), true);
+
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Market.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(30000, 1001);
+        QVERIFY(writeVideo(source, s, 10));
+        LinkOptions o;
+        o.editRate = Rational(30000, 1001);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(1920, 1080);
+        c.resolution = *findResolution(QStringLiteral("avc_intra100"));
+        c.videoDrive = dir.path();
+        QString error;
+        const auto made = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("AVC-Intra 100"));
+        const auto v1 = probe(linkOf(*made)->path);
+        QVERIFY(v1 && v1->firstVideo());
+        QCOMPARE(v1->firstVideo()->codec, QStringLiteral("h264"));
+        QCOMPARE(v1->firstVideo()->profile, QStringLiteral("High 4:2:2 Intra"));
+        QCOMPARE(v1->firstVideo()->width, 1920);
+        QVERIFY(v1->firstVideo()->interlaced);
+        QCOMPARE(v1->firstVideo()->length, 10);
+        FrameCache cache;
+        QVERIFY(near(cache.frame(*made, 5), colourOf(5), 16));
+        QCOMPARE(linkClip(*v1, o)->fields.value(QStringLiteral("Video")), QStringLiteral("AVC-Intra 100"));
+        // AVC-Intra 50: the thin raster.
+        c.resolution = *findResolution(QStringLiteral("avc_intra50"));
+        const auto thin = transcodeClip(*clip, 0, -1, c, &error);
+        QVERIFY2(thin, qPrintable(error));
+        const auto v50 = probe(linkOf(*thin)->path);
+        QVERIFY(v50 && v50->firstVideo());
+        QCOMPARE(v50->firstVideo()->width, 1440);
+        QCOMPARE(v50->firstVideo()->profile, QStringLiteral("High 10 Intra"));
+        QCOMPARE(linkClip(*v50, o)->fields.value(QStringLiteral("Video")), QStringLiteral("AVC-Intra 50"));
+        QVERIFY(near(cache.frame(*thin, 5), colourOf(5), 16));
+        setProjectFormat({}, Rational(), false);
+    }
+
     // DV, DVCPRO HD and XDCAM HD 35 as managed media (p.1252-1274; 11.1c2): offered in the formats the tables give, by
     // scan too; stored in their own rasters (DVCPRO HD's 1280 x 1080 at 1080i/59.94, DV's 480 lines for NTSC) with the
     // pixels' shape in the stream and the clip, labelled clip-wrapped, and shown filling the project frame.

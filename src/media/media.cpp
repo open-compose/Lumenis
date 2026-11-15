@@ -290,6 +290,13 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
             if (const char* trc = av_color_transfer_name(par->color_trc)) s.colorTransfer = QString::fromUtf8(trc);
         }
         s.interlaced = par->field_order != AV_FIELD_PROGRESSIVE && par->field_order != AV_FIELD_UNKNOWN;
+        if (par->bit_rate > 0) {
+            s.bitRate = par->bit_rate;
+        } else if (fmt->bit_rate > 0) {
+            int videos = 0;
+            for (unsigned k = 0; k < fmt->nb_streams; ++k) videos += fmt->streams[k]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO;
+            if (videos == 1) s.bitRate = fmt->bit_rate;
+        }
         // The field shown first (AVFieldOrder names the coded order first: TB is "top coded first, bottom displayed
         // first", as FFmpeg reads lower-field-first MXF); unknown and progressive count as upper.
         s.topFieldFirst = par->field_order != AV_FIELD_BB && par->field_order != AV_FIELD_TB;

@@ -288,6 +288,16 @@ public:
             s.interlaced = projectInterlaced();
             s.bottomFieldFirst = creation_.raster.height() == 486 || creation_.raster.height() == 480;
         }
+        if (r.codec == QLatin1String("h264")) {
+            // AVC-Intra's class; interlaced projects' fields as such.
+            s.videoOptions << r.options;
+            s.interlaced = projectInterlaced();
+        }
+        if (isDnxhd(r)) {
+            // DNxHD's compression ID follows the rate, the raster and the depth; interlaced projects' fields as such.
+            s.bitRate = r.bitRate;
+            s.interlaced = projectInterlaced();
+        }
         return true;
     }
 
@@ -907,6 +917,93 @@ bool isImportRate(int rate) {
 
 namespace {
 
+// The DNxHD resolutions (ROADMAP 11.1d), by the names the guide gives them (p.1121: "DNxHD 220 ... DNxHD 36, DNxHD
+// 145-TR, DNxHD 120-TR"), each "based on the frame rate of the project. For example, DNxHD 220 has a compressed data
+// rate of 220 Mb/sec at 29.97 fps. DNxHD 185, which is an equivalent resolution, has a compressed data rate of
+// 185Mb/sec at 25 fps". Ours: which names a format has, from SMPTE VC-3's compression IDs as FFmpeg's DNxHD encoder
+// makes them (8-bit, the "x" ones 10-bit; -TR in the 1440 x 1080 thin raster): 1080p 23.976 and 24 fps 36, 115, 175,
+// 175x; 1080p 25 36, 120, 185, 185x; 1080p 29.97 45, 145, 220; 1080i 25 120, 185, 185x, 120-TR; 1080i 29.97 145,
+// 220, 220x, 145-TR; 720p 23.976 and 24 60, 90, 90x; 720p 50 120; 720p 59.94 145, 220, 220x. DNxHD 10 and 100 are not
+// made (no encoder here), nor the rates the guide does not name.
+QList<Resolution> dnxhdResolutions() {
+    const Rational f23(24000, 1001), f24(24), f25(25), f29(30000, 1001), f50(50), f59(60000, 1001);
+    const QSize hd(1920, 1080), hd720(1280, 720), thin(1440, 1080);
+    auto p = [](QSize raster, Rational rate) { return ResolutionFormat{raster, rate, ResolutionFormat::Scan::Progressive, QSize()}; };
+    auto i = [](QSize raster, Rational rate, QSize stored = QSize()) {
+        return ResolutionFormat{raster, rate, ResolutionFormat::Scan::Interlaced, stored};
+    };
+    auto dnxhd = [](const char* id, const char* name, int mbps, bool tenBit, int quality, const QList<ResolutionFormat>& formats) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.profile = QStringLiteral("dnxhd");
+        r.pixelFormat = tenBit ? QStringLiteral("yuv422p10le") : QStringLiteral("yuv422p");
+        r.probed = QStringLiteral("DNXHD");
+        r.quality = quality;
+        r.bitRate = static_cast<std::int64_t>(mbps) * 1000000;
+        r.formats = formats;
+        return r;
+    };
+    return {
+        dnxhd("dnxhd_36", "DNxHD 36", 36, false, 1, {p(hd, f23), p(hd, f24), p(hd, f25)}),
+        dnxhd("dnxhd_45", "DNxHD 45", 45, false, 1, {p(hd, f29)}),
+        dnxhd("dnxhd_60", "DNxHD 60", 60, false, 1, {p(hd720, f23), p(hd720, f24)}),
+        dnxhd("dnxhd_90", "DNxHD 90", 90, false, 2, {p(hd720, f23), p(hd720, f24)}),
+        dnxhd("dnxhd_90x", "DNxHD 90x", 90, true, 4, {p(hd720, f23), p(hd720, f24)}),
+        dnxhd("dnxhd_115", "DNxHD 115", 115, false, 2, {p(hd, f23), p(hd, f24)}),
+        dnxhd("dnxhd_120", "DNxHD 120", 120, false, 2, {p(hd, f25), i(hd, f25), p(hd720, f50)}),
+        dnxhd("dnxhd_145", "DNxHD 145", 145, false, 2, {p(hd, f29), i(hd, f29), p(hd720, f59)}),
+        dnxhd("dnxhd_175", "DNxHD 175", 175, false, 3, {p(hd, f23), p(hd, f24)}),
+        dnxhd("dnxhd_175x", "DNxHD 175x", 175, true, 4, {p(hd, f23), p(hd, f24)}),
+        dnxhd("dnxhd_185", "DNxHD 185", 185, false, 3, {p(hd, f25), i(hd, f25)}),
+        dnxhd("dnxhd_185x", "DNxHD 185x", 185, true, 4, {p(hd, f25), i(hd, f25)}),
+        dnxhd("dnxhd_220", "DNxHD 220", 220, false, 3, {p(hd, f29), i(hd, f29), p(hd720, f59)}),
+        dnxhd("dnxhd_220x", "DNxHD 220x", 220, true, 4, {i(hd, f29), p(hd720, f59)}),
+        dnxhd("dnxhd_120tr", "DNxHD 120-TR", 120, false, 2, {i(hd, f25, thin)}),
+        dnxhd("dnxhd_145tr", "DNxHD 145-TR", 145, false, 2, {i(hd, f29, thin)}),
+    };
+}
+
+// AVC-Intra 100 and 50 (ROADMAP 11.1b; p.1252-1270: "AVC Intra 100" in the full 1920 x 1080 and 1280 x 720 rasters,
+// "AVC Intra 50" in the thin 1440 x 1080 and 960 x 720 ones; p.505 "AVC Intra 50 (Thin Raster)", "AVC Intra 100 (Full
+// Raster)"), through x264's AVC-Intra classes (FFmpeg's libx264, a patent codec: LUMENIS_PATENT_CODECS builds only).
+// Class 100 is High 4:2:2 Intra, 10-bit 4:2:2; class 50 High 10 Intra, 10-bit 4:2:0. Ours: XAVC Intra is not made
+// (Sony's XAVC constraints are in no open encoder); the operating systems' H.264 encoders have no AVC-Intra classes.
+QList<Resolution> avcIntraResolutions() {
+    using Scan = ResolutionFormat::Scan;
+    const Rational f23(24000, 1001), f24(24), f25(25), f29(30000, 1001), f50(50), f59(60000, 1001);
+    auto avc = [](const char* id, const char* name, int avcClass, const char* pixel, const char* probed, int quality,
+                  const QList<ResolutionFormat>& formats) {
+        Resolution r;
+        r.id = QString::fromLatin1(id);
+        r.name = QString::fromLatin1(name);
+        r.codec = QStringLiteral("h264");
+        r.pixelFormat = QString::fromLatin1(pixel);
+        r.probed = QString::fromLatin1(probed);
+        r.quality = quality;
+        r.options = {{QStringLiteral("avcintra-class"), QString::number(avcClass)}};
+        r.formats = formats;
+        return r;
+    };
+    const QSize hd(1920, 1080), thin(1440, 1080), hd720(1280, 720), thin720(960, 720);
+    QList<ResolutionFormat> full{{hd, f23, Scan::Progressive, {}}, {hd, f24, Scan::Progressive, {}}, {hd, f25, Scan::Progressive, {}},
+                                 {hd, f29, Scan::Progressive, {}}, {hd, f25, Scan::Interlaced, {}},   {hd, f29, Scan::Interlaced, {}}};
+    QList<ResolutionFormat> thin1080;
+    for (const ResolutionFormat& f : QList<ResolutionFormat>{{hd, f23, Scan::Progressive, {}}, {hd, f25, Scan::Interlaced, {}},
+                                                             {hd, f29, Scan::Interlaced, {}}}) {
+        thin1080 << ResolutionFormat{f.raster, f.rate, f.scan, thin} << ResolutionFormat{thin, f.rate, f.scan, {}};
+    }
+    QList<ResolutionFormat> full720, thinned720;
+    for (const Rational& rate : {f23, f25, f29, f50, f59}) {
+        full720 << ResolutionFormat{hd720, rate, Scan::Progressive, {}};
+        thinned720 << ResolutionFormat{hd720, rate, Scan::Progressive, thin720} << ResolutionFormat{thin720, rate, Scan::Progressive, {}};
+    }
+    return {
+        avc("avc_intra100", "AVC-Intra 100", 100, "yuv422p10le", "High 4:2:2 Intra", 3, full + full720),
+        avc("avc_intra50", "AVC-Intra 50", 50, "yuv420p10le", "High 10 Intra", 2, thin1080 + thinned720),
+    };
+}
+
 // Every resolution we know, whether or not this build can make it: Avid DNx, then Apple ProRes. The ranks put
 // comparable levels side by side (by data rate and depth): LB ~ Proxy, SQ ~ LT, HQ ~ 422, HQX ~ 422 HQ, 444 ~ 4444.
 QList<Resolution> allResolutions() {
@@ -1030,7 +1127,7 @@ QList<Resolution> allResolutions() {
         {QSize(960, 720), Rational(50)},
         {QSize(960, 720), Rational(60000, 1001)},
     };
-    return {
+    const QList<Resolution> out{
         // The quality levels p.1240 names, in order of quality.
         dnx("dnx_lb", "Avid DNx LB", "dnxhr_lb", "yuv422p", false, "DNXHR LB", 1),
         dnx("dnx_sq", "Avid DNx SQ", "dnxhr_sq", "yuv422p", false, "DNXHR SQ", 2),
@@ -1068,6 +1165,7 @@ QList<Resolution> allResolutions() {
         // 4:2:2 intra frames at a constant 30, 40 or 50 Mb/s in D-10's raster with the blanking above the picture.
         imx("mpeg_imx30", "MPEG30", 30, 1), imx("mpeg_imx40", "MPEG40", 40, 2), imx("mpeg_imx50", "MPEG50", 50, 3),
     };
+    return out + dnxhdResolutions() + avcIntraResolutions();
 }
 
 // Whether the encoder makes media here: a few frames into MXF OP-Atom, as managed media is written, in a temporary
@@ -1150,6 +1248,7 @@ const QList<Resolution>& stableResolutions() {
 bool canMake(const Resolution& r) {
     if (r.codec == QLatin1String("prores")) return !proresEncoder().isEmpty();
     if (r.codec == QLatin1String("mpeg2video") || r.codec == QLatin1String("dvvideo")) return encoderAvailable(r.codec);
+    if (r.codec == QLatin1String("h264")) return encoderAvailable(QStringLiteral("libx264"));
     return true; // DNx: checked when the media is made, as before
 }
 
@@ -1325,6 +1424,7 @@ QList<Resolution> resolutions() {
 QString resolutionEncoder(const Resolution& resolution) {
     if (resolution.codec == QLatin1String("prores")) return proresEncoder();
     if (resolution.codec == QLatin1String("mpeg2video") || resolution.codec == QLatin1String("dvvideo")) return resolution.codec;
+    if (resolution.codec == QLatin1String("h264")) return QStringLiteral("libx264");
     return QStringLiteral("dnxhd");
 }
 
@@ -1342,6 +1442,29 @@ const Resolution* resolutionOfProbed(const QString& codec, const QString& profil
         if (r.codec == family && r.probed.compare(profile, Qt::CaseInsensitive) == 0) return &r;
     }
     return nullptr;
+}
+
+bool isDnxhd(const Resolution& resolution) {
+    return resolution.codec == QLatin1String("dnxhd") && resolution.profile == QLatin1String("dnxhd");
+}
+
+const Resolution* dnxhdResolutionOf(std::int64_t bitRate, int bitsPerSample, QSize raster, Rational rate, bool interlaced) {
+    if (bitRate <= 0) return nullptr;
+    const Resolution* best = nullptr;
+    double nearest = 0.08; // within 8% of a name's rate: the file's rate includes its wrapper and sound
+    for (const Resolution& r : stableResolutions()) {
+        if (!isDnxhd(r) || (bitsPerSample > 8) != (r.pixelFormat == QLatin1String("yuv422p10le"))) continue;
+        const ResolutionFormat* f = formatFor(r, raster, rate, interlaced);
+        // The thin raster's media is 1440 wide: its format is the project's 1920 x 1080.
+        if (!f && raster == QSize(1440, 1080)) f = formatFor(r, QSize(1920, 1080), rate, interlaced);
+        if (!f || (raster == QSize(1440, 1080)) != (f->stored == QSize(1440, 1080))) continue;
+        const double off = std::abs(static_cast<double>(bitRate) / static_cast<double>(r.bitRate) - 1.0);
+        if (off < nearest) {
+            nearest = off;
+            best = &r;
+        }
+    }
+    return best;
 }
 
 const Resolution* knownResolution(const QString& idOrName) {

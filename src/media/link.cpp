@@ -83,10 +83,18 @@ QString videoName(const StreamInfo& s) {
     if (s.codec == QLatin1String("dnxhd")) {
         // FFmpeg's profiles: "DNXHD", "DNXHR LB", "DNXHR HQX", ...
         if (profile.startsWith(QLatin1String("DNXHR"))) return QStringLiteral("DNxHR") + profile.mid(5);
+        // DNxHD by its rate at this frame rate (p.1121): "DNxHD 120", "DNxHD 185x", "DNxHD 145-TR".
+        if (const Resolution* r = dnxhdResolutionOf(s.bitRate, s.bitsPerSample, QSize(s.width, s.height), s.frameRate, s.interlaced)) {
+            return r->name;
+        }
         return QStringLiteral("DNxHD");
     }
     if (s.codec.startsWith(QLatin1String("prores"))) {
         return profile.isEmpty() ? QStringLiteral("ProRes") : QStringLiteral("ProRes ") + profile;
+    }
+    // AVC-Intra by its profile (High 4:2:2 Intra: class 100; High 10 Intra: class 50).
+    if (s.codec == QLatin1String("h264") && profile.endsWith(QLatin1String("Intra"))) {
+        if (const Resolution* r = resolutionOfProbed(s.codec, profile)) return r->name;
     }
     static const QHash<QString, QString> names{
         {QStringLiteral("h264"), QStringLiteral("H.264")},  {QStringLiteral("hevc"), QStringLiteral("H.265")},

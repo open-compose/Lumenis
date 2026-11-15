@@ -70,6 +70,11 @@ struct Resolution {
 void setProjectFormat(QSize raster, Rational rate, bool interlaced, Rational aspect = Rational());
 // The project picture's aspect ratio (setProjectFormat()); invalid (0) for none.
 Rational projectAspect();
+// Whether the resolution is one of the DNxHD bit-rate resolutions ("DNxHD 120", ROADMAP 11.1d), not a DNxHR level.
+bool isDnxhd(const Resolution& resolution);
+// The DNxHD resolution media of that bit rate (bits a second; within 8%), depth, stored raster, rate and scan is in:
+// the name a linked DNxHD clip is shown by ("DNxHD 185x"); null when none is near.
+const Resolution* dnxhdResolutionOf(std::int64_t bitRate, int bitsPerSample, QSize raster, Rational rate, bool interlaced);
 // Whether the resolution is made for a project of that raster and rate, interlaced or progressive (nothing: either).
 bool resolutionFits(const Resolution& resolution, QSize raster, Rational rate, std::optional<bool> interlaced = std::nullopt);
 // The raster the resolution's media is stored in for that project raster and rate: the format's own (DVCPro HD's

@@ -1847,8 +1847,17 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
     blanking lines above the picture through `media::storedPlacement`, NTSC lower field first through
     `WriterSettings::bottomFieldFirst` and the frames' own field flags; the probe's displayed field order now reads
     FFmpeg's TB as lower first; test `tst_media transcodeImx`), so 11.1c is.
-  * 11.1b, XAVC and AVC-Intra through the operating systems' H.264 encoders; 11.1d, DNxUncompressed and the DNxHD
-    bit-rate names.
+  * 11.1b, AVC-Intra (done: AVC-Intra 100 in the full rasters and AVC-Intra 50 in the thin ones, p.1252-1270, through
+    x264's AVC-Intra classes in FFmpeg's libx264, so in builds with `LUMENIS_PATENT_CODECS` only; `avcIntraResolutions`
+    in managed.cpp; linked AVC-Intra named by its profile; test `tst_media transcodeAvcIntra`). Not made: XAVC Intra
+    (Sony's XAVC constraints are in no open encoder) and the operating systems' H.264 encoders, which have no AVC-Intra
+    classes; XAVC media still links and plays.
+  * 11.1d, the DNxHD bit-rate resolutions (done: the names of p.1121, DNxHD 36 to 220, the 10-bit "x" ones and 120-TR
+    and 145-TR in the 1440 x 1080 thin raster, each offered in the formats its rate belongs to as SMPTE VC-3's
+    compression IDs give them through FFmpeg's DNxHD encoder (ours: the guide names them but gives no table);
+    `dnxhdResolutions`, `media::isDnxhd`; linked DNxHD media named by its rate through `StreamInfo::bitRate` and
+    `dnxhdResolutionOf`; test `tst_media transcodeDnxhd`). Not made: DNxHD 10 and 100, and DNxUncompressed, which this
+    FFmpeg cannot encode (and its MXF muxers take no uncompressed video), so 11.1 is done as far as open encoders go.
 * 11.2, AudioSuite's Pitch Shift, Time Compression Expansion and Time Shift (p.850-860) on a time-stretch engine of
   our own: overlap-add (WSOLA, waveform-similarity overlap-add, for speech and music alike), pitch as a stretch and a
   resample (done: docs/spec/time-stretch.md, `src/media/time_stretch.*` with `timeStretch`, `rhythmicStretch` cutting
@@ -1944,7 +1953,11 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `tst_imf_ui newOriginalAndExport`, checked by FFmpeg's IMF reader); 11.5c3, Supplementals, MultiChannel Audio
   Mapping and MCA metadata (done: `ImfWindow::newSupplemental`, `MainWindow::imfPictureRuns` reusing the Original's
   track files, `ImfAudioTrack`/`ImfTrackGroup` rows, `media::writeImfSoundFile` with `imfMcaLabels`; test `tst_imf_ui
-  supplementalAndAudioMapping`), so 11.5c is.
+  supplementalAndAudioMapping`), so 11.5c is, and 11.5.
+
+**Status (Phase 11, 2026-11-15):** 11.1 to 11.5 are done. Left, as recorded in each step: what needs hardware or
+Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 100, the settings options still marked
+`"later"` (11.4f), Live mode on surround pans (11.4d), and Time Shift's Formant shift and Follow (11.2).
 
 ## 6. Immediate next steps
 
