@@ -1,0 +1,55 @@
+# One-off clean-up before the repository goes public (ROADMAP 10.0, step 6 of the owner's going-public steps): deletes
+# every earlier workflow run (their logs and job records name the owner's machines, the self-hosted runners) and the
+# ci-screenshots/* branches. Run by hand: Actions > Clean up before going public > Run workflow, typing DELETE. It
+# deletes nothing else; its own run stays (one hosted run, naming no machine). Removed again once used.
+name: Clean up before going public
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DELETE to delete every earlier run and the ci-screenshots branches
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  cleanup:
+    if: inputs.confirm == 'DELETE'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Delete the ci-screenshots branches
+        run: |
+          gh api --paginate "repos/$REPO/git/matching-refs/heads/ci-screenshots/" --jq '.[].ref' | while read -r ref; do
+            echo "deleting $ref"
+            gh api -X DELETE "repos/$REPO/git/${ref}" || echo "::warning::could not delete $ref"
+          done
+      - name: Cancel the runs still going
+        run: |
+          gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | .id' | while read -r id; do
+            [ "$id" = "$GITHUB_RUN_ID" ] && continue
+            echo "cancelling $id"
+            gh api -X POST "repos/$REPO/actions/runs/$id/force-cancel" >/dev/null || true
+          done
+          sleep 20
+      - name: Delete every earlier run
+        run: |
+          for pass in 1 2 3; do
+            ids=$(gh api --paginate "repos/$REPO/actions/runs?per_page=100" --jq '.workflow_runs[].id' | grep -vx "$GITHUB_RUN_ID" || true)
+            [ -z "$ids" ] && break
+            echo "pass $pass: $(echo "$ids" | wc -l) runs"
+            for id in $ids; do
+              gh api -X DELETE "repos/$REPO/actions/runs/$id" >/dev/null 2>&1 || echo "could not delete $id yet"
+            done
+            sleep 15
+          done
+          left=$(gh api --paginate "repos/$REPO/actions/runs?per_page=100" --jq '.workflow_runs[].id' | grep -vxc "$GITHUB_RUN_ID" || true)
+          echo "runs left besides this one: $left"
+          [ "$left" = "0" ] || { echo "::error::$left runs could not be deleted; run this again"; exit 1; }
