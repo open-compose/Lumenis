@@ -38,7 +38,7 @@ standards (ST 429-2 to 429-9), and on the watch list.
   subtitles or Interop DCPs.
 
 Not yet: validation by a DCP checker (ROADMAP Phase 7 gate 1: ClairMeta, which
-needs asdcplib too); IMF packages (p.333-340), later.
+needs asdcplib too); IMF packages (p.333-340) are docs/spec/imf.md.
 
 Tests: `tst_dcp` (sizes, rates, the documents, the package through a stand-in
 `asdcp-wrap`), `tst_movie_export_ui exportDcp`.

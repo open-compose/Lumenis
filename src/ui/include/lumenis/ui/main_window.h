@@ -87,6 +87,7 @@ enum class MonitorId;
 class BackgroundQueue;
 class DmfProfileEditor;
 class DynamicMediaFoldersWindow;
+class ImfWindow;
 class SourceSettingsDialog;
 class BackgroundQueueWindow;
 class CalculatorWindow;
@@ -1057,6 +1058,13 @@ public:
     // assets into the profile's bin, returning the bin's id (empty when nothing went in, or there is no project).
     void showDynamicMediaFolders();
     DynamicMediaFoldersWindow* dynamicMediaFoldersWindow() const { return dmfWindow_; }
+    // Tools > IMF Window (11.5c; docs/spec/imf.md, p.333-340), the "IMF" panel.
+    ImfWindow* imfWindow() const { return imfWindow_; }
+    // A CPL dragged from the IMF window into the bin `binId` (p.336, "Drag the CPL from the sidebar into a Bin to create
+    // a Media Composer sequence"): its package's track files linked as clips (the packages the window lists supply a
+    // Supplemental's Original), and the composition as a sequence of them (interop::imf::compositionSequence). A CPL
+    // whose package the window does not list is read from its own folder. Returns the new items' ids, the sequence last.
+    QStringList importImfComposition(const QString& binId, const QString& cplFile);
     bool editDmfProfile(const QString& folder, const QString& profile);
     void setDmfProfileEditorHook(std::function<bool(DmfProfileEditor&)> hook) { dmfProfileEditorHook_ = std::move(hook); }
     QString acquireDmfAssets(const QString& folder);
@@ -1626,6 +1634,8 @@ private:
     std::function<bool(DmfProfileEditor&)> dmfProfileEditorHook_;
     void refreshDmfWindow();
     void setUpDynamicMediaFolders();
+    void setUpImf();
+    ImfWindow* imfWindow_ = nullptr;
     void saveDynamicMediaFolders();
     void queueDmfEntry(const QString& folder, const QString& entry, const media::DmfProfile& profile);
     void refreshDmfAssets();

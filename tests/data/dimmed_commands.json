@@ -18,7 +18,6 @@
     {"id": "tools.remote_assets", "reason": "Remote Assets are on Avid's asset management service."},
     {"id": "tools.restrictions", "reason": "Restrictions come from Avid's asset management service."},
     {"id": "tools.nrcs_tool", "reason": "The NRCS Tool talks to a newsroom computer system (no protocol documented)."},
-    {"id": "tools.imf_window", "reason": "IMF packages are not made yet (ROADMAP)."},
     {"id": "file.open_settings_file", "reason": "Settings files (.avs) wait for 3.5 (no prior art, samples or seat)."},
     {"id": "edit.enlarge_headframes", "reason": "HeadFrames are not made yet."},
     {"id": "edit.reduce_headframes", "reason": "HeadFrames are not made yet."},

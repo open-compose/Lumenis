@@ -19,6 +19,7 @@ add_library(lumenis_interop STATIC
     ale.cpp
     otio.cpp
     fcp_xml.cpp
+    imf.cpp
     import_common.h
     text_common.h
     include/lumenis/interop/cfb.h
@@ -36,6 +37,7 @@ add_library(lumenis_interop STATIC
     include/lumenis/interop/ale.h
     include/lumenis/interop/otio.h
     include/lumenis/interop/fcp_xml.h
+    include/lumenis/interop/imf.h
 )
 add_library(lumenis::interop ALIAS lumenis_interop)
 

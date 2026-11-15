@@ -1934,8 +1934,11 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
   `tst_closed_captions_ui dataTrackCommands`. Ours: any media whose frames carry A/53 captions, the Legacy method's
   DNxHD embedding being unpublished); 11.5b, Show Track > Film and Show Every Frame (done: `src/ui/timeline_film.cpp`,
   `Timeline::setFilmTrack`/`showEveryFrame`/`setPictureAspect`; docs/spec/ui-inventory.md section 11; test
-  `tst_timeline_views filmTrack`); 11.5c, IMF: 11.5c1 linking IMF packages and the IMF
-  window, 11.5c2 creating IMF Originals and Supplementals.
+  `tst_timeline_views filmTrack`); 11.5c, IMF (docs/spec/imf.md), in three parts: 11.5c1, linking IMF packages and
+  the IMF window (done: `src/interop/imf.*` reading asset maps, packing lists and composition playlists and
+  `compositionSequence`; `src/ui/imf_window.*` with Explore, the sidebar and its metadata; CPLs dropped or imported
+  into bins through `MainWindow::importImfComposition`; tests `tst_imf`, `tst_imf_ui`); 11.5c2, New IMF and Export of
+  an IMF Original; 11.5c3, Supplementals, MultiChannel Audio Mapping and MCA metadata.
 
 ## 6. Immediate next steps
 

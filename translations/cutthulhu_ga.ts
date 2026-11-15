@@ -11734,6 +11734,101 @@ Dáta Cruthaithe: %4</translation>
     </message>
 </context>
 <context>
+    <name>lumenis::ui::ImfWindow</name>
+    <message>
+        <source>Explore</source>
+        <translation type="unfinished">Taiscéal</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished">Ainm</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation type="unfinished">Stádas</translation>
+    </message>
+    <message>
+        <source>IMF packages</source>
+        <translation type="unfinished">Pacáistí IMF</translation>
+    </message>
+    <message>
+        <source>Exported, on disk</source>
+        <translation type="unfinished">Easpórtáilte, ar an diosca</translation>
+    </message>
+    <message>
+        <source>IMF Name</source>
+        <translation type="unfinished">Ainm IMF</translation>
+    </message>
+    <message>
+        <source>Directory</source>
+        <translation type="unfinished">Comhadlann</translation>
+    </message>
+    <message>
+        <source>Issuer</source>
+        <translation type="unfinished">Eisitheoir</translation>
+    </message>
+    <message>
+        <source>Creator</source>
+        <translation type="unfinished">Cruthaitheoir</translation>
+    </message>
+    <message>
+        <source>Annotation</source>
+        <translation type="unfinished">Nóta</translation>
+    </message>
+    <message>
+        <source>IMP Name</source>
+        <translation type="unfinished">Ainm IMP</translation>
+    </message>
+    <message>
+        <source>Content Title</source>
+        <translation type="unfinished">Teideal an Ábhair</translation>
+    </message>
+    <message>
+        <source>CPL File Name</source>
+        <translation type="unfinished">Ainm Comhaid CPL</translation>
+    </message>
+    <message>
+        <source>Content Kind</source>
+        <translation type="unfinished">Cineál Ábhair</translation>
+    </message>
+    <message>
+        <source>Edit Rate</source>
+        <translation type="unfinished">Ráta Eagarthóireachta</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished">Fad</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n frame(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n fhráma</numerusform>
+            <numerusform>%n fhráma</numerusform>
+            <numerusform>%n fráma</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Segments</source>
+        <translation type="unfinished">Míreanna</translation>
+    </message>
+    <message>
+        <source>Image Sequences</source>
+        <translation type="unfinished">Seichimh Íomhá</translation>
+    </message>
+    <message>
+        <source>Audio Sequences</source>
+        <translation type="unfinished">Seichimh Fuaime</translation>
+    </message>
+    <message>
+        <source>Track Files</source>
+        <translation type="unfinished">Comhaid Rian</translation>
+    </message>
+    <message>
+        <source>Issue Date</source>
+        <translation type="unfinished">Dáta Eisiúna</translation>
+    </message>
+</context>
+<context>
     <name>lumenis::ui::ImportEdlDialog</name>
     <message>
         <source>Import EDL</source>
@@ -14579,6 +14674,26 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>%1 carries no ancillary data.</source>
         <translation type="unfinished">Níl sonraí coimhdeacha ar bith in %1.</translation>
+    </message>
+    <message>
+        <source>IMF Window</source>
+        <translation type="unfinished">Fuinneog IMF</translation>
+    </message>
+    <message>
+        <source>IMF: %1</source>
+        <translation type="unfinished">IMF: %1</translation>
+    </message>
+    <message>
+        <source>IMF: choose a bin that can be changed.</source>
+        <translation type="unfinished">IMF: roghnaigh araid is féidir a athrú.</translation>
+    </message>
+    <message>
+        <source>IMF: %1: track files not found or not linked: %2</source>
+        <translation type="unfinished">IMF: %1: comhaid rian nach bhfuarthas nó nach bhfuil nasctha: %2</translation>
+    </message>
+    <message>
+        <source>IMF: %1: %2</source>
+        <translation type="unfinished">IMF: %1: %2</translation>
     </message>
 </context>
 <context>

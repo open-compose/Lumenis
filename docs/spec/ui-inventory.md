@@ -2764,6 +2764,12 @@ p.610–640, ch. 13 p.432–434).**
   with the clip text after it.
 * It shows only where the segment is wide enough.
 
+### IMF packages (p.333-340)
+* Tools > IMF Window: Explore, the sidebar of root folders, IMPs and CPLs with
+  their status, the read-only metadata pane, CPLs dragged into bins as
+  sequences (11.5c1). Details: docs/spec/imf.md. New IMF, Export and the audio
+  mapping are 11.5c2-c3.
+
 ## 16. Playback (p.389–404, p.627)
 
 ### Playing

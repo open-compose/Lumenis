@@ -2,6 +2,7 @@
 #include "lumenis/interop/ale.h"
 #include "lumenis/interop/edl.h"
 #include "lumenis/interop/fcp_xml.h"
+#include "lumenis/interop/imf.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_essence.h"
@@ -374,6 +375,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     // The background services (8.4a) read their options from the user's settings, so they start after these exist.
     setUpBackgroundServices();
     setUpDynamicMediaFolders();
+    setUpImf();
 }
 
 MainWindow::~MainWindow() {
@@ -1007,8 +1009,10 @@ void MainWindow::createPanels() {
         QStringList timelines;
         QStringList fcp;
         QStringList captions;
+        QStringList imfCpls;
         for (const QString& p : paths) {
             (p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
+             : interop::imf::isComposition(p)                       ? imfCpls
              : interop::otio::isOtioFile(p)                         ? timelines
              : interop::fcpxml::isFcpXmlFile(p)                     ? fcp
                                                                     : media)
@@ -1017,6 +1021,8 @@ void MainWindow::createPanels() {
         importOtio(binId, timelines);
         importFcpXml(binId, fcp);
         importScc(binId, captions);
+        // A CPL dragged from the IMF window (p.336).
+        for (const QString& cpl : imfCpls) importImfComposition(binId, cpl);
         linkFiles(binId, media);
     });
     // Favorite Bins (p.293) and saved bin views (p.249) are User settings:
@@ -7021,8 +7027,10 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     QStringList captions;
     QStringList picts;
     QStringList cdTracks;
+    QStringList imfCpls;
     for (const QString& p : allPaths) {
         (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive)   ? aaf
+         : interop::imf::isComposition(p)                       ? imfCpls
          : media::isPictFile(p)                                 ? picts
          : media::isCdaFile(p)                                  ? cdTracks
          : p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
@@ -7034,6 +7042,8 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     }
     QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines) + importFcpXml(binId, fcp) +
                           importScc(binId, captions);
+    // IMF composition playlists (p.336): each a sequence of its package's track files.
+    for (const QString& cpl : imfCpls) fromAaf += importImfComposition(binId, cpl);
     // Multilayer Photoshop files (9.2e, p.218-221): the message box once for all of them; flattened, a file imports as
     // any graphic (FFmpeg reads its merged picture), as does a file of one layer.
     QList<QPair<QString, media::PsdFile>> layered;
@@ -9590,6 +9600,7 @@ void MainWindow::installPanelHandlers() {
     handle("other.add_script_mark", [this] { addScriptMark(); });
     handle("tools.background_services", [this] { backgroundServices(); });
     handle("tools.dynamic_media_folders", [this] { showDynamicMediaFolders(); });
+    handle("tools.imf_window", [this] { showTool(QStringLiteral("IMF")); });
     handle("script.scriptsync_ai", [this] { scriptSyncAI(); });
     handle("bin.create_script_from_clip", [this] { createScriptFromClips(); });
     handle("other.find_script", [this] { findScript(); });

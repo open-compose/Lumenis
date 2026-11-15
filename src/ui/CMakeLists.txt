@@ -81,6 +81,8 @@ add_library(lumenis_ui STATIC
     main_window_graphics.cpp
     main_window_embedded.cpp
     main_window_data.cpp
+    main_window_imf.cpp
+    imf_window.cpp
     export_drag.cpp
     main_window_report.cpp
     main_window_proxy.cpp
@@ -135,6 +137,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/background_queue.h
     include/lumenis/ui/background_services.h
     include/lumenis/ui/dynamic_media_folders_window.h
+    include/lumenis/ui/imf_window.h
     include/lumenis/ui/source_settings_dialog.h
     include/lumenis/ui/proxy_dialogs.h
     include/lumenis/ui/bin_container.h

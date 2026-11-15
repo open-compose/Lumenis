@@ -11726,6 +11726,100 @@ Data creazione: %4</translation>
     </message>
 </context>
 <context>
+    <name>lumenis::ui::ImfWindow</name>
+    <message>
+        <source>Explore</source>
+        <translation type="unfinished">Esplora</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation type="unfinished">Nome</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation type="unfinished">Stato</translation>
+    </message>
+    <message>
+        <source>IMF packages</source>
+        <translation type="unfinished">Pacchetti IMF</translation>
+    </message>
+    <message>
+        <source>Exported, on disk</source>
+        <translation type="unfinished">Esportato, su disco</translation>
+    </message>
+    <message>
+        <source>IMF Name</source>
+        <translation type="unfinished">Nome IMF</translation>
+    </message>
+    <message>
+        <source>Directory</source>
+        <translation type="unfinished">Directory</translation>
+    </message>
+    <message>
+        <source>Issuer</source>
+        <translation type="unfinished">Emittente</translation>
+    </message>
+    <message>
+        <source>Creator</source>
+        <translation type="unfinished">Autore</translation>
+    </message>
+    <message>
+        <source>Annotation</source>
+        <translation type="unfinished">Annotazione</translation>
+    </message>
+    <message>
+        <source>IMP Name</source>
+        <translation type="unfinished">Nome IMP</translation>
+    </message>
+    <message>
+        <source>Content Title</source>
+        <translation type="unfinished">Titolo del contenuto</translation>
+    </message>
+    <message>
+        <source>CPL File Name</source>
+        <translation type="unfinished">Nome file CPL</translation>
+    </message>
+    <message>
+        <source>Content Kind</source>
+        <translation type="unfinished">Tipo di contenuto</translation>
+    </message>
+    <message>
+        <source>Edit Rate</source>
+        <translation type="unfinished">Frequenza di montaggio</translation>
+    </message>
+    <message>
+        <source>Duration</source>
+        <translation type="unfinished">Durata</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n frame(s)</source>
+        <translation type="unfinished">
+            <numerusform>%n fotogramma</numerusform>
+            <numerusform>%n fotogrammi</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Segments</source>
+        <translation type="unfinished">Segmenti</translation>
+    </message>
+    <message>
+        <source>Image Sequences</source>
+        <translation type="unfinished">Sequenze immagine</translation>
+    </message>
+    <message>
+        <source>Audio Sequences</source>
+        <translation type="unfinished">Sequenze audio</translation>
+    </message>
+    <message>
+        <source>Track Files</source>
+        <translation type="unfinished">File di traccia</translation>
+    </message>
+    <message>
+        <source>Issue Date</source>
+        <translation type="unfinished">Data di emissione</translation>
+    </message>
+</context>
+<context>
     <name>lumenis::ui::ImportEdlDialog</name>
     <message>
         <source>Import EDL</source>
@@ -14535,6 +14629,26 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
     <message>
         <source>%1 carries no ancillary data.</source>
         <translation type="unfinished">%1 non contiene dati ancillari.</translation>
+    </message>
+    <message>
+        <source>IMF Window</source>
+        <translation type="unfinished">Finestra IMF</translation>
+    </message>
+    <message>
+        <source>IMF: %1</source>
+        <translation type="unfinished">IMF: %1</translation>
+    </message>
+    <message>
+        <source>IMF: choose a bin that can be changed.</source>
+        <translation type="unfinished">IMF: scegli un bin modificabile.</translation>
+    </message>
+    <message>
+        <source>IMF: %1: track files not found or not linked: %2</source>
+        <translation type="unfinished">IMF: %1: file di traccia non trovati o non collegati: %2</translation>
+    </message>
+    <message>
+        <source>IMF: %1: %2</source>
+        <translation type="unfinished">IMF: %1: %2</translation>
     </message>
 </context>
 <context>

@@ -1157,7 +1157,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   large ones, is in parts (ROADMAP). 11.5a, Data Mixdown and Extract DNxHD Data (docs/spec/closed-captions.md:
   `src/ui/main_window_data.cpp`, `media::VideoReader::captionPair`, `MediaWriter::setNextCaption`; test
   `tst_closed_captions_ui dataTrackCommands`), is done. 11.5b, Show Track > Film and Show Every Frame
-  (`src/ui/timeline_film.cpp`; test `tst_timeline_views filmTrack`), is done. 10.6 is an update check that only tells the user (no
+  (`src/ui/timeline_film.cpp`; test `tst_timeline_views filmTrack`), is done. 11.5c1, linking IMF packages and the IMF
+  window (docs/spec/imf.md: `src/interop/imf.*`, `src/ui/imf_window.*`, `MainWindow::importImfComposition`; tests
+  `tst_imf`, `tst_imf_ui`), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265
