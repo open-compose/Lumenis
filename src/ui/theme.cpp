@@ -79,6 +79,7 @@ int fixedPixelMetric(QStyle::PixelMetric metric) {
     case QStyle::PM_SpinBoxFrameWidth: return 3;
     case QStyle::PM_MenuBarItemSpacing: return 6;
     case QStyle::PM_DockWidgetTitleMargin: return 1;
+    case QStyle::PM_DockWidgetTitleBarButtonMargin: return 2;
     case QStyle::PM_TabBarTabOverlap: return 1;
     case QStyle::PM_TabBarBaseOverlap: return 2;
     // Qt's common style scales these the same way.
