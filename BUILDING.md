@@ -405,8 +405,13 @@ None of these showed in CI, which runs with the patent codecs on. Release builds
   need only an H.264 encoder that works: FFmpeg's where allowed, else the operating system's.
 * **An OS encoder compiled into FFmpeg was taken as present.** Windows Server has no Media Foundation H.264
   encoder. `osEncoderFor` now opens the encoder once with a small picture, and offers it only if that works.
-* **Release FFmpeg fails on SVT-AV1** ("no member named 'enable_adaptive_quantization'"). FFmpeg 7.1.1 builds only
-  against SVT-AV1 below 3.0, and Homebrew's is 3.x. `scripts/build-release-ffmpeg.sh` uses it only below 3.0.
+* **Release FFmpeg fails on SVT-AV1** ("no member named 'enable_adaptive_quantization'"), and **ProRes came
+  back washed out on macOS** (`tst_media transcodeProRes`). The release FFmpeg was 7.1.1. It does not build with
+  Homebrew's SVT-AV1 3.x, and with it the ProRes round trip through VideoToolbox gave the wrong colours, which CI's
+  macOS jobs, on Homebrew's FFmpeg 9.0.2, do not. `scripts/build-release-ffmpeg.sh` now builds 9.0.2. Keep the two
+  in step: the macOS CI jobs warn when Homebrew's FFmpeg is not the release's.
+* **Qt 6.8's `QTRY_COMPARE` fails GCC 13's `-Wconversion`.** The AppImage is the only build with GCC and Qt 6.8,
+  and it builds the tests with warnings as errors. `tests/CMakeLists.txt` turns that warning off for the tests there.
 * **aqt has no `qtwayland` module for Qt 6.8.3.** Qt 6.8's Linux package has the Wayland plug-ins in it already.
 * **`tst_media provider` still treated DNxHR as a patent codec.** DNx is allowed in every build.
 
@@ -1239,7 +1244,7 @@ number of the year (2026.1, 2026.2 ...; docs/spec/versioning.md); nothing is edi
   docs/spec/release-codecs.md), tested with `ctest`, packaged and checked (installed or mounted, launched with
   `--smoke-test`, no x264 or x265 inside);
 * FFmpeg: on macOS and in the AppImage our LGPL build without the encoders awaiting review
-  (`scripts/build-release-ffmpeg.sh`, FFmpeg's n7.1.1 tag checked against its commit), on Windows BtbN's LGPL build
+  (`scripts/build-release-ffmpeg.sh`, FFmpeg's n9.0.2 tag checked against its commit), on Windows BtbN's LGPL build
   (`scripts/get-ffmpeg.ps1 -Variant lgpl`), in the .deb and .tar.gz the distribution's;
 * everything goes into a **draft** GitHub Release (`v<version>`), with each file's checksum, the debug symbols
   (the macOS dSYM, the Linux `.debug`; the Windows PDB is in its packages) and `SHA256SUMS.txt`, made after the

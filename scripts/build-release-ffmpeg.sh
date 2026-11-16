@@ -14,8 +14,10 @@
 set -euo pipefail
 
 prefix="${1:?usage: build-release-ffmpeg.sh <prefix>}"
-tag="n7.1.1"
-commit="db69d06eeeab4f46da15030a80d539efb4503ca8" # git ls-remote https://github.com/FFmpeg/FFmpeg refs/tags/n7.1.1^{}
+# The FFmpeg CI's macOS jobs test against (Homebrew's; BUILDING.md "The first release run failed": 7.1.1 decoded
+# VideoToolbox ProRes washed out, and did not build with SVT-AV1 3.x). Move it with Homebrew's.
+tag="n9.0.2"
+commit="946fcce07b6dcd0331c8cc609192aeff5e1924f8" # git ls-remote https://github.com/FFmpeg/FFmpeg refs/tags/n9.0.2^{}
 work="${TMPDIR:-/tmp}/cutthulhu-ffmpeg-$tag"
 
 if [[ ! -d "$work/.git" ]]; then
@@ -29,7 +31,7 @@ if [[ "$got" != "$commit" ]]; then
 fi
 
 # The encoders of the codecs awaiting review (media::isPatentCodec), FFmpeg's own implementations.
-disabled_encoders="aac,aac_fixed,ac3,ac3_fixed,eac3,mpeg4,msmpeg4v2,msmpeg4v3,prores,prores_aw,prores_ks"
+disabled_encoders="aac,ac3,ac3_fixed,eac3,mpeg4,msmpeg4v2,msmpeg4v3,prores,prores_aw,prores_ks"
 
 options=(
     --prefix="$prefix"
@@ -44,9 +46,7 @@ case "$(uname -s)" in
 esac
 have() { pkg-config --exists "$1" 2>/dev/null; }
 have dav1d && options+=(--enable-libdav1d)
-# FFmpeg 7.1.1 builds against SVT-AV1 1.x and 2.x only: 3.0 changed its API (Homebrew's is 3.x; BUILDING.md
-# "Release FFmpeg fails on SVT-AV1"). Without it macOS has no AV1 encoder; H.264 and HEVC go through VideoToolbox.
-have 'SvtAv1Enc < 3.0' && options+=(--enable-libsvtav1)
+have SvtAv1Enc && options+=(--enable-libsvtav1)
 have opus && options+=(--enable-libopus)
 have libopenjp2 && options+=(--enable-libopenjpeg)
 

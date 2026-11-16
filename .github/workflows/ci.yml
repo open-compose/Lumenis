@@ -249,6 +249,17 @@ jobs:
       - name: Install build tools
         run: brew install ninja ffmpeg pkg-config
 
+      - name: FFmpeg is the release's
+        # The release builds its own FFmpeg at the tag in scripts/build-release-ffmpeg.sh; these jobs test Homebrew's.
+        # A warning, not a failure, as Homebrew moves on its own (BUILDING.md "The first release run failed").
+        run: |
+          release=$(sed -n 's/^tag="n\(.*\)"$/\1/p' scripts/build-release-ffmpeg.sh)
+          brewed=$(brew list --versions ffmpeg | awk '{print $2}' | sed 's/_.*//')
+          echo "Homebrew's FFmpeg $brewed, the release's $release"
+          if [ "$brewed" != "$release" ]; then
+            echo "::warning::Homebrew's FFmpeg is $brewed, the release builds $release: move scripts/build-release-ffmpeg.sh's tag"
+          fi
+
       - name: Python for the checks
         # OpenTimelineIO 0.18.1 has wheels up to Python 3.13. Built from source
         # for the runners' 3.14 on macOS 26 it cannot read any JSON ("bad any

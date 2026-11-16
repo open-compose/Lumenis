@@ -8,6 +8,13 @@ function(lumenis_add_test name)
     add_executable(${name} ${ARG_SOURCES})
     target_link_libraries(${name} PRIVATE Qt6::Test ${ARG_LIBS})
     lumenis_set_warnings(${name})
+    # Since Qt 6.8, QTRY_IMPL keeps a std::chrono::milliseconds count (a long) in an int, which GCC 13's -Wconversion
+    # reports in every test that uses QTRY_COMPARE, Qt's headers being -isystem or not (GCC 15 with Qt 6.10 does not).
+    # Only the AppImage release builds GCC with Qt 6.8, so CI did not show it (BUILDING.md "The first release run
+    # failed"). The tests only: the application keeps the warning.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
+        target_compile_options(${name} PRIVATE -Wno-conversion)
+    endif()
     # The report goes to the console and to test-logs/<name>.txt, which CI
     # prints when a test fails: ctest's capture of a test's output can come
     # back without it.
