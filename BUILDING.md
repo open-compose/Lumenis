@@ -1248,6 +1248,10 @@ number of the year (2026.1, 2026.2 ...; docs/spec/versioning.md); nothing is edi
 Read the draft on the Releases page and publish it; the update check (below) then offers it to everyone on an older
 version. Nothing is signed (no certificates; INSTALL.md says how each OS lets the packages run).
 
+If a run fails, its draft stays and takes its number: run the workflow again with that version (for example
+`2026.1`) to replace the draft. A version asked for replaces only an unpublished draft. A published release
+stops the run, and so does any existing release when the version is left empty.
+
 ## Update check
 
 Cutthulhu asks GitHub for its latest release at start-up and from Help > Check for Updates (ROADMAP 10.6;

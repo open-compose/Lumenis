@@ -63,10 +63,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.version.outputs.version }}
+          WANTED: ${{ inputs.version }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::A release $TAG exists already; delete the draft or choose another version"
-            exit 1
+            # A draft of the version asked for is a failed run's (BUILDING.md "Releases"): run again with that version
+            # to replace it. A published release, or a draft when no version was asked for, is never touched.
+            if [ -n "$WANTED" ] && [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
+              echo "Replacing the draft release $TAG"
+              gh release delete "$TAG" --yes
+            else
+              echo "::error::A release $TAG exists already; delete the draft or choose another version"
+              exit 1
+            fi
           fi
           {
             echo "Cutthulhu ${{ steps.version.outputs.version }}."
