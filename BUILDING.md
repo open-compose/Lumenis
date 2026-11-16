@@ -353,6 +353,18 @@ to `QStyle::PM_CustomBase` never ran, as that value is negative as an `int`.
 style font metrics from a 128 DPI image, which makes Linux scale as macOS
 did, and fails for any metric or rectangle that changes.
 
+With the sizes pinned, the Effect Editor was still 2 px narrower on macOS.
+That was the text, not the style. A combo box set to fit its items measures
+each item's ink (`QFontMetrics::boundingRect`), and Core Text rounds that
+differently from FreeType and DirectWrite, even for our bundled Inter. The
+Position Tracking row's Axis menu set the editor's width, so the whole
+parameter area moved. The menu is now sized by a count of characters
+(`setMinimumContentsLength`), which goes by the font's advances, and those
+are the same everywhere. If a window's width or a row's minimum width differs
+by a pixel or two only on macOS, find the combo box that sets it. To see what
+sets a window's minimum size, add `minimumSizeHint().width()` to
+`describe()` in `src/ui/capture.cpp` for a local run.
+
 ### Sending the gate 5 checklist to an editor
 
 The editor gets two PDFs. To make them:

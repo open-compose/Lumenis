@@ -218,6 +218,13 @@ QWidget* EffectEditor::trackingControls(model::TrackedParameter parameter, QWidg
     if (parameter == model::TrackedParameter::Position && !(current_ && media::is3DEffect(*current_))) {
         auto* axis = new QComboBox(box);
         axis->setObjectName(QStringLiteral("tracking:Position:Axis"));
+        // Sized by a count of characters, not by its items' text: Qt measures
+        // each item's ink (QFontMetrics::boundingRect), which FreeType and Core
+        // Text round apart, and this menu sets the editor's width, so macOS
+        // laid it out 2 pixels narrower (BUILDING.md "macOS screenshots
+        // differ"). Advances are the same everywhere.
+        axis->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        axis->setMinimumContentsLength(9); // about as wide as "X Tracking Only"
         axis->addItems({QStringLiteral("X and Y"), QStringLiteral("X Tracking Only"), QStringLiteral("Y Tracking Only")});
         connect(axis, &QComboBox::textActivated, this, [this](const QString& t) { setTrackingAxis(t); });
         trackingControls_.insert(axis->objectName(), axis);
