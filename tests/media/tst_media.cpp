@@ -2329,8 +2329,17 @@ private slots:
         // after its own CoInitializeEx had failed there, taking Qt's
         // reference: a crash on exit after any playback (BUILDING.md).
 #if defined(Q_OS_WIN)
-        const HRESULT first = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        QVERIFY(first == S_OK || first == S_FALSE);
+        // The main thread is usually single-threaded already (Qt's plugin);
+        // on GitHub's Windows runners something has made it multithreaded
+        // first (RPC_E_CHANGED_MODE), so take a reference to whichever
+        // apartment it has: the check is the same.
+        DWORD model = COINIT_APARTMENTTHREADED;
+        HRESULT first = CoInitializeEx(nullptr, model);
+        if (first == RPC_E_CHANGED_MODE) {
+            model = COINIT_MULTITHREADED;
+            first = CoInitializeEx(nullptr, model);
+        }
+        QVERIFY2(first == S_OK || first == S_FALSE, qPrintable(QString::number(quint32(first), 16)));
         {
             QTemporaryDir dir;
             WriterSettings s;
@@ -2353,7 +2362,7 @@ private slots:
         }
         // Still initialised: this adds a reference (S_FALSE), not a new
         // apartment (S_OK).
-        const HRESULT again = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        const HRESULT again = CoInitializeEx(nullptr, model);
         if (SUCCEEDED(again)) CoUninitialize();
         CoUninitialize();
         QCOMPARE(again, S_FALSE);

@@ -735,6 +735,29 @@ released later the concurrency group cancels the newer run, so check once more. 
 blocked" under Billing was a red herring here. One such run (run 423) could not be deleted afterwards either: the
 API answers that it cannot be; the Actions page's delete button or GitHub Support can.
 
+### CI: the sanitizer job stops with "No space left on device" while linking
+
+The `asan` preset's Debug build with AddressSanitizer and UBSan takes about 12 GB (each UI test binary carries
+the whole application with its debug information), and GitHub's hosted Ubuntu runner has less than that left once
+the dependencies are in (the first hosted run, 2026-11-16). The `linux-asan` job therefore first deletes toolchains
+it does not use (.NET, Android, GHC, CodeQL ...) and prints the free space before and after. If it fills up again,
+add more of the runner's preinstalled folders to that step.
+
+### CI: `otio_python` and `fcpxml_python` fail on macOS with "bad any cast"
+
+OpenTimelineIO 0.18.1 has wheels only up to Python 3.13. On the macos-26 runner the check environment was made with
+Python 3.14, so pip built OpenTimelineIO from source, and that build could not read any JSON, not even its own plug-in
+manifest: `RuntimeError: bad any cast` from `deserialize_json_from_string` (the first hosted run, 2026-11-16). The
+macOS job now sets up Python 3.13 first (`actions/setup-python`) and makes the environment with it. On your own Mac,
+make `~/.cutthulhu-venv` with a Python OpenTimelineIO has a wheel for (`brew install python@3.13`, then
+`python3.13 scripts/check-python.py`), after deleting the old one.
+
+### Windows: `soundLeavesComAlone` "first == S_OK || first == S_FALSE"
+
+On GitHub's Windows runner the test's main thread is already in COM's multithreaded apartment when the test starts, so
+asking for a single-threaded one answers `RPC_E_CHANGED_MODE` (the first hosted run, 2026-11-16). The test now takes a
+reference to whichever apartment the thread has, then checks that playback leaves that reference in place.
+
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 
 Clang is installed without its runtime libraries (libFuzzer, the
