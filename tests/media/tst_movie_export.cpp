@@ -60,6 +60,9 @@ private slots:
     void requiredEncoders() {
         const QStringList required = qEnvironmentVariable("LUMENIS_REQUIRE_ENCODERS").split(QLatin1Char(','), Qt::SkipEmptyParts);
         if (required.isEmpty()) QSKIP("LUMENIS_REQUIRE_ENCODERS is not set");
+        // The development FFmpeg must have them (BUILDING.md "Export says there is no H.264 encoder"); the release's
+        // codec policy refuses FFmpeg's own H.264 and H.265 encoders, so there they are not usable by design.
+        if (!patentCodecsAllowed()) QSKIP("the patent codecs are off (LUMENIS_PATENT_CODECS_OFF)");
         for (const QString& encoder : required) {
             bool found = false;
             for (const MovieCompression& c : movieCompressions()) {
