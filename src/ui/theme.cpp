@@ -33,6 +33,15 @@ namespace {
 bool g_fontLoaded = false;
 // Slider groove thickness in pixels, see LumenisStyle::subControlRect().
 constexpr int kSliderGroove = 7;
+// Fusion's spin box button width and combo box arrow sizes at its baseline DPI (qfusionstyle.cpp,
+// subControlRect), which it would otherwise scale like the pixel metrics.
+constexpr int kSpinButtonWidth = 14;
+constexpr int kComboArrowOffset = 18;
+constexpr int kComboArrowWidth = 19;
+// QCommonStyle's spin box button in its size hint (Qt 6.4's, at 96 DPI).
+constexpr int kCommonSpinButton = 16;
+// QCommonStyle's combo box arrow, which Fusion's is placed from, ends inside a 2 px margin.
+constexpr int kCommonComboMargin = 2;
 
 } // namespace
 
@@ -90,6 +99,27 @@ int fixedPixelMetric(QStyle::PixelMetric metric) {
     case QStyle::PM_TreeViewIndentation: return 20;
     case QStyle::PM_FocusFrameHMargin:
     case QStyle::PM_FocusFrameVMargin: return 2;
+    // QCommonStyle scales these as well, which moved layouts by a few pixels in the macOS screenshots (the
+    // Effect Editor, the New Project tab; CI 2026-11-16): their values at 96 DPI.
+    // (The layout margins too, 11 for a window and 9 inside one: LumenisStyle::pixelMetric.)
+    case QStyle::PM_LayoutHorizontalSpacing:
+    case QStyle::PM_LayoutVerticalSpacing: return 6;
+    case QStyle::PM_DockWidgetSeparatorExtent:
+    case QStyle::PM_ToolBarSeparatorExtent: return 6;
+    case QStyle::PM_TitleBarHeight: return 24;
+    case QStyle::PM_TitleBarButtonIconSize: return 16;
+    case QStyle::PM_TitleBarButtonSize: return 19;
+    case QStyle::PM_MenuScrollerHeight:
+    case QStyle::PM_MenuTearoffHeight: return 10;
+    case QStyle::PM_DialogButtonsSeparator: return 26;
+    case QStyle::PM_DialogButtonsButtonWidth: return 70;
+    case QStyle::PM_DialogButtonsButtonHeight: return 30;
+    case QStyle::PM_MdiSubWindowFrameWidth: return 4;
+    case QStyle::PM_MdiSubWindowMinimizedWidth: return 196;
+    case QStyle::PM_HeaderGripMargin: return 4;
+    case QStyle::PM_SizeGripSize: return 13;
+    case QStyle::PM_HeaderDefaultSectionSizeHorizontal: return 100;
+    case QStyle::PM_HeaderDefaultSectionSizeVertical: return 30;
     default: return kNotFixed;
     }
 }
@@ -110,6 +140,14 @@ public:
         case CT_LineEdit:
         case CT_SpinBox:
             s.setHeight(kControlHeight);
+            if (const auto* spin = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) {
+                // The width as Qt 6.4's QCommonStyle gives it at 96 DPI: the contents, the frame and a 16 px
+                // button. Qt 6.8 works the button out from the size and 6.4 scales it by the DPI, so Linux's
+                // system Qt and the other platforms' would differ.
+                const bool buttons = spin->buttonSymbols != QAbstractSpinBox::NoButtons;
+                const int fw = spin->frame ? pixelMetric(PM_SpinBoxFrameWidth, spin, widget) : 0;
+                s.setWidth(size.width() + (buttons ? kCommonSpinButton : 0) + 2 * fw);
+            }
             break;
         case CT_ToolButton:
             s.setHeight(kToolButtonHeight);
@@ -149,13 +187,28 @@ public:
             return kScrollBarExtent; // macOS otherwise reports a wider native extent
         }
         if (const int fixed = fixedPixelMetric(metric); fixed != kNotFixed) return fixed;
+        if (metric == PM_LayoutLeftMargin || metric == PM_LayoutTopMargin || metric == PM_LayoutRightMargin ||
+            metric == PM_LayoutBottomMargin) {
+            // QCommonStyle's choice, at 96 DPI.
+            const bool window = option ? (option->state & State_Window) != 0 : widget && widget->isWindow();
+            return window ? 11 : 9;
+        }
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
 
     // Fusion's slider groove is 7 px thick at its baseline DPI; it scales
-    // the thickness like the pixel metrics (fixedPixelMetric).
+    // the thickness like the pixel metrics (fixedPixelMetric). So it does the
+    // spin box buttons and the combo box arrow: on macOS's offscreen
+    // screenshots spin box fields came out 4 px narrower (CI 2026-11-16).
+    // Their rectangles here are Fusion's own formulas at 96 DPI.
     QRect subControlRect(ComplexControl control, const QStyleOptionComplex* option, SubControl sub,
                          const QWidget* widget) const override {
+        if (control == CC_SpinBox && (sub == SC_SpinBoxUp || sub == SC_SpinBoxDown || sub == SC_SpinBoxEditField)) {
+            if (const auto* spin = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) return spinBoxRect(*spin, sub);
+        }
+        if (control == CC_ComboBox && (sub == SC_ComboBoxArrow || sub == SC_ComboBoxEditField)) {
+            if (const auto* combo = qstyleoption_cast<const QStyleOptionComboBox*>(option)) return comboBoxRect(*combo, sub);
+        }
         QRect r = QProxyStyle::subControlRect(control, option, sub, widget);
         if (control == CC_Slider && sub == SC_SliderGroove) {
             if (const auto* slider = qstyleoption_cast<const QStyleOptionSlider*>(option)) {
@@ -170,6 +223,44 @@ public:
             }
         }
         return r;
+    }
+
+    // qfusionstyle.cpp's CC_SpinBox rectangles with the button kSpinButtonWidth wide.
+    static QRect spinBoxRect(const QStyleOptionSpinBox& spin, SubControl sub) {
+        const bool buttons = spin.buttonSymbols != QAbstractSpinBox::NoButtons;
+        if (!buttons && sub != SC_SpinBoxEditField) return {};
+        const int fw = spin.frame ? 3 : 0; // Fusion draws the frame 3 px wide whatever PM_SpinBoxFrameWidth says
+        const int center = spin.rect.height() / 2;
+        const int x = spin.rect.width() - fw - kSpinButtonWidth + 2;
+        QRect r;
+        switch (sub) {
+        case SC_SpinBoxUp: r = QRect(x, fw, kSpinButtonWidth, center - fw); break;
+        case SC_SpinBoxDown: r = QRect(x, center, kSpinButtonWidth, spin.rect.bottom() - center - fw + 1); break;
+        default:
+            r = buttons ? QRect(fw, fw, x - fw - std::max(fw - 1, 0), spin.rect.height() - 2 * fw)
+                        : QRect(fw, fw, spin.rect.width() - 2 * fw, spin.rect.height() - 2 * fw);
+            break;
+        }
+        return visualRect(spin.direction, spin.rect, r);
+    }
+
+    // qfusionstyle.cpp's CC_ComboBox rectangles (the arrow placed from QCommonStyle's) at 96 DPI.
+    static QRect comboBoxRect(const QStyleOptionComboBox& combo, SubControl sub) {
+        const QRect& o = combo.rect;
+        QRect r;
+        if (sub == SC_ComboBoxArrow) {
+            const int margin = combo.frame ? kCommonComboMargin : 0;
+            const int commonRight = o.x() + o.width() - margin - 1; // QCommonStyle's arrow ends here
+            r = QRect(commonRight - kComboArrowOffset, o.y() + margin - 2, kComboArrowWidth, o.height() - 2 * margin + 4);
+        } else {
+            constexpr int frame = 2;
+            r = QRect(o.left() + frame, o.top() + frame, o.width() - kComboArrowWidth - 2 * frame, o.height() - 2 * frame);
+            if (!combo.editable) {
+                r.adjust(2, 0, 0, 0);
+                if (combo.state & (State_Sunken | State_On)) r.translate(1, 1);
+            }
+        }
+        return visualRect(combo.direction, o, r);
     }
 
     // Disabled text is drawn plainly everywhere: some platforms otherwise

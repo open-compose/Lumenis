@@ -340,6 +340,19 @@ same place. `tst_theme` checks them on every
 platform. If a new kind of control shows the same symptom, add its pixel
 metric there.
 
+The first CI run on GitHub's macOS runners (2026-11-16) failed the same way
+for the Effect Editor: spin box fields 4 px narrower and combo boxes and the
+parameter area 2 px narrower. Fusion also scales the spin box buttons and the
+combo box arrow (`subControlRect`), Qt 6.4's common style the spin box's
+size hint, and QCommonStyle a set of metrics (layout margins and spacing,
+title bars, dialog buttons ...). `theme.cpp` pins all of these at their
+96 DPI values. Two things had hidden it: QTest's `QTEST_MAIN` sets
+`Qt::AA_Use96Dpi`, which every platform but macOS obeys, and the test's loop
+to `QStyle::PM_CustomBase` never ran, as that value is negative as an `int`.
+`tst_theme sizesDoNotFollowTheDpi` now clears the attribute and gives the
+style font metrics from a 128 DPI image, which makes Linux scale as macOS
+did, and fails for any metric or rectangle that changes.
+
 ### Sending the gate 5 checklist to an editor
 
 The editor gets two PDFs. To make them:
