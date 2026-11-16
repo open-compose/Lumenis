@@ -120,6 +120,10 @@ private slots:
         b.fontMetrics = QFontMetrics(QApplication::font(), &high);
         QVERIFY(a.fontMetrics.fontDpi() != b.fontMetrics.fontDpi());
         for (int m = 0; m <= static_cast<int>(QStyle::PM_LineEditIconMargin); ++m) { // PM_CustomBase is negative as an int
+            // The three PM_DialogButtons metrics just before PM_MdiSubWindowFrameWidth have no effect since Qt 4
+            // and are deprecated in Qt 6.8 (naming them is a warning there), so they are not pinned.
+            constexpr int mdi = static_cast<int>(QStyle::PM_MdiSubWindowFrameWidth);
+            if (m >= mdi - 3 && m < mdi) continue;
             const auto metric = static_cast<QStyle::PixelMetric>(m);
             QVERIFY2(style->pixelMetric(metric, &a) == style->pixelMetric(metric, &b),
                      qPrintable(QStringLiteral("pixel metric %1 follows the DPI").arg(m)));

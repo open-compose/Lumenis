@@ -111,12 +111,10 @@ int fixedPixelMetric(QStyle::PixelMetric metric) {
     case QStyle::PM_TitleBarButtonSize: return 19;
     case QStyle::PM_MenuScrollerHeight:
     case QStyle::PM_MenuTearoffHeight: return 10;
-    case QStyle::PM_DialogButtonsSeparator: return 26;
-    case QStyle::PM_DialogButtonsButtonWidth: return 70;
-    case QStyle::PM_DialogButtonsButtonHeight: return 30;
     case QStyle::PM_MdiSubWindowFrameWidth: return 4;
     case QStyle::PM_MdiSubWindowMinimizedWidth: return 196;
     case QStyle::PM_HeaderGripMargin: return 4;
+    case QStyle::PM_DockWidgetFrameWidth: return 1; // scaled from Qt 6.10 on
     case QStyle::PM_SizeGripSize: return 13;
     case QStyle::PM_HeaderDefaultSectionSizeHorizontal: return 100;
     case QStyle::PM_HeaderDefaultSectionSizeVertical: return 30;
