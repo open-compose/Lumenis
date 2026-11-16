@@ -257,7 +257,8 @@ jobs:
         run: LD_LIBRARY_PATH="$HOME/ffmpeg-release/lib" packaging/linux/make-appimage.sh build/dist
       - name: Installer gate (launch, check the codecs)
         run: |
-          appimage=$(ls build/dist/*.AppImage)
+          # An absolute path: the extraction runs it from inside build/dist.
+          appimage=$(realpath build/dist/*.AppImage)
           (cd build/dist && "$appimage" --appimage-extract >/dev/null)
           ls build/dist/squashfs-root/usr/lib/libavcodec.so*
           ! ls build/dist/squashfs-root/usr/lib/ | grep -q 'libx26'

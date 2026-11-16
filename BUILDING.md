@@ -414,6 +414,9 @@ None of these showed in CI, which runs with the patent codecs on. Release builds
   and it builds the tests with warnings as errors. `tests/CMakeLists.txt` turns that warning off for the tests there.
 * **aqt has no `qtwayland` module for Qt 6.8.3.** Qt 6.8's Linux package has the Wayland plug-ins in it already.
 * **`tst_media provider` still treated DNxHR as a patent codec.** DNx is allowed in every build.
+* **The AppImage's installer gate ran the AppImage by a relative path** from inside `build/dist` ("No such file or
+  directory", exit code 127). It now takes the path with `realpath`. The third run, on FFmpeg 9.0.2, also confirmed the
+  ProRes fix: the macOS package's tests passed.
 
 The check: the Linux, macOS and Windows CI jobs run the codec-dependent tests a second time with
 `LUMENIS_PATENT_CODECS_OFF=1` ("Test with the release's codec policy"). Run the same tests locally before changing
