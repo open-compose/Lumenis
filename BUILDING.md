@@ -416,7 +416,9 @@ None of these showed in CI, which runs with the patent codecs on. Release builds
 * **`tst_media provider` still treated DNxHR as a patent codec.** DNx is allowed in every build.
 * **The AppImage's installer gate ran the AppImage by a relative path** from inside `build/dist` ("No such file or
   directory", exit code 127). It now takes the path with `realpath`. The third run, on FFmpeg 9.0.2, also confirmed the
-  ProRes fix: the macOS package's tests passed.
+  ProRes fix: the macOS package's tests passed. The fourth run's upload then stopped on `mv` renaming the AppImage
+  onto itself (linuxdeploy already names it from `$VERSION`); it renames only a file with another name. Run a
+  changed packaging step's shell locally on a dummy folder before a release run: each run takes an hour.
 
 The check: the Linux, macOS and Windows CI jobs run the codec-dependent tests a second time with
 `LUMENIS_PATENT_CODECS_OFF=1` ("Test with the release's codec policy"). Run the same tests locally before changing

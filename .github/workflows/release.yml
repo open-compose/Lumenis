@@ -272,7 +272,9 @@ jobs:
         run: |
           cd build/dist
           version="${{ needs.prepare.outputs.version }}"
-          mv *.AppImage "Cutthulhu-$version-x86_64.AppImage"
+          # linuxdeploy usually names it so already (from $VERSION); mv refuses a file onto itself.
+          name="Cutthulhu-$version-x86_64.AppImage"
+          for f in *.AppImage; do [ "$f" = "$name" ] || mv "$f" "$name"; done
           objcopy --only-keep-debug bin/cutthulhu "cutthulhu-$version-linux-x86_64.debug"
           gzip -f "cutthulhu-$version-linux-x86_64.debug"
           for f in *.AppImage *.debug.gz; do sha256sum "$f" > "$f.sha256"; done
