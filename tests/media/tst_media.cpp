@@ -1960,7 +1960,11 @@ private slots:
         ext::CodecQuery q;
         q.codec = "mpeg2video";
         QVERIFY(codecs.front()->canDecode(q));
+        // DNx is allowed in every build (docs/spec/release-codecs.md); ProRes
+        // decodes only with the patent codecs on.
         q.codec = "dnxhr";
+        QVERIFY(codecs.front()->canDecode(q));
+        q.codec = "prores";
         QCOMPARE(codecs.front()->canDecode(q), patentCodecsAllowed());
         q.codec = "no-such-codec";
         QVERIFY(!codecs.front()->canDecode(q));

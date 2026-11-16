@@ -231,7 +231,8 @@ jobs:
           host: linux
           target: desktop
           arch: linux_gcc_64
-          modules: qtwayland
+          # No modules: Qt 6.8's Linux package has the Wayland plug-ins in it (aqt has no "qtwayland" module for it;
+          # check-appimage-wayland.sh below checks the AppImage opens on Wayland).
           cache: true
       - name: FFmpeg (LGPL, ours)
         run: scripts/build-release-ffmpeg.sh "$HOME/ffmpeg-release"

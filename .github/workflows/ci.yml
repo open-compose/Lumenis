@@ -56,6 +56,13 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
+      - name: Test with the release's codec policy
+        # The release builds run their tests with the patent codecs off (docs/spec/release-codecs.md): these are the
+        # tests that depend on it, so a policy bug shows here and not first in a release run (BUILDING.md).
+        env:
+          LUMENIS_PATENT_CODECS_OFF: '1'
+        run: ctest --preset ci -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
+
       - name: Logs of failed tests
         # QTest's own report, written to a file as well: ctest's capture can
         # lose it (BUILDING.md).
@@ -272,6 +279,12 @@ jobs:
       - name: Test
         run: ctest --preset ci-macos
 
+      - name: Test with the release's codec policy
+        # As on Linux; here H.264, HEVC and AAC go through VideoToolbox and AudioToolbox.
+        env:
+          LUMENIS_PATENT_CODECS_OFF: '1'
+        run: ctest --preset ci-macos -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
+
       - name: Logs of failed tests
         # QTest's own report, written to a file as well: ctest's capture can
         # lose it (BUILDING.md).
@@ -395,6 +408,16 @@ jobs:
         run: |
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
           ctest --preset ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test with the release's codec policy
+        # As on Linux; here H.264 and AAC go through Media Foundation, where the runner has its encoders.
+        shell: pwsh
+        env:
+          LUMENIS_PATENT_CODECS_OFF: '1'
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          ctest --preset ci -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Logs of failed tests

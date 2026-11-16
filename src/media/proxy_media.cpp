@@ -90,7 +90,12 @@ std::optional<model::ProxyMedia> makeProxyMedia(const model::BinItem& clip, cons
     if (!link || link->videoStream < 0 || clip.durationFrames <= 0) {
         return fail(QObject::tr("%1 has no picture to make proxies of.").arg(clip.name));
     }
-    if (!patentCodecsAllowed()) return fail(QObject::tr("H.264 and Avid DNx are not available in this build."));
+    // DNx is in every build; H.264 is FFmpeg's where the policy allows it, else the operating system's
+    // (docs/spec/release-codecs.md), which a machine may not have (Windows Server has no Media Foundation encoder).
+    const MovieCompression* h264 = findMovieCompression(QStringLiteral("h264"));
+    if (!h264 || !movieCompressionAvailable(*h264)) {
+        return fail(QObject::tr("H.264 proxies cannot be made here: this computer has no H.264 encoder."));
+    }
     const QString folder = proxyFolder(drive);
     if (!QDir().mkpath(folder)) return fail(QObject::tr("The proxy folder %1 cannot be made.").arg(folder));
 

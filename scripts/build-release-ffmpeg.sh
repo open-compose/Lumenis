@@ -44,7 +44,9 @@ case "$(uname -s)" in
 esac
 have() { pkg-config --exists "$1" 2>/dev/null; }
 have dav1d && options+=(--enable-libdav1d)
-have SvtAv1Enc && options+=(--enable-libsvtav1)
+# FFmpeg 7.1.1 builds against SVT-AV1 1.x and 2.x only: 3.0 changed its API (Homebrew's is 3.x; BUILDING.md
+# "Release FFmpeg fails on SVT-AV1"). Without it macOS has no AV1 encoder; H.264 and HEVC go through VideoToolbox.
+have 'SvtAv1Enc < 3.0' && options+=(--enable-libsvtav1)
 have opus && options+=(--enable-libopus)
 have libopenjp2 && options+=(--enable-libopenjpeg)
 

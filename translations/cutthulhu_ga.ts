@@ -800,7 +800,7 @@
     </message>
     <message>
         <source>H.264 and Avid DNx are not available in this build.</source>
-        <translation type="unfinished">Níl H.264 ná Avid DNx ar fáil sa leagan seo.</translation>
+        <translation type="obsolete">Níl H.264 ná Avid DNx ar fáil sa leagan seo.</translation>
     </message>
     <message>
         <source>The proxy folder %1 cannot be made.</source>
@@ -1521,6 +1521,10 @@
     <message>
         <source>There is no sound to export.</source>
         <translation type="unfinished">Níl fuaim ann le heaspórtáil.</translation>
+    </message>
+    <message>
+        <source>H.264 proxies cannot be made here: this computer has no H.264 encoder.</source>
+        <translation type="unfinished">Ní féidir meáin ionadacha H.264 a dhéanamh anseo: níl ionchódóir H.264 ar an ríomhaire seo.</translation>
     </message>
 </context>
 <context>

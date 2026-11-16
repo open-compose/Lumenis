@@ -462,6 +462,9 @@ bool isOsCodec(const QString& implementation) {
 
 namespace {
 
+// Whether the encoder opens here with a small picture or stereo sound, tried once per encoder (defined below).
+bool encoderOpens(const AVCodec* codec);
+
 // Whether this build may use the encoder: an OS one, or FFmpeg's own for an allowed codec.
 bool encoderAllowed(const AVCodec* codec) {
     if (!codec) return false;
@@ -539,7 +542,11 @@ QString osEncoderFor(const QString& codec) {
     (void)codec;
     const QString name; // VA-API's encoders take frames on the device: not used (ours)
 #endif
-    return !name.isEmpty() && avcodec_find_encoder_by_name(name.toUtf8().constData()) ? name : QString();
+    if (name.isEmpty()) return {};
+    const AVCodec* encoder = avcodec_find_encoder_by_name(name.toUtf8().constData());
+    // Compiled in is not enough: the OS must have the encoder behind it (Windows Server has no Media Foundation H.264
+    // encoder, BUILDING.md "Release builds cannot export H.264 on a server").
+    return encoder && encoderOpens(encoder) ? name : QString();
 }
 
 bool decodingAvailable(const QString& codec) {
@@ -1323,6 +1330,37 @@ AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 #endif
 }
 
+bool encoderOpens(const AVCodec* codec) {
+    static std::mutex lock;
+    static QHash<QString, bool> known;
+    const QString name = QString::fromUtf8(codec->name);
+    const std::lock_guard<std::mutex> hold(lock);
+    const auto it = known.constFind(name);
+    if (it != known.constEnd()) return *it;
+    AVCodecContext* ctx = avcodec_alloc_context3(codec);
+    bool ok = false;
+    if (ctx) {
+        if (codec->type == AVMEDIA_TYPE_VIDEO) {
+            ctx->width = 320;
+            ctx->height = 180;
+            ctx->pix_fmt = firstPixelFormat(codec);
+            ctx->time_base = AVRational{1, 25};
+            ctx->framerate = AVRational{25, 1};
+            ctx->bit_rate = 1000000;
+        } else {
+            ctx->sample_rate = 48000;
+            av_channel_layout_default(&ctx->ch_layout, 2);
+            ctx->sample_fmt = firstSampleFormat(codec);
+            ctx->time_base = AVRational{1, 48000};
+            ctx->bit_rate = 128000;
+        }
+        ok = avcodec_open2(ctx, codec, nullptr) >= 0;
+        avcodec_free_context(&ctx);
+    }
+    known.insert(name, ok);
+    return ok;
+}
+
 } // namespace
 
 // One output file: the muxer and up to one video and one audio encoder. vpts counts frames (the video
@@ -1585,12 +1623,11 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
 
     // The video encoder; the profile goes to its private options (DNxHR's "dnxhr_hq", ...).
     if (!s.videoCodec.isEmpty()) {
-        if (!codecAllowed(s.videoCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.videoCodec.toUtf8().constData());
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.videoCodec));
-        // The codec, not only the encoder's name: libx264 is H.264 (docs/EXTENSIONS.md).
-        if (!codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id))))
-            return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
+        // The operating system's encoders are always allowed; FFmpeg's own only for an allowed codec, judged by the
+        // codec as well as the encoder's name, as libx264 is H.264 (docs/spec/release-codecs.md, encoderAllowed).
+        if (!encoderAllowed(codec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         // Set up and opened with `threads` (0: automatic). An encoder whose per-thread buffers do not fit in
         // the memory there is (DNx on a many-core machine running other jobs: "Cannot allocate memory") is
         // opened again with one thread (BUILDING.md, Troubleshooting).
@@ -1681,11 +1718,10 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
     }
     // The audio encoder, and a swresample context from interleaved float to its sample format.
     if (!s.audioCodec.isEmpty()) {
-        if (!codecAllowed(s.audioCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.audioCodec.toUtf8().constData());
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.audioCodec));
-        if (!codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id))))
-            return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
+        // As for video: the operating system's AAC (aac_at) is allowed in every build.
+        if (!encoderAllowed(codec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
         d.aenc = avcodec_alloc_context3(codec);
         d.aenc->sample_rate = s.sampleRate;
         av_channel_layout_default(&d.aenc->ch_layout, s.channels);

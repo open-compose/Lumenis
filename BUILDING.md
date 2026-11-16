@@ -395,6 +395,26 @@ encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now
 
 To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
+### The first release run failed (2026-11-16)
+
+None of these showed in CI, which runs with the patent codecs on. Release builds run with them off.
+* **The writer refused the operating system's encoders.** `MediaWriter` checked the codec (H.264, AAC) against the
+  patent-codec policy. That refused `h264_mf`, `h264_videotoolbox` and `aac_at` as well, though the policy allows
+  them. A release build could not export H.264. It now uses the same rule as the movie export (`encoderAllowed`).
+* **Proxies were refused outright** with the patent codecs off ("H.264 and Avid DNx are not available"). They now
+  need only an H.264 encoder that works: FFmpeg's where allowed, else the operating system's.
+* **An OS encoder compiled into FFmpeg was taken as present.** Windows Server has no Media Foundation H.264
+  encoder. `osEncoderFor` now opens the encoder once with a small picture, and offers it only if that works.
+* **Release FFmpeg fails on SVT-AV1** ("no member named 'enable_adaptive_quantization'"). FFmpeg 7.1.1 builds only
+  against SVT-AV1 below 3.0, and Homebrew's is 3.x. `scripts/build-release-ffmpeg.sh` uses it only below 3.0.
+* **aqt has no `qtwayland` module for Qt 6.8.3.** Qt 6.8's Linux package has the Wayland plug-ins in it already.
+* **`tst_media provider` still treated DNxHR as a patent codec.** DNx is allowed in every build.
+
+The check: the Linux, macOS and Windows CI jobs run the codec-dependent tests a second time with
+`LUMENIS_PATENT_CODECS_OFF=1` ("Test with the release's codec policy"). Run the same tests locally before changing
+the codec policy:
+`LUMENIS_PATENT_CODECS_OFF=1 ctest --preset ci -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'`.
+
 ### ProRes media fails on a Mac: "cannot open the prores_videotoolbox encoder", "Operation not permitted"
 
 Making ProRes media (Transcode, Consolidate, renders, a ProRes Video Resolution) failed on the owner's M1 Mac mini

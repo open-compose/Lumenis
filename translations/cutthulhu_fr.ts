@@ -799,7 +799,7 @@
     </message>
     <message>
         <source>H.264 and Avid DNx are not available in this build.</source>
-        <translation type="unfinished">H.264 et Avid DNx ne sont pas disponibles dans cette version.</translation>
+        <translation type="obsolete">H.264 et Avid DNx ne sont pas disponibles dans cette version.</translation>
     </message>
     <message>
         <source>The proxy folder %1 cannot be made.</source>
@@ -1520,6 +1520,10 @@
     <message>
         <source>There is no sound to export.</source>
         <translation type="unfinished">Il n&apos;y a pas de son à exporter.</translation>
+    </message>
+    <message>
+        <source>H.264 proxies cannot be made here: this computer has no H.264 encoder.</source>
+        <translation type="unfinished">Impossible de créer des proxys H.264 ici : cet ordinateur n&apos;a pas d&apos;encodeur H.264.</translation>
     </message>
 </context>
 <context>
