@@ -395,6 +395,25 @@ encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now
 
 To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
+### Export says H.264 is not available on Windows
+
+The 2026.1 release candidate on Windows 11 refused H.264 in Export to File: "H.264 is not available in this build"
+(owner's report, 2026-11-16), though the PC plays H.264. Playing and writing use different parts of Windows: playback
+decodes through the graphics driver (D3D11VA), and writing encodes through Media Foundation (`h264_mf`, which the
+release's FFmpeg has). FFmpeg's Media Foundation encoders initialise COM as multithreaded and will not open on a
+thread in a single-threaded apartment ("COM must not be in STA mode"). Qt makes the GUI thread one, and both our check
+of the encoder at start-up and the export ran there, so the check always failed. The tests never saw it: nothing
+there sets up COM that way, and GitHub's Windows Server runners have no H.264 encoder at all.
+
+Now every call into a Media Foundation encoder (opening it, frames, packets, closing it) runs on a thread of the
+writer's own (`EncoderThread` in `src/media/media.cpp`). A refused encoder's reason is in the Console, and the export's
+message names the encoder and the reason (`media::osEncoderProblem`, `movieCompressionProblem`) instead of "not in
+this build". Windows Server still has no H.264 encoder, and Windows "N" editions need Microsoft's Media Feature Pack.
+
+The check: `tst_media encodersOnTheirOwnThread` writes through the encoder thread on every platform
+(`LUMENIS_ENCODER_THREAD=1` sends every encoder there), and on Windows writes H.264 with `h264_mf` from a
+single-threaded apartment wherever Windows has the encoder.
+
 ### The first release run failed (2026-11-16)
 
 None of these showed in CI, which runs with the patent codecs on. Release builds run with them off.

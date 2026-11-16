@@ -61,6 +61,9 @@ const MovieCompression* findMovieCompression(const QString& id);
 // it, else the operating system's for the same codec (VideoToolbox or Media Foundation's H.264 and HEVC,
 // VideoToolbox's ProRes; docs/spec/release-codecs.md); empty when there is none.
 QString movieEncoder(const MovieCompression& c);
+// Why a compression cannot be exported here, as a sentence for the message ("H.264 cannot be made here: the operating
+// system's encoder h264_mf does not open here (...)."); empty when it can.
+QString movieCompressionProblem(const MovieCompression& c);
 // Whether this build can write it: FFmpeg has the encoder, and it is not a codec awaiting legal review in a build
 // without them (codecAllowed, docs/EXTENSIONS.md).
 bool movieCompressionAvailable(const MovieCompression& compression);

@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <thread>
 
 #if defined(Q_OS_WIN)
 #ifndef NOMINMAX
@@ -2324,6 +2325,80 @@ private slots:
             qInfo() << "audio output:" << player.deviceName();
             player.stop();
         }
+    }
+
+    void encodersOnTheirOwnThread() {
+        // Media Foundation's encoders open only outside a single-threaded COM apartment, which Qt makes of the GUI
+        // thread on Windows, so the writer calls them on a thread of its own (EncoderThread in media.cpp; the owner's
+        // report, 2026-11-16). LUMENIS_ENCODER_THREAD=1 sends every encoder there, so this runs everywhere.
+        qputenv("LUMENIS_ENCODER_THREAD", "1");
+        const auto restore = qScopeGuard([] { qunsetenv("LUMENIS_ENCODER_THREAD"); });
+        QTemporaryDir dir;
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("dnxhd");
+        s.videoProfile = QStringLiteral("dnxhr_lb");
+        s.width = 256;
+        s.height = 144;
+        s.frameRate = Rational(25);
+        s.audioCodec = QStringLiteral("pcm_s16le");
+        s.sampleRate = 48000;
+        s.channels = 2;
+        const QString path = dir.filePath(QStringLiteral("threaded.mov"));
+        {
+            MediaWriter w;
+            QString error;
+            QVERIFY2(w.open(path, s, &error), qPrintable(error));
+            std::vector<float> tone(2 * 1920, 0.25f);
+            for (int i = 0; i < 10; ++i) {
+                QVERIFY2(w.writeVideo(picture(i, s.width, s.height)), qPrintable(w.lastError()));
+                QVERIFY2(w.writeAudio(tone.data(), 1920), qPrintable(w.lastError()));
+            }
+            QVERIFY2(w.finish(&error), qPrintable(error));
+        }
+        VideoReader reader;
+        QVERIFY(reader.open(path));
+        QCOMPARE(reader.frameCount(), std::int64_t(10));
+        QVERIFY(near(reader.frame(4), colourOf(4), 12));
+        // A writer given up before finish() frees its encoders on their thread.
+        {
+            MediaWriter w;
+            QVERIFY(w.open(dir.filePath(QStringLiteral("dropped.mov")), s));
+            QVERIFY(w.writeVideo(picture(0, s.width, s.height)));
+        }
+        // And the start-up check of an encoder runs there too.
+        QVERIFY(encoderAvailable(QStringLiteral("dnxhd")));
+
+#if defined(Q_OS_WIN)
+        // The real case: H.264 from Media Foundation written from a single-threaded apartment, as the GUI thread is.
+        // A new thread, as GitHub's runners make the main thread multithreaded; skipped where Windows has no H.264
+        // encoder (Windows Server, the runners).
+        qunsetenv("LUMENIS_ENCODER_THREAD");
+        if (osEncoderFor(QStringLiteral("h264")).isEmpty()) {
+            qInfo() << "no Media Foundation H.264 here:" << osEncoderProblem(QStringLiteral("h264"));
+            return;
+        }
+        bool written = false;
+        QString why;
+        std::thread sta([&] {
+            const HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+            WriterSettings h;
+            h.format = QStringLiteral("mp4");
+            h.videoCodec = QStringLiteral("h264_mf");
+            h.width = 320;
+            h.height = 180;
+            h.frameRate = Rational(25);
+            h.bitRate = 2000000;
+            MediaWriter w;
+            written = w.open(dir.filePath(QStringLiteral("sta.mp4")), h, &why);
+            for (int i = 0; written && i < 25; ++i) written = w.writeVideo(picture(i, h.width, h.height));
+            if (written) written = w.finish(&why);
+            if (!written && why.isEmpty()) why = w.lastError();
+            if (SUCCEEDED(hr)) CoUninitialize();
+        });
+        sta.join();
+        QVERIFY2(written, qPrintable(why));
+#endif
     }
 
     void soundLeavesComAlone() {

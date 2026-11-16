@@ -115,9 +115,11 @@ const MovieCompression* findMovieCompression(const QString& id) {
     return nullptr;
 }
 
-QString movieEncoder(const MovieCompression& c) {
-    if (encoderAvailable(c.encoder)) return c.encoder;
-    // The codec behind the encoder ("libx264" is H.264), by FFmpeg's id, or by the family when FFmpeg lacks it.
+namespace {
+
+// The codec behind a compression's encoder ("libx264" is H.264), by FFmpeg's id, or by the family when FFmpeg lacks
+// the encoder; empty when neither says.
+QString compressionCodec(const MovieCompression& c) {
     const AVCodec* own = avcodec_find_encoder_by_name(c.encoder.toUtf8().constData());
     QString codec = own ? QString::fromUtf8(avcodec_get_name(own->id)) : QString();
     if (codec.isEmpty()) {
@@ -126,7 +128,23 @@ QString movieEncoder(const MovieCompression& c) {
                 : c.family == QLatin1String("Apple ProRes") ? QStringLiteral("prores")
                                                              : QString();
     }
+    return codec;
+}
+
+} // namespace
+
+QString movieEncoder(const MovieCompression& c) {
+    if (encoderAvailable(c.encoder)) return c.encoder;
+    const QString codec = compressionCodec(c);
     return codec.isEmpty() ? QString() : osEncoderFor(codec);
+}
+
+QString movieCompressionProblem(const MovieCompression& c) {
+    if (!movieEncoder(c).isEmpty()) return {};
+    const QString codec = compressionCodec(c);
+    const QString os = codec.isEmpty() ? QString() : osEncoderProblem(codec);
+    return os.isEmpty() ? QObject::tr("%1 is not available in this build.").arg(c.label)
+                        : QObject::tr("%1 cannot be made here: %2.").arg(c.label, os);
 }
 
 bool movieCompressionAvailable(const MovieCompression& c) {
@@ -207,7 +225,7 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
             if (mxf) return fail(QObject::tr("%1 cannot go in this kind of MXF file.").arg(c->label));
             return fail(QObject::tr("%1 cannot go in an MP4 file; choose MOV, or H.264, HEVC or AV1.").arg(c->label));
         }
-        if (!movieCompressionAvailable(*c)) return fail(QObject::tr("%1 is not available in this build.").arg(c->label));
+        if (!movieCompressionAvailable(*c)) return fail(movieCompressionProblem(*c));
         QSize size = o.size.isValid() && !o.size.isEmpty() ? o.size : source.raster;
         // A resolution with a raster of its own (XDCAM-25 and -17) has it, the picture squeezed into it.
         if (c->raster.isValid() && !c->raster.isEmpty()) size = c->raster;

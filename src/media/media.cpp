@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QObject>
 #include <QStringList>
 
 extern "C" {
@@ -29,8 +30,11 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <mutex>
+#include <thread>
 #include <exception>
 #include <cmath>
 #include <cstring>
@@ -465,6 +469,13 @@ namespace {
 // Whether the encoder opens here with a small picture or stereo sound, tried once per encoder (defined below).
 bool encoderOpens(const AVCodec* codec);
 
+// Why encoderOpens() refused an encoder, by its name (osEncoderProblem()).
+QHash<QString, QString>& encoderProblems() {
+    static QHash<QString, QString> problems;
+    return problems;
+}
+std::mutex encoderProblemsLock;
+
 // Whether this build may use the encoder: an OS one, or FFmpeg's own for an allowed codec.
 bool encoderAllowed(const AVCodec* codec) {
     if (!codec) return false;
@@ -532,21 +543,43 @@ bool encoderAvailable(const QString& name) {
     return encoderAllowed(avcodec_find_encoder_by_name(name.toUtf8().constData()));
 }
 
-QString osEncoderFor(const QString& codec) {
+namespace {
+
+// The name of the operating system's encoder for a codec on this platform, whether FFmpeg has it or not; empty for
+// none (Linux).
+QString osEncoderName(const QString& codec) {
 #if defined(Q_OS_MACOS)
-    const QString name = codec.toLower() + (codec.compare(QLatin1String("aac"), Qt::CaseInsensitive) == 0 ? QStringLiteral("_at")
-                                                                                                         : QStringLiteral("_videotoolbox"));
+    return codec.toLower() + (codec.compare(QLatin1String("aac"), Qt::CaseInsensitive) == 0 ? QStringLiteral("_at")
+                                                                                            : QStringLiteral("_videotoolbox"));
 #elif defined(Q_OS_WIN)
-    const QString name = codec.toLower() + QStringLiteral("_mf");
+    return codec.toLower() + QStringLiteral("_mf");
 #else
     (void)codec;
-    const QString name; // VA-API's encoders take frames on the device: not used (ours)
+    return {}; // VA-API's encoders take frames on the device: not used (ours)
 #endif
+}
+
+} // namespace
+
+QString osEncoderFor(const QString& codec) {
+    const QString name = osEncoderName(codec);
     if (name.isEmpty()) return {};
     const AVCodec* encoder = avcodec_find_encoder_by_name(name.toUtf8().constData());
     // Compiled in is not enough: the OS must have the encoder behind it (Windows Server has no Media Foundation H.264
-    // encoder, BUILDING.md "Release builds cannot export H.264 on a server").
+    // encoder; BUILDING.md "Export says H.264 is not available on Windows").
     return encoder && encoderOpens(encoder) ? name : QString();
+}
+
+QString osEncoderProblem(const QString& codec) {
+    const QString name = osEncoderName(codec);
+    if (name.isEmpty()) return QObject::tr("this operating system's encoders are not used");
+    if (!avcodec_find_encoder_by_name(name.toUtf8().constData())) {
+        return QObject::tr("this build's FFmpeg has no %1").arg(name);
+    }
+    if (!osEncoderFor(codec).isEmpty()) return {};
+    const std::lock_guard<std::mutex> hold(encoderProblemsLock);
+    return QObject::tr("the operating system's encoder %1 does not open here (%2)")
+        .arg(name, encoderProblems().value(name, QObject::tr("no reason given")));
 }
 
 bool decodingAvailable(const QString& codec) {
@@ -1330,6 +1363,75 @@ AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 #endif
 }
 
+// A thread of its own that runs the calls given to it, one at a time, and waits for each.
+//
+// FFmpeg's Media Foundation encoders (h264_mf, hevc_mf, aac_mf) initialise COM as multithreaded on the thread that
+// opens them and refuse to open in a single-threaded apartment ("COM must not be in STA mode", EINVAL). Qt makes the
+// GUI thread one on Windows (OleInitialize, for drag and drop and the clipboard), and our exports write there, so
+// every H.264 export from a Windows release failed as "not available" (the owner's report, 2026-11-16; BUILDING.md
+// "Export says H.264 is not available on Windows"). Every call into such an encoder, from avcodec_open2 to
+// avcodec_free_context, goes through one of these, so COM is set up and torn down (mf_close's CoUninitialize) on the
+// same thread, which nothing else uses.
+class EncoderThread {
+public:
+    EncoderThread() : thread_([this] { loop(); }) {}
+    ~EncoderThread() {
+        {
+            const std::lock_guard<std::mutex> hold(lock_);
+            stop_ = true;
+        }
+        wake_.notify_all();
+        thread_.join();
+    }
+    EncoderThread(const EncoderThread&) = delete;
+    EncoderThread& operator=(const EncoderThread&) = delete;
+
+    // Runs `task` on the thread and returns when it has.
+    void run(const std::function<void()>& task) {
+        std::unique_lock<std::mutex> hold(lock_);
+        task_ = &task;
+        wake_.notify_all();
+        done_.wait(hold, [this] { return task_ == nullptr; });
+    }
+
+private:
+    void loop() {
+        std::unique_lock<std::mutex> hold(lock_);
+        for (;;) {
+            wake_.wait(hold, [this] { return stop_ || task_ != nullptr; });
+            if (task_) {
+                const std::function<void()>* task = task_;
+                hold.unlock();
+                (*task)();
+                hold.lock();
+                task_ = nullptr;
+                done_.notify_all();
+            } else if (stop_) {
+                return;
+            }
+        }
+    }
+
+    std::mutex lock_;
+    std::condition_variable wake_;
+    std::condition_variable done_;
+    const std::function<void()>* task_ = nullptr;
+    bool stop_ = false;
+    std::thread thread_; // last: started once the members above are made
+};
+
+// Whether the encoder's calls need an EncoderThread: Media Foundation's on Windows. LUMENIS_ENCODER_THREAD=1 sends
+// every encoder through one, so the tests on Linux and macOS (ASan, TSan) cover that path too.
+bool needsEncoderThread(const AVCodec* codec) {
+    if (qEnvironmentVariableIntValue("LUMENIS_ENCODER_THREAD") == 1) return true;
+#if defined(Q_OS_WIN)
+    return codec && QByteArray(codec->name).endsWith("_mf");
+#else
+    (void)codec;
+    return false;
+#endif
+}
+
 bool encoderOpens(const AVCodec* codec) {
     static std::mutex lock;
     static QHash<QString, bool> known;
@@ -1354,8 +1456,24 @@ bool encoderOpens(const AVCodec* codec) {
             ctx->time_base = AVRational{1, 48000};
             ctx->bit_rate = 128000;
         }
-        ok = avcodec_open2(ctx, codec, nullptr) >= 0;
-        avcodec_free_context(&ctx);
+        int rc = 0;
+        const std::function<void()> open = [&] {
+            rc = avcodec_open2(ctx, codec, nullptr);
+            avcodec_free_context(&ctx);
+        };
+        if (needsEncoderThread(codec)) {
+            EncoderThread().run(open);
+        } else {
+            open();
+        }
+        ok = rc >= 0;
+        if (!ok) {
+            const QString why = errorText(rc);
+            // Console only: the export's message names the encoder and this reason (encoderProblem).
+            qWarning("%s: the encoder does not open here (%s)", codec->name, qPrintable(why));
+            const std::lock_guard<std::mutex> holdProblems(encoderProblemsLock);
+            encoderProblems().insert(name, why);
+        }
     }
     known.insert(name, ok);
     return ok;
@@ -1391,6 +1509,17 @@ struct MediaWriter::Impl {
     bool opAtom = false;
     MobId materialPackage;
     MobId filePackage;
+    // Where the encoders' calls run when one needs it (needsEncoderThread: Media Foundation's); null otherwise.
+    std::unique_ptr<EncoderThread> encoderThread;
+
+    // Runs a call into an encoder on its thread, or here when it needs none.
+    void onEncoder(const std::function<void()>& call) {
+        if (encoderThread) {
+            encoderThread->run(call);
+        } else {
+            call();
+        }
+    }
 
     ~Impl() {
         sws_freeContext(sws);
@@ -1399,8 +1528,10 @@ struct MediaWriter::Impl {
         av_frame_free(&vframe);
         av_frame_free(&aframe);
         av_packet_free(&packet);
-        avcodec_free_context(&venc);
-        avcodec_free_context(&aenc);
+        onEncoder([this] {
+            avcodec_free_context(&venc);
+            avcodec_free_context(&aenc);
+        });
         if (out) {
             if (!(out->oformat->flags & AVFMT_NOFILE)) avio_closep(&out->pb);
             avformat_free_context(out);
@@ -1415,7 +1546,8 @@ struct MediaWriter::Impl {
     // Writes every packet the encoder has ready, its timestamps moved to the stream's time base.
     bool drain(AVCodecContext* enc, AVStream* st) {
         for (;;) {
-            const int rc = avcodec_receive_packet(enc, packet);
+            int rc = 0;
+            onEncoder([&] { rc = avcodec_receive_packet(enc, packet); });
             if (rc == AVERROR(EAGAIN) || rc == AVERROR_EOF) return true;
             if (rc < 0) return fail(errorText(rc));
             av_packet_rescale_ts(packet, enc->time_base, st->time_base);
@@ -1441,7 +1573,8 @@ struct MediaWriter::Impl {
 
     // Sends a frame (null: flush the encoder) and writes what comes out.
     bool encode(AVCodecContext* enc, AVStream* st, AVFrame* f) {
-        const int rc = avcodec_send_frame(enc, f);
+        int rc = 0;
+        onEncoder([&] { rc = avcodec_send_frame(enc, f); });
         if (rc < 0 && rc != AVERROR_EOF) return fail(errorText(rc));
         return drain(enc, st);
     }
@@ -1628,11 +1761,12 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         // The operating system's encoders are always allowed; FFmpeg's own only for an allowed codec, judged by the
         // codec as well as the encoder's name, as libx264 is H.264 (docs/spec/release-codecs.md, encoderAllowed).
         if (!encoderAllowed(codec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
+        if (needsEncoderThread(codec) && !d.encoderThread) d.encoderThread = std::make_unique<EncoderThread>();
         // Set up and opened with `threads` (0: automatic). An encoder whose per-thread buffers do not fit in
         // the memory there is (DNx on a many-core machine running other jobs: "Cannot allocate memory") is
         // opened again with one thread (BUILDING.md, Troubleshooting).
         auto openEncoder = [&](int threads) {
-            if (d.venc) avcodec_free_context(&d.venc);
+            if (d.venc) d.onEncoder([&] { avcodec_free_context(&d.venc); });
             d.venc = avcodec_alloc_context3(codec);
             if (!d.venc) return AVERROR(ENOMEM);
             d.venc->width = s.width;
@@ -1681,7 +1815,9 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
                 d.venc->flags |= AV_CODEC_FLAG_QSCALE;
                 d.venc->global_quality = FF_QP2LAMBDA * s.quality;
             }
-            return avcodec_open2(d.venc, codec, nullptr);
+            int rc = 0;
+            d.onEncoder([&] { rc = avcodec_open2(d.venc, codec, nullptr); });
+            return rc;
         };
         int rc = openEncoder(0);
         if (rc == AVERROR(ENOMEM)) rc = openEncoder(1);
@@ -1722,13 +1858,15 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.audioCodec));
         // As for video: the operating system's AAC (aac_at) is allowed in every build.
         if (!encoderAllowed(codec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
+        if (needsEncoderThread(codec) && !d.encoderThread) d.encoderThread = std::make_unique<EncoderThread>();
         d.aenc = avcodec_alloc_context3(codec);
         d.aenc->sample_rate = s.sampleRate;
         av_channel_layout_default(&d.aenc->ch_layout, s.channels);
         d.aenc->sample_fmt = firstSampleFormat(codec);
         d.aenc->time_base = AVRational{1, s.sampleRate};
         if (globalHeader) d.aenc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        const int rc = avcodec_open2(d.aenc, codec, nullptr);
+        int rc = 0;
+        d.onEncoder([&] { rc = avcodec_open2(d.aenc, codec, nullptr); });
         if (rc < 0) return failed(QStringLiteral("cannot open the %1 encoder: %2").arg(s.audioCodec, errorText(rc)));
         d.ast = avformat_new_stream(d.out, nullptr);
         avcodec_parameters_from_context(d.ast->codecpar, d.aenc);

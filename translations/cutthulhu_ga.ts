@@ -1526,6 +1526,26 @@
         <source>H.264 proxies cannot be made here: this computer has no H.264 encoder.</source>
         <translation type="unfinished">Ní féidir meáin ionadacha H.264 a dhéanamh anseo: níl ionchódóir H.264 ar an ríomhaire seo.</translation>
     </message>
+    <message>
+        <source>this operating system&apos;s encoders are not used</source>
+        <translation type="unfinished">ní úsáidtear ionchódóirí an chórais oibriúcháin seo</translation>
+    </message>
+    <message>
+        <source>this build&apos;s FFmpeg has no %1</source>
+        <translation type="unfinished">níl %1 ag FFmpeg an leagain seo</translation>
+    </message>
+    <message>
+        <source>the operating system&apos;s encoder %1 does not open here (%2)</source>
+        <translation type="unfinished">ní osclaíonn ionchódóir %1 an chórais oibriúcháin anseo (%2)</translation>
+    </message>
+    <message>
+        <source>no reason given</source>
+        <translation type="unfinished">níor tugadh cúis</translation>
+    </message>
+    <message>
+        <source>%1 cannot be made here: %2.</source>
+        <translation type="unfinished">Ní féidir %1 a dhéanamh anseo: %2.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>

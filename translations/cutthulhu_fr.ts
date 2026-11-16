@@ -1525,6 +1525,26 @@
         <source>H.264 proxies cannot be made here: this computer has no H.264 encoder.</source>
         <translation type="unfinished">Impossible de créer des proxys H.264 ici : cet ordinateur n&apos;a pas d&apos;encodeur H.264.</translation>
     </message>
+    <message>
+        <source>this operating system&apos;s encoders are not used</source>
+        <translation type="unfinished">les encodeurs de ce système d&apos;exploitation ne sont pas utilisés</translation>
+    </message>
+    <message>
+        <source>this build&apos;s FFmpeg has no %1</source>
+        <translation type="unfinished">le FFmpeg de cette version n&apos;a pas %1</translation>
+    </message>
+    <message>
+        <source>the operating system&apos;s encoder %1 does not open here (%2)</source>
+        <translation type="unfinished">l&apos;encodeur %1 du système d&apos;exploitation ne s&apos;ouvre pas ici (%2)</translation>
+    </message>
+    <message>
+        <source>no reason given</source>
+        <translation type="unfinished">aucune raison donnée</translation>
+    </message>
+    <message>
+        <source>%1 cannot be made here: %2.</source>
+        <translation type="unfinished">%1 ne peut pas être créé ici : %2.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>

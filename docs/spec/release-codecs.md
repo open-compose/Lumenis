@@ -20,6 +20,9 @@ Official releases are built with `LUMENIS_PATENT_CODECS` off (ROADMAP 10.7; the 
     place of libx264 and libx265 (`media::movieEncoder`), managed ProRes takes VideoToolbox's (as before), and MP4's
     sound is the OS's AAC, else Opus. On Linux there is no OS encoder (ours: VA-API's take frames on the device), so
     H.264 and HEVC export is not offered there.
+    Media Foundation's encoders open only outside a single-threaded COM apartment (the GUI thread is one), so
+    `MediaWriter` calls them on a thread of its own (`EncoderThread`), and `media::osEncoderProblem` says why an OS
+    encoder is not offered.
   * `media::isOsCodec` names the OS's and drivers' implementations by FFmpeg's suffixes (`_videotoolbox`, `_at`,
     `_mf`, `_vaapi`, `_qsv`, `_nvenc`, `_cuvid`, `_amf`); `encoderAvailable` takes those, and FFmpeg's own only for a
     codec `codecAllowed`.

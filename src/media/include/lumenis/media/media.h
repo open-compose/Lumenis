@@ -49,6 +49,9 @@ bool encoderAvailable(const QString& name);
 // The operating system's encoder for a codec ("h264", "hevc", "aac") that this FFmpeg has: VideoToolbox and
 // AudioToolbox on macOS, Media Foundation on Windows; empty for none.
 QString osEncoderFor(const QString& codec);
+// Why osEncoderFor() gives nothing for the codec, for a message ("the operating system's encoder h264_mf does not
+// open here (...)"); empty when it gives one.
+QString osEncoderProblem(const QString& codec);
 // Whether a stream of this codec can be decoded here: by FFmpeg's own decoder where codecAllowed(), else through the
 // operating system (a hardware decoder: VideoToolbox, D3D11VA/DXVA2, VA-API; AudioToolbox's audio decoders).
 bool decodingAvailable(const QString& codec);
