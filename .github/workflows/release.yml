@@ -81,7 +81,9 @@ jobs:
   macos:
     name: macOS arm64 (.dmg)
     needs: prepare
-    runs-on: macos-14
+    # The oldest macOS runner GitHub offers; the binary still runs on macOS 12
+    # and later (CMAKE_OSX_DEPLOYMENT_TARGET in CMakePresets.json).
+    runs-on: macos-15
     env:
       TAG: v${{ needs.prepare.outputs.version }}
       VERSION: ${{ needs.prepare.outputs.version }}

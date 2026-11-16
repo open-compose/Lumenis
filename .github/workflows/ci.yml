@@ -217,14 +217,16 @@ jobs:
           ctest --preset asan
 
   macos:
-    # macos-14 is the oldest supported toolchain (Xcode 15); macos-26 the
+    # macos-15 is the oldest macOS GitHub still offers (Xcode 16; macos-14,
+    # with Xcode 15, was retired: "The configuration 'macos-14-arm64-us-default'
+    # is not supported", 2026-11-16); macos-26 the
     # newest (Xcode 26, which dropped the AGL framework).
     name: macOS arm64 (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-26]
+        os: [macos-15, macos-26]
     steps:
       - uses: actions/checkout@v4
 

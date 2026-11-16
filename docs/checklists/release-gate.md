@@ -12,7 +12,7 @@ made (BUILDING.md "Releases").
 | The release workflow's build and `ctest` (release codec policy) passed | [ ] | [ ] | [ ] AppImage [ ] .deb |
 | The installer gate passed (installed or mounted, `--smoke-test`, no x264/x265 inside) | [ ] | [ ] | [ ] |
 | The package and its symbols are on the draft; `SHA256SUMS.txt` checks (`sha256sum -c`) | [ ] | [ ] | [ ] |
-| The hosted CI jobs on the release commit: Xcode 15 and 26; Windows; Ubuntu 24.04 and 26.04 | [ ] | [ ] | [ ] |
+| The hosted CI jobs on the release commit: Xcode 16 and 26; Windows; Ubuntu 24.04 and 26.04 | [ ] | [ ] | [ ] |
 
 ## 2. Phase 10's steps
 

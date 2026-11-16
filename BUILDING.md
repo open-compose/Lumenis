@@ -180,7 +180,7 @@ public, so their minutes and artifact storage cost nothing):
 | `linux` | `ubuntu-24.04` | system Qt 6.4: build, test, AppImage and .deb, the installer gate (also the AppImage on a headless Wayland compositor) |
 | `linux-latest` | Ubuntu 26.04 container | GCC 15 and Qt 6.10 with warnings as errors |
 | `linux-asan` | `ubuntu-24.04` | the `asan` preset: AddressSanitizer and UBSan over every test |
-| `macos` | `macos-14` (Xcode 15), `macos-26` (Xcode 26) | arm64 build, test, `.dmg` and its gate |
+| `macos` | `macos-15` (Xcode 16), `macos-26` (Xcode 26) | arm64 build, test, `.dmg` and its gate |
 | `windows` | `windows-2022` | MSVC 2022 build, test, `.msi` and `.zip`; installs the .msi, launches it, uninstalls it |
 | `ui-consistency` | `ubuntu-24.04` | each platform's screenshots against Linux's ("CI screenshots" under Troubleshooting) |
 
@@ -742,6 +742,13 @@ the whole application with its debug information), and GitHub's hosted Ubuntu ru
 the dependencies are in (the first hosted run, 2026-11-16). The `linux-asan` job therefore first deletes toolchains
 it does not use (.NET, Android, GHC, CodeQL ...) and prints the free space before and after. If it fills up again,
 add more of the runner's preinstalled folders to that step.
+
+### CI: the macOS job is cancelled at once: "The configuration 'macos-14-arm64-us-default' is not supported"
+
+GitHub retired its macos-14 runner, the only one with Xcode 15 (seen 2026-11-16: the job is cancelled within a second,
+with no runner and no log; the message is in the job's annotations). CI and the release workflow now use macos-15
+(Xcode 16), the oldest GitHub offers, and macos-26. Built with `CMAKE_OSX_DEPLOYMENT_TARGET` 12.0 (CMakePresets.json),
+the package still runs on macOS 12 and later. When GitHub retires macos-15 the same way, move to the next one.
 
 ### CI: `otio_python` and `fcpxml_python` fail on macOS with "bad any cast"
 

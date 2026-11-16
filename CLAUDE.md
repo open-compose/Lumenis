@@ -26,7 +26,7 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - **Names.** The product name is **Cutthulhu**, set in
   `cmake/Branding.cmake`. The internal code name `lumenis` (targets,
   namespaces, module ABI) stays.
-- **Support.** macOS arm64 (Xcode 15 and 26), Windows x64 (MSVC 2022) and
+- **Support.** macOS arm64 (Xcode 16 and 26; GitHub retired its Xcode 15 runner), Windows x64 (MSVC 2022) and
   Linux x64 (Ubuntu 24.04 system Qt 6.4). Release builds use Qt 6.8 LTS.
 
 ## Working practice
@@ -43,7 +43,7 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   job runs them too.
 - CI runs only on GitHub's hosted runners (ROADMAP 10.0): the repository is
   public, so minutes and artifacts are free. Every push to `main` and
-  `claude/**` runs Linux (Ubuntu 24.04, 26.04 and ASan), macOS (Xcode 15 and
+  `claude/**` runs Linux (Ubuntu 24.04, 26.04 and ASan), macOS (Xcode 16 and
   26), Windows and ui-consistency. Each job uploads its screenshots
   (`screenshots-<platform>`) and packages as artifacts. The owner's
   self-hosted runners and their scripts were removed before going public:
