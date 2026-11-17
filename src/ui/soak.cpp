@@ -20,6 +20,7 @@
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 
 #include <QAction>
 #include <QApplication>
@@ -204,6 +205,24 @@ Soak::Soak(MainWindow& window, CommandRegistry& commands, SoakOptions options)
 Soak::~Soak() {
     window_.setRenderHook({});
     window_.setClearRendersHook({});
+    setFailureObserver({});
+}
+
+namespace {
+// Failures logged one by one; past these only counted (in the closing line), so a failure every cycle cannot fill the
+// disk with the log.
+constexpr int kMostFailureLines = 500;
+} // namespace
+
+void Soak::failed(const QString& title, const QString& text) {
+    ++failures_;
+    if (failures_ > kMostFailureLines) return;
+    // "seconds", not "t": the check reads lines with "t" as samples.
+    const QJsonObject note{{QStringLiteral("failure"), title + QStringLiteral(": ") + text},
+                           {QStringLiteral("step"), step_},
+                           {QStringLiteral("cycle"), cycles_},
+                           {QStringLiteral("seconds"), static_cast<double>(QDateTime::currentMSecsSinceEpoch() - startedMs_) / 1000.0}};
+    writeLine(QJsonDocument(note).toJson(QJsonDocument::Compact));
 }
 
 bool Soak::prepare(QString* error) {
@@ -290,9 +309,12 @@ void Soak::start() {
                                              {QStringLiteral("seed"), static_cast<qint64>(options_.seed)},
                                              {QStringLiteral("cycles"), options_.cycles}}}};
     if (!writeLine(QJsonDocument(header).toJson(QJsonDocument::Compact))) {
-        stopAll(1);
+        stopAll(1, QStringLiteral("cannot write the log"));
         return;
     }
+    // Every failure the application reports goes into the log, with its step and time, instead of a box nobody reads
+    // until the end (the owner's first 72-hour runs ended with a write failure the logs did not have).
+    setFailureObserver([this](const QString& title, const QString& text) { failed(title, text); });
     sample(); // the figures before any step, the line every later one is compared with
     sampleTimer_.start();
     endTimer_.start(static_cast<int>(std::max(options_.hours, 0.0) * 3600.0 * 1000.0));
@@ -305,7 +327,7 @@ void Soak::nextStep() {
     Composer& composer = window_.composer();
     const model::LoadedClip* rec = composer.state(MonitorId::Record).current();
     if (!rec) {
-        stopAll(1);
+        stopAll(1, QStringLiteral("the Record monitor has no sequence"));
         return;
     }
     const std::int64_t length = std::max<std::int64_t>(model::Sequence::fromItem(rec->item).duration(), 1);
@@ -445,7 +467,7 @@ void Soak::watch() {
         lastCycleMs_ = now;
     } else if (now - lastCycleMs_ > 10 * 60 * 1000) {
         writeLine(QJsonDocument(QJsonObject{{QStringLiteral("stalled"), step_}}).toJson(QJsonDocument::Compact));
-        stopAll(1);
+        stopAll(1, QStringLiteral("stalled"));
         return;
     }
     sampleDue_ = true;
@@ -479,7 +501,9 @@ void Soak::sample() {
         {QStringLiteral("shown"), static_cast<qint64>(shown)},
         {QStringLiteral("dropped"), static_cast<qint64>(dropped)},
     };
-    if (!writeLine(QJsonDocument(line).toJson(QJsonDocument::Compact))) stopAll(1);
+    if (!writeLine(QJsonDocument(line).toJson(QJsonDocument::Compact))) {
+        stopAll(1, QStringLiteral("cannot write the log: ") + (log_ ? log_->errorString() : QString()));
+    }
 }
 
 int Soak::binItems() const {
@@ -493,7 +517,7 @@ bool Soak::writeLine(const QByteArray& json) {
     return log_->flush();
 }
 
-void Soak::stopAll(int code) {
+void Soak::stopAll(int code, const QString& why) {
     if (done_) return;
     done_ = true;
     stepTimer_.stop();
@@ -510,12 +534,12 @@ void Soak::stopAll(int code) {
     sampleTimer_.stop();
     endTimer_.stop();
     if (log_) {
-        writeLine(QJsonDocument(QJsonObject{{QStringLiteral("ended"),
-                                             QJsonObject{{QStringLiteral("code"), code},
-                                                         {QStringLiteral("seconds"),
-                                                          static_cast<double>(QDateTime::currentMSecsSinceEpoch() - startedMs_) / 1000.0},
-                                                         {QStringLiteral("cycles"), cycles_}}}})
-                      .toJson(QJsonDocument::Compact));
+        QJsonObject ended{{QStringLiteral("code"), code},
+                          {QStringLiteral("seconds"), static_cast<double>(QDateTime::currentMSecsSinceEpoch() - startedMs_) / 1000.0},
+                          {QStringLiteral("cycles"), cycles_},
+                          {QStringLiteral("failures"), failures_}};
+        if (!why.isEmpty()) ended.insert(QStringLiteral("why"), why);
+        writeLine(QJsonDocument(QJsonObject{{QStringLiteral("ended"), ended}}).toJson(QJsonDocument::Compact));
         log_->close();
     }
     emit finished(code);

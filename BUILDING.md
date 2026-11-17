@@ -1243,7 +1243,9 @@ preset), the machine left on with sleep off (macOS: `caffeinate -i` before the c
 Never), the window may be covered or minimised but not closed. Send the log back; the check prints each figure's growth
 per hour and what failed. A run that is stopped early still has a good log up to the last minute, but the check fails
 it as "stopped early" (the log's last line, `{"ended": ...}`, is written only when the run ends by itself): if a run
-stops short, look in Crash Reports ("Crash reports" above) and say whether it was stopped by hand. Sanitizer soaks of a
+stops short, look in Crash Reports ("Crash reports" above) and say whether it was stopped by hand. Failures the program
+reports during the run (the boxes that do not block) are in the log too, as `failure` lines, and fail the check, which
+lists them by text with when each first came. Sanitizer soaks of a
 few hours (Linux or macOS; five to fifteen times slower, so fewer cycles):
 
     ASAN_OPTIONS=detect_leaks=0 build/asan/bin/cutthulhu --soak 3 --soak-log soak-asan.jsonl

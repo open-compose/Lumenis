@@ -168,6 +168,13 @@ def main():
             problems.append("ended")
     elif args.app:
         problems.append("no closing line")  # the app run here writes one (ctest soak_smoke)
+    # Failures the application reported (reportFailure), each with its step, cycle and time; the closing line counts
+    # them all, the log keeps the first 500. Any failure fails the run: a soak of what an editor does should fail at
+    # nothing (the owner's first 72-hour runs ended with a write failure that no log had).
+    failures = [n for n in notes if "failure" in n]
+    failureCount = max(len(failures), (ended or {}).get("failures", 0))
+    if failureCount:
+        problems.append("failures")
     elif header and samples and not header.get("cycles"):
         wanted = float(header.get("hours", 0)) * 3600.0
         interval = float(header.get("interval", 60))
@@ -184,6 +191,7 @@ def main():
         "closedDialogs": sorted(set(dialogs)),
         "figures": results,
         "ended": ended,
+        "failures": failureCount,
         "problems": problems,
     }
     if args.json:
@@ -202,7 +210,16 @@ def main():
             print(f"  FAIL stopped at {stoppedEarly[0]:.1f} of {stoppedEarly[1]:g} hours without its closing line: it crashed, "
                   "was killed or its computer stopped (look in Crash Reports, BUILDING.md \"Crash reports\")")
         if ended is not None and "ended" in problems:
-            print(f"  FAIL ended with exit code {ended.get('code')}")
+            why = f" ({ended['why']})" if ended.get("why") else ""
+            print(f"  FAIL ended with exit code {ended.get('code')}{why}")
+        if failureCount:
+            print(f"  FAIL {failureCount} failures reported; by text (count, first at hours, step, cycle):")
+            first = {}
+            for n in failures:
+                entry = first.setdefault(n["failure"], [0, n.get("seconds", 0) / 3600.0, n.get("step"), n.get("cycle")])
+                entry[0] += 1
+            for text, (count, at, step, cycle) in sorted(first.items(), key=lambda kv: kv[1][1]):
+                print(f"       {count:5} x  {at:7.2f} h  step {step}  cycle {cycle}  {text}")
         if stalled:
             print("  FAIL stalled at step " + ", ".join(str(n["stalled"]) for n in stalled))
         if "cycles" in problems:

@@ -1,0 +1,12 @@
+{"soak": {"cpu": "x86_64", "cycles": 0, "hours": 1, "interval": 60, "os": "Example", "product": "Cutthulhu", "seed": 1, "version": "test"}}
+{"binItems": 2, "cycles": 0, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 0, "t": 0.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 1, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 100, "t": 60.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 2, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 200, "t": 120.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 3, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 300, "t": 180.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 4, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 400, "t": 240.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 5, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 500, "t": 300.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 6, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 600, "t": 360.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 7, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 700, "t": 420.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 8, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 800, "t": 480.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 9, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 900, "t": 540.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}
+{"binItems": 2, "cycles": 10, "dropped": 0, "gdiObjects": -1, "handles": 15, "heapMb": 90.0, "residentMb": 800.0, "shown": 1000, "t": 600.0, "threads": 15, "topLevels": 187, "userObjects": -1, "widgets": 3791}

@@ -66,7 +66,11 @@ private:
     void nextStep();
     void watch();
     void sample();
-    void stopAll(int code);
+    // Ends the run with an exit code and, for an error, why (in the log's closing line).
+    void stopAll(int code, const QString& why = {});
+    // Logs a failure the application reported (reportFailure), which would otherwise only open a box that does not
+    // block and that nothing logs.
+    void failed(const QString& title, const QString& text);
     bool writeLine(const QByteArray& json);
     int binItems() const;
 
@@ -90,6 +94,7 @@ private:
     std::int64_t lastShown_ = 0; // the Composer's counts when the current play started
     std::int64_t lastDropped_ = 0;
     bool done_ = false;
+    int failures_ = 0; // failures reported over the run; the first kMostFailureLines are logged
     bool sampleDue_ = false;       // the interval has passed: figures at the end of this cycle
     QPointer<QWidget> lastModal_; // the modal dialog open at the last line, if any (cleared if it goes)
     int lastCycles_ = 0;

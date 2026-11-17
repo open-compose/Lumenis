@@ -124,6 +124,15 @@ if(Python3_Interpreter_FOUND)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
         PASS_REGULAR_EXPRESSION "soak: ok"
         TIMEOUT 1200)
+    # The check itself, on example logs (tests/data/soak): a run that stopped short of its hours without its closing
+    # line, and one whose application reported a failure, both fail (docs/spec/soak.md "The check").
+    foreach(example stopped_early failures)
+        add_test(NAME soak_check_${example}
+            COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/soak-check.py
+                    ${PROJECT_SOURCE_DIR}/tests/data/soak/${example}.jsonl --smoke)
+    endforeach()
+    set_tests_properties(soak_check_stopped_early PROPERTIES PASS_REGULAR_EXPRESSION "soak: FAIL \\(stopped early\\)")
+    set_tests_properties(soak_check_failures PROPERTIES PASS_REGULAR_EXPRESSION "soak: FAIL \\(failures\\)")
 endif()
 
 # Crash reports (ROADMAP 10.5; app/crash_report.h): crashes on purpose and checks the reports. Not under the

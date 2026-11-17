@@ -40,8 +40,12 @@ crashed session. 10.2 runs what an editor does, in a loop, for hours, and checks
 
   Two other lines can appear: `{"closedDialog": <name>, "step": n}` when a dialog was still open at the next interval
   (it is closed so the run goes on; a progress dialog is working, not waiting, and is left alone), and `{"stalled": n}` when no cycle finished for ten minutes (the run ends, exit 1).
-  The last line, since 2026-11-17, is `{"ended": {"code": c, "seconds": s, "cycles": n}}` when the run ends by itself
-  (its hours or cycles done, a stall, a log it cannot write). It is not a sample (no `t`). A run that crashed, was
+  `{"failure": "<title>: <text>", "step": n, "cycle": n, "seconds": s}` for each failure the application reports
+  (`reportFailure`, through `setFailureObserver`): those open a box that does not block, which the watchdog does not
+  see, so before 2026-11-17 a failure repeated for hours showed only as a box at the end. The first 500 are logged.
+  The last line, since 2026-11-17, is `{"ended": {"code": c, "seconds": s, "cycles": n, "failures": n, "why": ...}}`
+  when the run ends by itself (its hours or cycles done, a stall, the Record monitor left without a sequence, a log it
+  cannot write; `why` says which when the code is not 0). It is not a sample (no `t`). A run that crashed, was
   killed or lost its computer has none, and its log otherwise looks like a finished one.
 * `--soak-cycles <n>` also ends the run after that many cycles (ctest `soak_smoke` takes one, however slow the
   build); `--soak-seed` sets the scrub positions; `processStats()` gives the process's figures for each OS.
@@ -65,7 +69,9 @@ per hour **and** its last quarter is above its second (a cache that filled and s
 Where `heapMb` is given (Linux, macOS), memory is judged by it and `residentMb` is shown but not judged: resident
 memory also counts what the allocator keeps after it was freed (glibc's per-thread arenas, macOS's zones), which rises
 in steps as decoders' threads come and go and then stays, without a leak. On Windows `residentMb` (the working set) is
-judged. `--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; an `ended` line with another code than 0 fails; a log
+judged. `--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; an `ended` line with another code than 0 fails (with its `why`); any reported failure fails, listed by text with its
+count and when it first came (ctests `soak_check_stopped_early` and `soak_check_failures` run the check on the example
+logs in tests/data/soak); a log
 without one whose samples stop more than two intervals short of the header's hours fails as "stopped early" (logs
 from before the closing line was written are judged this way too); a run the check starts itself (`--app`, ctest
 `soak_smoke`) fails without the closing line; the dialogs the soak had to
@@ -85,7 +91,10 @@ Results:
 | received 2026-11-17 | Windows 11 25H2 | 71.98 of 72 | 11156 | 18.4% | passed: every figure flat (working set +0.11 MB/hour, handles +0.20/hour, GDI and USER objects flat) |
 | received 2026-11-17 | Ubuntu 26.04.1 | 64.60 of 72 | 11744 | 36.9% | not a pass: the figures are flat (heap +0.89 MB/hour; resident memory 1117 to 1695 MB, not judged, the heap is), but the log stops 7.4 hours short with no gap before it, so the run crashed, was killed or was stopped; to be run again |
 
-Both ran version 0.1.0 (development builds, before 2026.1). The dropped share is the whole loop's (scrubbing, reverse
+Both ran version 0.1.0 (development builds, before 2026.1). Both ended with a message box about a file that could not
+be written, as if it were read-only (the owner's report; the exact texts were not kept). The soak did not log those
+failures then, nor why the Linux run ended; it does both now, so the next runs' logs will say which file, when and at
+which step. The dropped share is the whole loop's (scrubbing, reverse
 play and renders as well as playback), so it is reported, not judged.
 
 ## Found and fixed by the soak
