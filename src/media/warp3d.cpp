@@ -212,6 +212,53 @@ struct Placement {
         if (t <= 0.0) return std::nullopt; // behind the viewer
         return std::pair{x, y};
     }
+
+    // planePoint() for every pixel of a picture, worked out once (10.1b: solving it per pixel was a sixth of the 3D
+    // Warp's time). Each of planePoint()'s determinants is a linear function of the screen point (the Corner Pin's
+    // homography is one already), so a plane point is two linear forms over a third; only Cramer's numerator for t,
+    // which says whether the point is in front of the viewer, does not depend on it.
+    struct PlaneMap {
+        bool none = false;            // Target's size is zero: nothing is seen
+        double threshold = 1e-9;      // planePoint()'s: a denominator smaller than this shows nothing
+        std::array<double, 9> m{};    // x's numerator, y's, and the denominator, as (sx, sy, 1) rows
+        std::optional<double> t;      // t's numerator, when the point must be in front of the viewer
+        std::optional<std::pair<double, double>> at(double sx, double sy) const {
+            if (none) return std::nullopt;
+            const double den = m[6] * sx + m[7] * sy + m[8];
+            if (std::abs(den) < threshold) return std::nullopt;
+            if (t && *t / den <= 0.0) return std::nullopt; // behind the viewer
+            return std::pair{(m[0] * sx + m[1] * sy + m[2]) / den, (m[3] * sx + m[4] * sy + m[5]) / den};
+        }
+    };
+    PlaneMap planeMap() const {
+        PlaneMap map;
+        if (pinned) {
+            map.m = unpin;
+            map.threshold = 1e-12;
+            return map;
+        }
+        if (targetSize <= 1e-9) {
+            map.none = true;
+            return map;
+        }
+        // The three determinants at a screen point, as planePoint() works them out.
+        const Vec rhs = sub(viewer, c);
+        auto forms = [&](double sx, double sy) {
+            const Vec q{(sx - targetX) / targetSize, (sy - targetY) / targetSize, 0.0};
+            const Vec d = sub(q, viewer);
+            const Vec nd{-d[0], -d[1], -d[2]};
+            return std::array<double, 3>{dot(rhs, cross(col1, nd)), dot(col0, cross(rhs, nd)), dot(col0, cross(col1, nd))};
+        };
+        // Linear in (sx, sy): their values at the origin and one step along each axis give the coefficients.
+        const auto o = forms(0.0, 0.0), ux = forms(1.0, 0.0), uy = forms(0.0, 1.0);
+        for (int k = 0; k < 3; ++k) {
+            map.m[static_cast<std::size_t>(3 * k)] = ux[static_cast<std::size_t>(k)] - o[static_cast<std::size_t>(k)];
+            map.m[static_cast<std::size_t>(3 * k + 1)] = uy[static_cast<std::size_t>(k)] - o[static_cast<std::size_t>(k)];
+            map.m[static_cast<std::size_t>(3 * k + 2)] = o[static_cast<std::size_t>(k)];
+        }
+        map.t = dot(col0, cross(col1, rhs));
+        return map;
+    }
 };
 
 Placement placementOf(const model::Effect& e, double time, const model::EffectSpan& span, int width, int height) {
@@ -802,10 +849,11 @@ Picture placedLayer(const model::Effect& e, const Picture& source, double time, 
         return layer;
     }
     // Each pixel of the plane looked up on its own: rows shared out among the threads (10.1b).
+    const Placement::PlaneMap map = place.planeMap();
     detail::parallelRange(static_cast<std::size_t>(h), [&](std::size_t from, std::size_t to) {
         for (int py = static_cast<int>(from); py < static_cast<int>(to); ++py) {
             for (int px = 0; px < w; ++px) {
-                if (const auto at = place.planePoint(px + 0.5 - w / 2.0, h / 2.0 - (py + 0.5))) lookAt(fg, place, look, at->first, at->second, layer.pixel(px, py));
+                if (const auto at = map.at(px + 0.5 - w / 2.0, h / 2.0 - (py + 0.5))) lookAt(fg, place, look, at->first, at->second, layer.pixel(px, py));
             }
         }
     }, 16);

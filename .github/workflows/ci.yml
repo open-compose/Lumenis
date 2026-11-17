@@ -63,6 +63,12 @@ jobs:
           LUMENIS_PATENT_CODECS_OFF: '1'
         run: ctest --preset ci -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
 
+      - name: Benchmarks
+        # The performance check on GitHub's runner (ROADMAP 10.1c; docs/spec/performance.md): three runs of the
+        # benchmarks, each one's median of them compared with this runner's recorded times (a margin of its own: the
+        # hosts differ from run to run), the times printed for recording (scripts/perf.py --record-from <log>).
+        run: python3 scripts/perf.py --bench build/ci/bin/lumenis_bench --machine github-ubuntu-24.04 --repeat 3 --print-times
+
       - name: Logs of failed tests
         # QTest's own report, written to a file as well: ctest's capture can
         # lose it (BUILDING.md).
@@ -296,6 +302,12 @@ jobs:
           LUMENIS_PATENT_CODECS_OFF: '1'
         run: ctest --preset ci-macos -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
 
+      - name: Benchmarks
+        # The performance check on GitHub's runner (ROADMAP 10.1c; docs/spec/performance.md): three runs of the
+        # benchmarks, each one's median of them compared with this runner's recorded times (a margin of its own: the
+        # hosts differ from run to run), the times printed for recording (scripts/perf.py --record-from <log>).
+        run: python3 scripts/perf.py --bench build/ci-macos/bin/lumenis_bench --machine github-${{ matrix.os }} --repeat 3 --print-times
+
       - name: Logs of failed tests
         # QTest's own report, written to a file as well: ctest's capture can
         # lose it (BUILDING.md).
@@ -429,6 +441,16 @@ jobs:
         run: |
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
           ctest --preset ci -R 'tst_media$|tst_managed_media|tst_movie_export|tst_proxy|tst_render_ui|tst_copy_media|tst_send_to|tst_dcp'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Benchmarks
+        # The performance check on GitHub's runner (ROADMAP 10.1c; docs/spec/performance.md): three runs of the
+        # benchmarks, each one's median of them compared with this runner's recorded times (a margin of its own: the
+        # hosts differ from run to run), the times printed for recording (scripts/perf.py --record-from <log>).
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          python scripts/perf.py --bench build\ci\bin\lumenis_bench.exe --machine github-windows-2022 --repeat 3 --print-times
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Logs of failed tests

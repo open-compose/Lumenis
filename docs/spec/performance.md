@@ -36,8 +36,14 @@ unless the operating system provides them (ROADMAP Phase 10, the owner's answers
 * ctest `perf_benchmarks_run` runs every benchmark once in the ordinary test run, so a change that breaks one fails
   there. ctest `perf_compare` (label `perf`) is the timed comparison; the test presets leave it out, and
   `ctest --preset perf` runs it alone.
-* Times on shared CI machines vary from run to run; the hosted runners' baselines (after the repository is public,
-  10.0) are recorded from several runs, and the margin is the baseline's to widen.
+* GitHub's hosted runners (10.1c): the Linux (system Qt), both macOS and the Windows jobs of CI run
+  `scripts/perf.py --repeat 3 --print-times` after the tests, as machines `github-ubuntu-24.04`, `github-macos-15`,
+  `github-macos-26` and `github-windows-2022`. Each benchmark's time is the median of its three runs' medians, and the
+  times are printed between `perf-times-begin` and `perf-times-end` lines. A runner's host changes from run to run, so
+  its baseline comes from several CI runs (`scripts/perf.py --record-from <saved job logs> --machine <name> --margin
+  1.0`, the median of every run's times) with a margin of its own in its entry: a benchmark fails CI when it is twice
+  its recorded time. Slower and much faster benchmarks are also annotations on the run. Until a runner has a baseline
+  the step only reports.
 
 ## Profiling (10.1b)
 
@@ -55,9 +61,14 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `compose_dissolve_1080p` | (about 110 ms) | about 50 ms | memory traffic: both sides copied into the transition, and every blend making a new picture, zeroed before it was written |
 | `compose_blur_1080p` | 223 ms | about 120 ms | the benchmark had no object, so it timed a copy (the Blur Effect shows the picture as it is without one, FX Guide p.392); with one over most of the frame, the box blur ran on one thread and down the picture a pixel per row |
 | `compose_3d_warp_1080p` | (about 116 ms fastest) | about 100 ms fastest | a copy of the background; Shadow and Trail's sparkle on one thread |
+| `compose_3d_warp_1080p` | about 103 ms fastest | about 73 ms fastest | `planePoint` (Cramer's rule, three divisions) solved for every pixel; its determinants are linear in the screen point, so `Placement::planeMap` works the map out once a frame, two linear forms over a third (the same points to within 2e-11 of a pixel, checked over the benchmark's frame and every 3D Warp test) |
+| `compose_blur_1080p` | about 119 ms fastest | about 112 ms fastest | a division for every value the box blur writes, and two clamps per pixel; now the window's reciprocal, and the edges apart from the middle (test `tst_compositor boxBlurMatchesAPlainOne` against a plain blur) |
 | `compose_color_correction_1080p` | (about 163 ms fastest) | about 105-120 ms fastest | the luma ranges' shares (a walk of three curves) worked out for every pixel when no Shadows, Midtones or Highlights control was set, unused ranges blended in, and the hue and wheels' sines and cosines per pixel; the results are the same value for value |
 
-Looked at and left as they are: the audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
+Looked at and left as they are: `seek_ffv1_1080p` takes about seven times a frame in order because FFmpeg's FFV1
+encoder leaves a keyframe only every 12 frames, so a seek decodes up to 11 frames first; the media Cutthulhu makes is
+intra-frame (DNx, ProRes), and only the benchmark and the soak write FFV1. The 3D Warp's bilinear `sample` is four
+reads and multiplies a value; what is left of its cost is the call. The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
 generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
 
 The compositor's memory traffic (a 1080p picture is 33 MB of floats): `over` and `mix` have versions that take a

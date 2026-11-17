@@ -12,6 +12,11 @@
 #include <QJsonArray>
 #include <QTest>
 
+namespace lumenis::media::detail {
+// The Blur Effect's box blur (src/media/effect_drawing.h), tested against a plain one below.
+void blurPicture(Picture& picture, int rx, int ry);
+} // namespace lumenis::media::detail
+
 using namespace lumenis;
 using namespace lumenis::media;
 using namespace lumenis::model;
@@ -85,6 +90,55 @@ class TestCompositor : public QObject {
     Q_OBJECT
 
 private slots:
+    void boxBlurMatchesAPlainOne() {
+        // The blur's sums are worked out in place, a group of columns at a time and with the edges apart from the
+        // middle (10.1b); a plain clamped window average, three times along each axis, must give the same values,
+        // also for lines shorter than the window.
+        auto plain = [](media::Picture p, int r, bool horizontal) {
+            if (r <= 0) return p;
+            const int w = p.width(), h = p.height();
+            const int n = horizontal ? w : h, lines = horizontal ? h : w;
+            for (int pass = 0; pass < 3; ++pass) {
+                const media::Picture before = p;
+                for (int l = 0; l < lines; ++l) {
+                    for (int i = 0; i < n; ++i) {
+                        for (int c = 0; c < 4; ++c) {
+                            double sum = 0;
+                            for (int k = i - r; k <= i + r; ++k) {
+                                const int at = std::clamp(k, 0, n - 1);
+                                sum += static_cast<double>(horizontal ? before.pixel(at, l)[c] : before.pixel(l, at)[c]);
+                            }
+                            (horizontal ? p.pixel(i, l) : p.pixel(l, i))[c] = static_cast<float>(sum / (2.0 * r + 1.0));
+                        }
+                    }
+                }
+            }
+            return p;
+        };
+        for (const QSize size : {QSize(1, 1), QSize(3, 2), QSize(7, 5), QSize(40, 9), QSize(33, 70)}) {
+            for (const int r : {0, 1, 2, 5, 20}) {
+                media::Picture p(size.width(), size.height());
+                for (int y = 0; y < size.height(); ++y) {
+                    for (int x = 0; x < size.width(); ++x) {
+                        float* v = p.pixel(x, y);
+                        for (int c = 0; c < 4; ++c) v[c] = static_cast<float>(((x * 7 + y * 13 + c * 5) % 17) / 16.0);
+                    }
+                }
+                media::Picture got = p;
+                media::detail::blurPicture(got, r, r);
+                const media::Picture want = plain(plain(p, r, true), r, false);
+                for (int y = 0; y < size.height(); ++y) {
+                    for (int x = 0; x < size.width(); ++x) {
+                        for (int c = 0; c < 4; ++c) {
+                            QVERIFY2(std::abs(got.pixel(x, y)[c] - want.pixel(x, y)[c]) < 1e-5f,
+                                     qPrintable(QStringLiteral("%1x%2 r %3 at %4,%5").arg(size.width()).arg(size.height()).arg(r).arg(x).arg(y)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     void tracksBottomToTop() {
         Sequence seq = Sequence::withDefaultTracks();
         seq.addTrack(TrackKind::Video);

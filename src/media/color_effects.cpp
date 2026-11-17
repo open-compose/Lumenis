@@ -45,7 +45,7 @@ void boxBlur(Picture& p, int r, bool horizontal) {
     constexpr int kColumns = 16;
     const int group = horizontal ? 1 : kColumns;
     const std::size_t groups = static_cast<std::size_t>((lines + group - 1) / group);
-    const double count = 2.0 * r + 1.0;
+    const double scale = 1.0 / (2.0 * r + 1.0);
     float* data = p.data().data();
     const std::size_t stride = static_cast<std::size_t>(w) * 4;
     // Where value c of pixel i of line l is.
@@ -72,15 +72,26 @@ void boxBlur(Picture& p, int r, bool horizontal) {
                     const float* v = at(i);
                     for (std::size_t k = 0; k < used; ++k) sum[k] += static_cast<double>(v[k]);
                 }
-                for (int i = 0; i < n; ++i) {
+                // One output and the window moved on, for pixel i; the sum times the window's reciprocal (a division
+                // per value was a third of the blur's time).
+                auto step = [&](int i, const float* add, const float* drop) {
                     float* o = data + offset(first, i);
-                    const float* add = at(i + r + 1);
-                    const float* drop = at(i - r);
                     for (std::size_t k = 0; k < used; ++k) {
-                        o[k] = static_cast<float>(sum[k] / count);
+                        o[k] = static_cast<float>(sum[k] * scale);
                         sum[k] += static_cast<double>(add[k]) - static_cast<double>(drop[k]);
                     }
+                };
+                // The edges, where the window reaches past the line and is held at its end, apart from the middle,
+                // where it does not and needs no clamping.
+                const int lo = std::min(r, n);
+                const int hi = std::max(lo, n - r - 1);
+                for (int i = 0; i < lo; ++i) step(i, at(i + r + 1), at(i - r));
+                if (lo < hi) {
+                    const float* add = line.data() + static_cast<std::size_t>(lo + r + 1) * width;
+                    const float* drop = line.data() + static_cast<std::size_t>(lo - r) * width;
+                    for (int i = lo; i < hi; ++i, add += width, drop += width) step(i, add, drop);
                 }
+                for (int i = hi; i < n; ++i) step(i, at(i + r + 1), at(i - r));
             }
         }
     }, 1);

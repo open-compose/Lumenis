@@ -308,17 +308,20 @@ QList<Benchmark> benchmarks(const QString& dir, ui::MainWindow& window) {
         ~BinUi() { reset(); }
     };
     auto shown = std::make_shared<BinUi>();
-    list << Benchmark{QStringLiteral("bin_show_10k"), QStringLiteral("opening a bin of 10,000 clips in a Bin view"), 3, {}, [bin, binPath, shown] {
-                          shown->reset();
-                          shown->document = std::make_unique<ui::BinDocument>(QStringLiteral("bench"), binPath, *bin);
-                          shown->view = std::make_unique<ui::BinView>(*shown->document, nullptr);
-                          shown->view->resize(900, 700);
-                          shown->view->show();
-                          QCoreApplication::processEvents();
-                          return true;
-                      }};
+    auto openView = [bin, binPath, shown] {
+        shown->reset();
+        shown->document = std::make_unique<ui::BinDocument>(QStringLiteral("bench"), binPath, *bin);
+        shown->view = std::make_unique<ui::BinView>(*shown->document, nullptr);
+        shown->view->resize(900, 700);
+        shown->view->show();
+        QCoreApplication::processEvents();
+        return true;
+    };
+    list << Benchmark{QStringLiteral("bin_show_10k"), QStringLiteral("opening a bin of 10,000 clips in a Bin view"), 3, {}, openView};
     auto ascending = std::make_shared<bool>(true);
-    list << Benchmark{QStringLiteral("bin_sort_10k"), QStringLiteral("sorting a bin of 10,000 clips by Name"), 5, {}, [shown, ascending] {
+    // Its own view when bin_show_10k has not opened one (run alone with --only, which failed before).
+    list << Benchmark{QStringLiteral("bin_sort_10k"), QStringLiteral("sorting a bin of 10,000 clips by Name"), 5,
+                      [shown, openView] { return shown->view ? true : openView(); }, [shown, ascending] {
                           if (!shown->view) return false;
                           shown->view->sortOn(QStringLiteral("Name"), *ascending);
                           *ascending = !*ascending;
