@@ -1160,8 +1160,14 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   presets, `scripts/build-release-ffmpeg.sh`, a draft GitHub Release with checksums and symbols; INSTALL.md, BUILDING.md
   "Releases"), is done but its first run. Tests must pass with `LUMENIS_PATENT_CODECS_OFF=1` too (the release workflow
   runs them with patent codecs off): skip only what the operating system cannot do, never DNx. 12.3, the release gate
-  (docs/checklists/release-gate.md), is done, so Phase 12's steps are; what is left is the first release run and the
-  owner's checks. Versions are YEAR.N, worked out by the release workflow (docs/spec/versioning.md): never edit
+  (docs/checklists/release-gate.md), is done, so Phase 12's steps are. **Cutthulhu 2026.1, the first release, was
+  published on 2026-11-16** (ROADMAP's Phase 12 status; what its first runs found is in BUILDING.md "The first release
+  run failed (2026-11-16)"). The next release: Actions > Release on `main` with no version. Before a release run, run
+  a changed packaging step's shell locally on a dummy folder (each run takes an hour). Media Foundation's encoders
+  refuse the GUI thread's single-threaded COM apartment, so `MediaWriter` calls them on an `EncoderThread`
+  (`LUMENIS_ENCODER_THREAD=1` sends every encoder there, for tests); a new encoder call goes through `onEncoder`.
+  Left from the release gate: the update check from an older build, the owner's soak and screen-reader runs, the
+  translation reviews and the seat's gates. Versions are YEAR.N, worked out by the release workflow (docs/spec/versioning.md): never edit
   `PRODUCT_VERSION` for a release. The About box names no other company (the owner's decision, 2026-11-15).
   Name new features generically; ctest `trademark_names` checks.
   The owner's report that Export to File made no movie on Windows 11 was the Windows FFmpeg without H.264/H.265

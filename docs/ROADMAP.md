@@ -1,6 +1,7 @@
 # Cutthulhu — Project Plan and Roadmap
 
-Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push.
+Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push. The first
+release, 2026.1, was published on 2026-11-16 (Phase 12's status).
 
 ## 1. Goal and honest scope
 
@@ -1985,13 +1986,25 @@ owner's soak and screen-reader runs carry on as before.
   FFmpeg per the owner's decision of 2026-11-15: `scripts/build-release-ffmpeg.sh` (LGPL, the encoders awaiting review
   left out) on macOS and in the AppImage, BtbN's LGPL build on Windows, the distribution's in the .deb and .tar.gz;
   INSTALL.md's unsigned packages, checksums and codecs; BUILDING.md "Releases"; the tests run under the release
-  policy, with `LUMENIS_PATENT_CODECS_OFF=1` locally). Not yet run: the first run is the owner's, once hosted minutes
-  allow.
+  policy, with `LUMENIS_PATENT_CODECS_OFF=1` locally). First run 2026-11-16: the sixth run made 2026.1 (below).
 * 12.3, the release gate, 10.8 (done: docs/checklists/release-gate.md with the release run on each platform, Phase 10's
   steps and what is left of each, the gates the phases left open with their reasons, and the owner's try of a release
   candidate on each OS; ticking it is the owner's). Versions are YEAR.N (the owner's decision, 2026-11-15;
-  docs/spec/versioning.md), worked out by the release workflow from the year's releases. So Phase 12's steps are done: what is left is the first release
-  run, the owner's checks, 10.0's steps that are theirs, and 10.1b/c.
+  docs/spec/versioning.md), worked out by the release workflow from the year's releases. So Phase 12's steps are done.
+
+**Status (Phase 12, 2026-11-17): Cutthulhu 2026.1, the first release, was published on 2026-11-16** (tag `v2026.1`):
+the Windows .msi and .zip, the macOS arm64 .dmg, the Linux AppImage, .deb and .tar.gz, their symbols and
+SHA256SUMS.txt. The owner tried the Windows package on Windows 11 before publishing. The first five runs failed on
+things only the release builds do, each fixed with a check (BUILDING.md "The first release run failed (2026-11-16)"):
+the writer refusing the operating systems' encoders with the patent codecs off, proxies refused, OS encoders present
+but not working (`osEncoderFor` opens them), the release FFmpeg 7.1.1 against SVT-AV1 3.x and its ProRes colours on
+macOS (now 9.0.2, as CI tests), Qt 6.8's `QTRY_COMPARE` under GCC 13, and two shell slips in the AppImage steps. The
+Windows candidate then could not export H.264: Media Foundation's encoders refuse Qt's single-threaded GUI thread, so
+they now run on a thread of the writer's own (`EncoderThread`; BUILDING.md "Export says H.264 is not available on
+Windows"). Next releases: run Actions > Release on `main` with no version (2026.2 and on; BUILDING.md "Releases").
+Left from the release gate (docs/checklists/release-gate.md): checking the update check from an older build now that a
+release exists, the owner's soak and screen-reader runs, the native speakers' reviews of the translations, the gates
+waiting for the Media Composer seat, 10.0's steps that are the owner's, and 10.1b/c.
 
 ## 6. Immediate next steps
 
