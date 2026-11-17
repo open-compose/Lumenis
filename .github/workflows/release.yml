@@ -133,7 +133,10 @@ jobs:
           ls "$app"/Contents/Frameworks/libavcodec*.dylib
           "$app/Contents/MacOS/Cutthulhu" --version
           "$app/Contents/MacOS/Cutthulhu" --smoke-test
-          hdiutil detach "$mnt"
+          # The volume can still be busy for a moment after the app quits (Spotlight indexing it, "Resource busy",
+          # CI 2026-11-17): a few tries, then forced.
+          for try in 1 2 3 4 5; do hdiutil detach "$mnt" && break; sleep 3; done
+          if mount | grep -q "/$(basename "$mnt") "; then hdiutil detach -force "$mnt"; fi
       - name: Debug symbols (dSYM)
         run: |
           xcrun dsymutil build/dist-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu -o build/dist-macos/Cutthulhu.dSYM

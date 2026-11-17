@@ -1046,7 +1046,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   so 9.8 and Phase 9's steps are.
   Phase 10's step plan (10.0-10.8) and the owner's answers are in ROADMAP; the repository goes public after Phase 10.
   10.1a, the benchmarks (docs/spec/performance.md: `tests/perf/bench.cpp` as `lumenis_bench`, `scripts/perf.py` with
-  `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1b, the slow paths,
+  `tests/data/perf_baseline.json`, ctest `perf_benchmarks_run`, `ctest --preset perf`), is done. 10.1c, the hosted
+  runners' baselines, is done: CI's Linux, macOS and Windows jobs run `scripts/perf.py --repeat 3 --print-times` as
+  `github-<runner>`, each with a margin of its own; record again from saved job logs with `--record-from` (they hold the
+  times between `perf-times` lines) when a change makes benchmarks much faster. 10.1b, the slow paths,
   has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
   in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects).
   10.2, long-run stability (docs/spec/soak.md: `--soak <hours>` in `src/ui/soak.*`, `scripts/soak-check.py`, ctest

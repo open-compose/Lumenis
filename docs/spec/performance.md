@@ -42,7 +42,9 @@ unless the operating system provides them (ROADMAP Phase 10, the owner's answers
   times are printed between `perf-times-begin` and `perf-times-end` lines. A runner's host changes from run to run, so
   its baseline comes from several CI runs (`scripts/perf.py --record-from <saved job logs> --machine <name> --margin
   1.0`, the median of every run's times) with a margin of its own in its entry: a benchmark fails CI when it is twice
-  its recorded time. Slower and much faster benchmarks are also annotations on the run. Until a runner has a baseline
+  its recorded time, three times on Linux. The first baselines (2026-11-17) come from three CI runs, nine runs of the
+  benchmarks each: Windows' runs varied by under 7%, macOS's by up to 1.7 times, and Linux's by up to 2.3 times (one run
+  landed on a slow host), hence its margin of 2.0. Slower and much faster benchmarks are also annotations on the run. Until a runner has a baseline
   the step only reports.
 
 ## Profiling (10.1b)

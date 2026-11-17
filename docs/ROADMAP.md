@@ -1719,7 +1719,13 @@ The items:
     they are written whole, a 1080p dissolve from about 110 to 50 ms; the box blurs on threads and by column groups, the blur benchmark given an
     object to blur within (it timed a copy), 223 to about 120 ms; the 3D Warp's background moved in; the HSL group's ranges only when one is set and its
     sines and cosines once a picture, a Color Correction frame from about 163 to 105-120 ms; next: lighter pixels and the
-    other effects' copies); 10.1c, the baselines recorded on the hosted runners after 10.0.
+    other effects' copies; 2026-11-17: the 3D Warp's screen-to-plane map once a frame, 103 to 73 ms, and the box blur's
+    division and clamps out of its loop; open, the audio mix three to four times slower on macOS and Windows than on
+    Linux, to profile there); 10.1c, the baselines recorded on the hosted runners (done 2026-11-17: the Linux, macOS 15
+    and 26 and Windows CI jobs run the benchmarks three times after the tests through `scripts/perf.py --repeat 3
+    --print-times`; each runner's baseline in tests/data/perf_baseline.json from three CI runs' logs through
+    `--record-from`, with a margin of its own: Linux's runs varied up to 2.3 times, so it fails at three times its time,
+    the others at twice).
   * 10.2, long-run stability. Add a `--soak <hours>` mode that loops playback of the sample project's sequences
     with effects, renders and scrubbing, and logs memory, handles, threads and dropped frames every minute. A
     script checks the log for growth. Run 72 hours once on each OS (the owner's machines). Also run AddressSanitizer
@@ -2037,8 +2043,9 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **Work that can go ahead now**
 
-11. 10.1b, the slow paths, and 10.1c, the performance baselines recorded on the hosted runners (docs/spec/performance.md,
-    `scripts/perf.py`).
+11. 10.1b, the slow paths (next: the audio mix on macOS and Windows, profiled there; lighter pixels; the effects'
+    copies). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
+    benchmark much faster (the step's notices say which).
 12. The left-over items recorded in Phase 11's status: DNxHD 10 and 100, the settings options still marked `"later"`
     (11.4f), Live mode on surround pans (11.4d), Time Shift's Formant shift and Follow (11.2).
 13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,

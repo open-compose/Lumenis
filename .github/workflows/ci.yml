@@ -348,7 +348,10 @@ jobs:
           plutil -extract NSMicrophoneUsageDescription raw "$mnt/Cutthulhu.app/Contents/Info.plist"
           "$app" --version
           "$app" --smoke-test
-          hdiutil detach "$mnt"
+          # The volume can still be busy for a moment after the app quits (Spotlight indexing it, "Resource busy",
+          # CI 2026-11-17): a few tries, then forced.
+          for try in 1 2 3 4 5; do hdiutil detach "$mnt" && break; sleep 3; done
+          if mount | grep -q "/$(basename "$mnt") "; then hdiutil detach -force "$mnt"; fi
 
       - uses: actions/upload-artifact@v4
         continue-on-error: true

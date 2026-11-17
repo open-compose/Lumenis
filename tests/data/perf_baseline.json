@@ -1,6 +1,107 @@
 {
   "comment": "The benchmarks' recorded median times in milliseconds, per machine (ROADMAP 10.1; docs/spec/performance.md; scripts/perf.py --record writes them). A benchmark fails when it is more than 'margin' slower than its machine's time here and also more than 'floor_ms' slower.",
   "floor_ms": 2.0,
-  "machines": {},
+  "machines": {
+    "github-macos-15": {
+      "benchmarks": {
+        "audio_mix_16_tracks": 147.03,
+        "bin_read_10k": 44.28,
+        "bin_show_10k": 6.4,
+        "bin_sort_10k": 22.64,
+        "bin_write_10k": 82.2,
+        "compose_3d_warp_1080p": 38.9,
+        "compose_blur_1080p": 76.27,
+        "compose_color_correction_1080p": 37.22,
+        "compose_dissolve_1080p": 20.98,
+        "decode_ffv1_1080p": 128.59,
+        "encode_ffv1_1080p": 256.74,
+        "seek_ffv1_1080p": 344.61,
+        "timeline_paint_16x400": 6.8
+      },
+      "machine": {
+        "cpu": "arm64",
+        "host": "iad20-eo1209-6cfb6b5a-e3ac-4d96-8ddd-d4f32f88a528-569638793DDF.local",
+        "os": "macOS Sequoia (15.8)",
+        "threads": 3
+      },
+      "margin": 1.0,
+      "runs": 9
+    },
+    "github-macos-26": {
+      "benchmarks": {
+        "audio_mix_16_tracks": 152.49,
+        "bin_read_10k": 38.48,
+        "bin_show_10k": 6.65,
+        "bin_sort_10k": 24.01,
+        "bin_write_10k": 86.67,
+        "compose_3d_warp_1080p": 34.83,
+        "compose_blur_1080p": 57.43,
+        "compose_color_correction_1080p": 43.31,
+        "compose_dissolve_1080p": 17.69,
+        "decode_ffv1_1080p": 134.74,
+        "encode_ffv1_1080p": 291.37,
+        "seek_ffv1_1080p": 428.93,
+        "timeline_paint_16x400": 6.62
+      },
+      "machine": {
+        "cpu": "arm64",
+        "host": "sat12-bq164-3f9d606f-2f9e-4a3a-abc7-1837823414ae-9662888B1646.local",
+        "os": "macOS 26.7",
+        "threads": 3
+      },
+      "margin": 1.0,
+      "runs": 9
+    },
+    "github-ubuntu-24.04": {
+      "benchmarks": {
+        "audio_mix_16_tracks": 47.57,
+        "bin_read_10k": 59.67,
+        "bin_show_10k": 5.79,
+        "bin_sort_10k": 17.58,
+        "bin_write_10k": 85.52,
+        "compose_3d_warp_1080p": 71.83,
+        "compose_blur_1080p": 122.95,
+        "compose_color_correction_1080p": 99.22,
+        "compose_dissolve_1080p": 50.71,
+        "decode_ffv1_1080p": 140.06,
+        "encode_ffv1_1080p": 441.3,
+        "seek_ffv1_1080p": 399.61,
+        "timeline_paint_16x400": 7.42
+      },
+      "machine": {
+        "cpu": "x86_64",
+        "host": "ip-10-0-133-68",
+        "os": "Ubuntu 24.04.5 LTS",
+        "threads": 4
+      },
+      "margin": 2.0,
+      "runs": 9
+    },
+    "github-windows-2022": {
+      "benchmarks": {
+        "audio_mix_16_tracks": 136.94,
+        "bin_read_10k": 98.55,
+        "bin_show_10k": 10.31,
+        "bin_sort_10k": 42.21,
+        "bin_write_10k": 187.51,
+        "compose_3d_warp_1080p": 91.52,
+        "compose_blur_1080p": 134.41,
+        "compose_color_correction_1080p": 91.54,
+        "compose_dissolve_1080p": 50.14,
+        "decode_ffv1_1080p": 162.04,
+        "encode_ffv1_1080p": 367.26,
+        "seek_ffv1_1080p": 471.2,
+        "timeline_paint_16x400": 13.03
+      },
+      "machine": {
+        "cpu": "x86_64",
+        "host": "runnervm9zap3",
+        "os": "Windows Server 2022 Version 21H2",
+        "threads": 4
+      },
+      "margin": 1.0,
+      "runs": 9
+    }
+  },
   "margin": 0.3
 }

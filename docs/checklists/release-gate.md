@@ -18,7 +18,7 @@ made (BUILDING.md "Releases").
 
 | Step | State | What is left |
 |---|---|---|
-| 10.1 performance | 10.1a done; 10.1b started | 10.1c: the baselines recorded on the hosted runners (`scripts/perf.py`) |
+| 10.1 performance | 10.1a and 10.1c done (the hosted runners' baselines, 2026-11-17); 10.1b started | 10.1b: the audio mix on macOS and Windows, profiled there (docs/spec/performance.md) |
 | 10.2 long-run stability | done but the runs | 72-hour soaks on each OS (Windows passed 2026-11-17; Linux stopped at 64.6 hours, again; macOS) and the sanitizer soaks (docs/spec/soak.md "The runs"), the owner's |
 | 10.3 accessibility | done but the hand check | docs/checklists/screen-readers.md with VoiceOver, Narrator or NVDA, and Orca, the owner's |
 | 10.4 localisation | done but the reviews | native speakers' reviews of German, French, Italian and Irish (translations/glossary_*.md) |
