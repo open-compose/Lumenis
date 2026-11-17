@@ -68,7 +68,12 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 Looked at and left as they are: `seek_ffv1_1080p` takes about seven times a frame in order because FFmpeg's FFV1
 encoder leaves a keyframe only every 12 frames, so a seek decodes up to 11 frames first; the media Cutthulhu makes is
 intra-frame (DNx, ProRes), and only the benchmark and the soak write FFV1. The 3D Warp's bilinear `sample` is four
-reads and multiplies a value; what is left of its cost is the call. The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
+reads and multiplies a value; what is left of its cost is the call. Open: `audio_mix_16_tracks` takes 47 ms on GitHub's
+Linux runner but 150-180 ms on macOS and 134 ms on Windows (2026-11-17). Its 16 pieces come from 8 places in one stereo
+file, and readers are kept by file, stream and channel (`AudioMix::reader`), so two readers seek between 8 places on
+every block: on Linux 60% of the mix is those seeks and decoding, and opening a reader costs 80 million instructions
+(FFmpeg probing the WAV's data). A reader per source offset made Linux 40% slower (16 opens), so it was not kept; where
+the time goes on macOS and Windows needs Instruments and WPA there (BUILDING.md "Profiling"). The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
 generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
 
 The compositor's memory traffic (a 1080p picture is 33 MB of floats): `over` and `mix` have versions that take a
