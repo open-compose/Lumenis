@@ -2008,10 +2008,45 @@ waiting for the Media Composer seat, 10.0's steps that are the owner's, and 10.1
 
 ## 6. Immediate next steps
 
-1. Decide §2.2 (module exception and/or CLA) before accepting outside
-   contributions.
-2. Do Phase 0 gate 4: a person follows BUILDING.md on a fresh VM for each OS.
-3. Start `docs/spec/ui-inventory.md`, a window-by-window and
-   menu-by-menu inventory taken from the public Media Composer User Guide.
-   It drives Phase 1 gate 2.
-4. Start assembling the media and bin test corpus.
+Updated 2026-11-17, after the first release (2026.1, Phase 12's status). The steps that build software are done; what
+is left is mostly checks only a person can do, decisions, and work that waits on hardware, a licence or a seat.
+
+**Before outside contributions**
+
+1. Decide §2.2: the module exception and/or a CLA. The community files wait for it (10.0: README for users,
+   CONTRIBUTING with adding a language, SECURITY, issue templates for bugs and crashes).
+2. Ask counsel the questions in docs/spec/release-codecs.md "Watch": FFmpeg's H.264, HEVC and ProRes decoder front ends
+   kept for the hardware decoders, and BtbN's LGPL Windows build carrying FFmpeg's own AAC and ProRes encoders, which
+   the policy refuses but the DLL still contains.
+
+**Checks on the published release**
+
+3. Help > Check for Updates from an older build offers 2026.1 (10.6, release gate §2).
+4. A crash from a release package reads as functions and lines with its symbols (10.5, BUILDING.md "Crash reports").
+5. Tick docs/checklists/release-gate.md §4 on macOS and Linux (the Windows package was tried before publishing).
+
+**The owner's runs and reviews**
+
+6. The 72-hour soaks on each OS and the sanitizer soaks (10.2, BUILDING.md "Soak runs").
+7. The screen-reader checks (10.3d, docs/checklists/screen-readers.md).
+8. Native speakers' reviews of the German, French, Italian and Irish drafts (10.4, translations/glossary_*.md).
+9. Phase 0 gate 4 on Linux (a person following BUILDING.md on a fresh machine) and Phase 1 gate 5, the editor's
+   session (docs/checklists/phase1-gate5.md).
+10. Run 423, stuck queued, deleted from the Actions page or by GitHub Support (10.0).
+
+**Work that can go ahead now**
+
+11. 10.1b, the slow paths, and 10.1c, the performance baselines recorded on the hosted runners (docs/spec/performance.md,
+    `scripts/perf.py`).
+12. The left-over items recorded in Phase 11's status: DNxHD 10 and 100, the settings options still marked `"later"`
+    (11.4f), Live mode on surround pans (11.4d), Time Shift's Formant shift and Follow (11.2).
+13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
+    released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
+
+**Waiting on a seat, hardware or a licence**
+
+14. With the licensed Media Composer seat again: Phase 2 gate 2's linking (M), Phase 3 gates 2 and 3 (our bins and
+    AAF through Media Composer and back), Phase 4 gate 1's reference sequences, Phase 5's reference renders, and 3.5
+    (`.avp` projects and `.avs` settings, once there are samples).
+15. With the SDKs and hardware: 7.3c, the AJA and Blackmagic modules, and the video output hardware gate.
+16. DCP validation once asdcplib is on a runner; XAVC Intra and DNxUncompressed once an open encoder exists (11.1).
