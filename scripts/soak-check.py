@@ -158,6 +158,22 @@ def main():
         problems.append("fields")
     if any("badLine" in n for n in notes[:-1]):
         problems.append("bad lines")  # only the last line may be cut short (a killed run)
+    # How the run ended: its closing line ({"ended": {"code": ...}}, written since 2026-11-17), or, in a log without one,
+    # whether the samples reach the hours asked for. A run that crashed, was killed or lost its computer stops without
+    # it; the owner's first Linux soak stopped at 64.6 of 72 hours and passed unnoticed.
+    ended = next((n["ended"] for n in notes if "ended" in n), None)
+    stoppedEarly = None
+    if ended is not None:
+        if ended.get("code", 0) != 0 and not stalled:
+            problems.append("ended")
+    elif args.app:
+        problems.append("no closing line")  # the app run here writes one (ctest soak_smoke)
+    elif header and samples and not header.get("cycles"):
+        wanted = float(header.get("hours", 0)) * 3600.0
+        interval = float(header.get("interval", 60))
+        if wanted > 0 and samples[-1]["t"] < wanted - 2 * interval:
+            stoppedEarly = (samples[-1]["t"] / 3600.0, wanted / 3600.0)
+            problems.append("stopped early")
     summary = {
         "header": header,
         "hours": round(samples[-1]["t"] / 3600.0, 3) if samples else 0,
@@ -167,6 +183,7 @@ def main():
         "droppedShare": round(dropped / (shown + dropped), 4) if shown + dropped else 0.0,
         "closedDialogs": sorted(set(dialogs)),
         "figures": results,
+        "ended": ended,
         "problems": problems,
     }
     if args.json:
@@ -181,6 +198,11 @@ def main():
                   f"(allowed {r['allowedPerHour']:g}; quarters {r['secondQuarter']:.1f} -> {r['lastQuarter']:.1f}{note})")
         if dialogs:
             print("  dialogs the soak closed: " + ", ".join(sorted(set(dialogs))))
+        if stoppedEarly:
+            print(f"  FAIL stopped at {stoppedEarly[0]:.1f} of {stoppedEarly[1]:g} hours without its closing line: it crashed, "
+                  "was killed or its computer stopped (look in Crash Reports, BUILDING.md \"Crash reports\")")
+        if ended is not None and "ended" in problems:
+            print(f"  FAIL ended with exit code {ended.get('code')}")
         if stalled:
             print("  FAIL stalled at step " + ", ".join(str(n["stalled"]) for n in stalled))
         if "cycles" in problems:

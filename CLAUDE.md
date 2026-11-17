@@ -1050,7 +1050,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
   in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects).
   10.2, long-run stability (docs/spec/soak.md: `--soak <hours>` in `src/ui/soak.*`, `scripts/soak-check.py`, ctest
-  `soak_smoke`; the `tsan` presets on the tests labelled `core`), is done but the owner's 72-hour runs (BUILDING.md
+  `soak_smoke`; the `tsan` presets on the tests labelled `core`), is done but the owner's 72-hour runs (Windows passed 2026-11-17, Linux stopped at 64.6 hours and runs again,
+  macOS to come; docs/spec/soak.md "The runs"; BUILDING.md
   "Soak runs"). Use `std::mutex`, not `QMutex`, for new locks (ThreadSanitizer follows it); a dialog that blocks needs a
   hook the soak can answer (as `MainWindow::setRenderHook`).
   10.4, localisation, is in four parts (ROADMAP; docs/spec/localisation.md). 10.4a, the infrastructure (`translations/`

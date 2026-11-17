@@ -40,6 +40,9 @@ crashed session. 10.2 runs what an editor does, in a loop, for hours, and checks
 
   Two other lines can appear: `{"closedDialog": <name>, "step": n}` when a dialog was still open at the next interval
   (it is closed so the run goes on; a progress dialog is working, not waiting, and is left alone), and `{"stalled": n}` when no cycle finished for ten minutes (the run ends, exit 1).
+  The last line, since 2026-11-17, is `{"ended": {"code": c, "seconds": s, "cycles": n}}` when the run ends by itself
+  (its hours or cycles done, a stall, a log it cannot write). It is not a sample (no `t`). A run that crashed, was
+  killed or lost its computer has none, and its log otherwise looks like a finished one.
 * `--soak-cycles <n>` also ends the run after that many cycles (ctest `soak_smoke` takes one, however slow the
   build); `--soak-seed` sets the scrub positions; `processStats()` gives the process's figures for each OS.
 
@@ -62,7 +65,10 @@ per hour **and** its last quarter is above its second (a cache that filled and s
 Where `heapMb` is given (Linux, macOS), memory is judged by it and `residentMb` is shown but not judged: resident
 memory also counts what the allocator keeps after it was freed (glibc's per-thread arenas, macOS's zones), which rises
 in steps as decoders' threads come and go and then stays, without a leak. On Windows `residentMb` (the working set) is
-judged. `--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; the dialogs the soak had to
+judged. `--max-<figure>` changes one. A stall always fails; too few cycles (`--min-cycles`) fails; an `ended` line with another code than 0 fails; a log
+without one whose samples stop more than two intervals short of the header's hours fails as "stopped early" (logs
+from before the closing line was written are judged this way too); a run the check starts itself (`--app`, ctest
+`soak_smoke`) fails without the closing line; the dialogs the soak had to
 close are listed. `--smoke` checks only the log's form, the cycles and stalls: ctest `soak_smoke` runs one cycle of
 it, which is too short to judge growth. Dropped frames are reported, not judged (they depend on the machine).
 
@@ -71,6 +77,16 @@ it, which is too short to judge growth. Dropped frames are reported, not judged 
 * **72 hours once on each OS** on the owner's machines (BUILDING.md "Soak runs"), and on GitHub's hosted runners once
   the repository is public: a job there may run 6 hours, so the hosted runs are six hours each.
 * **Sanitizer soaks of a few hours** with the `asan` and `tsan` presets (`--soak 3` under each).
+
+Results:
+
+| Run | OS | Hours | Cycles | Dropped | Result |
+| --- | --- | --- | --- | --- | --- |
+| received 2026-11-17 | Windows 11 25H2 | 71.98 of 72 | 11156 | 18.4% | passed: every figure flat (working set +0.11 MB/hour, handles +0.20/hour, GDI and USER objects flat) |
+| received 2026-11-17 | Ubuntu 26.04.1 | 64.60 of 72 | 11744 | 36.9% | not a pass: the figures are flat (heap +0.89 MB/hour; resident memory 1117 to 1695 MB, not judged, the heap is), but the log stops 7.4 hours short with no gap before it, so the run crashed, was killed or was stopped; to be run again |
+
+Both ran version 0.1.0 (development builds, before 2026.1). The dropped share is the whole loop's (scrubbing, reverse
+play and renders as well as playback), so it is reported, not judged.
 
 ## Found and fixed by the soak
 
@@ -87,6 +103,7 @@ it, which is too short to judge growth. Dropped frames are reported, not judged 
   cache and its decoders' threads came and went; resident memory rose 714 to 794 MB in six minutes while the heap in
   use stayed at 62-74 MB (with `MALLOC_ARENA_MAX=2`, one step to 570 MB and then flat). Not a leak: the allocator keeps
   what the threads freed. So the log has `heapMb` and the check judges it where it is given. Every line is a cycle's
-  end: the run writes no last line when it stops, which could fall in the middle of a render.
+  end: the run writes no last sample when it stops, which could fall in the middle of a render (only the closing
+  `ended` line).
 * **Clear Renders asked a question nobody answered** (an `exec()` dialog): the soak answers it through
   `MainWindow::setClearRendersHook`, and its watchdog closes any dialog left open and logs which.

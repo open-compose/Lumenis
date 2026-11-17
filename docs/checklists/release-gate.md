@@ -19,7 +19,7 @@ made (BUILDING.md "Releases").
 | Step | State | What is left |
 |---|---|---|
 | 10.1 performance | 10.1a done; 10.1b started | 10.1c: the baselines recorded on the hosted runners (`scripts/perf.py`) |
-| 10.2 long-run stability | done but the runs | 72-hour soaks on each OS and the sanitizer soaks (BUILDING.md "Soak runs"), the owner's |
+| 10.2 long-run stability | done but the runs | 72-hour soaks on each OS (Windows passed 2026-11-17; Linux stopped at 64.6 hours, again; macOS) and the sanitizer soaks (docs/spec/soak.md "The runs"), the owner's |
 | 10.3 accessibility | done but the hand check | docs/checklists/screen-readers.md with VoiceOver, Narrator or NVDA, and Orca, the owner's |
 | 10.4 localisation | done but the reviews | native speakers' reviews of German, French, Italian and Irish (translations/glossary_*.md) |
 | 10.5 crash reports | done | a crash from the release package reads as functions and lines with its symbols (BUILDING.md "Crash reports") |

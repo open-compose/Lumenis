@@ -1241,7 +1241,9 @@ fails when a figure keeps growing after the warm-up:
 For the owner's 72-hour runs, once on each OS: a release build (the package from the builds folder, or the `ci`
 preset), the machine left on with sleep off (macOS: `caffeinate -i` before the command; Windows: Power & sleep >
 Never), the window may be covered or minimised but not closed. Send the log back; the check prints each figure's growth
-per hour and what failed. A run that is stopped early still has a good log up to the last minute. Sanitizer soaks of a
+per hour and what failed. A run that is stopped early still has a good log up to the last minute, but the check fails
+it as "stopped early" (the log's last line, `{"ended": ...}`, is written only when the run ends by itself): if a run
+stops short, look in Crash Reports ("Crash reports" above) and say whether it was stopped by hand. Sanitizer soaks of a
 few hours (Linux or macOS; five to fifteen times slower, so fewer cycles):
 
     ASAN_OPTIONS=detect_leaks=0 build/asan/bin/cutthulhu --soak 3 --soak-log soak-asan.jsonl

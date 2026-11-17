@@ -503,11 +503,21 @@ void Soak::stopAll(int code) {
         shown_ += composer.playStats().shown - lastShown_;
         dropped_ += composer.playStats().dropped - lastDropped_;
     }
-    // No last line here: the run may end in the middle of a step (a render's buffers in use), and every line must be
-    // a cycle's end to compare with the others.
+    // No last sample here: the run may end in the middle of a step (a render's buffers in use), and every sample must
+    // be a cycle's end to compare with the others. The closing line is not a sample (no "t"); it tells a run that
+    // ended from one that crashed or was killed, which otherwise look the same (scripts/soak-check.py fails a log that
+    // stops short of its hours without it).
     sampleTimer_.stop();
     endTimer_.stop();
-    if (log_) log_->close();
+    if (log_) {
+        writeLine(QJsonDocument(QJsonObject{{QStringLiteral("ended"),
+                                             QJsonObject{{QStringLiteral("code"), code},
+                                                         {QStringLiteral("seconds"),
+                                                          static_cast<double>(QDateTime::currentMSecsSinceEpoch() - startedMs_) / 1000.0},
+                                                         {QStringLiteral("cycles"), cycles_}}}})
+                      .toJson(QJsonDocument::Compact));
+        log_->close();
+    }
     emit finished(code);
 }
 

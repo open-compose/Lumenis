@@ -2027,7 +2027,8 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **The owner's runs and reviews**
 
-6. The 72-hour soaks on each OS and the sanitizer soaks (10.2, BUILDING.md "Soak runs").
+6. The 72-hour soaks: Windows passed (2026-11-17); Linux again (its first run stopped at 64.6 hours); macOS; and the
+   sanitizer soaks (10.2, docs/spec/soak.md "The runs", BUILDING.md "Soak runs").
 7. The screen-reader checks (10.3d, docs/checklists/screen-readers.md).
 8. Native speakers' reviews of the German, French, Italian and Irish drafts (10.4, translations/glossary_*.md).
 9. Phase 0 gate 4 on Linux (a person following BUILDING.md on a fresh machine) and Phase 1 gate 5, the editor's
