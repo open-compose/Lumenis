@@ -19,6 +19,8 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 
+#include <algorithm>
+
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
@@ -421,9 +423,12 @@ private slots:
             QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Recording);
             QTRY_VERIFY_WITH_TIMEOUT(rig.position() >= 25, 4000);
             QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Recording);
-            rig.tool.record(); // punch out, past the end
+            // Punch out, past the end. The wait above can return late on a busy runner (macOS CI, 2026-11-17: the
+            // punch-out at 32 or later, so play stopped where the punch ended): play must go on past where it is now.
+            const std::int64_t punchedOut = rig.position();
+            rig.tool.record();
             QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Playing);
-            QTRY_VERIFY_WITH_TIMEOUT(rig.position() >= 32, 4000);
+            QTRY_VERIFY_WITH_TIMEOUT(rig.position() >= std::max<std::int64_t>(32, punchedOut + 3), 4000);
             const std::int64_t stopped = rig.position();
             rig.tool.stopTake();
             QCOMPARE(rig.tool.state(), AudioPunchInTool::State::Idle);
