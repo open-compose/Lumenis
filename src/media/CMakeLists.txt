@@ -130,6 +130,12 @@ if(TARGET OpenColorIO::OpenColorIO)
     target_compile_definitions(lumenis_media PRIVATE LUMENIS_HAVE_OCIO=1)
 endif()
 lumenis_set_warnings(lumenis_media)
+# GCC's -O2 leaves a loop with a comparison in it unvectorised while floating-point exceptions may be observed
+# (-ftrapping-math, its default); nothing here reads them. Clang vectorises such loops already. With this the picture
+# passes' clamps and roundings run eight values at a time (10.1b: Picture::quantize, a third of a dissolve's work).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(lumenis_media PRIVATE -fno-trapping-math)
+endif()
 
 # MSVC 14.44 (cl 14.44.35207) stops with an internal compiler error (C1001) generating code for key_effects.cpp's RGB
 # Keyer (CI runs 219-321; BUILDING.md), with the optimizer off as well. The file is compiled without optimization and

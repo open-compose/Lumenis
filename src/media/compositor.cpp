@@ -31,6 +31,7 @@
 #include <array>
 #include <cstdint>
 #include <cmath>
+#include <vector>
 
 // The compositor (compositor.h). Tracks are walked from the top down to find what hides the rest,
 // then composited from the bottom up. Each effect is a function of the pictures it takes and its
@@ -92,41 +93,47 @@ Picture Picture::fromImage(const QImage& image, int width, int height, ImageInte
     Picture p = fitted.size() == QSize(width, height) ? uninitialized(width, height) : Picture(width, height);
     const int ox = (width - fitted.width()) / 2;
     const int oy = (height - fitted.height()) / 2;
-    // Each byte's value as a float, worked out once (the same values as dividing each one, 10.1b).
-    static const std::array<float, 256> kByte = [] {
-        std::array<float, 256> table{};
-        for (int i = 0; i < 256; ++i) table[static_cast<std::size_t>(i)] = static_cast<float>(i) / 255.0f;
-        return table;
-    }();
     const QImage& source = fitted;
     detail::parallelRange(static_cast<std::size_t>(source.height()), [&](std::size_t from, std::size_t to) {
         for (std::size_t y = from; y < to; ++y) {
             const uchar* line = source.constScanLine(static_cast<int>(y));
             float* out = p.pixel(ox, oy + static_cast<int>(y));
             const std::size_t values = static_cast<std::size_t>(source.width()) * 4;
-            for (std::size_t i = 0; i < values; ++i) out[i] = kByte[line[i]];
+            // Each byte divided by 255, eight at a time through a block of their own, which compilers vectorise (10.1b:
+            // a table of the 256 values, looked up one by one, could not be).
+            std::size_t i = 0;
+            for (; i + 8 <= values; i += 8) {
+                std::int32_t block[8];
+                for (std::size_t k = 0; k < 8; ++k) block[k] = line[i + k];
+                for (std::size_t k = 0; k < 8; ++k) out[i + k] = static_cast<float>(block[k]) / 255.0f;
+            }
+            for (; i < values; ++i) out[i] = static_cast<float>(line[i]) / 255.0f;
         }
     }, 64);
     return p;
 }
-
-namespace {
-
-// std::round for 0 <= x <= 65535, without the library call (10.1b): the whole part by conversion, up when the rest is a
-// half or more. The same result: both the whole part and the rest are exact floats here.
-inline float roundUnsigned(float x) {
-    const float whole = static_cast<float>(static_cast<std::int32_t>(x));
-    return x - whole >= 0.5f ? whole + 1.0f : whole;
-}
-
-} // namespace
 
 void Picture::quantize(EffectPrecision precision) {
     if (precision == EffectPrecision::Bits32) return;
     const float steps = precision == EffectPrecision::Bits8 ? 255.0f : 65535.0f;
     float* data = data_.data();
     detail::parallelRange(data_.size(), [data, steps](std::size_t from, std::size_t to) {
-        for (std::size_t i = from; i < to; ++i) data[i] = roundUnsigned(std::clamp(data[i], 0.0f, 1.0f) * steps) / steps;
+        // std::round(clamp(v) * steps) / steps without the library call: the whole part by conversion, up when the rest
+        // is a half or more (both are exact floats for 0 to 65535, so the same result), written so compilers vectorise it (10.1b: it was
+        // a third of a dissolve's instructions, one value at a time): no branches, the step count in a local, and the
+        // work in blocks of eight, which GCC's -O2 cost model takes (it refuses a loop that needs a remainder).
+        const float s = steps;
+        auto one = [s](float v) {
+            const float x = std::min(std::max(v, 0.0f), 1.0f) * s;
+            const float whole = static_cast<float>(static_cast<std::int32_t>(x));
+            return (whole + (x - whole >= 0.5f ? 1.0f : 0.0f)) / s;
+        };
+        std::size_t i = from;
+        for (; i + 8 <= to; i += 8) {
+            float* block = data + i;
+            for (int k = 0; k < 8; ++k) block[k] = one(block[k]);
+        }
+        for (; i < to; ++i) data[i] = one(data[i]);
     });
 }
 
@@ -137,13 +144,32 @@ QImage Picture::toImage() const {
     uchar* bits = out.bits();
     const qsizetype stride = out.bytesPerLine();
     detail::parallelRange(static_cast<std::size_t>(height_), [&](std::size_t from, std::size_t to) {
+        // Each line in two loops (10.1b: it was an eighth of a dissolve's instructions, one value at a time): every value
+        // rounded to a byte as std::round(clamp(v) * 255) does (as quantize() rounds), in blocks of eight that compilers vectorise
+        // (quantize() says why), then the bytes packed into pixels. Premultiplied over black: the colour channels as
+        // they are.
+        const std::size_t values = static_cast<std::size_t>(width_) * 4;
+        std::vector<std::uint8_t> bytes(values);
+        auto byte = [](float v) {
+            const float x = std::min(std::max(v, 0.0f), 1.0f) * 255.0f;
+            const float whole = static_cast<float>(static_cast<std::int32_t>(x));
+            return static_cast<std::int32_t>(whole + (x - whole >= 0.5f ? 1.0f : 0.0f));
+        };
         for (std::size_t y = from; y < to; ++y) {
+            const float* src = pixel(0, static_cast<int>(y));
+            std::uint8_t* rounded = bytes.data();
+            std::size_t i = 0;
+            for (; i + 8 <= values; i += 8) {
+                // Into a block of its own first: a byte store may alias the floats, which stops the vectoriser.
+                std::int32_t block[8];
+                for (std::size_t k = 0; k < 8; ++k) block[k] = byte(src[i + k]);
+                for (std::size_t k = 0; k < 8; ++k) rounded[i + k] = static_cast<std::uint8_t>(block[k]);
+            }
+            for (; i < values; ++i) rounded[i] = static_cast<std::uint8_t>(byte(src[i]));
             auto* line = reinterpret_cast<QRgb*>(bits + static_cast<qsizetype>(y) * stride);
             for (int x = 0; x < width_; ++x) {
-                const float* p = pixel(x, static_cast<int>(y));
-                // Premultiplied over black: the colour channels as they are.
-                auto channel = [](float v) { return static_cast<int>(roundUnsigned(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
-                line[x] = qRgb(channel(p[0]), channel(p[1]), channel(p[2]));
+                const std::uint8_t* v = rounded + static_cast<std::size_t>(x) * 4;
+                line[x] = qRgb(v[0], v[1], v[2]);
             }
         }
     }, 64);

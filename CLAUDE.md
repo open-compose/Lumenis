@@ -1051,7 +1051,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `github-<runner>`, each with a margin of its own; record again from saved job logs with `--record-from` (they hold the
   times between `perf-times` lines) when a change makes benchmarks much faster. 10.1b, the slow paths,
   has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
-  in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects).
+  in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects; write a
+  per-value pass with no branches and in blocks of eight, byte stores through a local block, as `Picture::quantize` and
+  `toImage` are, so GCC vectorises it (`lumenis_media` has `-fno-trapping-math`; check with `-fopt-info-vec`).
   10.2, long-run stability (docs/spec/soak.md: `--soak <hours>` in `src/ui/soak.*`, `scripts/soak-check.py`, ctest
   `soak_smoke`; the `tsan` presets on the tests labelled `core`), is done but the owner's 72-hour runs (Windows passed 2026-11-17, Linux stopped at 64.6 hours and runs again,
   macOS to come; docs/spec/soak.md "The runs"; BUILDING.md

@@ -65,6 +65,7 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `compose_3d_warp_1080p` | (about 116 ms fastest) | about 100 ms fastest | a copy of the background; Shadow and Trail's sparkle on one thread |
 | `compose_3d_warp_1080p` | about 103 ms fastest | about 73 ms fastest | `planePoint` (Cramer's rule, three divisions) solved for every pixel; its determinants are linear in the screen point, so `Placement::planeMap` works the map out once a frame, two linear forms over a third (the same points to within 2e-11 of a pixel, checked over the benchmark's frame and every 3D Warp test) |
 | `compose_blur_1080p` | about 119 ms fastest | about 112 ms fastest | a division for every value the box blur writes, and two clamps per pixel; now the window's reciprocal, and the edges apart from the middle (test `tst_compositor boxBlurMatchesAPlainOne` against a plain blur) |
+| `compose_dissolve_1080p` | 4.0 billion instructions (callgrind, three frames and a warm-up) | 3.1 billion | the passes every frame goes through ran one value at a time: `Picture::quantize` (a third of a dissolve), `toImage`'s rounding to bytes and `fromImage`'s table look-up. GCC's `-O2` leaves a loop with a comparison in it unvectorised while floating-point exceptions may be observed, so `lumenis_media` is built with `-fno-trapping-math` under GCC (Clang vectorised them already), and the loops work in blocks of eight with no branches, the byte stores through a block of their own (a byte pointer may alias the floats); the values are the same, value for value |
 | `compose_color_correction_1080p` | (about 163 ms fastest) | about 105-120 ms fastest | the luma ranges' shares (a walk of three curves) worked out for every pixel when no Shadows, Midtones or Highlights control was set, unused ranges blended in, and the hue and wheels' sines and cosines per pixel; the results are the same value for value |
 
 Looked at and left as they are: `seek_ffv1_1080p` takes about seven times a frame in order because FFmpeg's FFV1
@@ -91,7 +92,8 @@ development machine vary by a third from run to run since it moved to a busier h
 runs, or two builds' instruction counts under callgrind (BUILDING.md "Profiling"). `composeFrame` takes the first layer
 laid over its transparent start as it is (layer + 0), not blended: 145 million instructions fewer for a 1080p dissolve
 frame. Looked at and left: rounding to the effects' precision by a table of the steps' values in place of the division
-measured no faster (the division is vectorised). Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
+measured no faster. (The division was not vectorised under GCC either, as it turned out: see `-fno-trapping-math` above.)
+`toImage`'s packing of bytes into pixels stays one pixel at a time: its loads are four bytes apart. Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
 passes that still copy their source.
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,

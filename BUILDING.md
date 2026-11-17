@@ -1208,6 +1208,15 @@ build/ci/bin/lumenis_bench --only <name> --runs 1` and read the `summary:` line 
 whole program, set-up included, so a difference is the change's; it says nothing about memory waits, so a change that
 only moves less memory needs timings too (the fastest of several runs).
 
+**Whether a loop is vectorised:** callgrind counts a vector instruction once for eight values, so a pass that costs
+about as many instructions as it has values is running one value at a time. `objdump -d -C` on the object file shows it
+(`ps` instructions, such as `mulps`, are packed; `ss` ones, such as `mulss`, are not), and the compiler says why with
+`g++ -O2 -fno-trapping-math -fopt-info-vec-missed` on a copy of the loop. The usual reasons and their cures, from
+`Picture::quantize`, `toImage` and `fromImage` (docs/spec/performance.md): a comparison in the loop under GCC's default
+`-ftrapping-math` (`lumenis_media` is built without it), "control flow" (a branch: write the choice as a value), a loop
+that needs a remainder (work in blocks of eight, then the rest), and "complicated access pattern" (a store through a
+byte pointer, which may alias the source: fill a local block, then copy it out).
+
 ## Translations
 
 The interface's languages (ROADMAP 10.4; docs/spec/localisation.md; CONTRIBUTING.md, "Translations") are Qt Linguist
