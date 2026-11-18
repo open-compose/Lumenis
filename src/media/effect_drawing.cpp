@@ -13,26 +13,6 @@ double boxDistance(double x, double y, double x0, double y0, double x1, double y
     return std::hypot(std::max(dx, 0.0), std::max(dy, 0.0));
 }
 
-void sample(const Picture& p, double x, double y, float out[4]) {
-    std::fill(out, out + 4, 0.0f);
-    if (p.isNull() || x < 0 || y < 0 || x > p.width() || y > p.height()) return;
-    const double fx = x - 0.5;
-    const double fy = y - 0.5;
-    const int x0 = static_cast<int>(std::floor(fx));
-    const int y0 = static_cast<int>(std::floor(fy));
-    const float ax = static_cast<float>(fx - x0);
-    const float ay = static_cast<float>(fy - y0);
-    for (int j = 0; j < 2; ++j) {
-        for (int i = 0; i < 2; ++i) {
-            const int px = std::clamp(x0 + i, 0, p.width() - 1);
-            const int py = std::clamp(y0 + j, 0, p.height() - 1);
-            const float w = (i ? ax : 1.0f - ax) * (j ? ay : 1.0f - ay);
-            const float* s = p.pixel(px, py);
-            for (int c = 0; c < 4; ++c) out[c] += s[c] * w;
-        }
-    }
-}
-
 Border Border::of(const model::Effect& e, double time, const model::EffectSpan& span, int width) {
     const QString border = QStringLiteral("Border");
     const double unit = width / 16.0;

@@ -69,6 +69,8 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `compose_blur_1080p` | about 119 ms fastest | about 112 ms fastest | a division for every value the box blur writes, and two clamps per pixel; now the window's reciprocal, and the edges apart from the middle (test `tst_compositor boxBlurMatchesAPlainOne` against a plain blur) |
 | `compose_dissolve_1080p` | 4.0 billion instructions (callgrind, three frames and a warm-up) | 3.1 billion | the passes every frame goes through ran one value at a time: `Picture::quantize` (a third of a dissolve), `toImage`'s rounding to bytes and `fromImage`'s table look-up. GCC's `-O2` leaves a loop with a comparison in it unvectorised while floating-point exceptions may be observed, so `lumenis_media` is built with `-fno-trapping-math` under GCC (Clang vectorised them already), and the loops work in blocks of eight with no branches, the byte stores through a block of their own (a byte pointer may alias the floats); the values are the same, value for value |
 | `compose_dissolve_1080p` | (3.1 billion instructions) | 3.0 billion | `composeFrame` zeroed a whole picture to start each frame from, which the first layer then replaced: `result` is now made transparent only when something reads it. Also: `imageEffectPicture` zeroed its result before dispatching to the effects that make their own, and the Color Effect, the Safe Color Limiter and `colorCorrectedPicture` take their picture by value, so the compositor moves its layer in instead of copying 33 MB (the benchmark's correction comes through another path, so these show in sequences, not here) |
+| `compose_3d_warp_1080p` | 5.2 billion instructions (three frames and a warm-up) | 4.5 billion | the bilinear `sample` (over a quarter of a frame) was in another file, so never inlined, and called `std::floor` twice, a library call without SSE4.1; now inline in effect_drawing.h with the floor from a truncation, the same sums in the same order |
+| `compose_color_correction_1080p` | 5.68 billion instructions | 5.63 billion | the controls' factors (saturation / 100, the contrast slope, gain, gamma, setup) worked out for every pixel; now once, the same values |
 | `compose_color_correction_1080p` | (about 163 ms fastest) | about 105-120 ms fastest | the luma ranges' shares (a walk of three curves) worked out for every pixel when no Shadows, Midtones or Highlights control was set, unused ranges blended in, and the hue and wheels' sines and cosines per pixel; the results are the same value for value |
 
 Looked at and left as they are: `seek_ffv1_1080p` takes about seven times a frame in order because FFmpeg's FFV1
@@ -96,8 +98,12 @@ runs, or two builds' instruction counts under callgrind (BUILDING.md "Profiling"
 laid over its transparent start as it is (layer + 0), not blended: 145 million instructions fewer for a 1080p dissolve
 frame. Looked at and left: rounding to the effects' precision by a table of the steps' values in place of the division
 measured no faster. (The division was not vectorised under GCC either, as it turned out: see `-fno-trapping-math` above.)
-`toImage`'s packing of bytes into pixels stays one pixel at a time: its loads are four bytes apart. Left for later: lighter pixels (16-bit half floats) where the effects' precision allows, and the other effects'
-passes that still copy their source.
+`toImage`'s packing of bytes into pixels stays one pixel at a time: its loads are four bytes apart. Looked at and not done (2026-11-18): lighter pixels. Pictures are rounded after each effect to the Effects Processing
+precision the user chooses, 8 or 16 bits a channel or 32-bit floating point (FX Guide p.151), 16-bit by default. A half
+float's 11 bits cannot hold 16-bit steps (65,535 levels) or 32-bit values, so only 8-bit mode could keep lighter
+pixels, and then as bytes; that is a second pixel type through about 30 files and 120 places that read pixels. The
+copies: the Color Effect, the Safe Color Limiter and Color Correction work in the compositor's picture; the Blur and
+Mosaic Effect keep theirs (they read the original as they go).
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).
