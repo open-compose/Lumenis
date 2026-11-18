@@ -182,6 +182,26 @@ private slots:
         QTest::keyClick(full, Qt::Key_Escape);
         QVERIFY(!full->isVisible());
 
+        // Display Both Fields (p.1191): off, an interlaced project's picture is its first field with the lines between
+        // made from it (no toothcombing); on, both fields woven. A progressive project's picture is as it is.
+        full->setPictureSource([](bool*) {
+            QImage striped(16, 8, QImage::Format_RGB32);
+            for (int y = 0; y < striped.height(); ++y) {
+                for (int x = 0; x < striped.width(); ++x) striped.setPixel(x, y, y % 2 == 0 ? qRgb(255, 255, 255) : qRgb(0, 0, 0));
+            }
+            return striped;
+        });
+        QVERIFY(!full->displaysBothFields());
+        full->setProjectFields(std::nullopt);
+        QCOMPARE(qRed(full->shownPicture().pixel(3, 1)), 0); // progressive: unchanged
+        full->setProjectFields(true);
+        const QImage field = full->shownPicture();
+        QVERIFY(qRed(field.pixel(3, 1)) > 200 && qRed(field.pixel(3, 2)) > 200); // the upper field throughout
+        full->setDisplayBothFields(true);
+        QCOMPARE(qRed(full->shownPicture().pixel(3, 1)), 0); // woven: the toothcombing stays
+        window.settings().setValue(QStringLiteral("Full Screen Playback"), QStringLiteral("both"), false);
+        QTRY_VERIFY(!full->displaysBothFields());
+
         // Video quality.
         auto* quality = window.timeline().findChild<QToolButton*>(QStringLiteral("videoQuality"));
         QVERIFY(quality && quality->isEnabled());

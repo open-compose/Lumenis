@@ -10,6 +10,8 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
+
+#include "lumenis/model/color_framing.h"
 #include "lumenis/ui/translation.h"
 #include "lumenis/ui/accessibility.h"
 #include "lumenis/ui/find_command.h"
@@ -8996,6 +8998,13 @@ void MainWindow::applySettings() {
         view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));
         view->setTargetMask(model::targetMaskFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("targetMask"))));
+        view->setDisplayBothFields(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("both")));
+        std::optional<bool> topFirst;
+        if (project_ && project_->settings.format.scan == ScanMode::Interlaced) {
+            // NTSC SD's 486 lines have their lower field first; the others their upper (as the Digital Cut's tapes).
+            topFirst = project_->settings.format.height != 486;
+        }
+        view->setProjectFields(topFirst);
     }
     // Bin settings (p.1152-1154).
     binContainer_->setAutoSaveTiming(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")) * 60 * 1000,
@@ -9162,6 +9171,7 @@ void MainWindow::applySettings() {
     o.singleMarkEditing = s.flag(composer, QStringLiteral("singleMarkEditing"));
     o.phantomMarks = s.flag(composer, QStringLiteral("phantomMarks"));
     o.undoOnlyRecordEvents = s.flag(composer, QStringLiteral("undoOnlyRecord"));
+    o.colorFrameLength = model::colorFrameLength(s.text(composer, QStringLiteral("colorFraming")));
     o.autoCreateTracks = s.flag(composer, QStringLiteral("autoCreateTracks"));
     o.autoEnableSourceTracks = s.flag(composer, QStringLiteral("autoEnableSourceTracks"));
     o.copySourceMarkers = s.flag(composer, QStringLiteral("copySourceMarkers"));

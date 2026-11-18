@@ -1,6 +1,8 @@
 #include "lumenis/ui/background_services.h"
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/model/color_framing.h"
+
 #include "lumenis/ui/correction_monitors.h"
 
 #include "lumenis/media/ofx_host.h"
@@ -2532,6 +2534,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     };
     connect(&composer_, &Composer::changed, this, mapUpdate);
     connect(this, &Timeline::changed, this, mapUpdate);
+    connect(&composer_, &Composer::changed, this, &Timeline::syncColorFraming);
     connect(&composer_, &Composer::performed, this, &Timeline::composerPerformed);
     // Marking is an undo step (p.466), except in the Source monitor with Undo Only Record Events (p.1160).
     connect(&composer_, &Composer::marksEdited, this, [this](const model::MarkChange& change, const QString& description) {
@@ -2624,6 +2627,7 @@ void Timeline::setOptions(const Options& options) {
     topbar_->setVisible(options.toolbar);
     if (options.onlyOneSegmentTool && liftTool_ && spliceTool_) setSegmentTool(model::EditKind::SpliceIn, false);
     ButtonMapper::instance().setMarked(QStringLiteral("edit.overwrite"), options.syncPointEditing);
+    syncColorFraming();
     view_->update();
     if (map_) map_->update();
     composer_.refreshDisplay();
@@ -5952,6 +5956,48 @@ bool Timeline::playTrimLoop() {
     return trimLooping_;
 }
 
+std::optional<std::int64_t> Timeline::sourceTimecodeOf(const model::Segment& segment, std::int64_t offset) const {
+    if (segment.isFiller()) return std::nullopt;
+    const auto clip = composer_.resolveForSegment(segment);
+    if (!clip) return std::nullopt;
+    return model::startFrameOf(*clip) + segment.sourceIn + offset;
+}
+
+void Timeline::syncColorFraming() {
+    Composer::ColorFramingDisplay d;
+    d.length = options_.colorFrameLength;
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (d.length > 0 && rec && rec->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        const std::int64_t recordStart = model::startFrameOf(rec->item);
+        const QString track = correctionTrack();
+        d.breaks = model::colorFrameBreaks(
+            seq, track, recordStart, [this](const model::Segment& s) { return sourceTimecodeOf(s, 0); }, d.length);
+        // The Record monitor's shot at the position.
+        const model::MonitorState& r = composer_.state(MonitorId::Record);
+        auto phaseAt = [&](std::int64_t frame) -> std::optional<bool> {
+            const model::Track* t = seq.track(track);
+            if (!t) return std::nullopt;
+            std::int64_t start = 0;
+            const int i = t->segmentAt(frame, &start);
+            if (i < 0) return std::nullopt;
+            const auto tc = sourceTimecodeOf(t->segments.at(i), frame - start);
+            if (!tc) return std::nullopt;
+            return model::inColorFramePhase(*tc, recordStart + frame, d.length);
+        };
+        d.recordInPhase = phaseAt(r.position());
+        // The Source monitor's frame where an edit would lay it: its IN (or position) at the record IN (or position).
+        const model::MonitorState& src = composer_.state(MonitorId::Source);
+        if (const model::LoadedClip* clip = src.current(); clip && clip->item.kind != model::BinItemKind::Sequence) {
+            const std::int64_t sourceTc = model::startFrameOf(clip->item) + src.in().value_or(src.position());
+            d.sourceInPhase = model::inColorFramePhase(sourceTc, recordStart + r.in().value_or(r.position()), d.length);
+        }
+        // Trim mode: the first incoming frame of the transition.
+        if (const Composer::TrimDisplay& trim = composer_.trimDisplay(); trim.on) d.trimInPhase = phaseAt(trim.bFrame);
+    }
+    composer_.setColorFramingDisplay(d);
+}
+
 bool Timeline::playShotInContext(std::int64_t before, std::int64_t after) {
     const auto shot = correctionShot(0);
     if (!shot) return fail(tr("There is no clip at the position on the correction track."));
@@ -6093,6 +6139,7 @@ void Timeline::syncTrimDisplay() {
     d.small = options_.smallTrim == Options::SmallTrim::Always || (options_.smallTrim == Options::SmallTrim::GoTo && goToTrim_);
     d.dualImage = options_.dualImagePlay;
     composer_.setTrimDisplay(d);
+    syncColorFraming();
     // Trim mode and Effect mode exclude each other.
     if (trimMode_ && effectMode_) {
         effectMode_ = false;

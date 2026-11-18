@@ -1,5 +1,6 @@
 #include "lumenis/ui/full_screen.h"
 
+#include "lumenis/media/fields.h"
 #include "lumenis/media/target_mask.h"
 
 #include "lumenis/ui/composer.h"
@@ -97,8 +98,20 @@ void FullScreenView::paintEvent(QPaintEvent*) {
 }
 
 QImage FullScreenView::shownPicture(bool* offline) const {
-    if (source_) return source_(offline);
-    return composer_.picture(composer_.activeMonitor(), QSize(), offline);
+    const QImage image = source_ ? source_(offline) : composer_.picture(composer_.activeMonitor(), QSize(), offline);
+    // An interlaced project's picture without Display Both Fields: one field, the lines between made from it.
+    if (topFirst_ && !bothFields_ && !image.isNull()) return media::fieldPicture(image, 0, *topFirst_, media::FieldFill::Interpolate);
+    return image;
+}
+
+void FullScreenView::setProjectFields(std::optional<bool> topFirst) {
+    topFirst_ = topFirst;
+    update();
+}
+
+void FullScreenView::setDisplayBothFields(bool on) {
+    bothFields_ = on;
+    update();
 }
 
 void FullScreenView::setTargetMask(model::TargetMask mask) {

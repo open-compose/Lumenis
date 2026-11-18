@@ -24604,6 +24604,14 @@ Mediendateien werden nicht gelöscht.</translation>
         <source>Check for Updates at Startup</source>
         <translation type="unfinished">Beim Start nach Updates suchen</translation>
     </message>
+    <message>
+        <source>4 field</source>
+        <translation type="unfinished">4 Halbbilder</translation>
+    </message>
+    <message>
+        <source>8 field</source>
+        <translation type="unfinished">8 Halbbilder</translation>
+    </message>
 </context>
 <context>
     <name>tracking</name>

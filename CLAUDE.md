@@ -1157,7 +1157,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   from `MainWindow::soundOf`; test `tst_surround_ui liveModeGrids`), is done. 11.6b, Time Shift's Formant and Follow
   (`media::formantPitchShift`, pitch-synchronous overlap-add; `media::followEnvelope`; tests `tst_time_stretch
   formants`/`follow`), is done. 11.6c, marks as undo steps and Undo Only Record Events (`Composer::marksEdited`,
-  `model::EditStep::marks`; test `tst_composer_edit undoOnlyRecordEvents`), is done. 10.6 is an update check that only tells the user (no
+  `model::EditStep::marks`; test `tst_composer_edit undoOnlyRecordEvents`), is done. 11.6d, the settings options that
+  need no hardware (Real Time Update `EffectEditor::previewValue`, Segment Preview `Timeline::segmentPreview`, the scopes'
+  real-time updates, Default Starting EC, NTSC Has Setup, the settings' `"always"` options, Color Framing
+  `src/model/color_framing.*` with `Composer::ColorFramingDisplay`, Display Both Fields), is done. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
   (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from

@@ -75,6 +75,7 @@ constexpr QRgb kPlainBar = 0xff4a4a4a;
 constexpr QRgb kMarkedSpan = 0x60ffffff;
 constexpr QRgb kPhantomMark = 0xff3a7bd2; // phantom marks, blue (p.501)
 constexpr QRgb kAudioMark = 0xff3fc55a;   // audio marks, green (the picture on p.411)
+constexpr QRgb kColorFrameGreen = 0xff38d860; // Color Framing's bars and boxes, "green" (p.643)
 constexpr QRgb kSplice = 0xffe6c619;     // Splice-in (yellow) and Overwrite (red)
 constexpr QRgb kOverwrite = 0xffd23a32;
 constexpr QRgb kMarker = 0xffd23a32;     // red Add Marker
@@ -614,6 +615,15 @@ void PositionBar::paintEvent(QPaintEvent*) {
         const int x = xFor(*phantomOut);
         p.drawPolyline(QPolygon{QPoint(x - 4, 1), QPoint(x, 1), QPoint(x, height() - 2), QPoint(x - 4, height() - 2)});
     }
+    // Color Framing (p.643, p.1159): the Record bar's edits out of phase as green ticks that blink, and at the right
+    // end a light, steady green while the frame at the position is in phase (Composer::ColorFramingDisplay).
+    if (const Composer::ColorFramingDisplay& cf = composer_.colorFramingDisplay(); cf.length > 0) {
+        if (monitor_ == MonitorId::Record && composer_.colorFrameBlinkShown()) {
+            for (std::int64_t f : cf.breaks) p.fillRect(QRect(xFor(f) - 1, 0, 3, 3), QColor(kColorFrameGreen));
+        }
+        const std::optional<bool>& phase = monitor_ == MonitorId::Source ? cf.sourceInPhase : cf.recordInPhase;
+        if (phase && *phase) p.fillRect(QRect(width() - 7, 1, 6, 3), QColor(kColorFrameGreen));
+    }
     p.fillRect(QRect(xFor(s.position()) - 1, 0, 2, height()), QColor(kIndicator));
 }
 
@@ -747,6 +757,16 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         if (composer_.trimPlaySide() == *side && !composer_.trimDisplay().dualImage) {
             p.setPen(QPen(palette().color(QPalette::Highlight), 1));
             p.drawRect(rect().adjusted(0, 0, -1, -1));
+        }
+        // Color Framing in Trim mode (p.643): a green box at the top corner of each frame beside the cut, the outgoing
+        // frame's on its right and the incoming frame's on its left; "When the color sync signals are in phase, the
+        // boxes align horizontally", else the incoming one sits lower.
+        if (const Composer::ColorFramingDisplay& cf = composer_.colorFramingDisplay(); cf.length > 0 && cf.trimInPhase) {
+            const bool incoming = *side == model::TrimSide::B;
+            const int size = std::max(6, pic.height() / 18);
+            const int y = pic.top() + 4 + (incoming && !*cf.trimInPhase ? size + 4 : 0);
+            const int x = incoming ? pic.left() + 4 : pic.right() - 4 - size;
+            p.fillRect(QRect(x, y, size, size), QColor(kColorFrameGreen));
         }
         return;
     }
@@ -2012,6 +2032,31 @@ void Composer::setSingleMonitor(bool single) {
     if (single) active_ = MonitorId::Record;
     refresh();
     emit singleMonitorChanged(single);
+}
+
+void Composer::setColorFramingDisplay(const ColorFramingDisplay& display) {
+    if (display == colorFraming_) return;
+    colorFraming_ = display;
+    const bool blinking = display.length > 0 && !display.breaks.isEmpty();
+    if (blinking && !colorFrameBlinkTimer_) {
+        colorFrameBlinkTimer_ = new QTimer(this);
+        colorFrameBlinkTimer_->setInterval(500);
+        connect(colorFrameBlinkTimer_, &QTimer::timeout, this, [this] {
+            colorFrameBlink_ = !colorFrameBlink_;
+            if (PositionBar* bar = positionBar(MonitorId::Record)) bar->update();
+        });
+    }
+    if (colorFrameBlinkTimer_) {
+        if (blinking && !colorFrameBlinkTimer_->isActive()) colorFrameBlinkTimer_->start();
+        if (!blinking) colorFrameBlinkTimer_->stop();
+    }
+    if (!blinking) colorFrameBlink_ = true;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (PositionBar* bar = positionBar(m)) bar->update();
+    }
+    if (trim_.on) {
+        for (MonitorPicture* p : findChildren<MonitorPicture*>()) p->update();
+    }
 }
 
 void Composer::setTrimDisplay(const TrimDisplay& display) {

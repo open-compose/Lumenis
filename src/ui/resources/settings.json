@@ -149,7 +149,8 @@
         {
           "name": "Edit",
           "options": [
-            {"key": "colorFraming", "type": "bool", "label": "Color Framing", "default": false, "page": 1159, "later": true},
+            {"key": "colorFraming", "type": "choice", "style": "menu", "label": "Color Framing", "default": "off", "page": 1159,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "4field", "label": "4 field"}, {"value": "8field", "label": "8 field"}]},
             {"key": "syncPointEditing", "type": "bool", "label": "Sync Point Editing (Overwrites)", "default": false, "page": 1159},
             {"key": "singleMarkEditing", "type": "bool", "label": "Single Mark Editing", "default": true, "page": 1159},
             {"key": "phantomMarks", "type": "bool", "label": "Phantom Marks", "default": false, "page": 1159},
@@ -628,7 +629,7 @@
             {"key": "targetMask", "type": "choice", "style": "menu", "label": "Target Mask", "default": "none", "page": 1191,
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
             {"key": "fullScreen", "type": "bool", "label": "Full Screen", "default": true, "page": 1191},
-            {"key": "both", "type": "bool", "label": "Display Both Fields", "default": false, "page": 1191, "later": true}
+            {"key": "both", "type": "bool", "label": "Display Both Fields", "default": false, "page": 1191}
           ]
         }
       ]

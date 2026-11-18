@@ -1987,11 +1987,15 @@ Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 
     `EffectEditor::previewValue`; test `tst_effect_keyframes_ui realTimeUpdate`; Thumbwheels stay dimmed, described only
     in the Help), the Correction setting's Preview Pre-Roll and Post-Roll (done: Segment Preview, FX Guide p.710-711,
     `Timeline::segmentPreview`; test `tst_correction_mode segmentPreview`) and Waveform/Vectorscope Updates in
-    Real-Time (p.1166; done: `CorrectionMonitors::setScopesRealTime`; test `tst_correction_mode scopes`), the Composer's Color Framing (p.1159, p.643), the General setting's Default Starting EC,
+    Real-Time (p.1166; done: `CorrectionMonitors::setScopesRealTime`; test `tst_correction_mode scopes`), the Composer's Color Framing (p.1159, p.643; done: `src/model/color_framing.*`,
+    `Timeline::syncColorFraming`, `Composer::ColorFramingDisplay`; docs/spec/composer-edit.md; test `tst_composer_edit
+    colorFraming`), the General setting's Default Starting EC,
     NTSC Has Setup and Use Windows compatible file names (done: new sequences' Master Edge, the NTSC YC Waveform's
     black, always on; docs/spec/ui-inventory.md; tests `tst_bin_container`, `tst_scopes ycWaveform`,
-    `tst_settings_window`), Effect Apertures and the lower edit timebase (p.1192), and Full Screen Playback's Display
-    Both Fields (p.1191);
+    `tst_settings_window`), and Full Screen Playback's Display Both Fields (p.1191; done: `FullScreenView::
+    setDisplayBothFields`; test `tst_playback`), so 11.6d is done. Left dimmed: Effect Apertures and the Effect Editor's
+    Thumbwheels, which the guide describes only in the Help, and Project Default: Use lower edit timebase (p.1192),
+    the default for a project's own edit timebase (p.1289), which projects do not have yet;
   * 11.6e, the export and link options: Split Tracks to Mono and Mixdown with Video Edits in AAF export (p.1176),
     Cineon and Photoshop stills, AVI movies through FFmpeg, the Link setting's Quality and Volume Mounting tabs, Live
     Link and Multichannel Audio (p.1203-1204), the Media Creation setting's drive filtering (p.1207), and the Playback
@@ -2076,8 +2080,8 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 11. 10.1b is done (the audio mix on macOS and Windows is profiled only if editors report it slow). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
     benchmark much faster (the step's notices say which).
 12. 11.6, the left-over items recorded in Phase 11's status, in parts (Phase 11): 11.6a, Live mode on surround pans,
-    11.6b, Time Shift's Formant shift and Follow, and 11.6c, Undo Only Record Events, are done; next the settings options
-    still marked `"later"` that need no hardware, and the export and link options.
+    11.6b, Time Shift's Formant shift and Follow, 11.6c, Undo Only Record Events, and 11.6d, the settings options that
+    need no hardware, are done; next 11.6e, the export and link options.
 13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
     released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
 

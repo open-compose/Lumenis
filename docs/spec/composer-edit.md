@@ -72,7 +72,21 @@ Code:
   actions". Marking in the Source monitor is then no undo step, so "if you decide to undo the last edit made to
   the sequence, then you would not lose the In and Out points in the source clips" (p.466). The Record monitor's
   marks still are (ours: the guide's example is about source clips).
-* **Color Framing** stays dimmed: it is for tape (Phase 9).
+* **Color Framing** (p.1159, p.643; ROADMAP 11.6d): a menu, Off, 4 field (NTSC) or 8 field (PAL), as p.643's steps
+  have it ("Click the Color Framing menu in the Edit tab"); off by default. A colour frame is two frames (four fields)
+  or four (eight). Ours: a frame's phase is its timecode in frames counted in colour frames, so a source frame keeps
+  the phase where it lands when its timecode and the record timecode are a whole number of colour frames apart
+  (`model::inColorFramePhase` in `src/model/color_framing.*`). On the correction track's shots (the highest selected
+  video track, else the highest; `Timeline::syncColorFraming`):
+  * "green bars appear above the Overwrite and Splice-in buttons (Source and Record monitors) or above the position
+    bar which blink whenever a color sync signal is interrupted by an edit": ours above the position bars. The Record
+    bar's edits out of phase (`model::colorFrameBreaks`) are green ticks that blink twice a second.
+  * The lights: "Steady green lights indicate a frame that is properly phased", off when not (p.1159). Ours: a light
+    at each bar's right end, for the Source monitor's frame where an edit would lay it (its IN, or the position, at
+    the Record IN, or the position) and for the Record monitor's shot at the position.
+  * In Trim mode "small green boxes at the top corners of adjacent frames. When the color sync signals are in phase,
+    the boxes align horizontally": the outgoing frame's at its top right, the incoming frame's at its top left, lower
+    when out of phase (`Composer::ColorFramingDisplay`).
 
 ## Load Filler (p.462, p.99)
 

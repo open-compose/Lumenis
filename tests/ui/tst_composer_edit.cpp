@@ -1,7 +1,9 @@
 // The Composer settings' Edit tab (Editing Guide p.1159-1160; docs/spec/composer-edit.md): Sync Point
 // editing and its orange mark, Single Mark Editing, Phantom Marks, Auto-create New Tracks, Auto-enable
-// Source Tracks, Copy Source Markers, Undo Only Record Events with marks as undo steps, and Composer > Load Filler.
+// Source Tracks, Copy Source Markers, Undo Only Record Events with marks as undo steps, Color Framing, and Composer > Load
+// Filler.
 #include "lumenis/model/bin.h"
+#include "lumenis/model/color_framing.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/button_mapping.h"
@@ -10,6 +12,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QHash>
 #include <QMenu>
 #include <QTest>
 
@@ -269,6 +272,84 @@ private slots:
         QCOMPARE(f.timeline.history().descriptions().value(0), QStringLiteral("Mark IN"));
         QVERIFY(f.timeline.perform(QStringLiteral("edit.undo")));
         QVERIFY(!f.composer.state(MonitorId::Record).in());
+    }
+
+    // Color Framing (p.643, p.1159): 4 field is two frames; a shot whose source timecode is an odd number of frames
+    // from the record timecode is out of phase, its edit a blinking green tick on the Record bar, and the lights and
+    // trim boxes follow the frame at the position.
+    void colorFraming() {
+        QCOMPARE(model::colorFrameLength(QStringLiteral("4field")), 2);
+        QCOMPARE(model::colorFrameLength(QStringLiteral("8field")), 4);
+        QCOMPARE(model::colorFrameLength(QStringLiteral("off")), 0);
+        QVERIFY(model::inColorFramePhase(13, 9, 4));
+        QVERIFY(!model::inColorFramePhase(13, 10, 4));
+        QVERIFY(model::inColorFramePhase(13, 10, 0));
+
+        Composer composer;
+        Timeline timeline{composer};
+        QHash<QString, BinItem> items;
+        BinItem a = clip(QStringLiteral("A"), 100);
+        a.fields.insert(QStringLiteral("Start"), QStringLiteral("00:00:00:00"));
+        items.insert(a.id, a);
+        composer.setItemResolver([&](const QString&, const QString& id) -> std::optional<BinItem> {
+            if (items.contains(id)) return items.value(id);
+            return std::nullopt;
+        });
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        // V1: A from 0 (in phase) at 0, then A from 11 (odd: out of phase) at 10. The sequence starts at 01:00:00:00.
+        BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Online");
+        item.kind = BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment first = seg(QStringLiteral("A"), QStringLiteral("V1"), 10);
+        Segment second = seg(QStringLiteral("A"), QStringLiteral("V1"), 10);
+        second.sourceIn = 11;
+        seq.splice(QStringLiteral("V1"), 0, {first, second});
+        seq.storeIn(item);
+        composer.load(MonitorId::Record, QStringLiteral("bin"), item);
+        composer.load(MonitorId::Source, QStringLiteral("bin"), a);
+        composer.resize(900, 420);
+        composer.show();
+        settle();
+        QCOMPARE(composer.colorFramingDisplay().length, 0); // off by default
+
+        Timeline::Options o = timeline.options();
+        o.colorFrameLength = 2;
+        timeline.setOptions(o);
+        const Composer::ColorFramingDisplay& cf = composer.colorFramingDisplay();
+        QCOMPARE(cf.length, 2);
+        QCOMPARE(cf.breaks, (QList<std::int64_t>{10}));
+        composer.moveTo(MonitorId::Record, 4);
+        settle();
+        QCOMPARE(cf.recordInPhase, std::optional<bool>(true));
+        composer.moveTo(MonitorId::Record, 14);
+        settle();
+        QCOMPARE(cf.recordInPhase, std::optional<bool>(false));
+        // The source frame where an edit would lay it: source 3 at record 14 is odd, 4 is even.
+        composer.moveTo(MonitorId::Source, 3);
+        settle();
+        QCOMPARE(cf.sourceInPhase, std::optional<bool>(false));
+        composer.moveTo(MonitorId::Source, 4);
+        settle();
+        QCOMPARE(cf.sourceInPhase, std::optional<bool>(true));
+        // The Source bar's light is drawn green at its right end.
+        PositionBar* bar = composer.positionBar(MonitorId::Source);
+        QVERIFY(bar);
+        const QImage shot = bar->grab().toImage();
+        const QRgb light = shot.pixel(shot.width() - 4, 2);
+        QVERIFY2(qGreen(light) > 180 && qRed(light) < 120, qPrintable(QString::number(light, 16)));
+        // Trim mode at the out-of-phase cut: the incoming frame is out of phase.
+        composer.moveTo(MonitorId::Record, 10);
+        settle();
+        QVERIFY(timeline.perform(QStringLiteral("trim.trim_mode")));
+        settle();
+        QCOMPARE(cf.trimInPhase, std::optional<bool>(false));
+        // The 8 field colour frame (four frames): 11 frames off is out of phase, the first shot still in.
+        o.colorFrameLength = 4;
+        timeline.setOptions(o);
+        QCOMPARE(composer.colorFramingDisplay().breaks, (QList<std::int64_t>{10}));
     }
 
     void loadFiller() {

@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <optional>
 
 namespace lumenis::ui {
 
@@ -42,6 +43,15 @@ public:
     // Where the picture comes from instead of the Composer's active monitor: MainWindow's, which shows a stereoscopic
     // project's picture with the setting's S3D View and S3D Overlay (p.1190-1191; 8.6d2). `offline` as Composer::picture.
     void setPictureSource(std::function<QImage(bool* offline)> source) { source_ = std::move(source); }
+    // The project's fields: none for a progressive project, else whether its upper field comes first (NTSC SD's 486
+    // lines put the lower field first). Set by MainWindow.
+    void setProjectFields(std::optional<bool> topFirst);
+    // Display Both Fields (p.1191, off by default): "Select this option when Media Composer is connected to an
+    // interlaced display. If a progressive display ... is connected ... and you select this option, toothcombing appears
+    // in interlaced images." Off, an interlaced project's picture shows its first field with the lines between
+    // interpolated (media::fieldPicture), so a progressive screen shows no toothcombing; on, both fields woven.
+    void setDisplayBothFields(bool on);
+    bool displaysBothFields() const { return bothFields_; }
     // The picture it shows now.
     QImage shownPicture(bool* offline = nullptr) const;
     // Where the picture goes in a widget of `area`, for an image of
@@ -65,6 +75,8 @@ private:
     Reformat reformat_ = Reformat::Letterbox;
     model::TargetMask targetMask_ = model::TargetMask::None;
     bool fullScreen_ = true;
+    bool bothFields_ = false;
+    std::optional<bool> topFirst_;
     std::function<QImage(bool*)> source_;
 };
 

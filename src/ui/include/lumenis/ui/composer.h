@@ -479,6 +479,29 @@ public:
         bool dualImage = false;
     };
 
+    // Color Framing (Editing Guide p.643, the Composer setting's Edit tab p.1159; model/color_framing.h), as the
+    // Timeline works it out; off while `length` is 0. "Green bars appear above the Overwrite and Splice-in buttons
+    // (Source and Record monitors) or above the position bar which blink whenever a color sync signal is interrupted by
+    // an edit" (p.643): ours above the position bars. Each bar's light at its right end is steady green while the frame
+    // at the position is in phase and off when not; the Record bar's edits out of phase are green ticks that blink. In
+    // Trim mode the trim pictures show "small green boxes at the top corners of adjacent frames", level when in phase.
+    struct ColorFramingDisplay {
+        int length = 0;
+        // The Source monitor's frame where an edit would lay it, and the Record monitor's shot at its position;
+        // nothing where there is nothing to compare.
+        std::optional<bool> sourceInPhase;
+        std::optional<bool> recordInPhase;
+        // The Record monitor's sequence frames where an edit is out of phase.
+        QList<std::int64_t> breaks;
+        // In Trim mode: whether the incoming frame keeps the outgoing frame's phase.
+        std::optional<bool> trimInPhase;
+        bool operator==(const ColorFramingDisplay&) const = default;
+    };
+    void setColorFramingDisplay(const ColorFramingDisplay& display);
+    const ColorFramingDisplay& colorFramingDisplay() const { return colorFraming_; }
+    // The out-of-phase ticks' blink: shown or not, flipping twice a second while there are any.
+    bool colorFrameBlinkShown() const { return colorFrameBlink_; }
+
     // Turns the Big Trim display on or off and updates its counters. While on, the position bars and
     // button rows are hidden and both monitors are shown even in single-monitor mode.
     void setTrimDisplay(const TrimDisplay& display);
@@ -867,6 +890,9 @@ private:
     double carry_ = 0; // fractional frames between ticks
     QElapsedTimer clock_;
     QTimer* timer_ = nullptr;
+    ColorFramingDisplay colorFraming_;
+    QTimer* colorFrameBlinkTimer_ = nullptr;
+    bool colorFrameBlink_ = true;
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
     QWidget* effectBar_ = nullptr;

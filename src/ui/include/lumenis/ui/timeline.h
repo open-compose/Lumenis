@@ -342,6 +342,9 @@ public:
         // straight to the last record event. Off, every mark command is one (Composer::marksEdited).
         bool undoOnlyRecordEvents = false;
         bool phantomMarks = false;        // Phantom Marks (p.501)
+        // Color Framing (p.1159, p.643): the colour frame's length in frames (2 for 4 field NTSC, 4 for 8 field PAL;
+        // model::colorFrameLength), 0 when off. The Composer shows the phases (Composer::ColorFramingDisplay).
+        int colorFrameLength = 0;
         bool autoCreateTracks = true;     // Auto-create New Tracks
         bool autoEnableSourceTracks = true; // Auto-enable Source Tracks
         bool copySourceMarkers = true;    // Copy Source Markers
@@ -828,6 +831,12 @@ public:
     // Plays the shot at the position with `before` frames of what comes before it and `after` of what follows, once,
     // and puts the position back (Edit Review and Segment Preview in Color Correction mode).
     bool playShotInContext(std::int64_t before, std::int64_t after);
+    // Color Framing: the phases the Composer shows (Composer::setColorFramingDisplay), on the correction track's shots
+    // (the highest selected video track, else the highest), worked out whenever the monitors change.
+    void syncColorFraming();
+    // The source timecode, in frames, of `segment`'s frame `offset` frames from its start; nothing when its clip is
+    // not found.
+    std::optional<std::int64_t> sourceTimecodeOf(const model::Segment& segment, std::int64_t offset) const;
     // The Correction Type button's relationship (p.596-597; lumenis/model/correction_relations.h, 6.10d1) and the side
     // it works on. Choosing a type of the side the current segment's correction is on converts that correction to it
     // ("To convert a Source relationship correction to another Source relationship correction", p.598), an undo step;

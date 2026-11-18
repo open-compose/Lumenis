@@ -24604,6 +24604,14 @@ Les fichiers média ne sont pas supprimés.</translation>
         <source>Check for Updates at Startup</source>
         <translation type="unfinished">Rechercher des mises à jour au démarrage</translation>
     </message>
+    <message>
+        <source>4 field</source>
+        <translation type="unfinished">4 trames</translation>
+    </message>
+    <message>
+        <source>8 field</source>
+        <translation type="unfinished">8 trames</translation>
+    </message>
 </context>
 <context>
     <name>tracking</name>

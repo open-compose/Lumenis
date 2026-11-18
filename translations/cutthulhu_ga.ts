@@ -24654,6 +24654,14 @@ Ní scriostar comhaid mheán.</translation>
         <source>Check for Updates at Startup</source>
         <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe ag an Tosú</translation>
     </message>
+    <message>
+        <source>4 field</source>
+        <translation type="unfinished">4 réimse</translation>
+    </message>
+    <message>
+        <source>8 field</source>
+        <translation type="unfinished">8 réimse</translation>
+    </message>
 </context>
 <context>
     <name>tracking</name>

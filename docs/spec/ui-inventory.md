@@ -2865,7 +2865,14 @@ p.610–640, ch. 13 p.432–434).**
     Center Keep Size and Raw Pixel.
   * Full Screen: off, the picture is shown with as little scaling as
     possible.
-  * S3D View, Target Mask and Display Both Fields are *later*.
+  * S3D View and Target Mask came with 8.6d2 and 8.5e3.
+  * Display Both Fields (off by default; ROADMAP 11.6d): off, an
+    interlaced project's picture shows its first field with the lines
+    between interpolated, so a progressive screen shows no toothcombing
+    ("If a progressive display ... is connected ... and you select this
+    option, toothcombing appears in interlaced images"); on, both fields
+    woven, for an interlaced display (`FullScreenView::setDisplayBothFields`).
+    NTSC SD (486 lines) has its lower field first.
 * The Toggle Client Monitor button is gray and disabled in software-only
   mode (p.390), as ours is.
 

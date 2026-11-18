@@ -58,6 +58,7 @@ add_library(lumenis_model STATIC
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp
+    color_framing.cpp
     surround_pan.cpp
     sync_dupes.cpp
     text_find.cpp
