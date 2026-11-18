@@ -161,6 +161,10 @@ private:
     // `count` samples of a piece's channel from `offset` output samples into the piece, at the
     // output rate; zeros where the file has none.
     std::vector<float> samples(const AudioPiece& piece, std::int64_t offset, int count);
+    // The same into `out`, reading through `read_`: render() and renderChain() use it with `pieceSamples_`, so a block
+    // allocates nothing once the buffers have grown (10.1b; three vectors a piece a block before, which macOS's and
+    // Windows' allocators take longer over than glibc's).
+    void samples(const AudioPiece& piece, std::int64_t offset, int count, std::vector<float>& out);
     // Runs piece `index`'s EQ over `samples`, which start `offset` samples into the piece. The
     // filters keep their state from one render to the next; when a render does not follow on from
     // the last one (a seek, reverse play), they start again, run first over up to 0.1 s of the
@@ -220,6 +224,8 @@ private:
     int leftChannel_ = 0;
     int rightChannel_ = 1;
     std::vector<float> bus_; // render()'s, kept to save allocating it each time
+    std::vector<float> read_;         // samples(..., out)'s reader output, kept for the same reason
+    std::vector<float> pieceSamples_; // a piece's block in render() and renderChain(), likewise
 };
 
 // Plays a mix through the system's audio output (miniaudio). A thread

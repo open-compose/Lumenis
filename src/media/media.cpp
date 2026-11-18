@@ -220,6 +220,11 @@ Input openInput(const QString& path, QString* error) {
         if (const AVInputFormat* wav = av_find_input_format("wav")) {
             AVDictionary* wavOptions = nullptr;
             av_dict_copy(&wavOptions, options, 0);
+            // A probe of 32 KB, not FFmpeg's 5 MB: the WAV demuxer reads that much of the data at open to look for
+            // compressed sound carried as PCM (S/PDIF, whose bursts come every few kilobytes), and plain PCM needs
+            // none of it. Opening a WAV file went from about 86 to 22 million instructions (10.1b), which matters
+            // because playback keeps a reader for each place a file is played from (AudioMix::reader).
+            av_dict_set(&wavOptions, "probesize", "32768", 0);
             if (avformat_open_input(&raw, file.constData(), wav, &wavOptions) < 0) raw = nullptr;
             av_dict_free(&wavOptions);
         }
@@ -1282,7 +1287,14 @@ int AudioReader::sampleRate() const {
 // Seeks only when `start` is not inside (or just after) what is pending, then decodes until the
 // request is covered or the stream ends. What is returned is removed from `pending`.
 std::vector<float> AudioReader::samples(std::int64_t start, int count) {
-    if (!d_ || count <= 0 || start < 0) return {};
+    std::vector<float> out;
+    samples(start, count, out);
+    return out;
+}
+
+void AudioReader::samples(std::int64_t start, int count, std::vector<float>& out) {
+    out.clear();
+    if (!d_ || count <= 0 || start < 0) return;
     Impl& d = *d_;
     // Reuse what is decoded when the request starts inside it.
     if (d.pendingStart < 0 || start < d.pendingStart || start > d.pendingEnd()) {
@@ -1296,17 +1308,15 @@ std::vector<float> AudioReader::samples(std::int64_t start, int count) {
             d.pending.clear();
         }
     }
-    if (d.pendingStart < 0 || start >= d.pendingEnd()) return {};
+    if (d.pendingStart < 0 || start >= d.pendingEnd()) return;
     const auto ch = static_cast<std::size_t>(d.channels);
     const auto from = static_cast<std::size_t>(start - d.pendingStart) * ch;
     const auto available = d.pending.size() - from;
     const auto n = std::min(available, static_cast<std::size_t>(count) * ch);
-    std::vector<float> out(d.pending.begin() + static_cast<std::ptrdiff_t>(from),
-                           d.pending.begin() + static_cast<std::ptrdiff_t>(from + n));
+    out.assign(d.pending.begin() + static_cast<std::ptrdiff_t>(from), d.pending.begin() + static_cast<std::ptrdiff_t>(from + n));
     // Keep what follows for the next request.
     d.pending.erase(d.pending.begin(), d.pending.begin() + static_cast<std::ptrdiff_t>(from + n));
     d.pendingStart = start + static_cast<std::int64_t>(n / ch);
-    return out;
 }
 
 // ---------------------------------------------------------------- MediaWriter

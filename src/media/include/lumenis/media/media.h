@@ -208,6 +208,9 @@ public:
     int sampleRate() const;
     // `count` samples per channel from sample `start`; fewer at the end.
     std::vector<float> samples(std::int64_t start, int count);
+    // The same into `out`, which keeps its storage from one call to the next: playback reads every block this way, so
+    // it allocates nothing once the buffers have grown (10.1b).
+    void samples(std::int64_t start, int count, std::vector<float>& out);
 
 private:
     struct Impl;

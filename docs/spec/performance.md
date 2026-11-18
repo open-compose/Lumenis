@@ -81,7 +81,14 @@ Linux runner but 150-180 ms on macOS and 134 ms on Windows (2026-11-17). Its 16 
 file, and readers are kept by file, stream and channel (`AudioMix::reader`), so two readers seek between 8 places on
 every block: on Linux 60% of the mix is those seeks and decoding, and opening a reader costs 80 million instructions
 (FFmpeg probing the WAV's data). A reader per source offset made Linux 40% slower (16 opens), so it was not kept; where
-the time goes on macOS and Windows needs Instruments and WPA there (BUILDING.md "Profiling"). The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
+the time goes on macOS and Windows needs Instruments and WPA there (BUILDING.md "Profiling"). 2026-11-18, what helps
+every system: WAV files are opened with a 32 KB probe (`openInput`), not FFmpeg's 5 MB, which the WAV demuxer read at
+open to look for compressed sound carried as PCM (an open from about 86 to 22 million instructions); and a block reads
+into buffers the mix keeps (`AudioReader::samples` and `AudioMix::samples` with an `out`), not three new vectors a
+piece, since macOS's and Windows' allocators are slower than glibc's at that. The mix of 16 tracks went from 3.10 to
+2.66 billion instructions; with opens that cheap, a reader per source offset was tried again and still cost more in
+opens than the seeks it saved on Linux, so it stays one reader a channel. CI's macOS and Windows times say whether the
+gap there narrowed. The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
 generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
 
 The compositor's memory traffic (a 1080p picture is 33 MB of floats): `over` and `mix` have versions that take a

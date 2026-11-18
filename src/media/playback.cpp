@@ -476,7 +476,8 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
         const std::int64_t to = std::min(end, piece.at + piece.length);
         if (from >= to) continue;
         const auto n = static_cast<int>(to - from);
-        std::vector<float> src = samples(piece, from - piece.at, n);
+        std::vector<float>& src = pieceSamples_;
+        samples(piece, from - piece.at, n, src);
         if (src.empty()) continue;
         if (piece.equalised()) equalise(index, from - piece.at, src);
         float* dest = bus + kSpeakers * (from - start);
@@ -554,7 +555,8 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
         const std::int64_t to = std::min(end, piece.at + piece.length);
         if (from >= to) continue;
         const auto k = static_cast<int>(to - from);
-        std::vector<float> src = samples(piece, from - piece.at, k);
+        std::vector<float>& src = pieceSamples_;
+        samples(piece, from - piece.at, k, src);
         if (src.empty()) continue;
         if (piece.equalised()) equalise(index, from - piece.at, src);
         const SpeakerGains* gains = piece.surround ? &*piece.surround : nullptr;
@@ -624,39 +626,47 @@ void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* b
 // Files at 48 kHz are read directly; others are read at their own rate and interpolated linearly.
 // Empty when the file cannot be read.
 std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offset, int count) {
+    std::vector<float> out;
+    samples(piece, offset, count, out);
+    return out;
+}
+
+void AudioMix::samples(const AudioPiece& piece, std::int64_t offset, int count, std::vector<float>& out) {
+    out.clear();
     if (piece.tone) {
-        std::vector<float> out(static_cast<std::size_t>(std::max(count, 0)));
+        out.resize(static_cast<std::size_t>(std::max(count, 0)));
         renderTone(*piece.tone, piece.sourceStart + offset, count, kPlaybackRate, out.data());
-        return out;
+        return;
     }
     // Before the media's first sample (a group's angle that starts after the group, group_clip.h): silence.
     if (const std::int64_t start = piece.sourceStart + offset; start < 0 && count > 0) {
         const int lead = static_cast<int>(std::min<std::int64_t>(-start, count));
-        std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
+        out.assign(static_cast<std::size_t>(count), 0.0f);
         if (lead < count) {
             const std::vector<float> rest = samples(piece, offset + lead, count - lead);
             std::copy(rest.begin(), rest.end(), out.begin() + lead);
         }
-        return out;
+        return;
     }
     AudioReader* r = reader(piece);
-    if (!r || piece.channel >= r->channels() || count <= 0) return {};
+    if (!r || piece.channel >= r->channels() || count <= 0) return;
     // "Never: Media Composer does not perform sample rate conversion (segments play as silence)".
-    if (requiredRate_ > 0 && r->sampleRate() != requiredRate_) return {};
-    std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
+    if (requiredRate_ > 0 && r->sampleRate() != requiredRate_) return;
+    out.assign(static_cast<std::size_t>(count), 0.0f);
     const int channels = r->channels();
     const int rate = r->sampleRate();
+    std::vector<float>& src = read_;
     if (rate == kPlaybackRate) {
-        const std::vector<float> src = r->samples(piece.sourceStart + offset, count);
+        r->samples(piece.sourceStart + offset, count, src);
         const auto got = std::min(static_cast<int>(src.size()) / channels, count);
         for (int i = 0; i < got; ++i) out[static_cast<std::size_t>(i)] = src[static_cast<std::size_t>(i * channels + piece.channel)];
-        return out;
+        return;
     }
     const double step = static_cast<double>(rate) / kPlaybackRate;
     const double first = static_cast<double>(piece.sourceStart + offset) * step;
     const auto base = static_cast<std::int64_t>(std::floor(first));
     const int need = static_cast<int>(std::ceil(static_cast<double>(count) * step)) + 2;
-    const std::vector<float> src = r->samples(base, need);
+    r->samples(base, need, src);
     const auto got = static_cast<std::int64_t>(src.size()) / channels;
     for (int i = 0; i < count; ++i) {
         const double pos = first + static_cast<double>(i) * step - static_cast<double>(base);
@@ -667,7 +677,6 @@ std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offse
         const float b = src[static_cast<std::size_t>((k + 1) * channels + piece.channel)];
         out[static_cast<std::size_t>(i)] = a + (b - a) * frac;
     }
-    return out;
 }
 
 void AudioMix::equalise(std::size_t index, std::int64_t offset, std::vector<float>& samples) {
