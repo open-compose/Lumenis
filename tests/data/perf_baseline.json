@@ -18,6 +18,7 @@
         "seek_ffv1_1080p": 344.61,
         "timeline_paint_16x400": 6.8
       },
+      "floor_ms": 10.0,
       "machine": {
         "cpu": "arm64",
         "host": "iad20-eo1209-6cfb6b5a-e3ac-4d96-8ddd-d4f32f88a528-569638793DDF.local",
@@ -43,6 +44,7 @@
         "seek_ffv1_1080p": 428.93,
         "timeline_paint_16x400": 6.62
       },
+      "floor_ms": 10.0,
       "machine": {
         "cpu": "arm64",
         "host": "sat12-bq164-3f9d606f-2f9e-4a3a-abc7-1837823414ae-9662888B1646.local",
@@ -68,6 +70,7 @@
         "seek_ffv1_1080p": 399.61,
         "timeline_paint_16x400": 7.42
       },
+      "floor_ms": 10.0,
       "machine": {
         "cpu": "x86_64",
         "host": "ip-10-0-133-68",
@@ -93,6 +96,7 @@
         "seek_ffv1_1080p": 471.2,
         "timeline_paint_16x400": 13.03
       },
+      "floor_ms": 10.0,
       "machine": {
         "cpu": "x86_64",
         "host": "runnervm9zap3",

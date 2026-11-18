@@ -204,6 +204,14 @@ bool isImageEffect(const model::Effect& e) {
     return filmMaskRatio(e) || is(e, "Film", "Mask") || is(e, "Film", "Blowup");
 }
 
+Picture imageEffectPicture(const model::Effect& e, Picture&& layer, double time, const model::EffectSpan& span) {
+    if (!layer.isNull() && !detail::isIllusionSegmentEffect(e)) {
+        if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, std::move(layer), time, span);
+        if (e.name == QLatin1String("Safe Color Limiter")) return detail::safeColorLimiterPicture(e, std::move(layer), time, span);
+    }
+    return imageEffectPicture(e, static_cast<const Picture&>(layer), time, span);
+}
+
 bool isReformat(const model::Effect& e) {
     return e.category == QLatin1String("Reformat") &&
            (e.name == QLatin1String("16:9 Letterbox") || e.name == QLatin1String("14:9 Letterbox") || e.name == QLatin1String("4:3 Sidebar"));
@@ -215,7 +223,6 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
     if (layer.isNull()) return layer;
     const double W = width;
     const double H = height;
-    Picture out(width, height);
 
     if (detail::isIllusionSegmentEffect(e)) return detail::illusionSegmentPicture(e, layer, time, span);
     if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, layer, time, span);
@@ -226,6 +233,9 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
     if (e.name == QLatin1String("Blur Effect") || e.name == QLatin1String("Mosaic Effect")) {
         return detail::detailEffectPicture(e, layer, time, span);
     }
+    // The result, transparent to start with: made only here, as the effects above make their own (10.1b: zeroing a
+    // 1080p picture they never used was a sixth of a Color Effect's time).
+    Picture out(width, height);
     if (e.name == QLatin1String("Field Swap")) {
         // "Inverts the fields of any interlaced media" (p.469): each pair of lines changes places.
         for (int y = 0; y + 1 < height; y += 2) {

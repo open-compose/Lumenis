@@ -33,10 +33,11 @@ struct Border {
 };
 
 // The Color Effect (color_effects.cpp).
-Picture colorEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// `layer` by value: a caller done with its picture moves it in, and the effect works in it (10.1b).
+Picture colorEffectPicture(const model::Effect& effect, Picture layer, double time, const model::EffectSpan& span);
 // The Safe Color Limiter (color_effects.cpp; model/safe_color_limiter.h): every pixel's colour, read as the video levels
 // it stands for (0 as 16, 1 as 235), brought within the effect's enabled limits.
-Picture safeColorLimiterPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+Picture safeColorLimiterPicture(const model::Effect& effect, Picture layer, double time, const model::EffectSpan& span);
 // The Blur Effect and Mosaic Effect over the whole picture (color_effects.cpp); intraframe.cpp keeps them to their
 // objects.
 Picture detailEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);

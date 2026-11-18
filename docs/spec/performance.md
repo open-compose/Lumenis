@@ -44,7 +44,9 @@ unless the operating system provides them (ROADMAP Phase 10, the owner's answers
   1.0`, the median of every run's times) with a margin of its own in its entry: a benchmark fails CI when it is twice
   its recorded time, three times on Linux. The first baselines (2026-11-17) come from three CI runs, nine runs of the
   benchmarks each: Windows' runs varied by under 7%, macOS's by up to 1.7 times, and Linux's by up to 2.3 times (one run
-  landed on a slow host), hence its margin of 2.0. Slower and much faster benchmarks are also annotations on the run. Until a runner has a baseline
+  landed on a slow host), hence its margin of 2.0. Each hosted runner also has a floor of its own, 10 ms (`floor_ms` in
+its entry, `--floor`): a benchmark of a few milliseconds varied by more than the general 2 ms within one job on macOS
+(bin_show_10k at 6.2, 14.0 and 14.3 ms, 2026-11-17), so it fails only when it is also 10 ms slower. Slower and much faster benchmarks are also annotations on the run. Until a runner has a baseline
   the step only reports.
 
 ## Profiling (10.1b)
@@ -66,6 +68,7 @@ Found and fixed so far (times on the 4-thread Linux development machine):
 | `compose_3d_warp_1080p` | about 103 ms fastest | about 73 ms fastest | `planePoint` (Cramer's rule, three divisions) solved for every pixel; its determinants are linear in the screen point, so `Placement::planeMap` works the map out once a frame, two linear forms over a third (the same points to within 2e-11 of a pixel, checked over the benchmark's frame and every 3D Warp test) |
 | `compose_blur_1080p` | about 119 ms fastest | about 112 ms fastest | a division for every value the box blur writes, and two clamps per pixel; now the window's reciprocal, and the edges apart from the middle (test `tst_compositor boxBlurMatchesAPlainOne` against a plain blur) |
 | `compose_dissolve_1080p` | 4.0 billion instructions (callgrind, three frames and a warm-up) | 3.1 billion | the passes every frame goes through ran one value at a time: `Picture::quantize` (a third of a dissolve), `toImage`'s rounding to bytes and `fromImage`'s table look-up. GCC's `-O2` leaves a loop with a comparison in it unvectorised while floating-point exceptions may be observed, so `lumenis_media` is built with `-fno-trapping-math` under GCC (Clang vectorised them already), and the loops work in blocks of eight with no branches, the byte stores through a block of their own (a byte pointer may alias the floats); the values are the same, value for value |
+| `compose_dissolve_1080p` | (3.1 billion instructions) | 3.0 billion | `composeFrame` zeroed a whole picture to start each frame from, which the first layer then replaced: `result` is now made transparent only when something reads it. Also: `imageEffectPicture` zeroed its result before dispatching to the effects that make their own, and the Color Effect, the Safe Color Limiter and `colorCorrectedPicture` take their picture by value, so the compositor moves its layer in instead of copying 33 MB (the benchmark's correction comes through another path, so these show in sequences, not here) |
 | `compose_color_correction_1080p` | (about 163 ms fastest) | about 105-120 ms fastest | the luma ranges' shares (a walk of three curves) worked out for every pixel when no Shadows, Midtones or Highlights control was set, unused ranges blended in, and the hue and wheels' sines and cosines per pixel; the results are the same value for value |
 
 Looked at and left as they are: `seek_ffv1_1080p` takes about seven times a frame in order because FFmpeg's FFV1

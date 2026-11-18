@@ -14,7 +14,8 @@ this machine in tests/data/perf_baseline.json:
                                                              record from several runs' times (the hosted runners)
 
 A benchmark fails when its median is more than the margin slower than the recorded median and also more than
-`floor_ms` (2 ms) slower, so tiny times do not fail on noise. The margin is the machine's own when its entry has one
+`floor_ms` slower (the machine's own where its entry has one, 10 ms on the hosted runners, else 2 ms), so tiny
+times do not fail on noise. The margin is the machine's own when its entry has one
 (the hosted runners', whose hosts differ from run to run), else the baseline's (30%). Faster times are reported, and a
 time that much faster says to record again so the baseline keeps up. A machine with no baseline only reports (exit 0):
 times differ too much between machines to compare one with another's. Under GitHub Actions each slower or much faster
@@ -84,7 +85,7 @@ def annotate(kind, text):
         print(f"::{kind} title=Performance::{text}")
 
 
-def record(baseline, machine, times, margin):
+def record(baseline, machine, times, margin, floor=None):
     machines = baseline.setdefault("machines", {})
     entry = machines.setdefault(machine, {})
     entry["machine"] = times.get("machine", {})
@@ -92,6 +93,8 @@ def record(baseline, machine, times, margin):
         entry["runs"] = times["runs"]
     if margin is not None:
         entry["margin"] = margin
+    if floor is not None:
+        entry["floor_ms"] = floor
     recorded = entry.setdefault("benchmarks", {})
     for name, t in times["benchmarks"].items():
         recorded[name] = round(t["median_ms"], 2)
@@ -107,6 +110,7 @@ def main():
     ap.add_argument("--record-from", nargs="+", metavar="FILE",
                     help="record this machine's baseline from saved times (JSON files or CI logs with --print-times)")
     ap.add_argument("--margin", type=float, help="with --record or --record-from: the machine's own margin (1.0: 100%%)")
+    ap.add_argument("--floor", type=float, help="with --record or --record-from: the machine's own floor in ms")
     ap.add_argument("--only", default="", help="comma-separated benchmark names")
     ap.add_argument("--repeat", type=int, default=1, help="run the benchmarks this many times (default 1)")
     ap.add_argument("--print-times", action="store_true", help="print the times as JSON between perf-times lines")
@@ -118,7 +122,7 @@ def main():
         if not runs:
             print("perf: no times in " + ", ".join(args.record_from))
             return 2
-        record(baseline, args.machine, combined(runs), args.margin)
+        record(baseline, args.machine, combined(runs), args.margin, args.floor)
         return 0
     if not args.bench:
         ap.error("--bench is needed unless --record-from is given")
@@ -136,7 +140,7 @@ def main():
         print(END)
 
     if args.record:
-        record(baseline, args.machine, times, args.margin)
+        record(baseline, args.machine, times, args.margin, args.floor)
         return 0
 
     entry = baseline.get("machines", {}).get(args.machine)
@@ -145,7 +149,9 @@ def main():
               f"(record one with --record)")
         return 0
     margin = entry.get("margin", baseline.get("margin", 0.30))
-    floor = baseline.get("floor_ms", 2.0)
+    # The machine's own floor where it has one: on the hosted runners a benchmark of a few milliseconds varies by more
+    # than 2 ms between runs of one job (macOS: bin_show_10k at 6.2 and 14.3 ms, 2026-11-17).
+    floor = entry.get("floor_ms", baseline.get("floor_ms", 2.0))
     slower, faster = [], []
     for name, t in sorted(times["benchmarks"].items()):
         was = entry["benchmarks"].get(name)

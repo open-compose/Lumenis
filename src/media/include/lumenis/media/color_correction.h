@@ -37,8 +37,9 @@ private:
     std::shared_ptr<const Data> d_;
 };
 
-// The picture through the correction, rows shared out among the processor's threads.
-Picture colorCorrectedPicture(const model::ColorCorrection& correction, const Picture& picture);
+// The picture through the correction, rows shared out among the processor's threads. `picture` by value: a caller done
+// with its picture moves it in and the correction works in it (10.1b; a 1080p picture is 33 MB to copy).
+Picture colorCorrectedPicture(const model::ColorCorrection& correction, Picture picture);
 // One pixel (straight RGB, 0 to 1) through the correction; for tests and the Color Match control (6.10c). For many
 // pixels make a CorrectionPlan once.
 std::array<double, 3> colorCorrectedPixel(const model::ColorCorrection& correction, const std::array<double, 3>& rgb);

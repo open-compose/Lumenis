@@ -79,6 +79,10 @@ bool on(const ColorCorrection& c, const QString& path) {
 struct Controls {
     std::optional<double> hue, saturation, contrast, brightness, gain, gamma, setup;
     double hueCos = 1.0, hueSin = 0.0; // the hue rotation's, worked out once (10.1b)
+    // The controls' factors, worked out once from their values rather than for every pixel (10.1b): the same
+    // operations on the same values as controls() made per pixel before, so the same results.
+    double saturationFactor = 1.0, contrastFactor = 1.0, contrastChroma = 1.0, gainFactor = 1.0, gammaPower = 1.0,
+           setupOffset = 0.0;
     explicit Controls(const ColorCorrection& c, const QString& base) {
         auto read = [&](const char* name) { return applied(c, base + QLatin1String(name)); };
         hue = read("hue");
@@ -92,6 +96,16 @@ struct Controls {
             hueCos = std::cos(rad(*hue));
             hueSin = std::sin(rad(*hue));
         }
+        if (saturation) saturationFactor = *saturation / 100.0;
+        if (contrast) {
+            // -100 maps every pixel to neutral grey, 100 is "maximum contrast" (ours: a slope of 20), about mid grey.
+            const double v = *contrast / 100.0;
+            contrastFactor = v <= 0.0 ? 1.0 + v : 1.0 / std::max(0.05, 1.0 - 0.95 * v);
+            contrastChroma = std::max(0.0, std::min(1.0, contrastFactor));
+        }
+        if (gain) gainFactor = *gain / 100.0;
+        if (gamma) gammaPower = 1.0 / std::max(0.1, *gamma);
+        if (setup) setupOffset = *setup / 219.0;
     }
     Controls() = default;
     // Whether any control is set: one with none leaves a pixel exactly as it is.
@@ -107,26 +121,22 @@ Ycc controls(const Controls& k, Ycc p) {
         p.cr = cr;
     }
     if (k.saturation) {
-        const double s = *k.saturation / 100.0;
-        p.cb *= s;
-        p.cr *= s;
+        p.cb *= k.saturationFactor;
+        p.cr *= k.saturationFactor;
     }
     if (k.contrast) {
-        // -100 maps every pixel to neutral grey, 100 is "maximum contrast" (ours: a slope of 20), about mid grey.
-        const double v = *k.contrast / 100.0;
-        const double f = v <= 0.0 ? 1.0 + v : 1.0 / std::max(0.05, 1.0 - 0.95 * v);
-        p.y = 125.5 + (p.y - 125.5) * f;
-        p.cb *= std::max(0.0, std::min(1.0, f));
-        p.cr *= std::max(0.0, std::min(1.0, f));
+        p.y = 125.5 + (p.y - 125.5) * k.contrastFactor;
+        p.cb *= k.contrastChroma;
+        p.cr *= k.contrastChroma;
     }
     if (k.brightness) p.y += *k.brightness; // "adds 100 to the luminance value of every pixel"
     if (k.gain || k.gamma || k.setup) {
         // Gain "based on a percentage of the original luminance", Gamma on the midtones (raising it lightens them),
         // Setup the black point in 8-bit steps; on the 16-235 range.
         double l = (p.y - 16.0) / 219.0;
-        if (k.gain) l *= *k.gain / 100.0;
-        if (k.gamma && l > 0.0) l = std::pow(l, 1.0 / std::max(0.1, *k.gamma));
-        if (k.setup) l += *k.setup / 219.0;
+        if (k.gain) l *= k.gainFactor;
+        if (k.gamma && l > 0.0) l = std::pow(l, k.gammaPower);
+        if (k.setup) l += k.setupOffset;
         p.y = 16.0 + 219.0 * l;
     }
     return p;
@@ -457,10 +467,10 @@ std::array<double, 3> colorCorrectedPixel(const ColorCorrection& c, const std::a
     return CorrectionPlan(c).pixel(rgb);
 }
 
-Picture colorCorrectedPicture(const ColorCorrection& c, const Picture& picture) {
+Picture colorCorrectedPicture(const ColorCorrection& c, Picture picture) {
     if (c.values.isEmpty()) return picture;
     const CorrectionPlan plan(c);
-    Picture out = picture;
+    Picture out = std::move(picture);
     float* data = out.data().data();
     const std::size_t pixels = out.data().size() / 4;
     auto correct = [&plan, data](std::size_t from, std::size_t to) {

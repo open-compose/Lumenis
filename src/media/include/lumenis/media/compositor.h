@@ -148,6 +148,9 @@ bool isImageEffect(const model::Effect& effect);
 // where Picture-in-Picture leaves the tracks below to show and the Background Color where the others
 // leave no picture. Picture-in-Picture's Foreground Level is applied.
 Picture imageEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// The same for a caller done with `layer`: the effects that change a picture where it is (the Color Effect, the Safe
+// Color Limiter) work in it instead of a copy (10.1b); the others are as above.
+Picture imageEffectPicture(const model::Effect& effect, Picture&& layer, double time, const model::EffectSpan& span);
 // The 3D effects (ROADMAP 6.7a; docs/spec/3d-effects.md, warp3d.cpp): the 3D Warp effect (Blend, FX Guide
 // p.457) and the Xpress 3D effects (p.489), and effects promoted to 3D (model::promoteTo3D). True when `effect`
 // is one of them.

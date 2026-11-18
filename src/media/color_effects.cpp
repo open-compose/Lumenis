@@ -104,10 +104,10 @@ void blurPicture(Picture& picture, int rx, int ry) {
     boxBlur(picture, ry, false);
 }
 
-Picture safeColorLimiterPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
+Picture safeColorLimiterPicture(const model::Effect& e, Picture layer, double time, const model::EffectSpan& span) {
     const model::SafeLimiting limiting = model::safeColorLimiting(e, time, span);
     if (!limiting.compositeLuma && !limiting.rgb) return layer;
-    Picture out = layer;
+    Picture out = std::move(layer);
     PixelData& data = out.data();
     for (std::size_t i = 0; i + 3 < data.size(); i += 4) {
         const float a = data[i + 3];
@@ -120,7 +120,7 @@ Picture safeColorLimiterPicture(const model::Effect& e, const Picture& layer, do
     return out;
 }
 
-Picture colorEffectPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
+Picture colorEffectPicture(const model::Effect& e, Picture layer, double time, const model::EffectSpan& span) {
     const QString cat = QStringLiteral("Color Effect Parameters");
     auto num = [&](const char* name, double fallback) { return value(e, cat, QLatin1String(name), time, span, fallback); };
     auto flag = [&](const QString& name) { return e.parameters.value(cat).toObject().value(name).toBool(); };
@@ -156,7 +156,7 @@ Picture colorEffectPicture(const model::Effect& e, const Picture& layer, double 
     const double rangeHigh = fullRange ? 255.0 : 235.0;
     const double span_ = std::max(whitePoint - blackPoint, 1.0);
 
-    Picture out = layer;
+    Picture out = std::move(layer);
     for (std::size_t i = 0; i < out.data().size(); i += 4) {
         float* px = &out.data()[i];
         const float alpha = px[3];

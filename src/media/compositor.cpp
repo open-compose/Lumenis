@@ -424,7 +424,7 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
         const model::EffectSpan span(std::max<std::int64_t>(segment->length, 1));
         p = colorCorrectedPicture(correction.keyframes.isEmpty() ? correction
                                                                  : model::correctionAt(correction, span.timeOf(static_cast<double>(std::max<std::int64_t>(offset, 0))), span),
-                                  p);
+                                  std::move(p));
     }
     return p;
 }
@@ -736,7 +736,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     const int w = c.size.width();
     const int h = c.size.height();
     if (!c.sequence || w <= 0 || h <= 0) return Picture(w, h);
-    Picture result(w, h);
+    // The picture so far. It starts empty and is made transparent only when something reads it (`below()`): the first
+    // layer laid on a blank frame is moved in as it is, so the zeroing was 33 MB of writes a 1080p frame for nothing
+    // (10.1b).
+    Picture result;
+    auto below = [&]() -> Picture& {
+        if (result.isNull()) result = Picture(w, h);
+        return result;
+    };
     // Whether `result` is still the transparent picture it starts as: the first layer laid over it is then the layer
     // itself (layer + 0), so it is taken as it is rather than blended (10.1b).
     bool blank = true;
@@ -767,7 +774,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             result = Picture::fromImage(*image, w, h, c.interpolation);
             result.quantize(c.precision);
             blank = false;
-            if (matteKeys) lastStart = result;
+            if (matteKeys) lastStart = below();
             first = i + 1;
             break;
         }
@@ -777,21 +784,21 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     for (qsizetype i = first; i < c.tracks.size(); ++i) {
         const QString& name = c.tracks.at(i);
         if (!pendingStamps.isNull()) {
-            result = over(pendingStamps, std::move(result));
+            result = over(pendingStamps, std::move(below()));
             pendingStamps = {};
             blank = false;
         }
         if (c.effects) {
             Stamps stamps = stampsOf(c, name, frame);
             if (!stamps.under.isNull()) {
-                result = over(stamps.under, std::move(result));
+                result = over(stamps.under, std::move(below()));
                 blank = false;
             }
             pendingStamps = std::move(stamps.over);
         }
         if (matteKeys) {
             beneath = std::move(lastStart);
-            lastStart = result;
+            lastStart = below();
         }
         const auto tf = trackFrame(*c.sequence, name, frame);
         if (!tf) continue;
@@ -840,12 +847,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             layer.quantize(c.precision);
         } else if (tf->segment && tf->segment->effect && model::isClassicTitleEffect(*tf->segment->effect)) {
             // A Title Effect clip's segment is media, keyed whether or not effects are computed.
-            result = classicTitleLayer(c, *tf->segment, tf->offset, result, missing);
+            result = classicTitleLayer(c, *tf->segment, tf->offset, below(), missing);
             result.quantize(c.precision);
             continue;
         } else if (tf->segment && tf->segment->effect && model::isMatteKeyClipEffect(*tf->segment->effect)) {
             // So is a Matte Key clip's (9.2b).
-            result = matteKeyClipLayer(c, *tf->segment, tf->offset, result, missing);
+            result = matteKeyClipLayer(c, *tf->segment, tf->offset, below(), missing);
             result.quantize(c.precision);
             continue;
         } else {
@@ -866,7 +873,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Avid Titler+ (p.302-324): the title over the segment, filler's empty picture included.
                 layer = titlePicture(e, layer, time, model::EffectSpan(std::max<std::int64_t>(length, 1)));
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
@@ -874,7 +881,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // SubCap's caption over the segment's own picture, filler's empty picture included (subcap.cpp).
                 layer = subcapPicture(e, layer);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
@@ -882,12 +889,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Timecode Burn-In's displays over the segment's own picture (burn_in.cpp).
                 layer = burnInPicture(e, layer, c, name, frame);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
             if (e.category == QLatin1String("Key") && e.name == QLatin1String("Matte Key")) {
-                result = matteKeyPicture(e, beneath, result, layer, time, length);
+                result = matteKeyPicture(e, beneath, below(), layer, time, length);
                 result.quantize(c.precision);
                 continue;
             }
@@ -906,7 +913,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                     layer = regionStabilizePicture(e, layer, tf->offset, seg.length, material, pictureAt);
                 }
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
@@ -942,13 +949,13 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 if (!made.isNull()) layer = Picture::fromImage(made, w, h, c.interpolation);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
             if (is3DEffect(e)) {
                 // A 3D effect places the segment in 3D over the tracks below (FX Guide ch.11; warp3d.cpp).
-                result = warp3dPicture(e, layer, std::move(result), time, length);
+                result = warp3dPicture(e, layer, std::move(below()), time, length);
                 result.quantize(c.precision);
                 continue;
             }
@@ -956,7 +963,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Avid Pan & Zoom: the image over the placeholder segment (FX Guide p.239-241).
                 layer = panZoomPicture(e, layer, time, length, c.effectPreview);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
@@ -972,19 +979,19 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 const model::ColorCorrection shapeOwn = model::shapeCorrectionOf(e);
                 const model::ColorCorrection shapeAt = shapeOwn.keyframes.isEmpty() ? shapeOwn : model::correctionAt(shapeOwn, t, span);
                 if (tf->segment->isFiller()) {
-                    result = colorCorrectedShapesPicture(e, result, at, shapeAt, t, span, c.shapeView);
+                    result = colorCorrectedShapesPicture(e, below(), at, shapeAt, t, span, c.shapeView);
                     result.quantize(c.precision);
                     continue;
                 }
                 layer = colorCorrectedShapesPicture(e, layer, at, shapeAt, t, span, c.shapeView);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
             if (isPlasmaWipe(e)) {
                 // A PlasmaWipe on a segment, "static wipes" of the segment over the tracks below (p.443).
-                result = plasmaWipeSegmentPicture(e, layer, result, time, length);
+                result = plasmaWipeSegmentPicture(e, layer, below(), time, length);
                 result.quantize(c.precision);
                 continue;
             }
@@ -1001,7 +1008,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 };
                 frames.interlaced = c.interlaced;
                 frames.topFieldFirst = c.topFieldFirst ? c.topFieldFirst(seg) : true;
-                result = intraframePicture(e, layer, result, time, length, &frames);
+                result = intraframePicture(e, layer, below(), time, length, &frames);
                 result.quantize(c.precision);
                 continue;
             }
@@ -1015,7 +1022,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 }
                 layer = ofxSegmentPicture(e, layer, time, length, more);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
@@ -1026,24 +1033,24 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                         layer = transformed(layer, *map);
                     }
                 }
-                if (c.limitSafeColors || e.name != QLatin1String("Safe Color Limiter")) layer = imageEffectPicture(e, layer, time, length);
+                if (c.limitSafeColors || e.name != QLatin1String("Safe Color Limiter")) layer = imageEffectPicture(e, std::move(layer), time, length);
                 layer.quantize(c.precision);
-                result = over(layer, std::move(result));
+                result = over(layer, std::move(below()));
                 result.quantize(c.precision);
                 continue;
             }
             if (isPanAndScan(e)) {
                 // Pan and Scan reformats its segment and the tracks below, as the other Reformat effects do
                 // (p.229-231), unless the Effect Preview shows the original.
-                result = over(layer, std::move(result));
-                if (!c.effectPreview) result = panScanPicture(e, result, time, length);
+                result = over(layer, std::move(below()));
+                if (!c.effectPreview) result = panScanPicture(e, below(), time, length);
                 result.quantize(c.precision);
                 continue;
             }
             if (isReformat(e)) {
                 // "A Reformat effect works on all tracks below the track to which you apply it" (p.229),
                 // and on its own segment.
-                result = reformatPicture(e, over(layer, result), time, length);
+                result = reformatPicture(e, over(layer, below()), time, length);
                 result.quantize(c.precision);
                 continue;
             }
@@ -1052,9 +1059,9 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // to the segment. Ours: over the segment's length unless its Level is keyframed, as a
                 // transition's is.
                 const double progress = keyed ? model::numberAt(e, foreground, level, time, length).value_or(100.0) / 100.0 : time;
-                Picture below = std::move(result);
-                if (parameterFlag(e, foreground, QStringLiteral("Swap Sources"))) std::swap(below, layer);
-                result = wipePicture(e, std::move(below), std::move(layer), progress, time, length);
+                Picture under = std::move(below());
+                if (parameterFlag(e, foreground, QStringLiteral("Swap Sources"))) std::swap(under, layer);
+                result = wipePicture(e, std::move(under), std::move(layer), progress, time, length);
                 result.quantize(c.precision);
                 continue;
             }
@@ -1070,11 +1077,13 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         if (wasBlank && layer.width() == w && layer.height() == h) {
             result = std::move(layer);
         } else {
-            result = over(layer, std::move(result));
+            result = over(layer, std::move(below()));
         }
         result.quantize(c.precision);
     }
-    if (!pendingStamps.isNull()) result = over(pendingStamps, std::move(result));
+    if (!pendingStamps.isNull()) result = over(pendingStamps, std::move(below()));
+    // A frame no track gave a picture to is transparent.
+    if (blank) return below();
     return result;
 }
 
