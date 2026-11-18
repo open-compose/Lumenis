@@ -1,7 +1,8 @@
 # Cutthulhu — Project Plan and Roadmap
 
 Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push. The first
-release, 2026.1, was published on 2026-11-16 (Phase 12's status).
+release, 2026.1, was published on 2026-11-16 (Phase 12's status). Since then 10.1b (the slow paths) and 11.6 (Phase 11's
+left-overs) are done (2026-11-18); the next release carries them.
 
 ## 1. Goal and honest scope
 
@@ -2012,6 +2013,17 @@ Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 
   Not taken up: what needs capture or output hardware, a GPU or Avid's services, OMFI, Windows Media, and the
   resolutions no open encoder makes (DNxHD 10 and 100, XAVC Intra, DNxUncompressed).
 
+**Status (Phase 11, 2026-11-18):** 11.1 to 11.6 are done, so Phase 11 is. What stays, each with its reason in its step:
+- for hardware, a GPU or Avid's services: capture, video output, the GPU options, the Media Indexer, network drive
+  filtering, Generate LTC on Playback;
+- for the seat or samples: OMFI and the AAF render track of Mixdown with Video Edits (11.6e);
+- for an open encoder: XAVC Intra, DNxUncompressed, DNxHD 10 and 100;
+- for Windows: Windows Media;
+- for linking volumes and sources of several resolutions: the Link setting's Quality and Volume Mounting tabs;
+- for a project edit timebase: the lower edit timebase default;
+- because the guide describes them only by name or in the Help: Effect Apertures, Thumbwheels, Maximum Real Time
+  Streams and Ignore Real Time Stream Counts.
+
 ### Phase 12 — Finishing Phase 10
 
 The owner's choice (2026-11-15), after Phase 11: finish Phase 10's open steps before anything new. 10.0, going public,
@@ -2086,18 +2098,20 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **Work that can go ahead now**
 
-11. 10.1b is done (the audio mix on macOS and Windows is profiled only if editors report it slow). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
-    benchmark much faster (the step's notices say which).
-12. 11.6, the left-over items recorded in Phase 11's status, in parts (Phase 11): 11.6a, Live mode on surround pans,
-    11.6b, Time Shift's Formant shift and Follow, 11.6c, Undo Only Record Events, 11.6d, the settings options that need
-    no hardware, and 11.6e, the export and link options, are done, so 11.6 is.
+11. The next release, 2026.2, with 10.1b's speed-ups and 11.6's features (Actions > Release on `main` with no version,
+    BUILDING.md "Releases"); 2026.1's update check tells its users, which is also the release gate's check of the
+    update check from an older build.
+12. Keeping the hosted runners' benchmark baselines current (10.1c, docs/spec/performance.md): record them again from
+    CI's logs after a change that makes a benchmark much faster (the step's notices say which). The audio mix on macOS
+    and Windows, about twice Linux's time, is profiled only if editors report slow audio (10.1b).
 13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
     released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
 
 **Waiting on a seat, hardware or a licence**
 
 14. With the licensed Media Composer seat again: Phase 2 gate 2's linking (M), Phase 3 gates 2 and 3 (our bins and
-    AAF through Media Composer and back), Phase 4 gate 1's reference sequences, Phase 5's reference renders, and 3.5
-    (`.avp` projects and `.avs` settings, once there are samples).
+    AAF through Media Composer and back), Phase 4 gate 1's reference sequences, Phase 5's reference renders, 3.5
+    (`.avp` projects and `.avs` settings, once there are samples), and how an AAF holds Mixdown with Video Edits' render
+    track for Pro Tools (11.6e, docs/spec/aaf.md).
 15. With the SDKs and hardware: 7.3c, the AJA and Blackmagic modules, and the video output hardware gate.
 16. DCP validation once asdcplib is on a runner; XAVC Intra and DNxUncompressed once an open encoder exists (11.1).

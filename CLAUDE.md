@@ -1164,8 +1164,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   and link options (AAF's Split Tracks to Mono and Mixdown with Video Edits in `prepareAafMedia`, Cineon `src/media/
   cineon.*` and Photoshop stills, AVI `MovieContainer::Avi` with `media::fileFields`, Live Link `MainWindow::
   checkLiveLinks`, Multichannel Audio `MultichannelMapDialog` and the settings' `trackFormats` type, Filter Out System and
-  Launch Drive `media::setDriveFilters`), is done, so 11.6 is. 10.6 is an update check that only tells the user (no
-  automatic updates, the owner's decision).
+  Launch Drive `media::setDriveFilters`), is done, so 11.6 and Phase 11 are (2026-11-18; what stays dimmed, and why, is
+  in ROADMAP's Phase 11 status). A settings option whose effect is always so here is `"always": true` (shown checked
+  and dimmed); a value a dialog of the setting edits needs an option type of its own in `SettingsDialog`, as
+  `trackFormats` is, since a `"button"` option only tells MainWindow. The next release (2026.2) carries 10.1b and 11.6.
+  10.6 is an update check that only tells the user (no automatic updates, the owner's decision).
   Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
   (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from
   `main_window_updates.cpp`, Help > Check for Updates, the Interface setting's Check for Updates at Startup, the
