@@ -4,7 +4,7 @@
   "machines": {
     "github-macos-15": {
       "benchmarks": {
-        "audio_mix_16_tracks": 147.03,
+        "audio_mix_16_tracks": 103.5,
         "bin_read_10k": 44.28,
         "bin_show_10k": 6.4,
         "bin_sort_10k": 22.64,
@@ -30,7 +30,7 @@
     },
     "github-macos-26": {
       "benchmarks": {
-        "audio_mix_16_tracks": 152.49,
+        "audio_mix_16_tracks": 76.7,
         "bin_read_10k": 38.48,
         "bin_show_10k": 6.65,
         "bin_sort_10k": 24.01,
@@ -56,7 +56,7 @@
     },
     "github-ubuntu-24.04": {
       "benchmarks": {
-        "audio_mix_16_tracks": 47.57,
+        "audio_mix_16_tracks": 40.7,
         "bin_read_10k": 59.67,
         "bin_show_10k": 5.79,
         "bin_sort_10k": 17.58,
@@ -82,7 +82,7 @@
     },
     "github-windows-2022": {
       "benchmarks": {
-        "audio_mix_16_tracks": 136.94,
+        "audio_mix_16_tracks": 79.0,
         "bin_read_10k": 98.55,
         "bin_show_10k": 10.31,
         "bin_sort_10k": 42.21,
