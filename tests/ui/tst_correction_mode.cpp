@@ -210,6 +210,42 @@ private slots:
         QCOMPARE(r.position(), 30);
     }
 
+    // Segment Preview (FX Guide p.710-711): the shot with the Correction setting's Pre-Roll and Post-Roll around it,
+    // once, then back; only in Color Correction mode, and from the monitors' button.
+    void segmentPreview() {
+        Rig r;
+        r.at(30); // in B, frames 25-44
+        QVERIFY(!r.timeline.segmentPreview());
+        r.timeline.setCorrectionMode(true);
+        Timeline::Options o = r.timeline.options();
+        o.correctionPreroll = 0;
+        o.correctionPostroll = 0;
+        r.timeline.setOptions(o);
+        r.at(30);
+        QVERIFY(r.timeline.perform(QStringLiteral("cc.segment_preview")));
+        QVERIFY(r.composer.isPlaying());
+        QCOMPARE(r.position(), 25); // the shot's first frame
+        std::int64_t furthest = 0;
+        for (int i = 0; i < 100 && r.composer.isPlaying(); ++i) {
+            r.composer.advance(40);
+            if (r.composer.isPlaying()) furthest = std::max(furthest, r.position());
+        }
+        QVERIFY(!r.composer.isPlaying());
+        QVERIFY2(furthest <= 44, qPrintable(QString::number(furthest))); // not into C
+        QCOMPARE(r.position(), 30);
+        // A second of each side: from 5 frames into A, by way of the filler.
+        o.correctionPreroll = 1;
+        o.correctionPostroll = 1;
+        r.timeline.setOptions(o);
+        QToolButton* button = r.monitors()->monitorButton(1, QStringLiteral("cc.segment_preview"));
+        QVERIFY(button);
+        button->click();
+        settle();
+        QVERIFY(r.composer.isPlaying());
+        QCOMPARE(r.position(), 0);
+        r.composer.stop();
+    }
+
     void scopes() {
         // The waveform and vectorscope commands in the Source menu (p.591, p.686-687): "Media Composer displays the
         // information for the currently active monitor".
@@ -251,6 +287,34 @@ private slots:
         QVERIFY(green > 0);
         m->setPal(true);
         QVERIFY(m->isPal());
+
+        // Waveform/Vectorscope Updates in Real-Time (p.1166): on, the scope follows playback; off, it holds while
+        // playing and measures again when playback stops.
+        r.at(30);
+        picture->grab();
+        QCOMPARE(m->scopeFrame(2), 30);
+        r.composer.setActiveMonitor(MonitorId::Record);
+        auto playFor = [&](int ms) {
+            r.composer.perform(QStringLiteral("play.play_forward"));
+            r.composer.advance(ms);
+            picture->grab();
+        };
+        playFor(400);
+        QVERIFY(r.composer.isPlaying());
+        QVERIFY(m->scopeFrame(2) > 30);
+        r.composer.stop();
+        m->setScopesRealTime(false);
+        r.at(30);
+        picture->grab();
+        QCOMPARE(m->scopeFrame(2), 30);
+        playFor(400);
+        QVERIFY(r.composer.isPlaying());
+        QCOMPARE(m->scopeFrame(2), 30); // held
+        r.composer.stop();
+        settle();
+        picture->grab();
+        QCOMPARE(m->scopeFrame(2), r.position());
+        QVERIFY(r.position() > 30);
     }
 
     void safeColorWarnings() {

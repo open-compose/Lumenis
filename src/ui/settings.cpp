@@ -38,7 +38,7 @@ QString SettingKind::title() const {
 }
 
 // The document is {"settings": [{"kind", "scope", "page", "opens", "versions": [{"name", "values"}], "tabs": [{"name", "options":
-// [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "guide", "later",
+// [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "guide", "later", "always",
 // "choices": [{"value", "label", "later"}], "choicesFrom"}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
     SettingsSchema schema;
@@ -82,6 +82,7 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.page = oo.value(QStringLiteral("page")).toInt();
                 option.fxGuide = oo.value(QStringLiteral("guide")).toString() == QLatin1String("fx");
                 option.later = oo.value(QStringLiteral("later")).toBool();
+                option.always = oo.value(QStringLiteral("always")).toBool();
                 option.ours = oo.value(QStringLiteral("ours")).toBool();
                 option.choicesFrom = oo.value(QStringLiteral("choicesFrom")).toString();
                 option.applies = oo.value(QStringLiteral("applies")).toString();
@@ -257,7 +258,7 @@ QJsonValue Settings::value(const QString& kind, const QString& key) const {
 
 QJsonValue SettingOption::effectiveValue(const QJsonValue& stored) const {
     // Options not available yet keep their default.
-    if (later || stored.isUndefined()) return defaultValue;
+    if (later || always || stored.isUndefined()) return defaultValue;
     if (stored.type() != defaultValue.type() && !defaultValue.isNull()) return defaultValue;
     // A choice that is not available yet counts as the default.
     if (type == QLatin1String("choice")) {

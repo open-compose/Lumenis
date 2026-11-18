@@ -718,6 +718,9 @@ public:
     // Runs a Composer command by id (the buttons, the menus and the
     // keyboard all come here). Returns false if it is not one.
     bool perform(const QString& commandId);
+    // Puts a mark step's marks back (`before` for Undo, else `after` for Redo) on the clip it names, shown or not. False
+    // when the clip is no longer loaded in that monitor.
+    bool restoreMarks(const model::MarkChange& change, bool before);
 
     // Whether perform() knows the command.
     static bool handles(const QString& commandId);
@@ -755,6 +758,9 @@ signals:
     void commandRequested(const QString& commandId);
     // A command the Composer carried out, after it did.
     void performed(const QString& commandId);
+    // A command changed the shown clip's marks (Mark IN, Clear Both Marks ...; p.405-411), named `description` as the
+    // command is: the Timeline keeps it as an undo step (Undo Only Record Events, p.1160).
+    void marksEdited(const model::MarkChange& change, const QString& description);
     // The Effect Preview: a keyframe indicator in the position bar was clicked (Ctrl: `extend`), at
     // `frame` frames into the effect (p.103); a toolbar button the Composer does not carry out itself
     // (Add Keyframe, Go to Previous/Next Event), with Alt held or not.

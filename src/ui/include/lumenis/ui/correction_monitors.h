@@ -144,7 +144,17 @@ public:
     // The YC Waveform's scale: PAL (millivolts) or NTSC (IRE), by the project's format (p.690).
     void setPal(bool pal);
     bool isPal() const { return pal_; }
+    // The General setting's NTSC Has Setup (p.1192, on by default): the NTSC YC Waveform's black at 7.5 IRE, else 0 IRE.
+    void setNtscSetup(bool on);
+    bool ntscSetup() const { return ntscSetup_; }
     bool dualSplitDuringPlayback() const { return dualSplitPlayback_; }
+    // Waveform/Vectorscope Updates in Real-Time (the Correction setting, p.1166; on by default): off, a monitor showing
+    // a scope holds it while the Composer plays and measures again when playback stops (ours: the guide gives no
+    // description; the name says what it turns off).
+    void setScopesRealTime(bool on);
+    bool scopesRealTime() const { return scopesRealTime_; }
+    // The frame a monitor showing a scope last measured; -1 before any, or for a monitor not showing one yet.
+    std::int64_t scopeFrame(int monitor) const;
     // The Safe Colors project setting (FX Guide ch.23; 6.10e4b). While a limit type is set to Warn and a monitor's
     // picture exceeds it, "an orange safe color warning triangle in the top left corner of the image, along with warning
     // indicators for each of the safe color value types that are currently set to warn" (p.724): a column each,
@@ -217,6 +227,8 @@ private:
     Sampling sampling_ = Sampling::None;
     bool averaging_ = false;
     bool dualSplitPlayback_ = true;
+    bool scopesRealTime_ = true;
+    bool ntscSetup_ = true;
     bool pal_ = false;
     model::SafeColorLimits safeColors_;
     std::function<model::ColorCorrection()> ranges_;

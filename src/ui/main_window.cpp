@@ -1154,6 +1154,9 @@ void MainWindow::createPanels() {
         model::BinItem item = model::newSequence(doc->bin(), project_->settings.format.editRate,
                                                  QDateTime::currentDateTimeUtc(), binContainer_->defaultStartTimecode());
         item.fields.insert(QStringLiteral("Format"), binContainer_->sequenceFormat());
+        if (!binContainer_->defaultStartEdgecode().isEmpty()) {
+            item.fields.insert(QStringLiteral("Master Edge"), binContainer_->defaultStartEdgecode());
+        }
         // Default Sync Locks On (p.1220).
         if (timeline_->options().defaultSyncLocks) model::syncLockAllTracks(item);
         return std::make_pair(doc->nodeId(), item);
@@ -3192,28 +3195,8 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     if (audioEq_ && audioEq_->bypassed()) {
         for (media::AudioPiece& piece : pieces) piece.eq.reset();
     }
-    // Live mode (p.724): "When you play the audio, the system uses your new settings" — each
-    // track's Live Mix level on top of what it plays, like an external mixer's fader (ours), and
-    // its Live Mix pan, once set, in place of its pans. Surround pans and multichannel tracks keep
-    // theirs.
-    if (audioMixer_ && audioMixer_->mode() == AudioMixer::Mode::Live) {
-        for (media::AudioPiece& piece : pieces) {
-            const QString track = piece.track.section(QLatin1Char('#'), 0, 0);
-            if (track.isEmpty()) continue;
-            const auto [db, pan] = audioMixer_->liveValue(track);
-            if (audioMixer_->hasLivePan(track) && piece.speaker < 0 && !piece.surround) {
-                piece.pan = pan;
-                piece.panKeys.clear();
-                media::panGains(pan, piece.gainDb, &piece.left, &piece.right);
-            }
-            if (db != 0.0) {
-                const float gain = db <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, db / 20.0));
-                piece.left *= gain;
-                piece.right *= gain;
-                piece.scale *= gain;
-            }
-        }
-    }
+    // Live mode (p.724): what the mixer's Live Mix makes of them.
+    if (audioMixer_) audioMixer_->applyLiveMix(pieces);
     // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces), and the Audio Project
     // setting's Output Gain, "the volume of global audio output" (p.920, p.1150).
     const double master = (audioMixer_ && !withoutMasterFader_ ? audioMixer_->masterGain() : 0.0) + outputGainDb();
@@ -9081,6 +9064,7 @@ void MainWindow::applySettings() {
     timeline_->setAlternatingPan(s.text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered"));
     // General settings (p.1192).
     binContainer_->setDefaultStartTimecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartTc")));
+    binContainer_->setDefaultStartEdgecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartEc")));
 
     // Composer settings (p.1158-1160).
     const QString composer = QStringLiteral("Composer");
@@ -9177,6 +9161,7 @@ void MainWindow::applySettings() {
     o.syncPointEditing = s.flag(composer, QStringLiteral("syncPointEditing"));
     o.singleMarkEditing = s.flag(composer, QStringLiteral("singleMarkEditing"));
     o.phantomMarks = s.flag(composer, QStringLiteral("phantomMarks"));
+    o.undoOnlyRecordEvents = s.flag(composer, QStringLiteral("undoOnlyRecord"));
     o.autoCreateTracks = s.flag(composer, QStringLiteral("autoCreateTracks"));
     o.autoEnableSourceTracks = s.flag(composer, QStringLiteral("autoEnableSourceTracks"));
     o.copySourceMarkers = s.flag(composer, QStringLiteral("copySourceMarkers"));
@@ -9193,6 +9178,7 @@ void MainWindow::applySettings() {
         e.setPositionToKeyframe = s.flag(fx, QStringLiteral("setPositionToKeyframe"));
         e.updatePositionWhilePlaying = s.flag(fx, QStringLiteral("updatePositionWhilePlaying"));
         e.showModeMenu = s.flag(fx, QStringLiteral("showAddKeyframeModeMenu"));
+        e.realTimeUpdate = s.flag(fx, QStringLiteral("realTimeUpdate"));
         const QString mode = s.text(fx, QStringLiteral("addKeyframeCommand"));
         static const char* const modes[] = {"activeParameter", "activeGroup", "openGroups", "enabledGroups", "openGraphs", "allParameters"};
         for (int i = 0; i < 6; ++i) {
@@ -9205,6 +9191,8 @@ void MainWindow::applySettings() {
     o.trimAutoFocus = s.flag(trim, QStringLiteral("autoFocus"));
     o.trimPreroll = s.value(trim, QStringLiteral("preroll")).toInt(2);
     o.trimPostroll = s.value(trim, QStringLiteral("postroll")).toInt(2);
+    o.correctionPreroll = s.value(QStringLiteral("Correction"), QStringLiteral("preroll")).toInt(3);
+    o.correctionPostroll = s.value(QStringLiteral("Correction"), QStringLiteral("postroll")).toInt(3);
     o.trimIntermission = s.value(trim, QStringLiteral("intermission")).toInt(0);
     o.jklTrim = s.flag(trim, QStringLiteral("jklTrim"));
     const QString small = s.value(trim, QStringLiteral("trimMode")).toString();
@@ -9241,6 +9229,8 @@ void MainWindow::applySettings() {
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
             m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));
             m->setDualSplitDuringPlayback(s.flag(cc, QStringLiteral("dualSplitDuringPlayback")));
+            m->setScopesRealTime(s.flag(cc, QStringLiteral("scopesRealTime")));
+            m->setNtscSetup(s.flag(QStringLiteral("General"), QStringLiteral("ntscHasSetup")));
             m->setSafeColors(c.safeColors);
         }
         o.correctionUseMarks = s.flag(cc, QStringLiteral("useMarks"));

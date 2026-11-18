@@ -946,6 +946,7 @@ EffectEditor::Options EffectEditor::options() const {
     o.setPositionToKeyframe = positionToKeyframe_;
     o.updatePositionWhilePlaying = updateWhilePlaying_;
     o.showModeMenu = showModeMenu_;
+    o.realTimeUpdate = realTimeUpdate_;
     o.mode = mode_;
     return o;
 }
@@ -954,6 +955,7 @@ void EffectEditor::setOptions(const Options& o) {
     positionToKeyframe_ = o.setPositionToKeyframe;
     updateWhilePlaying_ = o.updatePositionWhilePlaying;
     showModeMenu_ = o.showModeMenu;
+    realTimeUpdate_ = o.realTimeUpdate;
     mode_ = o.mode;
     if (indentRows_ != o.indentRows || largeText_ != o.largeText) {
         indentRows_ = o.indentRows;
@@ -1377,8 +1379,8 @@ void EffectEditor::keyPressEvent(QKeyEvent* event) {
     QWidget::keyPressEvent(event);
 }
 
-// The Effect Editor shortcut menu's options (p.131-132), as the setting has them. Thumbwheels and
-// Real-Time Update wait for their controls and for rendering.
+// The Effect Editor shortcut menu's options (p.131-132), as the setting has them. Thumbwheels wait for their
+// controls (the guide describes them only in the Help).
 QMenu* EffectEditor::effectEditorMenu() {
     auto* menu = new QMenu(this);
     menu->setObjectName(QStringLiteral("effectEditorMenu"));
@@ -1397,7 +1399,7 @@ QMenu* EffectEditor::effectEditorMenu() {
     toggle(tr("Indent Rows"), indentRows_, [](Options& o, bool v) { o.indentRows = v; });
     toggle(tr("Large Text"), largeText_, [](Options& o, bool v) { o.largeText = v; });
     toggle(tr("Thumbwheels"), false, [](Options&, bool) {})->setEnabled(false);
-    toggle(tr("Real-Time Update"), true, [](Options&, bool) {})->setEnabled(false);
+    toggle(tr("Real-Time Update"), realTimeUpdate_, [](Options& o, bool v) { o.realTimeUpdate = v; });
     toggle(tr("Set Position To Keyframe"), positionToKeyframe_, [](Options& o, bool v) { o.setPositionToKeyframe = v; });
     toggle(tr("Update Position While Playing"), updateWhilePlaying_, [](Options& o, bool v) { o.updatePositionWhilePlaying = v; });
     toggle(tr("Show Add Keyframe Mode Menu"), showModeMenu_, [](Options& o, bool v) { o.showModeMenu = v; });

@@ -164,7 +164,7 @@ of p.679:
   (`Timeline::writeSurroundAutomation` from `AudioMixer::recordTick`).
 * **The Fast menu:** in a 5.1 or 7.1 sequence, Filter, Remove and Remove Hidden Pan on Track take the surround pans'
   keyframes too (ours); Adjust Pan on Track stays on the stereo pan.
-* **Not yet:** Live mode on surround pans, and copying and pasting surround keyframes.
+* **Not yet:** copying and pasting surround keyframes.
 
 ## Checks
 
@@ -195,7 +195,7 @@ of p.679:
   waveforms and Enlarge/Reduce Track.
 * Lassoing keyframes (p.722).
 * Delete Hidden Left/Right on a transition's right-click menu (p.723).
-* Surround pans in Live mode, and copied and pasted.
+* Surround pans copied and pasted.
 * Live Mix mode's Set Live Mix to Automation / as Automation (p.725-726).
 * Avid controllers and fader hardware (p.718).
 * Keyframes in AAF, OTIO, FCP XML and `.avb` interchange. They are not

@@ -158,6 +158,23 @@ void MonitorState::step(std::int64_t frames) {
     setPosition(position() + frames);
 }
 
+ClipMarks MonitorState::marks() const {
+    const LoadedClip* c = current();
+    return c ? ClipMarks{c->in, c->out, c->audioIn, c->audioOut} : ClipMarks{};
+}
+
+bool MonitorState::setMarks(const QString& itemId, const ClipMarks& marks) {
+    for (LoadedClip& c : loaded_) {
+        if (c.item.id != itemId) continue;
+        c.in = marks.in;
+        c.out = marks.out;
+        c.audioIn = marks.audioIn;
+        c.audioOut = marks.audioOut;
+        return true;
+    }
+    return false;
+}
+
 void MonitorState::markIn() {
     if (LoadedClip* c = currentMutable()) {
         c->in = c->position;

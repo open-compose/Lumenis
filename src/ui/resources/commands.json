@@ -317,6 +317,7 @@
     {"id": "cc.dual_split", "text": "Dual Split", "palette": "cc"},
     {"id": "cc.previous_uncorrected_shot", "text": "Go to Previous Uncorrected Shot", "palette": "cc"},
     {"id": "cc.next_uncorrected_shot", "text": "Go to Next Uncorrected Shot", "palette": "cc"},
+    {"id": "cc.segment_preview", "text": "Segment Preview", "palette": "cc"},
     {"id": "cc.reference_current", "text": "Reference Current", "palette": "cc"},
     {"id": "cc.update_correction", "text": "Update Correction", "palette": "cc"},
     {"id": "cc.merge_correction", "text": "Merge Correction", "palette": "cc"},

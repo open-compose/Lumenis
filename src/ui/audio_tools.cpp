@@ -1,5 +1,7 @@
 #include "lumenis/ui/audio_tools.h"
 
+#include "lumenis/media/playback.h"
+
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
@@ -829,8 +831,8 @@ void AudioMixer::syncValues() {
         MixerStrip* s = strips_.value(t);
         if (!s) continue;
         s->trackButton()->setChecked(timeline_.patch().isRecordSelected(t));
-        // Surround panning: mono and stereo tracks of a 5.1 or 7.1 sequence (p.706), in Clip and Auto mode (Live
-        // mode does not apply to surround pans yet, ours). In Auto mode the grids show the automation at the position.
+        // Surround panning: mono and stereo tracks of a 5.1 or 7.1 sequence (p.706). In Auto mode the grids show the
+        // automation at the position; in Live mode the track's Live Mix pans once moved, else what plays there.
         if (const model::Track* track = seq.track(t)) {
             const int channels = model::channelCount(track->format);
             const bool surround = seq.mixFormat() != model::AudioFormat::Stereo && channels <= 2;
@@ -843,8 +845,10 @@ void AudioMixer::syncValues() {
                 QList<model::SurroundPan> pans = seg ? model::surroundPansOf(*seg, track->format, seg->panOr(side))
                                                      : model::surroundPansOf(model::Segment{}, track->format, side);
                 if (automation && seg) pans = touchedSurround_.value(t, timeline_.surroundPansAt(t));
+                if (mode_ == Mode::Live) pans = liveSurround_.value(t, seg ? timeline_.surroundPansAt(t) : pans);
                 s->showSurroundPans(pans);
-                const bool editable = seg.has_value() && (mode_ == Mode::Clip || automation);
+                // Live values belong to the track, so its grids move with or without a segment there.
+                const bool editable = mode_ == Mode::Live || (seg.has_value() && (mode_ == Mode::Clip || automation));
                 for (int k = 0; k < channels; ++k) {
                     if (PanGrid* g = s->panGrid(k)) g->setEnabled(editable);
                 }
@@ -919,6 +923,19 @@ void AudioMixer::setSurroundPan(const QString& track, int channel, const model::
         autoSurroundPan(track, channel, pan, other, done);
         return;
     }
+    if (mode_ == Mode::Live) {
+        // Every move is heard at once (p.724), as the fader and pan knob are; the other channel follows the link.
+        const QList<model::SurroundPan> pans = liveSurroundPans(track);
+        std::optional<model::SurroundPan> other;
+        if (pans.size() == 2 && stereoLink_ != model::StereoLink::Unlinked && channel >= 0 && channel < 2) {
+            other = model::linkedPan(pans.at(1 - channel), pans.at(channel), pan, stereoLink_);
+            if (MixerStrip* s = strips_.value(track)) {
+                if (PanGrid* g = s->panGrid(1 - channel)) g->setPan(*other);
+            }
+        }
+        liveSurroundPan(track, channel, pan, other);
+        return;
+    }
     if (mode_ != Mode::Clip) return;
     const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
     if (!rec) return;
@@ -936,6 +953,29 @@ void AudioMixer::setSurroundPan(const QString& track, int channel, const model::
         }
     }
     if (done) timeline_.setSurroundPan(track, channel, pan, other);
+}
+
+QList<model::SurroundPan> AudioMixer::liveSurroundPans(const QString& track) const {
+    if (const auto it = liveSurround_.constFind(track); it != liveSurround_.constEnd()) return *it;
+    // Not moved yet: what plays at the position, or the track's default placement without a segment there.
+    if (timeline_.audioSegmentAt(track)) return timeline_.surroundPansAt(track);
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec) return {};
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    if (!t || model::channelCount(t->format) > 2) return {};
+    const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
+    return model::surroundPansOf(model::Segment{}, t->format, side);
+}
+
+void AudioMixer::liveSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                                 const std::optional<model::SurroundPan>& other) {
+    QList<model::SurroundPan> pans = liveSurroundPans(track);
+    if (channel < 0 || channel >= pans.size()) return;
+    pans[channel] = pan;
+    if (other && pans.size() == 2) pans[1 - channel] = *other;
+    liveSurround_.insert(track, pans);
+    emit liveMixChanged();
 }
 
 void AudioMixer::autoSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
@@ -974,7 +1014,9 @@ AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
     }
     const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
     delete panner_.data();
-    auto* panner = new AdvancedPanner(track, seq.mixFormat(), model::surroundPansOf(*seg, t->format, seg->panOr(side)), this);
+    const QList<model::SurroundPan> pans =
+        mode_ == Mode::Live ? liveSurroundPans(track) : model::surroundPansOf(*seg, t->format, seg->panOr(side));
+    auto* panner = new AdvancedPanner(track, seq.mixFormat(), pans, this);
     panner_ = panner;
     panner->setAttribute(Qt::WA_DeleteOnClose);
     panner->setLink(stereoLink_);
@@ -988,6 +1030,7 @@ AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
                 }
                 if (done && mode_ == Mode::Clip) timeline_.setSurroundPan(track, channel, pan, other);
                 if (mode_ == Mode::Auto) autoSurroundPan(track, channel, pan, other, done);
+                if (mode_ == Mode::Live) liveSurroundPan(track, channel, pan, other);
             });
     // The panner's link buttons set the mixer's.
     connect(panner->linkButton(), &QToolButton::clicked, this, [this] {
@@ -1281,6 +1324,7 @@ QMenu* AudioMixer::fastMenu() {
         connect(reset, &QAction::triggered, this, [this] {
             liveGain_.clear();
             livePan_.clear();
+            liveSurround_.clear();
             syncValues();
             emit liveMixChanged();
         });
@@ -1328,6 +1372,41 @@ void AudioMixer::setDisplay(const MixerDisplay& display) {
     if (master_) master_->setDisplay(display);
 }
 
+void AudioMixer::applyLiveMix(std::vector<media::AudioPiece>& pieces) const {
+    // Live mode (p.724): "When you play the audio, the system uses your new settings" — each
+    // track's Live Mix level on top of what it plays, like an external mixer's fader (ours), and
+    // its Live Mix pan, once set, in place of its pans; in a 5.1 or 7.1 sequence its Live Mix surround
+    // pans, once set, in place of its surround pans and their automation. Multichannel tracks keep
+    // their speakers.
+    if (mode_ != Mode::Live) return;
+    for (media::AudioPiece& piece : pieces) {
+        const QString track = piece.track.section(QLatin1Char('#'), 0, 0);
+        if (track.isEmpty()) continue;
+        const auto [db, pan] = liveValue(track);
+        if (hasLivePan(track) && piece.speaker < 0 && !piece.surround) {
+            piece.pan = pan;
+            piece.panKeys.clear();
+            media::panGains(pan, piece.gainDb, &piece.left, &piece.right);
+        }
+        if (piece.surround && hasLiveSurround(track)) {
+            // The channel from the piece's key ("A1" the first, "A1#2" the second; media::channelTrackKey).
+            const int channel = piece.track.contains(QLatin1Char('#')) ? piece.track.section(QLatin1Char('#'), 1).toInt() - 1 : 0;
+            const QList<model::SurroundPan> pans = liveSurround(track);
+            if (channel >= 0 && channel < pans.size()) {
+                piece.surroundPan = pans.at(channel);
+                piece.surround = media::surroundGains(piece.surroundPan, piece.surroundMix);
+                piece.surroundKeys = {};
+            }
+        }
+        if (db != 0.0) {
+            const float gain = db <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, db / 20.0));
+            piece.left *= gain;
+            piece.right *= gain;
+            piece.scale *= gain;
+        }
+    }
+}
+
 std::pair<double, int> AudioMixer::liveValue(const QString& track) const {
     return {liveGain_.value(track, 0.0), livePan_.value(track, 0)};
 }
@@ -1336,6 +1415,11 @@ void AudioMixer::setLiveMixToAutomation() {
     for (const QString& t : order_) {
         if (const auto v = timeline_.automationAt(t, model::AutomationParam::Volume)) liveGain_.insert(t, *v);
         if (const auto p = timeline_.automationAt(t, model::AutomationParam::Pan)) livePan_.insert(t, static_cast<int>(std::lround(*p)));
+        // Surround pans with their automation at the position (Timeline::surroundPansAt), on tracks that have them.
+        if (timeline_.audioSegmentAt(t)) {
+            const QList<model::SurroundPan> pans = timeline_.surroundPansAt(t);
+            if (!pans.isEmpty()) liveSurround_.insert(t, pans);
+        }
     }
     syncValues();
     emit liveMixChanged();
@@ -1344,8 +1428,12 @@ void AudioMixer::setLiveMixToAutomation() {
 bool AudioMixer::setLiveMixAsAutomation() {
     const QStringList tracks = selectedTracks();
     QHash<QString, std::pair<double, int>> live;
-    for (const QString& t : tracks) live.insert(t, liveValue(t));
-    return timeline_.setLiveMixAsAutomation(tracks, live);
+    QHash<QString, QList<model::SurroundPan>> surround;
+    for (const QString& t : tracks) {
+        live.insert(t, liveValue(t));
+        if (hasLiveSurround(t)) surround.insert(t, liveSurround_.value(t));
+    }
+    return timeline_.setLiveMixAsAutomation(tracks, live, surround);
 }
 
 // ---------------------------------------------------------------- CalibrationToneDialog

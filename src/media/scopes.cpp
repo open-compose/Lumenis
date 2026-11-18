@@ -178,7 +178,7 @@ void hdrWaveform(QImage& image, const QRect& area, const Samples& s, double maxN
 
 // YC Waveform (p.690): Y in green and the composite Y ± C in cyan, a red edge where the composite leaves its range.
 // With limits, illegal luma white and illegal composite excursions yellow (p.727).
-void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal, const model::SafeColorLimits* limits) {
+void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal, const model::SafeColorLimits* limits, bool setup) {
     Plot luma(area), chroma(area), lumaIllegal(area), chromaIllegal(area);
     bool over = false, under = false;
     for (int y = 0; y < s.height; ++y) {
@@ -209,8 +209,10 @@ void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal, co
             levelLine(p, area, levelUp(level), QStringLiteral("%1mV").arg(mv), QStringLiteral("%1%").arg(mv * 100 / 700));
         }
     } else {
-        // 7.5 IRE black and 100 IRE white: 16 and 235 on the 8-bit scale.
-        for (const auto& [level, ire] : {std::pair{16.0, 7.5}, std::pair{126.0, 53.75}, std::pair{235.0, 100.0}}) {
+        // 7.5 IRE black and 100 IRE white: 16 and 235 on the 8-bit scale. Without setup (NTSC-EIAJ, the General
+        // setting's NTSC Has Setup off, p.1192) black is 0 IRE.
+        const double black = setup ? 7.5 : 0.0;
+        for (const auto& [level, ire] : {std::pair{16.0, black}, std::pair{126.0, (black + 100.0) / 2.0}, std::pair{235.0, 100.0}}) {
             levelLine(p, area, levelUp(level), QStringLiteral("%1 IRE").arg(ire), QStringLiteral("%1%").arg(static_cast<int>(std::lround((level - 16.0) * 100.0 / 219.0))));
         }
     }
@@ -334,15 +336,15 @@ void vectorscope(QImage& image, const QRect& area, const Samples& s) {
     }
 }
 
-void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool pal, const model::SafeColorLimits* limits) {
+void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool pal, const model::SafeColorLimits* limits, bool setup) {
     switch (scope) {
     case Scope::QuadDisplay: {
         // "clockwise from the top left corner: YC Waveform, Vectorscope, RGB Histogram, RGB Parade" (p.687).
         const int w = area.width() / 2, h = area.height() / 2;
-        draw(image, QRect(area.left(), area.top(), w - 1, h - 1), s, Scope::YcWaveform, pal, limits);
-        draw(image, QRect(area.left() + w + 1, area.top(), w - 1, h - 1), s, Scope::Vectorscope, pal, limits);
-        draw(image, QRect(area.left() + w + 1, area.top() + h + 1, w - 1, h - 1), s, Scope::RgbHistogram, pal, limits);
-        draw(image, QRect(area.left(), area.top() + h + 1, w - 1, h - 1), s, Scope::RgbParade, pal, limits);
+        draw(image, QRect(area.left(), area.top(), w - 1, h - 1), s, Scope::YcWaveform, pal, limits, setup);
+        draw(image, QRect(area.left() + w + 1, area.top(), w - 1, h - 1), s, Scope::Vectorscope, pal, limits, setup);
+        draw(image, QRect(area.left() + w + 1, area.top() + h + 1, w - 1, h - 1), s, Scope::RgbHistogram, pal, limits, setup);
+        draw(image, QRect(area.left(), area.top() + h + 1, w - 1, h - 1), s, Scope::RgbParade, pal, limits, setup);
         break;
     }
     case Scope::RgbHistogram: histograms(image, area, s, false); break;
@@ -359,7 +361,7 @@ void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool 
     }
     case Scope::YWaveformHdr1000: hdrWaveform(image, area, s, 1000.0); break;
     case Scope::YWaveformHdr10000: hdrWaveform(image, area, s, 10000.0); break;
-    case Scope::YcWaveform: ycWaveform(image, area, s, pal, limits); break;
+    case Scope::YcWaveform: ycWaveform(image, area, s, pal, limits, setup); break;
     }
 }
 
@@ -404,12 +406,12 @@ double pqCode(double nits) {
     return std::pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
 }
 
-QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal, const model::SafeColorLimits* limits) {
+QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal, const model::SafeColorLimits* limits, bool ntscSetup) {
     QImage image(size.expandedTo(QSize(1, 1)), QImage::Format_RGB32);
     image.fill(Qt::black);
     const Samples s = sample(frame, std::max(size.width(), 16));
     if (s.rgb.empty()) return image;
-    draw(image, image.rect().adjusted(2, 2, -2, -2), s, scope, pal, limits);
+    draw(image, image.rect().adjusted(2, 2, -2, -2), s, scope, pal, limits, ntscSetup);
     return image;
 }
 

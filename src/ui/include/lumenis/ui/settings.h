@@ -41,6 +41,9 @@ struct SettingOption {
     int page = 0; // the Editing Guide page that describes it; 0 when not given
     bool fxGuide = false; // `page` is the FX Guide's ("guide": "fx")
     bool later = false; // shown, not available yet: value() returns the default
+    // Shown checked (its default) and dimmed: what it turns on is always so here (Use Windows compatible file names,
+    // p.1192: our names keep to those rules on every system). value() returns the default.
+    bool always = false;
     bool ours = false;  // not in the guides (no page to cite): ours, on the watch list (docs/spec/ui-inventory.md)
     QList<SettingChoice> choices;
     // Where a choice option's extra choices come from ("languages", "resolutions", "resolutionNames").

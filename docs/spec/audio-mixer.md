@@ -82,9 +82,13 @@ on the whole track. They are dimmed until a track is selected.
     (ours: the guide likens Live mode to an external mixer).
   * Its pan, once moved, takes the place of the track's pans.
   * A move while playing is heard at once.
-  * Surround pans and multichannel tracks keep their own placement.
+  * In a 5.1 or 7.1 sequence a mono or stereo track's Pan grids and Advanced
+    Panner set its Live Mix surround pans (ours: the guide's Live mode names
+    the pan without saying which). Once moved, they take the place of the
+    segments' surround pans and their automation; the stereo link applies.
+  * Multichannel tracks keep their own speakers.
 * **Set Live Mix to Automation.** Each track's Live Mix takes the volume and pan
-  automation's values at the position.
+  automation's values at the position, and its surround pans theirs.
   * The guide's table says this "permanently removes the existing ... key
     frames between the In and Out points". Its example on p.726, though,
     describes writing the Live Mix into the keyframes, which is Set Live Mix
@@ -92,7 +96,9 @@ on the whole track. They are dimmed until a track is selected.
   * We keep the keyframes for this item.
 * **Set Live Mix as Automation.** On the selected tracks between the marks, the
   volume and pan keyframes give way to the Live Mix values
-  (`model::setAutomationTo`).
+  (`model::setAutomationTo`), and so do the surround pans' automated members
+  (Front, Rear, Front/Rear and Center) where the Live Mix has surround pans.
+  Side and LFE have no automation and are not written.
   * With marks, "keyframes at the In and Out points and ... ramps from the In
     and Out points to the new value": the IN and OUT keep the values they had,
     and the value one frame inside them is the Live Mix.

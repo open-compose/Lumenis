@@ -343,6 +343,11 @@ private slots:
         tc->setText(QStringLiteral("99:99:99:99"));
         QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("01:00:00:00"));
         QVERIFY(!general.values().contains("projectFormat"));
+        // Use Windows compatible file names (p.1192): always on here, shown checked and dimmed, never stored.
+        auto* windowsNames = qobject_cast<QCheckBox*>(general.editor("windowsFileNames"));
+        QVERIFY(windowsNames && windowsNames->isChecked() && !windowsNames->isEnabledTo(&general));
+        QVERIFY(!general.values().contains("windowsFileNames"));
+        QVERIFY(general.editor("ntscHasSetup")->isEnabledTo(&general));
 
         // Timecodes are checked at the project's rate: frame 29 exists at
         // 30 fps but not at 25; 00:01:00;00 does not exist in 29.97 drop.

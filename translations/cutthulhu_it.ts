@@ -1545,6 +1545,14 @@
         <source>%1 cannot be made here: %2.</source>
         <translation type="unfinished">%1 non può essere creato qui: %2.</translation>
     </message>
+    <message>
+        <source>Formant</source>
+        <translation type="unfinished">Formante</translation>
+    </message>
+    <message>
+        <source>Follow</source>
+        <translation type="unfinished">Segui</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -3836,6 +3844,10 @@
     <message>
         <source>Check for Updates...</source>
         <translation type="unfinished">Cerca aggiornamenti...</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Anteprima segmento</translation>
     </message>
 </context>
 <context>
@@ -9753,6 +9765,10 @@ Data creazione: %4</translation>
     <message>
         <source>Remove Effect</source>
         <translation type="unfinished">Rimuovi effetto</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Anteprima segmento</translation>
     </message>
 </context>
 <context>
@@ -16764,6 +16780,10 @@ I file media non vengono eliminati.</translation>
         <source>Setting Name:</source>
         <translation type="unfinished">Nome impostazione:</translation>
     </message>
+    <message>
+        <source>Always on: Cutthulhu&apos;s names keep to these rules on every system.</source>
+        <translation type="unfinished">Sempre attivo: i nomi di Cutthulhu rispettano queste regole su ogni sistema.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::SettingsList</name>
@@ -19229,6 +19249,14 @@ I file media non vengono eliminati.</translation>
     <message>
         <source>Film</source>
         <translation type="unfinished">Pellicola</translation>
+    </message>
+    <message>
+        <source>Marks</source>
+        <translation type="unfinished">Punti IN/OUT</translation>
+    </message>
+    <message>
+        <source>Segment Preview plays in Color Correction mode.</source>
+        <translation type="unfinished">L&apos;anteprima del segmento funziona in Modalità Correzione colore.</translation>
     </message>
 </context>
 <context>

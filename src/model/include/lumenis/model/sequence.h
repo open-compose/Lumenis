@@ -911,13 +911,34 @@ int adjustClipAudio(Sequence& sequence, const QString& track, std::int64_t start
 int setDefaultClipPan(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length, int side,
                       bool commit);
 
-// One step of Edit > Undo/Redo (p.466): a sequence item before and after.
+// A loaded clip's marks (lumenis/model/monitor.h, LoadedClip): inclusive frames, nullopt when not set.
+struct ClipMarks {
+    std::optional<std::int64_t> in;
+    std::optional<std::int64_t> out;
+    std::optional<std::int64_t> audioIn;
+    std::optional<std::int64_t> audioOut;
+    bool operator==(const ClipMarks&) const = default;
+};
+
+// Marking as an undo step (Undo Only Record Events, p.1160 and p.466: with it off, undoing first takes back the marks
+// made since the last edit): the marks of the item `itemId` loaded in the Record monitor (`record`) or the Source
+// monitor, before and after.
+struct MarkChange {
+    bool record = false;
+    QString itemId;
+    ClipMarks before;
+    ClipMarks after;
+};
+
+// One step of Edit > Undo/Redo (p.466): a sequence item before and after, or a monitor's marks.
 struct EditStep {
     // The menu text of the edit; binId is the bin holding the sequence item.
-    QString description; // "Splice-in", "Overwrite", ...
+    QString description; // "Splice-in", "Overwrite", "Mark IN" ...
     QString binId;
     BinItem before;
     BinItem after;
+    // A mark step: the marks to put back, and no item (`before` and `after` unused).
+    std::optional<MarkChange> marks;
 };
 
 // Undo and redo, 100 levels (p.466).

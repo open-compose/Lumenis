@@ -556,6 +556,48 @@ private slots:
         QCOMPARE(level->parentWidget()->layout()->contentsMargins().left(), 0);
     }
 
+    // Real Time Update (p.1171): a slider being dragged shows the effect as it goes (pictureOverride) and stores it on
+    // the release; off, nothing shows until the release.
+    void realTimeUpdate() {
+        Rig rig;
+        QSlider* level = rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"));
+        QVERIFY(level);
+        const QJsonValue before = rig.effect().parameters.value(QStringLiteral("Foreground")).toObject().value(QStringLiteral("Level"));
+        const int steps = rig.timeline.history().undoCount();
+        level->setSliderDown(true);
+        level->setValue(level->minimum() + (level->maximum() - level->minimum()) / 4);
+        const auto shown = rig.editor.pictureOverride();
+        QVERIFY(shown);
+        const QJsonValue dragged = shown->second.parameters.value(QStringLiteral("Foreground")).toObject().value(QStringLiteral("Level"));
+        QVERIFY(dragged != before);
+        QCOMPARE(rig.timeline.history().undoCount(), steps); // not stored while dragging
+        QCOMPARE(rig.effect().parameters.value(QStringLiteral("Foreground")).toObject().value(QStringLiteral("Level")), before);
+        level->setSliderDown(false); // the release
+        settle();
+        QVERIFY(!rig.editor.pictureOverride());
+        QCOMPARE(rig.timeline.history().undoCount(), steps + 1);
+        QCOMPARE(rig.effect().parameters.value(QStringLiteral("Foreground")).toObject().value(QStringLiteral("Level")), dragged);
+        // Off: nothing previewed while dragging; the release still stores it.
+        EffectEditor::Options o = rig.editor.options();
+        o.realTimeUpdate = false;
+        rig.editor.setOptions(o);
+        level = rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"));
+        level->setSliderDown(true);
+        level->setValue(level->maximum());
+        QVERIFY(!rig.editor.pictureOverride());
+        level->setSliderDown(false);
+        settle();
+        QCOMPARE(rig.timeline.history().undoCount(), steps + 2);
+        // The shortcut menu's Real-Time Update shows and sets it.
+        std::unique_ptr<QMenu> menu(rig.editor.effectEditorMenu());
+        for (QAction* a : menu->actions()) {
+            if (a->text() != QStringLiteral("Real-Time Update")) continue;
+            QVERIFY(a->isEnabled() && !a->isChecked());
+            a->trigger();
+        }
+        QVERIFY(rig.editor.options().realTimeUpdate);
+    }
+
     void promoteTo3D() {
         // "In the Effect Editor, click the 3D Promote button" (FX Guide p.289): the Picture-in-Picture becomes a
         // 3D Warp with its keyframes, one undo step; "You cannot demote a 3D effect".

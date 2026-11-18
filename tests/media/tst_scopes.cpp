@@ -118,6 +118,11 @@ private slots:
         // A grey frame has no chroma and no red edge.
         const QImage grey = scopeImage(solid(QColor(128, 128, 128)), Scope::YcWaveform, QSize(kW, kH));
         QVERIFY(qRed(grey.pixel(kArea.center().x(), kArea.top())) < 200);
+        // NTSC Has Setup off (p.1192): the scale's labels change (black at 0 IRE); PAL's millivolts do not.
+        const QImage noSetup = scopeImage(solid(QColor(128, 128, 128)), Scope::YcWaveform, QSize(kW, kH), false, nullptr, false);
+        QVERIFY(noSetup != grey);
+        const QImage pal = scopeImage(solid(QColor(128, 128, 128)), Scope::YcWaveform, QSize(kW, kH), true);
+        QCOMPARE(scopeImage(solid(QColor(128, 128, 128)), Scope::YcWaveform, QSize(kW, kH), true, nullptr, false), pal);
     }
 
     void safeColorLimits() {

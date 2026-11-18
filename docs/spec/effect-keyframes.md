@@ -206,8 +206,12 @@ live in the Effect Preview monitor's position bar and come with Effect mode (6.2
 
 * A User setting, "Effect Editor": Indent Rows, Large Text ("12-point size"), Set Position To
   Keyframe, Update Position While Playing ("deselected by default"), Show Add Keyframe Mode Menu, and
-  the Add Keyframe button commands. Thumbwheels, Real Time Update and Open the color info tool when
-  picking color are dimmed until their controls, rendering and the Color Info tool come.
+  the Add Keyframe button commands. Thumbwheels stay dimmed: the guide describes them only in the Help.
+* **Real Time Update** (on by default): "Media Composer updates the rendered effect image in real time.
+  Because the update can be slow for complex effects, you have the option to deselect real-time updating"
+  (p.1171). On, dragging a slider previews the effect as it goes in the monitors and the Effect Preview
+  (`EffectEditor::previewValue`, shown through `pictureOverride` at the outermost level), as a handle drag
+  does; the release stores it as one undo step. Off, the picture changes on the release only.
 * The Effect Editor shortcut menu (right-click outside the tracks) has the same options, mirrored:
   "The Effect Editor settings and the commands in the Effect Editor shortcut menu are similar but not
   identical" (p.1171). Ours: changing one in the menu changes the setting.

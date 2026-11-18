@@ -1991,6 +1991,7 @@ QString BinContainer::newSequence(const QString& targetBin) {
     }
     model::BinItem item = model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc(), startTimecode_);
     if (!sequenceFormat_.isEmpty()) item.fields.insert(QStringLiteral("Format"), sequenceFormat_);
+    if (!startEdgecode_.isEmpty()) item.fields.insert(QStringLiteral("Master Edge"), startEdgecode_);
     if (defaultSyncLocks_) model::syncLockAllTracks(item);
     doc->addItem(item);
     if (BinView* v = viewFor(doc)) v->selectIds({item.id});

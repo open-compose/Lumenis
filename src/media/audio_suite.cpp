@@ -111,9 +111,12 @@ const QList<AudioSuiteInfo>& builtIn() {
              choice("range", QT_TRANSLATE_NOOP("QObject", "Range"), {QObject::tr("Low"), QObject::tr("Mid"), QObject::tr("High"), QObject::tr("Wide")}, 3),
              param("gain", QT_TRANSLATE_NOOP("QObject", "Gain"), "dB", -6, 0, 0),
              param("shift", QT_TRANSLATE_NOOP("QObject", "Time Shift"), "%", 25, 400, 100),
+             // Formant/Transient (p.859-860): Formant in Monophonic mode, the Transient controls and Follow in the others.
+             param("formant", QT_TRANSLATE_NOOP("QObject", "Formant"), "semitones", -24, 24, 0),
              param("window", QT_TRANSLATE_NOOP("QObject", "Window"), "ms", 6, 185, 18),
              param("threshold", QT_TRANSLATE_NOOP("QObject", "Threshold"), "dB", -40, 0, -6),
              param("decay", QT_TRANSLATE_NOOP("QObject", "Decay Rate"), "ms", 10, 1000, 100),
+             choice("follow", QT_TRANSLATE_NOOP("QObject", "Follow"), {QObject::tr("Off"), QObject::tr("On")}, 0),
              transpose});
         shift.masterClipOnly = true;
         shift.changesLength = true;
@@ -224,11 +227,18 @@ std::vector<std::vector<float>> timeProcess(const QString& id, const QMap<QStrin
     if (mode == 0) {
         o.crossfadeMs = 1500.0 / o.minPitchHz; // half the window: one and a half periods
         o.accuracy = 1.0;
-    } else {
-        o.crossfadeMs = v("window") / 2.0;
-        o.accuracy = 0.5;
+        // Transposition and the Formant control formant-correct (p.860), grain by grain.
+        const double formant = v("formant");
+        if (std::abs(semitones) > 1e-9 || std::abs(formant) > 1e-9) {
+            return formantPitchShift(channels, semitones, formant, length, o);
+        }
+        return timeStretch(channels, length, o);
     }
-    return pitchShift(channels, semitones, true, o, length);
+    o.crossfadeMs = v("window") / 2.0;
+    o.accuracy = 0.5;
+    auto out = pitchShift(channels, semitones, true, o, length);
+    // Follow (p.860): the original's level over time, stretched with it.
+    return v("follow") >= 0.5 ? followEnvelope(channels, std::move(out), length, kPlaybackRate) : out;
 }
 
 } // namespace

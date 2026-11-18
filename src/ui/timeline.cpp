@@ -2533,6 +2533,14 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     connect(&composer_, &Composer::changed, this, mapUpdate);
     connect(this, &Timeline::changed, this, mapUpdate);
     connect(&composer_, &Composer::performed, this, &Timeline::composerPerformed);
+    // Marking is an undo step (p.466), except in the Source monitor with Undo Only Record Events (p.1160).
+    connect(&composer_, &Composer::marksEdited, this, [this](const model::MarkChange& change, const QString& description) {
+        if (inCommandMarks_ || (!change.record && options_.undoOnlyRecordEvents)) return;
+        model::EditStep step;
+        step.description = description.isEmpty() ? tr("Marks") : description;
+        step.marks = change;
+        history_.push(std::move(step));
+    });
     // The Composer's buttons for the Timeline's commands (Splice-in, the Trim
     // buttons, Add Marker, ...).
     connect(&composer_, &Composer::commandRequested, this, [this](const QString& id) {
@@ -3354,6 +3362,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("cc.color_correction_mode"),
         QStringLiteral("cc.previous_uncorrected_shot"),
         QStringLiteral("cc.next_uncorrected_shot"),
+        QStringLiteral("cc.segment_preview"),
         QStringLiteral("cc.update_correction"),
         QStringLiteral("cc.merge_correction"),
         QStringLiteral("cc.flatten_correction"),
@@ -3471,7 +3480,12 @@ bool Timeline::perform(const QString& id) {
         const model::EditStep* step = undo ? history_.undo() : history_.redo();
         if (!step) return fail(undo ? tr("Nothing to undo.") : tr("Nothing to redo."));
         composer_.stop();
-        restore(step->binId, undo ? step->before : step->after);
+        if (step->marks) {
+            // A mark step: the marks go back on their clip; one no longer loaded leaves nothing to put back.
+            composer_.restoreMarks(*step->marks, undo);
+        } else {
+            restore(step->binId, undo ? step->before : step->after);
+        }
     } else if (id == QLatin1String("edit.undo_redo_list")) {
         undoRedoMenu()->popup(QCursor::pos());
     } else if (id == QLatin1String("edit.to_the_left") || id == QLatin1String("edit.to_the_right") ||
@@ -3625,6 +3639,8 @@ bool Timeline::perform(const QString& id) {
         openCorrectionManagement(CorrectionManagement::Remove);
     } else if (id == QLatin1String("cc.previous_uncorrected_shot") || id == QLatin1String("cc.next_uncorrected_shot")) {
         goToUncorrectedShot(id == QLatin1String("cc.next_uncorrected_shot") ? 1 : -1);
+    } else if (id == QLatin1String("cc.segment_preview")) {
+        return segmentPreview();
     } else if (id == QLatin1String("fx.effect_mode")) {
         // A second click leaves it (ours; FX p.684 says only that it cannot close the Effect Editor in
         // Color Correction mode).
@@ -3932,7 +3948,7 @@ void Timeline::addTrack(model::TrackKind kind, model::AudioFormat format) {
 void Timeline::commit(const QString& description, const model::BinItem& before, model::BinItem after) {
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     const QString binId = rec ? rec->binId : QString();
-    history_.push(model::EditStep{description, binId, before, after});
+    history_.push(model::EditStep{description, binId, before, after, std::nullopt});
     restore(binId, after);
 }
 
@@ -4660,8 +4676,11 @@ void Timeline::topOrTail(bool top) {
     // Top: T-R-X, Mark Clip, Mark OUT, Extract. Tail: T-E-X (p.639).
     if (!recordSequence()) return;
     composer_.setActiveMonitor(MonitorId::Record);
+    // Its marks are part of the one command, not undo steps of their own.
+    inCommandMarks_ = true;
     composer_.perform(QStringLiteral("edit.mark_clip"));
     composer_.perform(top ? QStringLiteral("edit.mark_out") : QStringLiteral("edit.mark_in"));
+    inCommandMarks_ = false;
     remove(true);
 }
 
@@ -5933,6 +5952,24 @@ bool Timeline::playTrimLoop() {
     return trimLooping_;
 }
 
+bool Timeline::playShotInContext(std::int64_t before, std::int64_t after) {
+    const auto shot = correctionShot(0);
+    if (!shot) return fail(tr("There is no clip at the position on the correction track."));
+    const model::MonitorState& r = composer_.state(MonitorId::Record);
+    const std::int64_t last = std::max<std::int64_t>(r.duration() - 1, 0);
+    const std::int64_t start = std::clamp<std::int64_t>(shot->first - before, 0, last);
+    const std::int64_t end = std::clamp<std::int64_t>(shot->second - 1 + after, start, last);
+    composer_.playOnce(MonitorId::Record, start, end, r.position());
+    return true;
+}
+
+bool Timeline::segmentPreview() {
+    if (!correctionMode_) return fail(tr("Segment Preview plays in Color Correction mode."));
+    if (!recordSequence()) return fail(tr("Load a sequence first."));
+    const auto fps = static_cast<std::int64_t>(std::max(format_.nominalFps, 1));
+    return playShotInContext(options_.correctionPreroll * fps, options_.correctionPostroll * fps);
+}
+
 bool Timeline::editReview() {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return fail(tr("Load a sequence first."));
@@ -5941,14 +5978,7 @@ bool Timeline::editReview() {
         // "Media Composer plays part of the previous clip, all of the current clip, and part of the next clip. When
         // playback is complete, the position indicator returns to its location", the parts being the Trim settings'
         // Preroll and Postroll (FX Guide p.594).
-        const auto shot = correctionShot(0);
-        if (!shot) return fail(tr("There is no clip at the position on the correction track."));
-        const model::MonitorState& r = composer_.state(MonitorId::Record);
-        const std::int64_t last = std::max<std::int64_t>(r.duration() - 1, 0);
-        const std::int64_t start = std::clamp<std::int64_t>(shot->first - options_.trimPreroll * fps, 0, last);
-        const std::int64_t end = std::clamp<std::int64_t>(shot->second - 1 + options_.trimPostroll * fps, start, last);
-        composer_.playOnce(MonitorId::Record, start, end, r.position());
-        return true;
+        return playShotInContext(options_.trimPreroll * fps, options_.trimPostroll * fps);
     }
     std::optional<std::int64_t> cut;
     if (trimMode_ && !rollers_.isEmpty()) {
@@ -7023,7 +7053,8 @@ bool Timeline::setDefaultClipPan(const QStringList& tracks, bool commit) {
     return commitSequence(commit ? tr("Commit Default Clip Pan on Track") : tr("Remove Default Clip Pan on Track"), seq);
 }
 
-bool Timeline::setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live) {
+bool Timeline::setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live,
+                                      const QHash<QString, QList<model::SurroundPan>>& surround) {
     message_.clear();
     if (!recordSequence()) return false;
     const model::MonitorState& record = composer_.state(MonitorId::Record);
@@ -7035,6 +7066,20 @@ bool Timeline::setLiveMixAsAutomation(const QStringList& tracks, const QHash<QSt
         const auto [db, pan] = live.value(t, {0.0, 0});
         changed += model::setAutomationTo(seq, t, from, to, model::AutomationParam::Volume, db, ramps, alternatingPan_);
         changed += model::setAutomationTo(seq, t, from, to, model::AutomationParam::Pan, pan, ramps, alternatingPan_);
+        // Live surround pans: each channel's automated members (Front, Rear, Front/Rear and Center; Side and LFE have
+        // no automation, p.679-680), as Auto mode writes them.
+        const QList<model::SurroundPan> pans = surround.value(t);
+        for (int channel = 0; channel < std::min<qsizetype>(pans.size(), 2); ++channel) {
+            const model::SurroundPan& p = pans.at(channel);
+            const std::pair<model::SurroundAxis, int> members[] = {{model::SurroundAxis::Front, p.front},
+                                                                   {model::SurroundAxis::Rear, p.rear},
+                                                                   {model::SurroundAxis::FrontRear, p.frontRear},
+                                                                   {model::SurroundAxis::Center, p.center}};
+            for (const auto& [axis, value] : members) {
+                changed += model::setAutomationTo(seq, t, from, to, model::surroundParam(channel, axis), value, ramps,
+                                                  alternatingPan_);
+            }
+        }
     }
     if (changed == 0) return fail(tr("There is no audio segment there to set."));
     keySelection_.clear();

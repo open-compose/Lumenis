@@ -292,6 +292,9 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
             if (o.later) {
                 row->setEnabled(false);
                 row->setToolTip(laterTip());
+            } else if (o.always) {
+                row->setEnabled(false);
+                row->setToolTip(tr("Always on: Cutthulhu's names keep to these rules on every system."));
             }
             editors_.insert(o.key, editor);
             v->addWidget(row);
@@ -417,7 +420,7 @@ QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
         for (const SettingOption& o : t.options) {
-            if (o.later || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph") ||
+            if (o.later || o.always || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph") ||
                 o.type == QLatin1String("button") || o.type == QLatin1String("applyToAll")) {
                 continue;
             }

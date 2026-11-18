@@ -47,4 +47,24 @@ std::vector<std::vector<float>> pitchShift(const std::vector<std::vector<float>>
                                            bool timeCorrection, const StretchOptions& options = {},
                                            double lengthRatio = 1.0);
 
+// Formant-correct pitch shifting (Time Shift's Monophonic mode, p.859-860: "In Monophonic mode, pitch shift can also be
+// formant-correct"): pitch-synchronous overlap-add. The sound's period is found every 5 ms (autocorrelation, from
+// `options.minPitchHz` up to 1000 Hz; unvoiced sound takes 10 ms); grains two periods long, Hann-windowed, are cut a
+// period apart and laid down closer together to raise the pitch or further apart to lower it, each from where
+// `lengthRatio` puts it in the input. A grain keeps its own shape, so the formants, the resonances that make a voice
+// sound like itself, stay where they were. `formantSemitones` (-24 to 24, the Formant control) squeezes or widens each
+// grain in time, which moves the formants by that much without moving the pitch.
+std::vector<std::vector<float>> formantPitchShift(const std::vector<std::vector<float>>& channels, double semitones,
+                                                  double formantSemitones, double lengthRatio,
+                                                  const StretchOptions& options = {});
+
+// Time Shift's Follow (Polyphonic mode, p.860: "an envelope follower that simulates the original acoustics of the audio
+// being stretched"): `stretched`, made from `original` at `ratio` times its length, is given the original's level over
+// time, stretched with it. Levels are measured over 10 ms every 5 ms on the channels' sum; the gain at each point is the
+// original's level there over the stretched one's (at most 4 times, 12 dB), smoothed between the points, so the decays
+// and attacks keep their shape instead of the overlapping windows' smear.
+std::vector<std::vector<float>> followEnvelope(const std::vector<std::vector<float>>& original,
+                                               std::vector<std::vector<float>> stretched, double ratio,
+                                               int sampleRate = 48000);
+
 } // namespace lumenis::media

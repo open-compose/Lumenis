@@ -15,6 +15,7 @@
 
 #include <functional>
 #include <optional>
+#include <vector>
 
 class QAction;
 class QButtonGroup;
@@ -29,6 +30,10 @@ class QPushButton;
 class QSlider;
 class QSpinBox;
 class QToolButton;
+
+namespace lumenis::media {
+struct AudioPiece;
+}
 
 namespace lumenis::ui {
 
@@ -377,11 +382,18 @@ public:
     // Whether the track's Live Mix pan was moved (or set from automation); MainWindow plays the
     // Live Mix level always and the pan only then.
     bool hasLivePan(const QString& track) const { return livePan_.contains(track); }
+    // A mono or stereo track's Live Mix surround pans in a 5.1 or 7.1 sequence (the Pan grids and the Advanced Panner
+    // in Live mode), once moved or set from automation: one a channel. MainWindow plays them in place of the
+    // segments' surround pans and their automation.
+    bool hasLiveSurround(const QString& track) const { return liveSurround_.contains(track); }
+    QList<model::SurroundPan> liveSurround(const QString& track) const { return liveSurround_.value(track); }
+    // In Live mode, what the Live Mix makes of the pieces that play (MainWindow::soundOf, p.724); nothing otherwise.
+    void applyLiveMix(std::vector<media::AudioPiece>& pieces) const;
     // Set Live Mix to Automation: each track's Live Mix takes the volume and pan automation's
     // values at the Record position (ours: the keyframes stay; see docs/spec/audio-mixer.md).
     void setLiveMixToAutomation();
     // Set Live Mix as Automation: Timeline::setLiveMixAsAutomation with the selected tracks' Live
-    // Mix values.
+    // Mix values, surround pans included.
     bool setLiveMixAsAutomation();
 
 signals:
@@ -439,6 +451,12 @@ private:
     QHash<QString, QString> gangs_;      // track -> gang letter
     QHash<QString, double> liveGain_; // Live mode: not saved (p.725)
     QHash<QString, int> livePan_;
+    QHash<QString, QList<model::SurroundPan>> liveSurround_;
+    // The track's Live Mix surround pans, or what plays at the position until they are moved.
+    QList<model::SurroundPan> liveSurroundPans(const QString& track) const;
+    // Live mode's side of setSurroundPan and the Advanced Panner: stores the pans and plays them at once.
+    void liveSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                         const std::optional<model::SurroundPan>& other);
     // Auto mode recording.
     QToolButton* record_ = nullptr;
     QToolButton* cancel_ = nullptr;

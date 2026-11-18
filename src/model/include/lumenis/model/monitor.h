@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/sequence.h"
 
 #include <QList>
 #include <QString>
@@ -116,6 +117,10 @@ public:
     void clearAudioOut();
     std::optional<std::int64_t> audioIn() const;
     std::optional<std::int64_t> audioOut() const;
+    // The shown clip's four marks together, and putting them back on a loaded clip (shown or not) by its item id, as
+    // Undo does for a mark step (EditStep::marks). False when the clip is no longer loaded.
+    ClipMarks marks() const;
+    bool setMarks(const QString& itemId, const ClipMarks& marks);
     bool hasAudioMarks() const { return audioIn() || audioOut(); }
     bool goToAudioIn();
     bool goToAudioOut();

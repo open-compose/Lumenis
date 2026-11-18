@@ -115,6 +115,12 @@ private slots:
         QCOMPARE(doc->bin().items.first().name, QStringLiteral("Untitled Sequence.01"));
         QCOMPARE(doc->bin().items.first().editRate, Rational(25)); // the project's
         QCOMPARE(f.container.activeView()->selectedIds(), QStringList{seq});
+        QVERIFY(!doc->bin().items.first().fields.contains(QStringLiteral("Master Edge")));
+        // The General setting's Default Starting EC (p.1192) in new sequences' Master Edge column.
+        f.container.setDefaultStartEdgecode(QStringLiteral(" 103-9025+03 "));
+        const QString second = f.container.newSequence();
+        QCOMPARE(doc->bin().item(second)->fields.value(QStringLiteral("Master Edge")), QStringLiteral("103-9025+03"));
+        doc->removeItems({second});
 
         QVERIFY(f.container.saveBin(doc));
         QCOMPARE(f.tabTexts(), QStringList{"Doc"});

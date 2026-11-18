@@ -1795,6 +1795,15 @@ These are recorded now so they are not entered from memory later.
     shows the active monitor's IN to OUT duration.
   * Default Starting TC 01:00:00:00 (General settings, p.1191, gives no
     value).
+  * The General settings' other options (p.1192; ROADMAP 11.6d): Default
+    Starting EC goes into new sequences' Master Edge column (ours: where a
+    sequence's edgecode is kept), blank by default. NTSC Has Setup, on by
+    default, puts the NTSC YC Waveform's black at 7.5 IRE, off at 0 IRE
+    (NTSC-EIAJ); a software-only system has no other place for it. Use
+    Windows compatible file names (macOS only in the guide) is always on and
+    shown checked and dimmed: our project, bin and user names keep to those
+    rules on every system (`core::validateName`). Generate LTC on Playback
+    needs video hardware.
   * Go to Previous/Next Event go to the edits on the selected tracks of a
     sequence (1.4b), and to the start and end of a clip.
   * The active monitor has a thin highlight.

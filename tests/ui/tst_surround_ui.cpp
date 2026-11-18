@@ -1,7 +1,8 @@
 // Surround panning in the Audio Mixer (Editing Guide p.704-710; docs/spec/surround.md): the Pan grids
 // in place of the pan knob in a 5.1 or 7.1 sequence, storing a pan as an undo step, Stereo Link and
-// Mirror, the Advanced Panner's controls and speaker snapping, and LFE-only tracks. The pan law and
+// Mirror, the Advanced Panner's controls and speaker snapping, Live mode's surround pans, and LFE-only tracks. The pan law and
 // playback are in tests/media/tst_surround.cpp.
+#include "lumenis/media/playback.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
@@ -15,6 +16,7 @@
 #include <QDial>
 #include <QHash>
 #include <QLabel>
+#include <QSignalSpy>
 #include <QSlider>
 #include <QTest>
 #include <QMenu>
@@ -208,6 +210,70 @@ private slots:
         QVERIFY2(rig.timeline.editAutomation(Timeline::AutomationEdit::Remove, model::AutomationParam::Pan),
                  qPrintable(rig.timeline.lastMessage()));
         QVERIFY(rig.shown().track(QStringLiteral("A1"))->segments.first().surroundKeys.isEmpty());
+    }
+
+    // Live mode (p.724-726; docs/spec/audio-mixer.md "Live mode"): the grids set the track's Live Mix surround
+    // pans, heard at once in place of the segments' and their automation, never stored; Set Live Mix as Automation
+    // writes them as surround pan keyframes.
+    void liveModeGrids() {
+        Rig rig;
+        rig.mixer.setMode(AudioMixer::Mode::Live);
+        rig.mixer.show();
+        rig.composer.moveTo(MonitorId::Record, 5);
+        MixerStrip* mono = rig.mixer.strip(QStringLiteral("A1"));
+        QVERIFY(mono && mono->panGrid(0) && mono->panGrid(0)->isEnabled());
+        const int steps = static_cast<int>(rig.timeline.history().undoCount());
+        QSignalSpy live(&rig.mixer, &AudioMixer::liveMixChanged);
+        rig.mixer.setSurroundPan(QStringLiteral("A1"), 0, SurroundPan::at(30, -40), false);
+        QCOMPARE(live.count(), 1); // heard while dragging
+        QVERIFY(rig.mixer.hasLiveSurround(QStringLiteral("A1")));
+        QCOMPARE(rig.mixer.liveSurround(QStringLiteral("A1")).first(), SurroundPan::at(30, -40));
+        QCOMPARE(static_cast<int>(rig.timeline.history().undoCount()), steps); // not in the sequence
+        QVERIFY(rig.pans(QStringLiteral("A1")).isEmpty());
+        // The stereo link moves the other channel.
+        rig.mixer.setStereoLink(model::StereoLink::Mirror);
+        rig.mixer.setSurroundPan(QStringLiteral("A2"), 0, SurroundPan::at(-80, 100), true);
+        QCOMPARE(rig.mixer.liveSurround(QStringLiteral("A2")),
+                 (QList<SurroundPan>{SurroundPan::at(-80, 100), SurroundPan::at(80, 100)}));
+        QCOMPARE(gridPan(rig.mixer.strip(QStringLiteral("A2")), 1), SurroundPan::at(80, 100));
+
+        // What plays: each channel's piece takes its Live Mix surround pan, without its automation.
+        std::vector<media::AudioPiece> pieces(3);
+        pieces[0].track = QStringLiteral("A1");
+        pieces[1].track = QStringLiteral("A2");
+        pieces[2].track = media::channelTrackKey(QStringLiteral("A2"), 1);
+        for (media::AudioPiece& p : pieces) {
+            p.surroundMix = AudioFormat::Surround51;
+            p.surround = media::surroundGains(SurroundPan{}, AudioFormat::Surround51);
+            p.surroundKeys.front << model::AudioKey{0, 50};
+        }
+        rig.mixer.applyLiveMix(pieces);
+        QCOMPARE(pieces[0].surroundPan, SurroundPan::at(30, -40));
+        QCOMPARE(pieces[1].surroundPan, SurroundPan::at(-80, 100));
+        QCOMPARE(pieces[2].surroundPan, SurroundPan::at(80, 100));
+        QVERIFY(pieces[2].surroundKeys.front.isEmpty());
+        QVERIFY(*pieces[2].surround == media::surroundGains(SurroundPan::at(80, 100), AudioFormat::Surround51));
+        // Not in Clip mode.
+        std::vector<media::AudioPiece> clip(1);
+        clip[0].track = QStringLiteral("A1");
+        clip[0].surround = media::surroundGains(SurroundPan{}, AudioFormat::Surround51);
+        rig.mixer.setMode(AudioMixer::Mode::Clip);
+        rig.mixer.applyLiveMix(clip);
+        QCOMPARE(clip[0].surroundPan, SurroundPan{});
+        // Back in Live mode the grids show the Live Mix again.
+        rig.mixer.setMode(AudioMixer::Mode::Live);
+        QCOMPARE(gridPan(mono, 0), SurroundPan::at(30, -40));
+
+        // Set Live Mix as Automation on the selected A1, without marks: the segment holds the pan's automated members.
+        for (const char* t : {"A1", "A2", "A3"}) rig.timeline.patch().setRecordSelected(QString::fromLatin1(t), t[1] == '1');
+        QVERIFY2(rig.mixer.setLiveMixAsAutomation(), qPrintable(rig.timeline.lastMessage()));
+        const model::Segment seg = rig.shown().track(QStringLiteral("A1"))->segments.first();
+        QCOMPARE(seg.surroundKeys.size(), 1);
+        QCOMPARE(seg.surroundKeys.first().front, (QList<model::AudioKey>{{0, 30}, {19, 30}}));
+        QCOMPARE(seg.surroundKeys.first().frontRear, (QList<model::AudioKey>{{0, -40}, {19, -40}}));
+        // Set Live Mix to Default forgets them; Set Live Mix to Automation takes the automation's back.
+        rig.mixer.setLiveMixToAutomation();
+        QCOMPARE(rig.mixer.liveSurround(QStringLiteral("A1")).first().front, 30);
     }
 
     // A finished drag stores the pan as one undo step; Stereo Link moves the other channel.

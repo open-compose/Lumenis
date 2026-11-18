@@ -1972,6 +1972,33 @@ The audit of 2026-11-14 checked every "later" note in the specs, the dimmed comm
 Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 100, the settings options still marked
 `"later"` (11.4f), Live mode on surround pans (11.4d), and Time Shift's Formant shift and Follow (11.2).
 
+* 11.6, the left-overs taken up after the first release (2026-11-18), in parts:
+  * 11.6a, Live mode on surround pans (done: the Pan grids and the Advanced Panner set a track's Live Mix surround
+    pans, heard at once in place of the segments' and their automation; Set Live Mix to Default, to Automation and as
+    Automation take them in; `AudioMixer::liveSurround`/`applyLiveMix`, which MainWindow::soundOf calls; docs/spec/
+    audio-mixer.md "Live mode"; test `tst_surround_ui liveModeGrids`);
+  * 11.6b, Time Shift's Formant shift and Follow (done: Monophonic's Transpose and Formant formant-correct through
+    pitch-synchronous overlap-add, `media::formantPitchShift`; Polyphonic's Follow through `media::followEnvelope`;
+    docs/spec/time-stretch.md; tests `tst_time_stretch formants`/`follow`);
+  * 11.6c, Undo Only Record Events (done: marks as undo steps through `Composer::marksEdited`/`restoreMarks` and
+    `model::EditStep::marks`, the Source monitor's left out with the setting, `Timeline::Options::undoOnlyRecordEvents`;
+    docs/spec/composer-edit.md; test `tst_composer_edit undoOnlyRecordEvents`);
+  * 11.6d, the settings options that need no hardware: the Effect Editor's Real Time Update (p.1171; done:
+    `EffectEditor::previewValue`; test `tst_effect_keyframes_ui realTimeUpdate`; Thumbwheels stay dimmed, described only
+    in the Help), the Correction setting's Preview Pre-Roll and Post-Roll (done: Segment Preview, FX Guide p.710-711,
+    `Timeline::segmentPreview`; test `tst_correction_mode segmentPreview`) and Waveform/Vectorscope Updates in
+    Real-Time (p.1166; done: `CorrectionMonitors::setScopesRealTime`; test `tst_correction_mode scopes`), the Composer's Color Framing (p.1159, p.643), the General setting's Default Starting EC,
+    NTSC Has Setup and Use Windows compatible file names (done: new sequences' Master Edge, the NTSC YC Waveform's
+    black, always on; docs/spec/ui-inventory.md; tests `tst_bin_container`, `tst_scopes ycWaveform`,
+    `tst_settings_window`), Effect Apertures and the lower edit timebase (p.1192), and Full Screen Playback's Display
+    Both Fields (p.1191);
+  * 11.6e, the export and link options: Split Tracks to Mono and Mixdown with Video Edits in AAF export (p.1176),
+    Cineon and Photoshop stills, AVI movies through FFmpeg, the Link setting's Quality and Volume Mounting tabs, Live
+    Link and Multichannel Audio (p.1203-1204), the Media Creation setting's drive filtering (p.1207), and the Playback
+    setting's real-time stream limits (p.1225).
+  Not taken up: what needs capture or output hardware, a GPU or Avid's services, OMFI, Windows Media, and the
+  resolutions no open encoder makes (DNxHD 10 and 100, XAVC Intra, DNxUncompressed).
+
 ### Phase 12 — Finishing Phase 10
 
 The owner's choice (2026-11-15), after Phase 11: finish Phase 10's open steps before anything new. 10.0, going public,
@@ -2048,8 +2075,9 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 11. 10.1b is done (the audio mix on macOS and Windows is profiled only if editors report it slow). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
     benchmark much faster (the step's notices say which).
-12. The left-over items recorded in Phase 11's status: DNxHD 10 and 100, the settings options still marked `"later"`
-    (11.4f), Live mode on surround pans (11.4d), Time Shift's Formant shift and Follow (11.2).
+12. 11.6, the left-over items recorded in Phase 11's status, in parts (Phase 11): 11.6a, Live mode on surround pans,
+    11.6b, Time Shift's Formant shift and Follow, and 11.6c, Undo Only Record Events, are done; next the settings options
+    still marked `"later"` that need no hardware, and the export and link options.
 13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
     released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
 

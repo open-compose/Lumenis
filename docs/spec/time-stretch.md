@@ -78,9 +78,29 @@ frames ("the plug-ins automatically lengthen or shorten the clip", p.803).
   | Threshold (0 to -40 dB, default -6), Decay Rate | Rhythmic's transients and fades (Decay Rate's 10-1000 ms range is ours) |
   | Transpose (-24 to +24 semitones) | the pitch, the length kept (not in Varispeed) |
 
-  Ours: the Formant shift, the Follow envelope and the Shift percentage
-  beside Transpose wait; so do the Units menu and the Processed End,
-  Length and Tempo boxes (the Time Shift percentage sets the length).
+  | Formant (-24 to +24 semitones, Monophonic) | the formants moved, the pitch kept (below) |
+  | Follow (Polyphonic) | the original's level over time, stretched with it (below) |
+
+  In Monophonic mode, Transpose and Formant are formant-correct ("In
+  Monophonic mode, pitch shift can also be formant-correct", p.860):
+  `formantPitchShift` is pitch-synchronous overlap-add. The period is found
+  every 5 ms by autocorrelation, from the range's lowest pitch to 1000 Hz
+  (unvoiced sound takes 10 ms); grains two periods long are cut a period
+  apart and laid down a period of the new pitch apart, each from where the
+  Time Shift puts it, so each keeps its shape and the formants stay. The
+  Formant control squeezes or widens each grain in time by its factor, which
+  moves the formants alone. Without Transpose or Formant, Monophonic is the
+  WSOLA stretch as before.
+
+  Follow (`followEnvelope`): levels over 10 ms every 5 ms of the original and
+  the stretched sound; each point of the stretched sound is given the
+  original's level where it came from (at most 12 dB up), smoothed between
+  the points, so decays keep their shape (ours: the guide says only that it
+  "simulates the original acoustics").
+
+  Ours: the Shift percentages beside Transpose and Formant (the same values
+  as percentages) are not shown; nor are the Units menu and the Processed
+  End, Length and Tempo boxes (the Time Shift percentage sets the length).
 
 ## Tests
 
@@ -89,5 +109,8 @@ stays pure (a stretch without the search scores far worse); a stereo pair
 keeps its relation sample for sample; Pitch Shift with and without Time
 Correction, and two octaves with a length change; hits a quarter second
 apart come half a second apart when stretched twice; the three processes'
-lengths and pitches. `tst_audio_suite newMasterClip`: the new clip's length
+lengths and pitches; a voice-like sound moved up a fourth keeps its
+formant where a resampled shift moves it, and the Formant control moves the
+formant an octave down with the pitch kept; Follow brings a stretch's level
+within a quarter of the plain stretch's error. `tst_audio_suite newMasterClip`: the new clip's length
 after Time Compression Expansion and Time Shift.

@@ -1545,6 +1545,14 @@
         <source>%1 cannot be made here: %2.</source>
         <translation type="unfinished">%1 kann hier nicht erstellt werden: %2.</translation>
     </message>
+    <message>
+        <source>Formant</source>
+        <translation type="unfinished">Formant</translation>
+    </message>
+    <message>
+        <source>Follow</source>
+        <translation type="unfinished">Folgen</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -3836,6 +3844,10 @@
     <message>
         <source>Check for Updates...</source>
         <translation type="unfinished">Nach Updates suchen...</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Segmentvorschau</translation>
     </message>
 </context>
 <context>
@@ -9753,6 +9765,10 @@ Erstellungsdatum: %4</translation>
     <message>
         <source>Remove Effect</source>
         <translation type="unfinished">Effekt entfernen</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Segmentvorschau</translation>
     </message>
 </context>
 <context>
@@ -16764,6 +16780,10 @@ Mediendateien werden nicht gelöscht.</translation>
         <source>Setting Name:</source>
         <translation type="unfinished">Name der Einstellung:</translation>
     </message>
+    <message>
+        <source>Always on: Cutthulhu&apos;s names keep to these rules on every system.</source>
+        <translation type="unfinished">Immer an: Die Namen in Cutthulhu halten sich auf jedem System an diese Regeln.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::SettingsList</name>
@@ -19229,6 +19249,14 @@ Mediendateien werden nicht gelöscht.</translation>
     <message>
         <source>Film</source>
         <translation type="unfinished">Film</translation>
+    </message>
+    <message>
+        <source>Marks</source>
+        <translation type="unfinished">Marken</translation>
+    </message>
+    <message>
+        <source>Segment Preview plays in Color Correction mode.</source>
+        <translation type="unfinished">Die Segmentvorschau spielt im Farbkorrekturmodus.</translation>
     </message>
 </context>
 <context>

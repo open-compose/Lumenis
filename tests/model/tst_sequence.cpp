@@ -655,7 +655,7 @@ private slots:
         for (int i = 0; i < EditHistory::kLevels + 5; ++i) {
             BinItem after;
             after.durationFrames = i;
-            h.push(EditStep{QStringLiteral("Edit %1").arg(i), "bin", BinItem{}, after});
+            h.push(EditStep{QStringLiteral("Edit %1").arg(i), "bin", BinItem{}, after, std::nullopt});
         }
         // 100 levels (p.466).
         QCOMPARE(h.undoCount(), EditHistory::kLevels);
@@ -666,7 +666,7 @@ private slots:
         QCOMPARE(h.redo()->after.durationFrames, 104);
         QVERIFY(!h.canRedo());
         h.undo();
-        h.push(EditStep{QStringLiteral("New"), "bin", BinItem{}, BinItem{}});
+        h.push(EditStep{QStringLiteral("New"), "bin", BinItem{}, BinItem{}, std::nullopt});
         QVERIFY(!h.canRedo()); // a new edit drops what could be redone
         QCOMPARE(h.descriptions().first(), QStringLiteral("New"));
     }

@@ -2864,6 +2864,9 @@ bool Composer::perform(const QString& id) {
     if (!handles(id)) return false;
     const MonitorId m = active_;
     model::MonitorState& s = state(m);
+    // The marks before, so a command that changes them is an undo step (marksEdited).
+    const model::ClipMarks marksBefore = s.marks();
+    const QString markedItem = s.isEmpty() ? QString() : s.current()->item.id;
     const bool progressive = !s.isEmpty() && TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps == 24;
     // 10 frames, or 8 in 24-frame formats (p.398).
     const std::int64_t big = progressive ? 8 : 10;
@@ -3026,8 +3029,32 @@ bool Composer::perform(const QString& id) {
             if (s.out()) moveTo(m, *s.out());
         }
     }
+    if (!markedItem.isEmpty() && s.current() && s.current()->item.id == markedItem && !(s.marks() == marksBefore)) {
+        // The Undo/Redo List names the step as the command is named (commands.json).
+        static const QHash<QString, QString> names{
+            {QStringLiteral("edit.mark_in"), QStringLiteral("Mark IN")},
+            {QStringLiteral("edit.mark_out"), QStringLiteral("Mark OUT")},
+            {QStringLiteral("edit.mark_clip"), QStringLiteral("Mark Clip")},
+            {QStringLiteral("edit.clear_in_mark"), QStringLiteral("Clear IN Mark")},
+            {QStringLiteral("edit.clear_out_mark"), QStringLiteral("Clear OUT Mark")},
+            {QStringLiteral("edit.clear_both_marks"), QStringLiteral("Clear Both Marks")},
+            {QStringLiteral("edit.audio_mark_in"), QStringLiteral("Audio Mark IN")},
+            {QStringLiteral("edit.audio_mark_out"), QStringLiteral("Audio Mark OUT")},
+        };
+        const QString name = names.value(id);
+        model::MarkChange change{m == MonitorId::Record, markedItem, marksBefore, s.marks()};
+        emit marksEdited(change, name.isEmpty() ? QString() : translatedResource("commands", name));
+    }
     refresh();
     emit performed(id);
+    return true;
+}
+
+bool Composer::restoreMarks(const model::MarkChange& change, bool before) {
+    model::MonitorState& s = state(change.record ? MonitorId::Record : MonitorId::Source);
+    if (!s.setMarks(change.itemId, before ? change.before : change.after)) return false;
+    refresh();
+    emit changed();
     return true;
 }
 

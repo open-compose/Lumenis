@@ -1,6 +1,6 @@
 // The Composer settings' Edit tab (Editing Guide p.1159-1160; docs/spec/composer-edit.md): Sync Point
 // editing and its orange mark, Single Mark Editing, Phantom Marks, Auto-create New Tracks, Auto-enable
-// Source Tracks, Copy Source Markers, and Composer > Load Filler.
+// Source Tracks, Copy Source Markers, Undo Only Record Events with marks as undo steps, and Composer > Load Filler.
 #include "lumenis/model/bin.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
@@ -223,6 +223,54 @@ private slots:
 
     // Load Filler from the Source monitor's Clip Name menu (p.462): two minutes of filler on the
     // sequence's tracks.
+    // Marks are undo steps (p.466); Undo Only Record Events (p.1160) leaves the Source monitor's out, so "if you decide
+    // to undo the last edit made to the sequence, then you would not lose the In and Out points in the source clips".
+    void undoOnlyRecordEvents() {
+        Fixture f;
+        auto perform = [&](MonitorId m, const char* id, std::int64_t at) {
+            f.composer.setActiveMonitor(m);
+            f.composer.state(m).setPosition(at);
+            QVERIFY(f.composer.perform(QString::fromLatin1(id)));
+        };
+        MonitorState& source = f.composer.state(MonitorId::Source);
+        const int start = f.timeline.history().undoCount();
+        perform(MonitorId::Source, "edit.mark_in", 10);
+        perform(MonitorId::Source, "edit.mark_out", 29);
+        QCOMPARE(f.timeline.history().undoCount(), start + 2);
+        QCOMPARE(f.timeline.history().descriptions().value(0), QStringLiteral("Mark OUT"));
+        // A command that changes nothing is no step.
+        perform(MonitorId::Source, "edit.go_to_in_point", 0);
+        QCOMPARE(f.timeline.history().undoCount(), start + 2);
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(source.in(), std::optional<std::int64_t>(10));
+        QVERIFY(!source.out());
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.redo")));
+        QCOMPARE(source.out(), std::optional<std::int64_t>(29));
+        // A splice, then new source marks: without the setting Undo takes back the marks first.
+        f.composer.setActiveMonitor(MonitorId::Record);
+        f.composer.state(MonitorId::Record).setPosition(50);
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.splice_in")));
+        QCOMPARE(f.recorded().track(QStringLiteral("V1"))->length(), 120);
+        perform(MonitorId::Source, "edit.mark_in", 100);
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(f.recorded().track(QStringLiteral("V1"))->length(), 120); // the splice stays
+        QCOMPARE(source.in(), std::optional<std::int64_t>(10));
+        // With it, the source marks are kept and Undo goes to the splice; Record monitor marks still are steps.
+        f.set([](Timeline::Options& o) { o.undoOnlyRecordEvents = true; });
+        const int before = f.timeline.history().undoCount();
+        perform(MonitorId::Source, "edit.mark_in", 120);
+        perform(MonitorId::Source, "edit.clear_out_mark", 0);
+        QCOMPARE(f.timeline.history().undoCount(), before);
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(f.recorded().track(QStringLiteral("V1"))->length(), 100);
+        QCOMPARE(source.in(), std::optional<std::int64_t>(120));
+        QVERIFY(!source.out());
+        perform(MonitorId::Record, "edit.mark_in", 40);
+        QCOMPARE(f.timeline.history().descriptions().value(0), QStringLiteral("Mark IN"));
+        QVERIFY(f.timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(!f.composer.state(MonitorId::Record).in());
+    }
+
     void loadFiller() {
         Fixture f;
         QMenu* menu = f.composer.clipNameMenu(MonitorId::Source);

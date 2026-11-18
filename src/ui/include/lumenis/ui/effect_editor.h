@@ -136,6 +136,10 @@ public:
         bool setPositionToKeyframe = true;
         bool updatePositionWhilePlaying = false; // "deselected by default"
         bool showModeMenu = true;
+        // Real Time Update (p.1171, on by default): dragging a slider shows the effect as it goes, before the undo step
+        // its release makes; off, the picture changes on the release only ("the update can be slow for complex
+        // effects").
+        bool realTimeUpdate = true;
         KeyframeMode mode = KeyframeMode::OpenGroups;
         bool operator==(const Options&) const = default;
     };
@@ -403,6 +407,9 @@ public:
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.
     std::optional<std::pair<model::EffectRef, model::Effect>> pictureOverride() const;
+    // A slider of `category`/`parameter` being dragged to `value`: with Real Time Update, the shown effect as setValue
+    // would change it, previewed (pictureOverride) and not stored. The slider's release stores it.
+    void previewValue(const QString& category, const QString& parameter, const QJsonValue& value);
     // Dragging handle `id` from `from` to `to` (fractions of the picture, as Composer::effectHandleDragged
     // gives them): the shown effect as it was when the drag began, with the values media::dragEffectHandle
     // gives, rounded and kept to the controls' ranges, put on the selected keyframes of their parameters (or
@@ -776,6 +783,10 @@ private:
     std::int64_t effectStart_ = 0; // the Record frame of the shown effect's first frame
     std::optional<model::Effect> current_; // the shown effect as stored, from the last refresh()
     std::optional<model::Effect> preview_; // the shown effect with a drag not yet stored
+    // A slider is being dragged with Real Time Update (previewValue): refresh() keeps the preview, and changeShown
+    // previews instead of storing while `previewing_`.
+    bool sliderPreview_ = false;
+    bool previewing_ = false;
     std::unique_ptr<PluginOverlayInput> pluginOverlay_; // made on first use (pluginOverlay())
     bool pluginDragging_ = false; // a press the plug-in's overlay took, until its release
     PluginOverlayInput* pluginOverlay();
@@ -804,6 +815,7 @@ private:
     bool indentRows_ = true;
     bool largeText_ = false;
     bool updateWhilePlaying_ = false;
+    bool realTimeUpdate_ = true;
     // Applies Indent Rows and Large Text to the controls built.
     void applyLook();
 };

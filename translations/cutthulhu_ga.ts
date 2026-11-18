@@ -1546,6 +1546,14 @@
         <source>%1 cannot be made here: %2.</source>
         <translation type="unfinished">Ní féidir %1 a dhéanamh anseo: %2.</translation>
     </message>
+    <message>
+        <source>Formant</source>
+        <translation type="unfinished">Formant</translation>
+    </message>
+    <message>
+        <source>Follow</source>
+        <translation type="unfinished">Lean</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -3837,6 +3845,10 @@
     <message>
         <source>Check for Updates...</source>
         <translation type="unfinished">Seiceáil le haghaidh Nuashonruithe...</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Réamhamharc Deighleáin</translation>
     </message>
 </context>
 <context>
@@ -9757,6 +9769,10 @@ Dáta Cruthaithe: %4</translation>
     <message>
         <source>Remove Effect</source>
         <translation type="unfinished">Bain an Mhaisíocht</translation>
+    </message>
+    <message>
+        <source>Segment Preview</source>
+        <translation type="unfinished">Réamhamharc Deighleáin</translation>
     </message>
 </context>
 <context>
@@ -16812,6 +16828,10 @@ Ní scriostar comhaid mheán.</translation>
         <source>Setting Name:</source>
         <translation type="unfinished">Ainm an tSocraithe:</translation>
     </message>
+    <message>
+        <source>Always on: Cutthulhu&apos;s names keep to these rules on every system.</source>
+        <translation type="unfinished">Ar siúl i gcónaí: cloíonn ainmneacha Cutthulhu leis na rialacha seo ar gach córas.</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::SettingsList</name>
@@ -19278,6 +19298,14 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Film</source>
         <translation type="unfinished">Scannán</translation>
+    </message>
+    <message>
+        <source>Marks</source>
+        <translation type="unfinished">Marcanna</translation>
+    </message>
+    <message>
+        <source>Segment Preview plays in Color Correction mode.</source>
+        <translation type="unfinished">Seinneann Réamhamharc Deighleáin i Mód Ceartú Datha.</translation>
     </message>
 </context>
 <context>

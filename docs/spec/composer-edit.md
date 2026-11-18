@@ -61,8 +61,17 @@ Code:
   Composer copies the markers when you edit the clip into the Record monitor."
   * The markers within the edited material go onto the record tracks their tracks are patched to.
   * Ours: a spanned marker is cut short at the end of the edited material.
-* **Undo Only Record Events** stays dimmed: our marks are not undo steps, so Undo already undoes only
-  record events (p.466).
+* **Marks are undo steps** (p.466; ROADMAP 11.6c): each mark command that changes the shown clip's marks in
+  either monitor (Mark IN, Mark OUT, Mark Clip, the three Clear commands with and without Shift, Audio Mark
+  IN and OUT) is a step in Edit > Undo and the Undo/Redo List, named as the command is (`Composer::marksEdited`).
+  * Undoing one puts the clip's four marks back as they were, also when another clip is shown in that monitor
+    (`Composer::restoreMarks`); a clip no longer loaded has nothing to put back.
+  * Ours: marks moved by dragging them in the position bar, and the marks a command sets on its way to an edit
+    (Top and Tail, p.639), are not steps of their own; nor does undoing an edit bring back the marks it cleared.
+* **Undo Only Record Events** (p.1160, off by default): "you can limit the Undo command to undo only record
+  actions". Marking in the Source monitor is then no undo step, so "if you decide to undo the last edit made to
+  the sequence, then you would not lose the In and Out points in the source clips" (p.466). The Record monitor's
+  marks still are (ours: the guide's example is about source clips).
 * **Color Framing** stays dimmed: it is for tape (Phase 9).
 
 ## Load Filler (p.462, p.99)

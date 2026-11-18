@@ -60,7 +60,8 @@ media::Scope scopeOf(CorrectionSource source) {
     return static_cast<media::Scope>(static_cast<int>(source) - static_cast<int>(CorrectionSource::QuadDisplay));
 }
 
-// The monitor buttons' pictures (ours): Dual Split a picture half filled, the Go to buttons an arrow to a bar with a
+// The monitor buttons' pictures (ours): Dual Split a picture half filled, Segment Preview a play triangle between bars,
+// the Go to buttons an arrow to a bar with a
 // slash for "uncorrected", Remove Effect a cross.
 QIcon buttonIcon(const QString& id) {
     QPixmap pm(20, 16);
@@ -75,6 +76,16 @@ QIcon buttonIcon(const QString& id) {
     } else if (id == QLatin1String("fx.remove_effect")) {
         p.drawLine(QPointF(5, 3), QPointF(15, 13));
         p.drawLine(QPointF(15, 3), QPointF(5, 13));
+    } else if (id == QLatin1String("cc.segment_preview")) {
+        // A play triangle between two bars: the shot played with what comes before and after it.
+        QPainterPath play;
+        play.moveTo(7.5, 4);
+        play.lineTo(13.5, 8);
+        play.lineTo(7.5, 12);
+        play.closeSubpath();
+        p.fillPath(play, ink);
+        p.drawLine(QPointF(3.5, 3), QPointF(3.5, 13));
+        p.drawLine(QPointF(16.5, 3), QPointF(16.5, 13));
     } else {
         const bool back = id == QLatin1String("cc.previous_uncorrected_shot");
         QPainterPath arrow;
@@ -99,6 +110,9 @@ public:
         setMinimumSize(120, 68);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     }
+
+    // The frame the scope shown last measured; -1 before any.
+    std::int64_t scopeFrame() const { return scopeFrame_; }
 
     // The picture's place, at the project's aspect ratio, letterboxed or pillarboxed.
     QRect pictureRect() const {
@@ -139,10 +153,18 @@ protected:
         const CorrectionSource source = owner_.source(index_);
         if (isScopeSource(source)) {
             // The active monitor's corrected frame (a small copy is enough to measure), as a waveform or vectorscope.
-            const QImage picture = composer.pictureAt(MonitorId::Record, *frame, QSize(320, 180));
+            // With Waveform/Vectorscope Updates in Real-Time off (p.1166), it holds what it showed while the Composer
+            // plays and catches up when playback stops.
             const QRect area = rect().adjusted(2, 2, -2, -2);
             p.fillRect(rect(), Qt::black);
-            p.drawImage(area, media::scopeImage(picture, scopeOf(source), area.size(), owner_.pal_, &owner_.safeColors_));
+            const bool hold = composer.isPlaying() && !owner_.scopesRealTime_ && !scope_.isNull() && scopeSource_ == source;
+            if (!hold) {
+                const QImage picture = composer.pictureAt(MonitorId::Record, *frame, QSize(320, 180));
+                scope_ = media::scopeImage(picture, scopeOf(source), area.size(), owner_.pal_, &owner_.safeColors_, owner_.ntscSetup_);
+                scopeFrame_ = *frame;
+                scopeSource_ = source;
+            }
+            p.drawImage(area, scope_);
             warnings_ = {};
             return;
         }
@@ -438,6 +460,10 @@ private:
     bool overlayDrag_ = false; // a press the shape tools took
     QImage shown_;
     QRect shownRect_;
+    // The scope last drawn, from which frame and as which display (held during playback without real-time updates).
+    QImage scope_;
+    std::int64_t scopeFrame_ = -1;
+    CorrectionSource scopeSource_ = CorrectionSource::Current;
     bool sampling_ = false;
     QList<QColor> samples_;
 };
@@ -589,7 +615,8 @@ CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QW
         m.bar->setObjectName(QStringLiteral("ccKeyframeBar%1").arg(i));
         v->addWidget(m.bar);
         // Under it: "Dual Split button, Go to Previous Uncorrected Shot button, Go to Next Uncorrected Shot button, and
-        // Remove Effect button" (p.592).
+        // Remove Effect button" (p.592), and the Segment Preview button the FX Guide's picture shows there (p.711; ours:
+        // under every monitor, as the others are).
         m.buttons = new QWidget(column);
         auto* h = new QHBoxLayout(m.buttons);
         h->setContentsMargins(0, 0, 0, 0);
@@ -598,6 +625,7 @@ CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QW
         const std::pair<const char*, const char*> buttons[] = {{"cc.dual_split", QT_TR_NOOP("Dual Split")},
                                                                {"cc.previous_uncorrected_shot", QT_TR_NOOP("Go to Previous Uncorrected Shot")},
                                                                {"cc.next_uncorrected_shot", QT_TR_NOOP("Go to Next Uncorrected Shot")},
+                                                               {"cc.segment_preview", QT_TR_NOOP("Segment Preview")},
                                                                {"fx.remove_effect", QT_TR_NOOP("Remove Effect")}};
         for (const auto& [id, tip] : buttons) {
             auto* b = new QToolButton(m.buttons);
@@ -717,6 +745,24 @@ void CorrectionMonitors::setPal(bool pal) {
     if (pal == pal_) return;
     pal_ = pal;
     refresh();
+}
+
+void CorrectionMonitors::setNtscSetup(bool on) {
+    if (on == ntscSetup_) return;
+    ntscSetup_ = on;
+    refresh();
+}
+
+void CorrectionMonitors::setScopesRealTime(bool on) {
+    if (on == scopesRealTime_) return;
+    scopesRealTime_ = on;
+    refresh();
+}
+
+std::int64_t CorrectionMonitors::scopeFrame(int monitor) const {
+    if (monitor < 0 || monitor >= kMonitors) return -1;
+    const auto* picture = static_cast<const CorrectionPicture*>(monitors_.at(static_cast<std::size_t>(monitor)).picture);
+    return picture ? picture->scopeFrame() : -1;
 }
 
 void CorrectionMonitors::setDualSplitDuringPlayback(bool on) {

@@ -338,6 +338,9 @@ public:
         // Composer settings, Edit tab (p.1159-1160; docs/spec/composer-edit.md).
         bool syncPointEditing = false;    // Sync Point Editing (Overwrites), also Composer > Sync Point Overwrite
         bool singleMarkEditing = true;    // Single Mark Editing (p.468)
+        // Undo Only Record Events (p.1160, p.466): marking in the Source monitor is not an undo step, so Undo goes
+        // straight to the last record event. Off, every mark command is one (Composer::marksEdited).
+        bool undoOnlyRecordEvents = false;
         bool phantomMarks = false;        // Phantom Marks (p.501)
         bool autoCreateTracks = true;     // Auto-create New Tracks
         bool autoEnableSourceTracks = true; // Auto-enable Source Tracks
@@ -351,6 +354,9 @@ public:
         bool trimAutoFocus = false;
         int trimPreroll = 2;      // Play Loop tab: seconds before the transition (ours: seconds)
         int trimPostroll = 2;     // seconds after it
+        // The Correction setting's Preview tab (p.1167): Segment Preview's seconds of the shots before and after.
+        int correctionPreroll = 3;
+        int correctionPostroll = 3;
         int trimIntermission = 0; // seconds between passes (ours: a pause)
         bool jklTrim = true;      // J-K-L Trim (p.658)
         // Features tab: Small Trim display never, after Go to Previous/Next Event, or always (p.649).
@@ -819,6 +825,9 @@ public:
     // The shot `step` shots from the one at the position on that track, as its [start, end) frames (the monitors'
     // Previous, Next and Second ones, p.591).
     std::optional<std::pair<std::int64_t, std::int64_t>> correctionShot(int step) const;
+    // Plays the shot at the position with `before` frames of what comes before it and `after` of what follows, once,
+    // and puts the position back (Edit Review and Segment Preview in Color Correction mode).
+    bool playShotInContext(std::int64_t before, std::int64_t after);
     // The Correction Type button's relationship (p.596-597; lumenis/model/correction_relations.h, 6.10d1) and the side
     // it works on. Choosing a type of the side the current segment's correction is on converts that correction to it
     // ("To convert a Source relationship correction to another Source relationship correction", p.598), an undo step;
@@ -1011,6 +1020,11 @@ public:
     // from Preroll before the trimmed transition; otherwise from Preroll before the last transition at
     // or before the position where every selected track has an edit. False with none.
     bool editReview();
+    // Segment Preview (Color Correction mode, FX Guide p.710-711): plays "the last 3 seconds of the previous clip ...
+    // followed by the entire current clip, followed by the first 3 seconds of the next clip", the seconds being the
+    // Correction setting's Pre-Roll and Post-Roll, and the position goes back. False outside the mode or with no
+    // shot there.
+    bool segmentPreview();
     // Trims by frames: Trim buttons, drags, J-K-L (p.656, p.658).
     // Positive frames trim to the right. Returns false, and beeps, when no frame could be trimmed.
     bool trimBy(std::int64_t frames);
@@ -1113,7 +1127,8 @@ public:
     // end, the start to OUT, the whole tracks without marks) the volume and pan keyframes give way
     // to each track's Live Mix value (`live`: track -> {dB, pan}), ramped at marks inside segments
     // (model::setAutomationTo). One undo step.
-    bool setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live);
+    bool setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live,
+                                const QHash<QString, QList<model::SurroundPan>>& surround = {});
     // Surround panning (p.704-710; lumenis/model/surround_pan.h): channel `channel`'s pan of the
     // segment under the Record position on a mono or stereo track, with `other` the other channel's
     // too (Stereo Link and Mirror), as one undo step ("Surround Pan"). Already so: true without a step.
@@ -1644,6 +1659,8 @@ private:
     // A nest's item changed: its segment in the level out takes it, and so on out to the bin.
     void storeNest(const model::BinItem& item);
     model::EditHistory history_;
+    // While a command marks on its own way to an edit (Top, Tail): its marks are not undo steps.
+    bool inCommandMarks_ = false;
     QSet<QString> unmonitored_;
     std::function<bool(const QString&, bool)> soloMuteState_;
     QStringList views_;

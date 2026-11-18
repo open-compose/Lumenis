@@ -35,7 +35,11 @@ QString scopeName(Scope scope); // "Quad Display", "RGB Histogram", ...
 // With `limits`, "The Y Waveform, YC Waveform, and RGB Parade displays incorporate any safe color limits you have set"
 // (p.727): legal luma green and illegal white; legal composite cyan and illegal yellow; each RGB Parade channel in its
 // colour when legal and white when not (6.10e4b). Ours: they follow the limits whatever their Actions.
-QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal = false, const model::SafeColorLimits* limits = nullptr);
+//
+// `ntscSetup` (the General setting's NTSC Has Setup, p.1192, on by default): the NTSC scale's black at 7.5 IRE; off, for
+// NTSC-EIAJ, at 0 IRE (ours: where the setting shows in a software-only system).
+QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal = false, const model::SafeColorLimits* limits = nullptr,
+                  bool ntscSetup = true);
 
 // The safe colour limits a picture exceeds (FX Guide p.723-724; 6.10e4b), every pixel read as the video level it stands
 // for (model::pictureLevel), every limit type counted whatever its Action (model::warnedViolations keeps the warned ones).

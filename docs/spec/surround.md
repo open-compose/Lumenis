@@ -115,15 +115,16 @@ the Audio Project setting's Mix Mode Selection (p.1150). The menu:
     (p.707), and grid pans in the middle reach more.
   * The gains have unit power; LFE adds its percentage to the LFE channel.
   * Surround pan automation (11.4d2, docs/spec/automation.md "Surround
-    pans") moves the pans over time; Live mode does not apply to them yet.
+    pans") moves the pans over time. In Live mode the track's Live Mix
+    surround pans take their place (docs/spec/audio-mixer.md "Live mode").
     Volume automation does.
 * **The Pan grid (p.705-706).** In a 5.1 or 7.1 sequence each mono or
   stereo track's mixer strip shows a small grid for each channel, with the
   speakers around it, instead of the pan knob. 5.1 and 7.1 tracks show no
   pan, because their channels have their own speakers. In Clip mode,
   dragging the cursor sets the pan of the segment under the position when
-  the drag ends ("Surround Pan", one undo step). In Auto and Live mode the
-  grids are dimmed in Live mode (ours); in Auto mode they set and record
+  the drag ends ("Surround Pan", one undo step). In Live mode they set the
+  track's Live Mix surround pans, heard at once and not saved; in Auto mode they set and record
   surround pan automation (11.4d2b, docs/spec/automation.md "Surround pans").
 * **The Advanced Panner (p.705-710).** The strip's Adv button opens it for
   that track:
@@ -178,7 +179,7 @@ the Audio Project setting's Mix Mode Selection (p.1150). The menu:
 
 ## Later
 
-* Live mode panning of surround pans; 3-Knob mode and typed
+* 3-Knob mode and typed
   Position values (p.706).
 * Direct Out and the Audio Project setting's output assignments
   (p.692, p.1150).

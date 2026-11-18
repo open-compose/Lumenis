@@ -94,7 +94,12 @@ Code: `Segment::sourceCorrection`/`programCorrection`, `model::segmentCorrection
   (not offered when another monitor is Current), Previous, Next, Second Previous, Second Next, and the waveform and
   vectorscope displays (p.591). Reference Current from the right-click menu; the reference shows in the right monitor
   (p.591, p.594). Escape switches between the centre and right monitors (p.593).
-* Under each monitor: Dual Split, Go to Previous Uncorrected Shot, Go to Next Uncorrected Shot, Remove Effect (p.592).
+* Under each monitor: Dual Split, Go to Previous Uncorrected Shot, Go to Next Uncorrected Shot, Remove Effect (p.592),
+  and Segment Preview (ROADMAP 11.6d): the FX Guide's picture shows it under the Current monitor (p.711; ours: under
+  each, as the others are). It plays "the last 3 seconds of the previous clip ... followed by the entire current clip,
+  followed by the first 3 seconds of the next clip" (p.710-711), the seconds being the Correction setting's Preview
+  tab's Pre-Roll and Post-Roll (3 by default), then the position goes back (`Timeline::segmentPreview`). The command
+  `cc.segment_preview` is not on the Command Palette's CC tab, whose picture (p.96) does not have it.
   Dual Split shows the uncorrected image on the left of a box with triangular handles (p.592).
 * Play Loop "plays the whole sequence in the active monitor, starting from the current position"; Edit Review plays
   part of the previous clip, the current clip and part of the next by the Trim settings' Preroll and Postroll, then
@@ -241,7 +246,9 @@ and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/
   every segment between the marks, whole); Eyedropper 3 x 3 Averaging; Show Eyedropper Info; Eyedropper Picks from
   Anywhere in Application; Show ChromaWheel and ChromaCurve Graphs (colour backgrounds, off by default) (p.608).
   The Editing Guide also lists Dual-Split remains Active During Playback and Waveform/Vectorscope Updates in Real-Time
-  without a description (p.1166).
+  without a description (p.1166). Ours, from the names: the second, on by default, lets a monitor showing a scope
+  follow playback; off, the scope holds what it showed while the Composer plays and measures again when playback stops
+  (`CorrectionMonitors::setScopesRealTime`; ROADMAP 11.6d).
 * AutoCorrect: the first, second and third automatic corrections when the effect is applied from the Effect Palette
   (Nothing, HSL Auto Balance/Black/Contrast/White, Curves Auto Balance/Contrast) (p.608-609; Editing Guide p.1166-1167).
 * Preview: Pre-Roll and Post-Roll, 3 seconds by default (Editing Guide p.1167).
@@ -265,9 +272,9 @@ and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/
   drawn while the Composer plays. Use Marks needs both marks in the Record monitor.
 * Saved Color Labels and Eyedropper Picks from Anywhere came with 6.10c3b, Show Eyedropper Info with 6.10c3a (on by
   default as p.631 has it);
-  Waveform/Vectorscope Updates in Real-Time (6.10c), the AutoCorrect tab (6.10e; our defaults HSL Auto Balance, then
-  Nothing) and the Preview tab are dimmed. The FX Guide gives Edit Review's preroll and postroll to the Trim settings
-  (p.594), so the Preview tab's use is unknown.
+  The AutoCorrect tab came with 6.10e (our defaults HSL Auto Balance, then Nothing), Waveform/Vectorscope Updates in
+  Real-Time with 11.6d. The FX Guide gives Edit Review's preroll and postroll to the Trim settings (p.594); the Preview
+  tab's are Segment Preview's (p.711, above).
 
 ## 6.10b4b: the tool's buttons, Comments and the Tab buttons
 

@@ -156,7 +156,7 @@
             {"key": "autoCreateTracks", "type": "bool", "label": "Auto-create New Tracks", "default": true, "page": 1159},
             {"key": "autoEnableSourceTracks", "type": "bool", "label": "Auto-enable Source Tracks", "default": true, "page": 1160},
             {"key": "copySourceMarkers", "type": "bool", "label": "Copy Source Markers", "default": true, "page": 1160},
-            {"key": "undoOnlyRecord", "type": "bool", "label": "Undo Only Record Events", "default": false, "page": 1160, "later": true},
+            {"key": "undoOnlyRecord", "type": "bool", "label": "Undo Only Record Events", "default": false, "page": 1160},
             {"key": "activateRecordAfterEdit", "type": "bool", "label": "Activate Record Monitor After Edit", "default": false, "page": 1160},
             {"key": "showComposerMarkers", "type": "bool", "label": "Show Composer Markers", "default": true, "page": 1160},
             {"key": "showSpannedMarkers", "type": "bool", "label": "Show Spanned Markers", "default": true, "page": 1160}
@@ -258,7 +258,7 @@
             {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166},
             {"key": "showBackgrounds", "type": "bool", "label": "Show Color Wheel and Chroma Curve Graphs", "default": false, "page": 1166},
             {"key": "dualSplitDuringPlayback", "type": "bool", "label": "Dual-Split remains Active During Playback", "default": true, "page": 1166},
-            {"key": "scopesRealTime", "type": "bool", "label": "Waveform/Vectorscope Updates in Real-Time", "default": true, "page": 1166, "later": true}
+            {"key": "scopesRealTime", "type": "bool", "label": "Waveform/Vectorscope Updates in Real-Time", "default": true, "page": 1166}
           ]
         },
         {
@@ -275,8 +275,8 @@
         {
           "name": "Preview",
           "options": [
-            {"key": "preroll", "type": "int", "label": "Pre-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167, "later": true},
-            {"key": "postroll", "type": "int", "label": "Post-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167, "later": true}
+            {"key": "preroll", "type": "int", "label": "Pre-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167},
+            {"key": "postroll", "type": "int", "label": "Post-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167}
           ]
         }
       ]
@@ -373,7 +373,7 @@
             {"key": "indentRows", "type": "bool", "label": "Indent Rows", "default": true, "page": 1171},
             {"key": "largeText", "type": "bool", "label": "Large Text", "default": false, "page": 1171},
             {"key": "thumbwheels", "type": "bool", "label": "Thumbwheels", "default": false, "page": 1171, "later": true},
-            {"key": "realTimeUpdate", "type": "bool", "label": "Real Time Update", "default": true, "page": 1171, "later": true},
+            {"key": "realTimeUpdate", "type": "bool", "label": "Real Time Update", "default": true, "page": 1171},
             {"key": "setPositionToKeyframe", "type": "bool", "label": "Set Position To Keyframe", "default": true, "page": 1171},
             {"key": "updatePositionWhilePlaying", "type": "bool", "label": "Update Position While Playing", "default": false, "page": 1171},
             {"key": "showAddKeyframeModeMenu", "type": "bool", "label": "Show Add Keyframe Mode Menu", "default": true, "page": 1171},
@@ -712,11 +712,11 @@
             {"key": "projectFormat", "type": "info", "label": "Project Format", "page": 1192},
             {"key": "tempDirectory", "type": "text", "label": "Temporary File Directory:", "default": "", "page": 1192},
             {"key": "defaultStartTc", "type": "timecode", "label": "Default Starting TC:", "default": "01:00:00:00", "page": 1192},
-            {"key": "defaultStartEc", "type": "text", "label": "Default Starting EC:", "default": "", "page": 1192, "later": true},
+            {"key": "defaultStartEc", "type": "text", "label": "Default Starting EC:", "default": "", "page": 1192},
             {"key": "effectApertures", "type": "choice", "style": "radio", "label": "Effect Apertures", "default": "itu601", "page": 1192, "later": true,
              "choices": [{"value": "dv25", "label": "DV25"}, {"value": "itu601", "label": "ITU 601"}]},
-            {"key": "ntscHasSetup", "type": "bool", "label": "NTSC Has Setup", "default": true, "page": 1192, "later": true},
-            {"key": "windowsFileNames", "type": "bool", "label": "Use Windows compatible file names", "default": false, "page": 1192, "later": true},
+            {"key": "ntscHasSetup", "type": "bool", "label": "NTSC Has Setup", "default": true, "page": 1192},
+            {"key": "windowsFileNames", "type": "bool", "label": "Use Windows compatible file names", "default": true, "page": 1192, "always": true},
             {"key": "generateLtc", "type": "bool", "label": "Generate LTC on Playback", "default": false, "page": 1192, "later": true},
             {"key": "lowerEditTimebase", "type": "bool", "label": "Project Default: Use lower edit timebase in high frame rate projects.", "default": false, "page": 1192, "later": true}
           ]

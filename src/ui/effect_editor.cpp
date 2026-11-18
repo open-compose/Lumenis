@@ -747,7 +747,7 @@ void EffectEditor::refresh() {
     current_.reset();
     // A handle drag in the Effect Preview keeps its preview while the Composer redraws (its refresh says
     // changed() too); anything else previewed is dropped.
-    if (!handleStart_ && !pluginDragging_ && !(titler_ && titler_->busy())) preview_.reset();
+    if (!handleStart_ && !pluginDragging_ && !sliderPreview_ && !(titler_ && titler_->busy())) preview_.reset();
     chain_.clear();
     // Another effect opens at its outermost level.
     if (ref != shown_) level_ = 0;
@@ -1151,10 +1151,23 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
                     connect(s, &QSlider::valueChanged, this, [this, s, value, category, p](int v) {
                         value->setText(p.shown(p.fromSlider(v).toDouble()));
-                        if (!s->isSliderDown()) setValue(category, p.name, p.fromSlider(v));
+                        if (!s->isSliderDown()) {
+                            setValue(category, p.name, p.fromSlider(v));
+                        } else if (realTimeUpdate_) {
+                            previewValue(category, p.name, p.fromSlider(v));
+                        }
                     });
-                    connect(s, &QSlider::sliderReleased, this,
-                            [this, s, category, p] { setValue(category, p.name, p.fromSlider(s->value())); });
+                    connect(s, &QSlider::sliderReleased, this, [this, s, category, p] {
+                        const bool previewed = sliderPreview_;
+                        sliderPreview_ = false;
+                        preview_.reset();
+                        setValue(category, p.name, p.fromSlider(s->value()));
+                        if (previewed) {
+                            // Unchanged in the end: the preview is dropped all the same.
+                            syncPreview();
+                            timeline_.composer().refreshDisplay();
+                        }
+                    });
                     row->addWidget(s, 1);
                     row->addWidget(value);
                     controls_.insert(k, s);
@@ -1726,6 +1739,12 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
     });
 }
 
+void EffectEditor::previewValue(const QString& category, const QString& parameter, const QJsonValue& value) {
+    previewing_ = true;
+    setValue(category, parameter, value);
+    previewing_ = false;
+}
+
 // Keeps the shown transition's duration and start; elsewhere the default transition length.
 void EffectEditor::setAlignment(model::TransitionAlignment alignment) {
     const QList<model::TrimRoller> cuts = transitionCuts();
@@ -1969,6 +1988,17 @@ bool EffectEditor::changeShown(const QString& description, const std::function<v
         change(e);
         keepAutoZoom(before, e);
     };
+    if (previewing_) {
+        // A slider being dragged with Real Time Update: the change previewed at the outermost level, nothing stored.
+        if (level_ != 0 || !current_) return false;
+        model::Effect e = *current_;
+        changed(e);
+        preview_ = e;
+        sliderPreview_ = true;
+        syncPreview();
+        timeline_.composer().refreshDisplay();
+        return true;
+    }
     autoZoomOff_ = false;
     const bool done = level_ == 0 ? timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { changed(e); })
                                   : timeline_.changeNestedEffect(*shown_, nestOffset_, level_, description, changed);

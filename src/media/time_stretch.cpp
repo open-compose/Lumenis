@@ -212,4 +212,140 @@ std::vector<std::vector<float>> pitchShift(const std::vector<std::vector<float>>
     return varispeed(s, factor, o.sampleRate);
 }
 
+namespace {
+
+// The sound's period in samples about `centre`: the lag with the highest normalised autocorrelation between the lags of
+// 1000 Hz and `minPitchHz`, over a window of twice the longest; 0 where none reaches 0.5 (unvoiced, or silence).
+double periodAt(const std::vector<float>& m, std::size_t centre, int rate, double minPitchHz) {
+    const auto shortest = static_cast<std::size_t>(std::max(2, rate / 1000));
+    const auto longest = static_cast<std::size_t>(std::max<double>(static_cast<double>(shortest) + 1, rate / std::max(minPitchHz, 20.0)));
+    const std::size_t span = 2 * longest;
+    if (m.size() < span + longest) return 0;
+    const std::size_t start = std::min(centre > longest ? centre - longest : 0, m.size() - span - longest);
+    const float* a = m.data() + start;
+    double best = 0.5;
+    std::size_t lag = 0;
+    for (std::size_t l = shortest; l <= longest; ++l) {
+        const double c = similarity(a, a + l, span);
+        if (c > best) {
+            best = c;
+            lag = l;
+        }
+    }
+    // The shortest lag near the best one, so a period is not taken for two (the correlation repeats at multiples).
+    if (lag != 0) {
+        for (std::size_t d = 2; d <= 4; ++d) {
+            const std::size_t l = lag / d;
+            if (l >= shortest && similarity(a, a + l, span) > 0.9 * best) return static_cast<double>(l);
+        }
+    }
+    return static_cast<double>(lag);
+}
+
+} // namespace
+
+std::vector<std::vector<float>> formantPitchShift(const std::vector<std::vector<float>>& channels, double semitones,
+                                                  double formantSemitones, double lengthRatio, const StretchOptions& o) {
+    const double alpha = std::pow(2.0, std::clamp(semitones, -24.0, 24.0) / 12.0);       // the pitch's factor
+    const double beta = std::pow(2.0, std::clamp(formantSemitones, -24.0, 24.0) / 12.0); // the formants'
+    lengthRatio = std::clamp(lengthRatio, 0.25, 4.0);
+    const std::size_t n = lengthOf(channels);
+    if (n == 0) return channels;
+    if (std::abs(alpha - 1.0) < 1e-9 && std::abs(beta - 1.0) < 1e-9) return timeStretch(channels, lengthRatio, o);
+    const int rate = std::max(o.sampleRate, 1);
+    const std::vector<float> m = mono(channels);
+    // The period every 5 ms, unvoiced stretches taking 10 ms.
+    const auto hop = static_cast<std::size_t>(std::max(1, rate / 200));
+    const double unvoiced = rate / 100.0;
+    std::vector<double> periods;
+    for (std::size_t at = 0; at < n; at += hop) {
+        const double p = periodAt(m, at, rate, o.minPitchHz);
+        periods.push_back(p > 0 ? p : unvoiced);
+    }
+    auto periodOf = [&](double t) {
+        const auto i = static_cast<std::size_t>(std::clamp(t / static_cast<double>(hop), 0.0, static_cast<double>(periods.size() - 1)));
+        return periods[i];
+    };
+    // The analysis marks, a period apart.
+    std::vector<double> marks;
+    for (double t = 0; t < static_cast<double>(n); t += periodOf(t)) marks.push_back(t);
+    const auto outLength = static_cast<std::size_t>(std::llround(static_cast<double>(n) * lengthRatio));
+    std::vector<std::vector<float>> out(channels.size(), std::vector<float>(outLength, 0.0f));
+    std::vector<float> weight(outLength, 0.0f);
+    std::size_t k = 0;
+    for (double ts = 0; ts < static_cast<double>(outLength);) {
+        // The mark nearest where this point of the output comes from.
+        const double ti = ts / lengthRatio;
+        while (k + 1 < marks.size() && std::abs(marks[k + 1] - ti) <= std::abs(marks[k] - ti)) ++k;
+        const double mark = marks[k];
+        const double period = periodOf(mark);
+        // The grain, two periods long in the input, `beta` times shorter in the output.
+        const double half = period / beta;
+        const auto from = static_cast<std::int64_t>(std::ceil(ts - half));
+        const auto to = static_cast<std::int64_t>(std::floor(ts + half));
+        for (std::int64_t i = std::max<std::int64_t>(from, 0); i <= to && i < static_cast<std::int64_t>(outLength); ++i) {
+            const double u = (static_cast<double>(i) - ts) * beta; // input samples from the mark
+            const double w = 0.5 * (1.0 + std::cos(std::numbers::pi * u / period));
+            const double x = mark + u;
+            if (x < 0 || x >= static_cast<double>(n - 1)) continue;
+            const auto x0 = static_cast<std::size_t>(x);
+            const auto f = static_cast<float>(x - static_cast<double>(x0));
+            const auto wf = static_cast<float>(w);
+            for (std::size_t c = 0; c < channels.size(); ++c) {
+                const std::vector<float>& in = channels[c];
+                out[c][static_cast<std::size_t>(i)] += wf * (in[x0] + f * (in[x0 + 1] - in[x0]));
+            }
+            weight[static_cast<std::size_t>(i)] += wf;
+        }
+        // The next grain a period of the new pitch later.
+        ts += period / alpha;
+    }
+    // The grains' windows add up to about the pitch factor where they overlap; dividing by their sum keeps the level.
+    // Thin spots (grains further apart than they are long) are not raised more than twice.
+    for (std::size_t i = 0; i < outLength; ++i) {
+        const float g = 1.0f / std::max(weight[i], 0.5f);
+        for (auto& c : out) c[i] *= g;
+    }
+    return out;
+}
+
+std::vector<std::vector<float>> followEnvelope(const std::vector<std::vector<float>>& original,
+                                               std::vector<std::vector<float>> stretched, double ratio, int sampleRate) {
+    const std::size_t n = lengthOf(original);
+    const std::size_t out = lengthOf(stretched);
+    if (n == 0 || out == 0 || ratio <= 0) return stretched;
+    const auto hop = static_cast<std::size_t>(std::max(1, sampleRate / 200));
+    // The level (RMS of the channels' sum) over two hops about each point every `hop`.
+    auto levels = [&](const std::vector<float>& m) {
+        std::vector<double> l;
+        for (std::size_t at = 0; at < m.size(); at += hop) {
+            const std::size_t a = at > hop ? at - hop : 0;
+            const std::size_t b = std::min(m.size(), at + hop);
+            double sum = 0;
+            for (std::size_t i = a; i < b; ++i) sum += static_cast<double>(m[i]) * static_cast<double>(m[i]);
+            l.push_back(std::sqrt(sum / static_cast<double>(std::max<std::size_t>(b - a, 1))));
+        }
+        return l;
+    };
+    const std::vector<double> was = levels(mono(original));
+    const std::vector<double> now = levels(mono(stretched));
+    auto at = [](const std::vector<double>& l, double index) {
+        index = std::clamp(index, 0.0, static_cast<double>(l.size() - 1));
+        const auto i = static_cast<std::size_t>(index);
+        const double f = index - static_cast<double>(i);
+        return i + 1 < l.size() ? l[i] + f * (l[i + 1] - l[i]) : l[i];
+    };
+    // The gain at each of the stretched sound's points: the original's level where it came from over its own.
+    std::vector<double> gains(now.size(), 1.0);
+    for (std::size_t p = 0; p < now.size(); ++p) {
+        const double target = at(was, static_cast<double>(p) / ratio);
+        gains[p] = now[p] > 1e-6 ? std::clamp(target / now[p], 0.0, 4.0) : 1.0;
+    }
+    for (std::size_t i = 0; i < out; ++i) {
+        const auto g = static_cast<float>(at(gains, static_cast<double>(i) / static_cast<double>(hop)));
+        for (auto& c : stretched) c[i] *= g;
+    }
+    return stretched;
+}
+
 } // namespace lumenis::media

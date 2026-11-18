@@ -396,6 +396,10 @@ public:
     void setSequenceFormat(const QString& label) { sequenceFormat_ = label; }
     const QString& sequenceFormat() const { return sequenceFormat_; }
     const QString& defaultStartTimecode() const { return startTimecode_; }
+    // General settings "Default Starting EC" (p.1192): "the default starting edgecode for each new sequence", kept in
+    // its Master Edge column (the edgecode of the sequence's first frame, p.287; ours). Empty leaves the column blank.
+    void setDefaultStartEdgecode(const QString& ec) { startEdgecode_ = ec.trimmed(); }
+    const QString& defaultStartEdgecode() const { return startEdgecode_; }
     // New sequences sync-lock all their tracks (Timeline settings, Default Sync Locks On, p.1220).
     void setDefaultSyncLocks(bool on) { defaultSyncLocks_ = on; }
 
@@ -519,6 +523,7 @@ private:
     Rational editRate_{24000, 1001};
     bool openFloating_ = false;
     QString startTimecode_;
+    QString startEdgecode_;
     QString sequenceFormat_;
     bool defaultSyncLocks_ = false;
     QList<BinDocument*> documents_;
