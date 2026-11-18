@@ -1050,7 +1050,7 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   runners' baselines, is done: CI's Linux, macOS and Windows jobs run `scripts/perf.py --repeat 3 --print-times` as
   `github-<runner>`, each with a margin of its own; record again from saved job logs with `--record-from` (they hold the
   times between `perf-times` lines) when a change makes benchmarks much faster. 10.1b, the slow paths,
-  has started (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
+  is done; the audio mix on macOS and Windows (twice Linux's time) is profiled only if editors report it slow (`media::CorrectionPlan`, `detail::parallelRange` in `src/media/parallel.h`; BUILDING.md "Profiling";
   in-place `over`/`mix` taking `Picture&&` and `Picture::uninitialized`: use them in new blends and effects; write a
   per-value pass with no branches and in blocks of eight, byte stores through a local block, as `Picture::quantize` and
   `toImage` are, so GCC vectorises it (`lumenis_media` has `-fno-trapping-math`; check with `-fopt-info-vec`).

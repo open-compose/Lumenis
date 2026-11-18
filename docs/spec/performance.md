@@ -89,7 +89,7 @@ piece, since macOS's and Windows' allocators are slower than glibc's at that. Th
 2.66 billion instructions; with opens that cheap, a reader per source offset was tried again and still cost more in
 opens than the seeks it saved on Linux, so it stays one reader a channel. On CI (6c00d68, 2026-11-18) the mix went from
 47.6 to 40.7 ms on Linux, 147 to 104 ms on macOS 15, 152 to 77 ms on macOS 26 and 137 to 79 ms on Windows: most of the
-gap was the 5 MB read at each open and the allocations. What is left (about twice Linux) needs a profiler there. The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
+gap was the 5 MB read at each open and the allocations. What is left (about twice Linux) would need Instruments or WPA there; the owner decided on 2026-11-18 to profile it only if editors report slow audio. The audio mix of 16 file tracks takes about 1% of real time (the calibration tone's
 generator is slower, but one tone is still under 1% of real time); FFV1 coding is FFmpeg's.
 
 The compositor's memory traffic (a 1080p picture is 33 MB of floats): `over` and `mix` have versions that take a

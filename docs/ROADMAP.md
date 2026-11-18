@@ -1724,7 +1724,7 @@ The items:
     transparent start and the effects' copies of their source left out where nothing uses them, the bilinear sample
     inline without `std::floor`, a 1080p dissolve from 4.0 to 3.0 billion instructions and a 3D Warp frame 14% fewer;
     lighter pixels not done, as the 16-bit and 32-bit Effects Processing need full floats (docs/spec/performance.md);
-    so the video passes are done; open, the audio mix three to four times slower on macOS and Windows than on Linux); 10.1c, the baselines recorded on the hosted runners (done 2026-11-17: the Linux, macOS 15
+    so the video passes are done; the audio mix's WAV opens with a 32 KB probe and its reads into kept buffers, 16 tracks from 152 to 77 ms on macOS 26 and 137 to 79 ms on Windows; so 10.1b is done. What is left there, about twice Linux's time, is profiled only if editors report slow audio (the owner's decision, 2026-11-18)); 10.1c, the baselines recorded on the hosted runners (done 2026-11-17: the Linux, macOS 15
     and 26 and Windows CI jobs run the benchmarks three times after the tests through `scripts/perf.py --repeat 3
     --print-times`; each runner's baseline in tests/data/perf_baseline.json from three CI runs' logs through
     `--record-from`, with a margin of its own: Linux's runs varied up to 2.3 times, so it fails at three times its time,
@@ -2046,7 +2046,7 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **Work that can go ahead now**
 
-11. 10.1b, the slow paths: the video passes are done; next, the audio mix on macOS and Windows. 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
+11. 10.1b is done (the audio mix on macOS and Windows is profiled only if editors report it slow). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
     benchmark much faster (the step's notices say which).
 12. The left-over items recorded in Phase 11's status: DNxHD 10 and 100, the settings options still marked `"later"`
     (11.4f), Live mode on surround pans (11.4d), Time Shift's Formant shift and Follow (11.2).
