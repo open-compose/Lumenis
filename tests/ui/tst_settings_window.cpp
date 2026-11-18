@@ -126,7 +126,7 @@ private slots:
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
                     QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph", "button",
-                                         "applyToAll", "driveMode"}).contains(o.type),
+                                         "applyToAll", "driveMode", "trackFormats"}).contains(o.type),
                              qPrintable(where));
                     // An Apply to All button names what it copies.
                     if (o.type == QLatin1String("applyToAll")) {

@@ -286,6 +286,12 @@ public:
     // Files that are not media are left out and named in the Console.
     // The bin is opened if needed; empty if it cannot be.
     QStringList linkFiles(const QString& binId, const QStringList& paths);
+    // Live Link (the Link Options tab, p.1204, p.319): clips linked with it on remember their file's time ("modified" in
+    // BinItem::link). When the application is active again, a clip whose file has changed is linked afresh: "The updated
+    // clip appears in your bin (and sequence) and replaces the old clip", unless its tracks or duration changed, when
+    // "the system creates a new clip and will not overwrite or replace the existing clip in the bin". Returns how many
+    // clips were replaced or added.
+    int checkLiveLinks();
     // Links files without putting them in a bin and loads them into a
     // monitor, to review (p.315-316).
     void loadFiles(const QStringList& paths, bool recordMonitor = false);

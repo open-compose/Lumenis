@@ -352,13 +352,22 @@ is written:
   tab choosing it consolidates the clips' video and audio together (ours).
 * **Video Mixdown** (video only): "replaces all of the video tracks with a
   single video track named Video Mixdown" (p.872), a new clip "<sequence>
-  Video Mixdown" in the folder. Mixdown with Video Edits (a mixdown track
-  beside the edit tracks) later.
+  Video Mixdown" in the folder. That is Mixdown without Video Edits, the
+  default. Mixdown with Video Edits keeps "Video tracks that represent each
+  track and edit in the original sequence" and adds "A 'render track' that
+  contains the single video mixdown track" (p.871-872): ours, a video track
+  above the others named Video Mixdown with the mixdown clip. The guide says
+  the render track's metadata is stored in the AAF so that Media Composer
+  does not show it while Pro Tools does; how, it does not say, so ours is an
+  ordinary track (on the watch list for the seat, ROADMAP 11.6e).
+* **Split Tracks to Mono** (Audio Details, on by default, p.1176): the
+  exported sequences' multichannel tracks become mono tracks
+  (`model::splitAllToMono`); the bin's sequence stays as it is.
 * **Media Destinations:** Folder, with Use Same Folder as AAF File on by
   default (p.871, p.1177), or Embedded in AAF ("Embedded media", below);
   Media Drive later.
 
-Not yet: Split Tracks to Mono and Remove Track Effects
+Not yet: Remove Track Effects
 (our AAF export writes no track effects), Convert Audio Sample Rate, Bit
 Depth and File Format, Add Audio Mixdown Track, Render Video Effects.
 Test: `tst_managed_media aafExportMethods`.

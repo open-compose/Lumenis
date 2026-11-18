@@ -4,6 +4,7 @@
 #include "lumenis/ui/settings.h"
 
 #include <QDialog>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -26,6 +27,24 @@ class TargetSettingsDialog;
 // boxes, number boxes, menus and radio buttons, on tabs when the setting
 // has several. Options not available yet are shown dimmed.
 // SettingsList::openEntry() shows it; it does not change the entry itself.
+// The Set Multichannel Audio window of the Link setting's Link Options tab (Editing Guide p.330-332): "Click the format
+// buttons to select one of the following audio track formats for each pair of source channels: Mono, Stereo", up to
+// 64 channels. "You must map source audio channels in mono or stereo pairs." Its result is the mapping as the Track
+// Formats column writes it (model::trackFormatsText: the stereo pairs; the others mono).
+class MultichannelMapDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    static constexpr int kChannels = 64;
+    MultichannelMapDialog(const QString& trackFormats, QWidget* parent = nullptr);
+    QString trackFormats() const;
+    // The pair starting at channel `first` (1, 3, 5 ...) as stereo or mono.
+    void setStereo(int first, bool stereo);
+
+private:
+    QList<QToolButton*> pairs_;
+};
+
 class SettingsDialog : public QDialog {
     Q_OBJECT
 

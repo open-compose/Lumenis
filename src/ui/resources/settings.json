@@ -400,7 +400,7 @@
             {"key": "exportAs", "type": "choice", "style": "menu", "label": "Export As", "default": "aaf", "page": 1173,
              "choices": [{"value": "omfi1", "label": "OMFI 1.0", "later": true}, {"value": "omfi2", "label": "OMFI 2.0", "later": true},
                          {"value": "aaf", "label": "AAF"}, {"value": "qtReference", "label": "QuickTime Reference", "later": true},
-                         {"value": "qtMovie", "label": "QuickTime Movie"}, {"value": "avi", "label": "AVI", "later": true},
+                         {"value": "qtMovie", "label": "QuickTime Movie"}, {"value": "avi", "label": "AVI"},
                          {"value": "windowsMedia", "label": "Windows Media", "later": true}, {"value": "scc", "label": "SCC"},
                          {"value": "ttml", "label": "TTML"}, {"value": "audio", "label": "Audio"},
                          {"value": "graphic", "label": "Graphic"}, {"value": "ale", "label": "Avid Log Exchange"},
@@ -426,7 +426,7 @@
                          {"value": "consolidate", "label": "Consolidate Media"}, {"value": "mixdown", "label": "Video Mixdown"}]},
             {"key": "videoHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
             {"key": "videoMixdownEdits", "type": "choice", "style": "radio", "label": "", "default": "without", "page": 1176,
-             "choices": [{"value": "with", "label": "Mixdown with Video Edits", "later": true},
+             "choices": [{"value": "with", "label": "Mixdown with Video Edits"},
                          {"value": "without", "label": "Mixdown without Video Edits"}]},
             {"key": "mixdownEffectsToV1", "type": "bool", "label": "Mixdown Video/Effects to V1", "default": false, "page": 885},
             {"key": "videoExcludePrevious", "type": "bool", "label": "Ask to Exclude Media from a Previous Sequence", "default": false, "page": 886}
@@ -439,7 +439,7 @@
              "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media"},
                          {"value": "consolidate", "label": "Consolidate Media"}]},
             {"key": "audioHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
-            {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176, "later": true},
+            {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176},
             {"key": "flattenAudioEffects", "type": "bool", "label": "Flatten Audio Tracks that Contain Effects", "default": false, "page": 885},
             {"key": "audioTrackCount", "type": "choice", "style": "menu", "label": "Audio Tracks", "default": "all", "page": 884,
              "choices": [{"value": "all", "label": "All"}, {"value": "2", "label": "First 2"}, {"value": "4", "label": "First 4"},
@@ -499,6 +499,19 @@
           ]
         },
         {
+          "name": "AVI",
+          "options": [
+            {"key": "aviFieldOrder", "type": "choice", "style": "menu", "label": "File Field Order", "default": "odd", "page": 1181,
+             "choices": [{"value": "odd", "label": "Odd (Upper Field First)"}, {"value": "even", "label": "Even (Lower Field First)"},
+                         {"value": "single", "label": "Single Field"}]},
+            {"key": "aviQuality", "type": "int", "label": "Compression Quality", "default": 75, "min": 1, "max": 100, "page": 1182},
+            {"key": "aviKeyFrames", "type": "int", "label": "Key Frame Every", "default": 0, "min": 0, "max": 9999, "suffix": "frames",
+             "specialText": "Off", "page": 1182},
+            {"key": "aviDataRate", "type": "int", "label": "Limit Data Rate", "default": 0, "min": 0, "max": 1000000, "suffix": "KB/sec",
+             "specialText": "Off", "page": 1182}
+          ]
+        },
+        {
           "name": "MXF OP1a",
           "options": [
             {"key": "mxfCompression", "type": "choice", "style": "menu", "label": "Video Compression", "default": "dnxhr_hq", "page": 889,
@@ -555,8 +568,8 @@
           "name": "Graphic",
           "options": [
             {"key": "graphicFormat", "type": "choice", "style": "menu", "label": "Graphic Format", "default": "png", "page": 1186,
-             "choices": [{"value": "bmp", "label": "BMP"}, {"value": "cineon", "label": "Cineon", "later": true},
-                         {"value": "jpeg", "label": "JPEG"}, {"value": "photoshop", "label": "Photoshop", "later": true},
+             "choices": [{"value": "bmp", "label": "BMP"}, {"value": "cineon", "label": "Cineon"},
+                         {"value": "jpeg", "label": "JPEG"}, {"value": "photoshop", "label": "Photoshop"},
                          {"value": "pict", "label": "PICT"}, {"value": "png", "label": "PNG"}, {"value": "tiff", "label": "TIFF"}]},
             {"key": "graphicSize", "type": "choice", "style": "menu", "label": "Width x Height", "default": "project", "page": 1186,
              "choices": [{"value": "project", "label": "Project raster"}, {"value": "3840x2160", "label": "3840 x 2160"},
@@ -809,8 +822,8 @@
           "name": "Drive Filtering & Indexing",
           "options": [
             {"key": "filterNetworkDrives", "type": "bool", "label": "Filter Network Drives Based on Resolution", "default": false, "page": 1207, "later": true},
-            {"key": "filterSystemDrive", "type": "bool", "label": "Filter Out System Drive", "default": false, "page": 1207, "later": true},
-            {"key": "filterLaunchDrive", "type": "bool", "label": "Filter Out Launch Drive", "default": false, "page": 1207, "later": true},
+            {"key": "filterSystemDrive", "type": "bool", "label": "Filter Out System Drive", "default": false, "page": 1207},
+            {"key": "filterLaunchDrive", "type": "bool", "label": "Filter Out Launch Drive", "default": false, "page": 1207},
             {"key": "autoIndex", "type": "bool", "label": "Auto-index local drives as they come online (using filtering rules)", "default": false, "page": 1207, "later": true}
           ]
         }
@@ -907,10 +920,11 @@
         {
           "name": "Link Options",
           "options": [
-            {"key": "multichannelAudio", "type": "bool", "label": "Multichannel Audio", "default": false, "page": 1203, "later": true},
+            {"key": "multichannelAudio", "type": "bool", "label": "Multichannel Audio", "default": false, "page": 1203},
+            {"key": "multichannelMap", "type": "trackFormats", "label": "", "default": "", "page": 1203},
             {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "invert", "page": 1204,
              "choices": [{"value": "invert", "label": "Invert on import (white = opaque)"}, {"value": "noInvert", "label": "Do not invert (black = opaque)"}, {"value": "ignore", "label": "Ignore"}]},
-            {"key": "liveLink", "type": "bool", "label": "Live Link", "default": false, "page": 1204, "later": true},
+            {"key": "liveLink", "type": "bool", "label": "Live Link", "default": false, "page": 1204},
             {"key": "reformat", "type": "choice", "style": "menu", "label": "Reformatting option", "default": "keepSize", "page": 1204,
              "choices": [{"value": "stretch", "label": "Stretch"}, {"value": "letterbox", "label": "Pillarbox/Letterbox"}, {"value": "crop", "label": "Center Crop"}, {"value": "keepSize", "label": "Center Keep Size"}]},
             {"key": "sdWidescreen", "type": "bool", "label": "Always use 16:9 aspect ratio for SD clips", "default": false, "page": 1204}

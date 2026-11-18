@@ -7,6 +7,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -23,6 +24,7 @@
 #include <QUuid>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <mutex>
 #include <optional>
@@ -1560,10 +1562,35 @@ QStringList& unmounted() {
 }
 } // namespace
 
+namespace {
+std::atomic<bool> filterSystem{false};
+std::atomic<bool> filterLaunch{false};
+} // namespace
+
+void setDriveFilters(bool systemDrive, bool launchDrive) {
+    filterSystem = systemDrive;
+    filterLaunch = launchDrive;
+}
+
+QList<MediaDrive> filteredDrives(const QList<MediaDrive>& drives, const QString& systemRoot, const QString& launchRoot,
+                                 const std::function<QString(const QString& folder)>& volumeOf) {
+    if (systemRoot.isEmpty() && launchRoot.isEmpty()) return drives;
+    QList<MediaDrive> out;
+    for (const MediaDrive& d : drives) {
+        const QString volume = QDir::cleanPath(volumeOf(d.root));
+        if (!systemRoot.isEmpty() && volume == QDir::cleanPath(systemRoot)) continue;
+        if (!launchRoot.isEmpty() && volume == QDir::cleanPath(launchRoot)) continue;
+        out << d;
+    }
+    return out;
+}
+
 QList<MediaDrive> mediaDrives() {
     QList<MediaDrive> drives = mediaDrives(extraDrives());
     drives.removeIf([](const MediaDrive& d) { return unmounted().contains(d.root); });
-    return drives;
+    const QString system = filterSystem ? QStorageInfo::root().rootPath() : QString();
+    const QString launch = filterLaunch ? QStorageInfo(QCoreApplication::applicationDirPath()).rootPath() : QString();
+    return filteredDrives(drives, system, launch, [](const QString& folder) { return QStorageInfo(folder).rootPath(); });
 }
 
 void unmountDrives(const QStringList& roots) {

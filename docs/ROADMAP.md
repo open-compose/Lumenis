@@ -1996,10 +1996,19 @@ Avid's services, XAVC Intra and DNxUncompressed (no open encoder), DNxHD 10 and 
     setDisplayBothFields`; test `tst_playback`), so 11.6d is done. Left dimmed: Effect Apertures and the Effect Editor's
     Thumbwheels, which the guide describes only in the Help, and Project Default: Use lower edit timebase (p.1192),
     the default for a project's own edit timebase (p.1289), which projects do not have yet;
-  * 11.6e, the export and link options: Split Tracks to Mono and Mixdown with Video Edits in AAF export (p.1176),
-    Cineon and Photoshop stills, AVI movies through FFmpeg, the Link setting's Quality and Volume Mounting tabs, Live
-    Link and Multichannel Audio (p.1203-1204), the Media Creation setting's drive filtering (p.1207), and the Playback
-    setting's real-time stream limits (p.1225).
+  * 11.6e, the export and link options: Split Tracks to Mono and Mixdown with Video Edits in AAF export (p.1176; done:
+    `MainWindow::prepareAafMedia`, docs/spec/aaf.md; test `tst_managed_media`; the render track's form in the AAF is
+    for the seat), Cineon and Photoshop stills (done: `src/media/cineon.*`, `media::psdData`; test `tst_movie_export
+    stills`), AVI movies through FFmpeg (done: `MovieContainer::Avi`, the Export setting's AVI tab, `media::fileFields`;
+    docs/spec/movie-export.md; test `tst_movie_export avi`), the Link setting's Live Link and Multichannel Audio (p.1203-1204;
+    done: `MainWindow::checkLiveLinks`, `MultichannelMapDialog`; docs/spec/ui-inventory.md "Link settings"; tests
+    `tst_background_services liveLink`/`linkSettingMultichannel`; the Quality and Volume Mounting tabs wait for sources of
+    several resolutions and mounted volumes), the Media Creation setting's drive filtering (p.1207; done: Filter Out
+    System Drive and Launch Drive, `media::setDriveFilters`; test `tst_media_unmount driveFilters`; the network and
+    indexing options need what Avid's services know), so 11.6e is done. Left dimmed: the Video Display setting's
+    Maximum Real Time Streams and Ignore Real Time Stream Counts (p.1225), which the guide defines only by name ("For more
+    information, see ... in the Help"): our playback has no stream limit, decoding what the computer can and showing what
+    it could not as the playback indicators (FX Guide p.136).
   Not taken up: what needs capture or output hardware, a GPU or Avid's services, OMFI, Windows Media, and the
   resolutions no open encoder makes (DNxHD 10 and 100, XAVC Intra, DNxUncompressed).
 
@@ -2080,8 +2089,8 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 11. 10.1b is done (the audio mix on macOS and Windows is profiled only if editors report it slow). 10.1c's baselines are recorded (docs/spec/performance.md): record them again after a change that makes a
     benchmark much faster (the step's notices say which).
 12. 11.6, the left-over items recorded in Phase 11's status, in parts (Phase 11): 11.6a, Live mode on surround pans,
-    11.6b, Time Shift's Formant shift and Follow, 11.6c, Undo Only Record Events, and 11.6d, the settings options that
-    need no hardware, are done; next 11.6e, the export and link options.
+    11.6b, Time Shift's Formant shift and Follow, 11.6c, Undo Only Record Events, 11.6d, the settings options that need
+    no hardware, and 11.6e, the export and link options, are done, so 11.6 is.
 13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
     released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
 

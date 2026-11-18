@@ -1160,7 +1160,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `model::EditStep::marks`; test `tst_composer_edit undoOnlyRecordEvents`), is done. 11.6d, the settings options that
   need no hardware (Real Time Update `EffectEditor::previewValue`, Segment Preview `Timeline::segmentPreview`, the scopes'
   real-time updates, Default Starting EC, NTSC Has Setup, the settings' `"always"` options, Color Framing
-  `src/model/color_framing.*` with `Composer::ColorFramingDisplay`, Display Both Fields), is done. 10.6 is an update check that only tells the user (no
+  `src/model/color_framing.*` with `Composer::ColorFramingDisplay`, Display Both Fields), is done. 11.6e, the export
+  and link options (AAF's Split Tracks to Mono and Mixdown with Video Edits in `prepareAafMedia`, Cineon `src/media/
+  cineon.*` and Photoshop stills, AVI `MovieContainer::Avi` with `media::fileFields`, Live Link `MainWindow::
+  checkLiveLinks`, Multichannel Audio `MultichannelMapDialog` and the settings' `trackFormats` type, Filter Out System and
+  Launch Drive `media::setDriveFilters`), is done, so 11.6 is. 10.6 is an update check that only tells the user (no
   automatic updates, the owner's decision).
   Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
   (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from

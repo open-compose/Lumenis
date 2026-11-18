@@ -1,6 +1,8 @@
 // The background services (8.4a; Editing Guide p.375-377): the Background Queue starting jobs only while the services
 // are active, pausing (explicit, during playback, extended while play goes on), the error report, the Timeline's progress
 // indicator and Tools > Background Services with its options kept in the user's settings.
+#include "lumenis/ui/settings_window.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/media/dynamic_media_folders.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/movie_export.h"
@@ -161,6 +163,114 @@ private slots:
         QCOMPARE(clip->fields.value(QStringLiteral("Labroll")), QStringLiteral("Roll_C"));
         QCOMPARE(clip->fields.value(QStringLiteral("Camroll")), QStringLiteral("Scanner 3"));
         QCOMPARE(clip->fields.value(QStringLiteral("DPX")), QStringLiteral("Roll_C0000042"));
+    }
+
+    // The Link Options tab's Multichannel Audio (p.1203, p.330-332): linked clips take the mapping's tracks, a pair the
+    // file lacks a channel of left mono; off, the clips stay mono.
+    void linkSettingMultichannel() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        // A WAVE file of four channels, a second of silence.
+        const QString wav = dir.filePath(QStringLiteral("four.wav"));
+        {
+            const int channels = 4, rate = 48000, frames = 48000;
+            QByteArray data(frames * channels * 2, '\0');
+            QByteArray h;
+            auto u32 = [&](quint32 v) { for (int i = 0; i < 4; ++i) h.append(static_cast<char>((v >> (8 * i)) & 0xff)); };
+            auto u16 = [&](quint16 v) { h.append(static_cast<char>(v & 0xff)); h.append(static_cast<char>(v >> 8)); };
+            h.append("RIFF"); u32(static_cast<quint32>(36 + data.size())); h.append("WAVEfmt "); u32(16); u16(1); u16(channels);
+            u32(rate); u32(rate * channels * 2); u16(channels * 2); u16(16); h.append("data"); u32(static_cast<quint32>(data.size()));
+            QFile f(wav);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(h + data);
+        }
+        const QString binId = window.binContainer().newBin();
+        QStringList ids = window.linkFiles(binId, {wav});
+        QCOMPARE(ids.size(), 1);
+        QVERIFY(model::trackFormatsOf(*window.binContainer().document(binId)->bin().item(ids.first())).isEmpty());
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("multichannelAudio"), true);
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("multichannelMap"), QStringLiteral("Stereo A3A4; Stereo A5A6"));
+        ids = window.linkFiles(binId, {wav});
+        QCOMPARE(ids.size(), 1);
+        const QList<model::ChannelGroup> groups = model::trackFormatsOf(*window.binContainer().document(binId)->bin().item(ids.first()));
+        QCOMPARE(groups, (QList<model::ChannelGroup>{{model::AudioFormat::Stereo, 3}}));
+
+        // The setting's Edit button opens Set Multichannel Audio; its pairs make the mapping.
+        const SettingKind* link = SettingsSchema::builtIn().find(QStringLiteral("Link"));
+        QVERIFY(link);
+        SettingsDialog dialog(*link, model::SettingEntry{QStringLiteral("Link"), {}, true, {}});
+        auto* edit = qobject_cast<QPushButton*>(dialog.editor(QStringLiteral("multichannelMap")));
+        QVERIFY(edit);
+        edit->click();
+        auto* map = dialog.findChild<MultichannelMapDialog*>(QStringLiteral("multichannelMapDialog"));
+        QVERIFY(map);
+        map->setStereo(1, true);
+        map->setStereo(7, true);
+        map->accept();
+        QCOMPARE(dialog.values().value(QStringLiteral("multichannelMap")).toString(), QStringLiteral("Stereo A1A2; Stereo A7A8"));
+    }
+
+    // Live Link (p.1204, p.319): a clip linked with it on follows its file when the file changes; a change of length
+    // makes a new clip and leaves the old one.
+    void liveLink() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        const QString wav = dir.filePath(QStringLiteral("mix.wav"));
+        auto writeWav = [&](int seconds, char fill, const QDateTime& when) {
+            const int rate = 48000;
+            QByteArray data(seconds * rate * 2 * 2, fill);
+            QByteArray h;
+            auto u32 = [&](quint32 v) { for (int i = 0; i < 4; ++i) h.append(static_cast<char>((v >> (8 * i)) & 0xff)); };
+            auto u16 = [&](quint16 v) { h.append(static_cast<char>(v & 0xff)); h.append(static_cast<char>(v >> 8)); };
+            h.append("RIFF"); u32(static_cast<quint32>(36 + data.size())); h.append("WAVEfmt "); u32(16); u16(1); u16(2);
+            u32(rate); u32(rate * 4); u16(4); u16(16); h.append("data"); u32(static_cast<quint32>(data.size()));
+            QFile f(wav);
+            if (!f.open(QIODevice::WriteOnly)) return false;
+            f.write(h + data);
+            f.close();
+            return f.open(QIODevice::ReadWrite) && f.setFileTime(when, QFileDevice::FileModificationTime);
+        };
+        const QDateTime start = QDateTime::currentDateTimeUtc().addSecs(-60);
+        QVERIFY(writeWav(1, '\0', start));
+        window.settings().setValue(QStringLiteral("Link"), QStringLiteral("liveLink"), true);
+        const QString binId = window.binContainer().newBin();
+        const QStringList ids = window.linkFiles(binId, {wav});
+        QCOMPARE(ids.size(), 1);
+        BinDocument* doc = window.binContainer().document(binId);
+        QVERIFY(doc->bin().item(ids.first())->link.contains(QStringLiteral("modified")));
+        QCOMPARE(window.checkLiveLinks(), 0); // unchanged
+        // Changed in another application, as long as before: the clip follows it.
+        QVERIFY(writeWav(1, '\x10', start.addSecs(10)));
+        QCOMPARE(window.checkLiveLinks(), 1);
+        QCOMPARE(doc->bin().items.size(), 1);
+        QCOMPARE(window.checkLiveLinks(), 0); // once
+        // Now longer: a new clip, the old one kept.
+        QVERIFY(writeWav(2, '\x10', start.addSecs(20)));
+        const std::int64_t before = doc->bin().item(ids.first())->durationFrames;
+        QCOMPARE(window.checkLiveLinks(), 1);
+        QCOMPARE(doc->bin().items.size(), 2);
+        QCOMPARE(doc->bin().item(ids.first())->durationFrames, before);
+        QCOMPARE(window.checkLiveLinks(), 0);
     }
 
     void queueFollowsTheServices() {

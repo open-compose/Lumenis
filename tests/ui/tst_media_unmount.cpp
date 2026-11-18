@@ -100,6 +100,30 @@ private slots:
     }
 
     // File > Input > Link opens the Source Browser to link (p.315, p.328), Import Media to import.
+    // The Media Creation setting's Filter Out System Drive and Filter Out Launch Drive (p.1207): drives on those volumes
+    // are no storage choice.
+    void driveFilters() {
+        const QList<media::MediaDrive> drives{{QStringLiteral("System"), QStringLiteral("/sys/home"), 0},
+                                              {QStringLiteral("Apps"), QStringLiteral("/apps"), 0},
+                                              {QStringLiteral("Media"), QStringLiteral("/media/raid"), 0}};
+        auto volumeOf = [](const QString& folder) { return QStringLiteral("/") + folder.section(QLatin1Char('/'), 1, 1); };
+        QCOMPARE(media::filteredDrives(drives, {}, {}, volumeOf).size(), 3);
+        QList<media::MediaDrive> left = media::filteredDrives(drives, QStringLiteral("/sys"), {}, volumeOf);
+        QCOMPARE(left.size(), 2);
+        QCOMPARE(left.first().name, QStringLiteral("Apps"));
+        left = media::filteredDrives(drives, QStringLiteral("/sys"), QStringLiteral("/apps"), volumeOf);
+        QCOMPARE(left.size(), 1);
+        QCOMPARE(left.first().name, QStringLiteral("Media"));
+        // The tests' own drive folder sits on neither volume of this test (a temporary folder): kept when filtering is
+        // on, unless it is on the system's volume.
+        media::setDriveFilters(false, false);
+        const int all = static_cast<int>(media::mediaDrives().size());
+        media::setDriveFilters(true, true);
+        QVERIFY(media::mediaDrives().size() <= all);
+        media::setDriveFilters(false, false);
+        QCOMPARE(static_cast<int>(media::mediaDrives().size()), all);
+    }
+
     void inputLink() {
         QTemporaryDir dir;
         ext::ProviderRegistry providers;

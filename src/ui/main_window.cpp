@@ -158,6 +158,7 @@
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -1162,6 +1163,11 @@ void MainWindow::createPanels() {
         // Default Sync Locks On (p.1220).
         if (timeline_->options().defaultSyncLocks) model::syncLockAllTracks(item);
         return std::make_pair(doc->nodeId(), item);
+    });
+    // Live Link (p.319): "Once the changed QuickTime movie is exported or rendered, refocus or open Media Composer. The
+    // updated clip appears in your bin".
+    connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive && settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("liveLink"))) checkLiveLinks();
     });
     connect(timeline_, &Timeline::videoDisplaySettingsRequested, this, [this] {
         const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
@@ -3853,6 +3859,28 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
             if (QFileInfo(file).suffix().compare(QLatin1String("dpx"), Qt::CaseInsensitive) == 0) media::applyAisColumns(item, file, ais);
         }
     }
+    // The Link Options tab's Multichannel Audio (p.1203, p.330-332): the clips' channels as the mapping's tracks; "If the
+    // source media does not have an audio channel on A2, Media Composer ignores the channel", so a pair the clip has not
+    // both channels of stays mono.
+    if (settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("multichannelAudio"))) {
+        const auto map = model::parseTrackFormats(settings_->text(QStringLiteral("Link"), QStringLiteral("multichannelMap")));
+        for (model::BinItem& item : items) {
+            const int channels = model::audioChannelsOf(item);
+            QList<model::ChannelGroup> groups;
+            for (const model::ChannelGroup& g : map.value_or(QList<model::ChannelGroup>{})) {
+                if (g.first + model::channelCount(g.format) - 1 <= channels) groups << g;
+            }
+            if (!groups.isEmpty()) model::setTrackFormats(item, groups);
+        }
+    }
+    // Live Link (p.1204): the file's time, for checkLiveLinks.
+    if (settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("liveLink"))) {
+        for (model::BinItem& item : items) {
+            if (const auto l = media::linkOf(item); l && !l->isManaged()) {
+                item.link.insert(QStringLiteral("modified"), QFileInfo(l->file()).lastModified().toMSecsSinceEpoch());
+            }
+        }
+    }
     QStringList ids;
     for (const model::BinItem& item : items) {
         // A file with alpha appears "in your bin as a Matte Key effect" (p.318) unless the Alpha Channel option is
@@ -3869,6 +3897,49 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
         reportFailure(this, tr("Link: %n file(s) are not media that can be linked.", "", skipped));
     }
     return ids;
+}
+
+int MainWindow::checkLiveLinks() {
+    if (!binContainer_) return 0;
+    int done = 0;
+    for (BinDocument* doc : binContainer_->openDocuments()) {
+        if (doc->isReadOnly()) continue;
+        const QList<model::BinItem> items = doc->bin().items;
+        for (const model::BinItem& item : items) {
+            if (!item.link.contains(QStringLiteral("modified"))) continue;
+            const auto l = media::linkOf(item);
+            if (!l || l->isManaged()) continue;
+            const QFileInfo file(l->file());
+            const qint64 now = file.lastModified().toMSecsSinceEpoch();
+            if (!file.exists() || now <= static_cast<qint64>(item.link.value(QStringLiteral("modified")).toDouble())) continue;
+            const QList<model::BinItem> fresh = media::linkFiles({file.absoluteFilePath()}, linkOptions());
+            if (fresh.isEmpty()) continue;
+            model::BinItem changed = fresh.first();
+            changed.link.insert(QStringLiteral("modified"), now);
+            if (changed.durationFrames == item.durationFrames && model::sourceTracksOf(changed) == model::sourceTracksOf(item)) {
+                // The same clip, its media now the changed file's.
+                model::BinItem updated = item;
+                updated.link = changed.link;
+                doc->replaceItem(updated);
+                composer_->updateItem(updated);
+            } else {
+                // A new clip beside the old one, which keeps its media as it was linked (and is not checked again).
+                changed.name = item.name;
+                doc->addItem(changed);
+                model::BinItem kept = item;
+                kept.link.insert(QStringLiteral("modified"), now);
+                doc->replaceItem(kept);
+            }
+            ++done;
+        }
+    }
+    if (done > 0) {
+        frames_->clear();
+        composer_->refreshDisplay();
+        // Console only: what Live Link did.
+        ConsoleLog::instance().append(tr("Live Link: %n clip(s) follow their changed files.", "", done));
+    }
+    return done;
 }
 
 // The clips are loaded with an empty bin id: they are in no bin until Composer::commitSource() puts
@@ -4717,6 +4788,8 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
                                       : g == QLatin1String("tiff") ? media::StillFormat::Tiff
                                       : g == QLatin1String("bmp")  ? media::StillFormat::Bmp
                                       : g == QLatin1String("pict") ? media::StillFormat::Pict
+                                      : g == QLatin1String("cineon") ? media::StillFormat::Cineon
+                                      : g == QLatin1String("photoshop") ? media::StillFormat::Photoshop
                                                                    : media::StillFormat::Png);
         }
         if (exportAs == QLatin1String("audio"))
@@ -4732,6 +4805,7 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
                : exportAs == QLatin1String("tabDelimited") ? QStringLiteral("txt")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
                : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
+               : exportAs == QLatin1String("avi")    ? QStringLiteral("avi")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
                : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy") ||
                        exportAs == QLatin1String("as11")
@@ -4748,8 +4822,9 @@ QString MainWindow::exportFilter(const QString& exportAs) {
                : exportAs == QLatin1String("tabDelimited") ? tr("Tab-delimited text (*.txt)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
                : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
+               : exportAs == QLatin1String("avi")    ? tr("AVI movies (*.avi)")
                : exportAs == QLatin1String("graphic") || exportAs == QLatin1String("dpx") || exportAs == QLatin1String("openexr")
-                   ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
+                   ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr *.cin *.psd)")
                : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
                : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy") ||
@@ -5722,13 +5797,14 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
                        format == QLatin1String("openexr") || format == QLatin1String("op1a") || format == QLatin1String("xdcam") ||
-                       format == QLatin1String("op1aLegacy") || format == QLatin1String("as11") || format == QLatin1String("dcp");
+                       format == QLatin1String("op1aLegacy") || format == QLatin1String("as11") || format == QLatin1String("dcp") ||
+                       format == QLatin1String("avi");
     const bool captionText = format == QLatin1String("scc") || format == QLatin1String("ttml");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("tabDelimited") && format != QLatin1String("fcpxml") && !movie && !captionText) {
         // Console only: the caller shows the export's Console lines in a message (Export to File, Send To).
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, "
-                                         "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
+                                         "MP4, AVI, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
         return false;
     }
     const model::BinItem* firstSequence = nullptr;
@@ -5757,7 +5833,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
             old.compare(QLatin1String("scc"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("dcp"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("ttml"), Qt::CaseInsensitive) == 0 ||
             QStringList{QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("png"),
                         QStringLiteral("jpg"), QStringLiteral("tif"), QStringLiteral("bmp"), QStringLiteral("pct"), QStringLiteral("dpx"),
-                        QStringLiteral("exr")}
+                        QStringLiteral("exr"), QStringLiteral("avi"), QStringLiteral("cin"), QStringLiteral("psd")}
                 .contains(old.toLower())) {
             path.chop(old.size() + 1);
         }
@@ -6196,9 +6272,27 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     const QString trackCount = text("audioTrackCount");
     const int audioLimit = trackCount.isEmpty() || trackCount == QLatin1String("all") ? 0 : trackCount.toInt();
     items = selected + clips;
+    // Split Tracks to Mono (p.1176, on by default): "splits all multichannel audio tracks to separate mono tracks" in the
+    // exported sequences (model::splitAllToMono); the bins' sequences stay as they are.
+    const bool splitMono = exportFlag(QStringLiteral("splitToMono"));
+    auto splitToMono = [&](QList<model::BinItem>& list) {
+        if (!splitMono) return;
+        for (model::BinItem& item : list) {
+            if (item.kind != model::BinItemKind::Sequence) continue;
+            model::Sequence seq = model::Sequence::fromItem(item);
+            QString why;
+            if (model::splitAllToMono(seq, &why) > 0) {
+                seq.storeIn(item);
+            } else if (!why.isEmpty()) {
+                warnings << tr("%1: its tracks could not be split to mono: %2").arg(item.name, why);
+            }
+        }
+    };
     if (videoMethod == QLatin1String("link") && audioMethod == QLatin1String("link") && !simplifyVideo && !flattenAudio &&
-        audioLimit == 0)
+        audioLimit == 0) {
+        splitToMono(items);
         return true;
+    }
     if (!project_) {
         if (error) *error = tr("Open a project first.");
         return false;
@@ -6455,16 +6549,24 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
         clipItems = still;
     }
 
-    // The mixdowns take the place of the sequences' video tracks.
+    // The mixdowns take the place of the sequences' video tracks: "Mixdown without Video Edits ... replaces all of the
+    // video tracks with a single video track named Video Mixdown". "Mixdown with Video Edits" keeps "Video tracks that
+    // represent each track and edit in the original sequence" and adds the mixdown, "A 'render track' that contains the
+    // single video mixdown track" (p.871-872). Ours: the render track is a video track above the others named Video
+    // Mixdown (the guide does not say how the AAF holds it; docs/spec/aaf.md).
+    const bool withEdits = text("videoMixdownEdits") == QLatin1String("with");
     for (model::BinItem& seqItem : sequences) {
         const auto it = mixdownOf.constFind(seqItem.id);
         if (it == mixdownOf.constEnd()) continue;
         model::Sequence seq = model::Sequence::fromItem(seqItem);
         const model::Sequence original = seq;
+        int top = 0;
         for (const model::Track& t : original.tracks()) {
-            if (t.kind == model::TrackKind::Video) seq.removeTrack(t.name());
+            if (t.kind != model::TrackKind::Video) continue;
+            top = std::max(top, t.number);
+            if (!withEdits) seq.removeTrack(t.name());
         }
-        model::Track* v1 = seq.ensureTrack(QStringLiteral("V1"));
+        model::Track* v1 = seq.ensureTrack(withEdits ? QStringLiteral("V%1").arg(top + 1) : QStringLiteral("V1"));
         if (!v1) continue;
         v1->customName = tr("Video Mixdown");
         model::Segment segment;
@@ -6536,6 +6638,7 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
                                                            audioMethod == QLatin1String("copy"), exclude);
     warnings << copied.warnings;
     items = sequences + copied.items;
+    splitToMono(items);
     return true;
 }
 
@@ -6552,6 +6655,8 @@ bool MainWindow::exportStills(const QString& path, const QString& format, const 
                : graphic == QLatin1String("tiff")   ? media::StillFormat::Tiff
                : graphic == QLatin1String("bmp")    ? media::StillFormat::Bmp
                : graphic == QLatin1String("pict")   ? media::StillFormat::Pict
+               : graphic == QLatin1String("cineon") ? media::StillFormat::Cineon
+               : graphic == QLatin1String("photoshop") ? media::StillFormat::Photoshop
                                                     : media::StillFormat::Png;
     const QString size = text("graphicSize");
     if (format == QLatin1String("graphic") && size != QLatin1String("project"))
@@ -6701,13 +6806,15 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     // "sink": the frames and sound handed to movieSink_ (the Digital Cut, 7.3a) rather than written to a file.
     const bool sink = format == QLatin1String("sink");
     const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy") || as11;
+    const bool avi = format == QLatin1String("avi");
     o.container = format == QLatin1String("mp4")          ? media::MovieContainer::Mp4
+                  : avi                                   ? media::MovieContainer::Avi
                   : format == QLatin1String("op1a") || as11 ? media::MovieContainer::Mxf
                   : format == QLatin1String("xdcam")      ? media::MovieContainer::Xdcam
                   : format == QLatin1String("op1aLegacy") ? media::MovieContainer::MxfLegacy
                                                           : media::MovieContainer::Mov;
     const QString tracks = mxf ? QStringLiteral("both") : text("movieTracks");
-    const bool movie = mxf || sink || dcp || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    const bool movie = mxf || sink || dcp || avi || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
     const bool sound = format == QLatin1String("audio");
     o.video = movie ? tracks != QLatin1String("audio") && !video.isEmpty() : !sound;
     o.audio = movie ? tracks != QLatin1String("video") && !audio.isEmpty() : sound;
@@ -6741,6 +6848,18 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     o.aac = text("movieAudioCodec") == QLatin1String("aac");
     o.sampleRate = mxf ? 48000 : text("movieSampleRate").toInt();
     o.bitDepth = (mxf ? text("mxfBitDepth") : text("movieBitDepth")).toInt();
+    // The AVI tab (p.1181-1182): File Field Order for an interlaced project (NTSC SD's 486 lines are lower field first),
+    // the key frames, data rate and Motion JPEG's quality.
+    if (avi) {
+        if (project_->settings.format.scan == ScanMode::Interlaced) o.projectTopFirst = project_->settings.format.height != 486;
+        const QString order = text("aviFieldOrder");
+        o.fieldOrder = order == QLatin1String("single") ? media::MovieExportOptions::FieldOrder::Single
+                       : order == QLatin1String("even") ? media::MovieExportOptions::FieldOrder::Lower
+                                                        : media::MovieExportOptions::FieldOrder::Upper;
+        o.keyFrameEvery = exportSetting(QStringLiteral("aviKeyFrames")).toInt();
+        o.dataRateKBps = exportSetting(QStringLiteral("aviDataRate")).toInt();
+        o.quality = exportSetting(QStringLiteral("aviQuality")).toInt();
+    }
     // The item's timecode is embedded (p.881).
     o.startTimecode = QString::fromStdString(Timecode(model::startFrameOf(sequenceItem) + start, model::timecodeFormatOf(sequenceItem)).toString());
 
@@ -9074,6 +9193,9 @@ void MainWindow::applySettings() {
     // General settings (p.1192).
     binContainer_->setDefaultStartTimecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartTc")));
     binContainer_->setDefaultStartEdgecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartEc")));
+    // The Media Creation setting's Drive Filtering & Indexing tab (p.1207).
+    media::setDriveFilters(s.flag(QStringLiteral("Media Creation"), QStringLiteral("filterSystemDrive")),
+                           s.flag(QStringLiteral("Media Creation"), QStringLiteral("filterLaunchDrive")));
 
     // Composer settings (p.1158-1160).
     const QString composer = QStringLiteral("Composer");

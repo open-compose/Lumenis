@@ -2,6 +2,7 @@
 #include "lumenis/ui/translation.h"
 #include "lumenis/ui/target_settings_dialog.h"
 
+#include "lumenis/model/multichannel.h"
 #include "lumenis/model/safe_colors.h"
 #include "lumenis/ui/safe_color_graph.h"
 
@@ -21,6 +22,7 @@
 #include <QDragEnterEvent>
 #include <QFontDatabase>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -31,6 +33,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
+#include <QSet>
 #include <QMimeData>
 #include <QPixmap>
 #include <QPushButton>
@@ -242,6 +245,35 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     if (o.defaultValue.toString().isEmpty()) menu->addAction(tr("No Color"), button, [show] { show(QString()); });
                     button->setMenu(menu);
                     editor = button;
+                } else if (o.type == QLatin1String("trackFormats")) {
+                    // The Link Options tab's multichannel audio mappings (p.330-332): the mapping as the Track Formats
+                    // column writes it, and Edit opening the Set Multichannel Audio window. The value is the button's
+                    // "trackFormats" property.
+                    auto* button = new QPushButton(tr("Edit..."), row);
+                    auto* shownMap = new QLabel(row);
+                    shownMap->setObjectName(o.key + QStringLiteral("Text"));
+                    auto show = [button, shownMap](const QString& text) {
+                        button->setProperty("trackFormats", text);
+                        shownMap->setText(text.isEmpty() ? tr("All mono") : text);
+                    };
+                    show(current.toString());
+                    QObject::connect(button, &QPushButton::clicked, button, [button, show] {
+                        auto* dialog = new MultichannelMapDialog(button->property("trackFormats").toString(), button);
+                        dialog->setAttribute(Qt::WA_DeleteOnClose);
+                        QObject::connect(dialog, &QDialog::accepted, button, [dialog, show] { show(dialog->trackFormats()); });
+                        dialog->open();
+                    });
+                    auto* holder = new QWidget(row);
+                    auto* hh = new QHBoxLayout(holder);
+                    hh->setContentsMargins(0, 0, 0, 0);
+                    hh->addWidget(shownMap);
+                    hh->addWidget(button);
+                    editor = button;
+                    h->addWidget(holder);
+                    editor->setObjectName(o.key);
+                    editors_.insert(o.key, editor);
+                    v->addWidget(row);
+                    continue;
                 } else if (o.type == QLatin1String("font")) {
                     // The system's font families, after "Default" (empty: the application's font).
                     auto* menu = new QComboBox(row);
@@ -440,6 +472,8 @@ QJsonObject SettingsDialog::values() const {
                 out.insert(o.key, menu->currentData().toString());
             } else if (o.type == QLatin1String("color") && e) {
                 out.insert(o.key, e->property("color").toString());
+            } else if (o.type == QLatin1String("trackFormats") && e) {
+                out.insert(o.key, e->property("trackFormats").toString());
             } else if (auto* line = qobject_cast<QLineEdit*>(e)) {
                 QString text = line->text().trimmed();
                 if (o.type == QLatin1String("timecode")) {
@@ -457,6 +491,52 @@ QJsonObject SettingsDialog::values() const {
         }
     }
     return out;
+}
+
+// ---------------------------------------------------------------- MultichannelMapDialog
+
+MultichannelMapDialog::MultichannelMapDialog(const QString& trackFormats, QWidget* parent) : QDialog(parent) {
+    setObjectName(QStringLiteral("multichannelMapDialog"));
+    setWindowTitle(tr("Set Multichannel Audio"));
+    auto* v = new QVBoxLayout(this);
+    v->addWidget(new QLabel(tr("Each pair of source channels as mono or stereo tracks:"), this));
+    auto* grid = new QGridLayout;
+    QSet<int> stereo;
+    for (const model::ChannelGroup& g : model::parseTrackFormats(trackFormats).value_or(QList<model::ChannelGroup>{})) {
+        if (g.format == model::AudioFormat::Stereo) stereo << g.first;
+    }
+    for (int pair = 0; pair < kChannels / 2; ++pair) {
+        const int first = pair * 2 + 1;
+        auto* b = new QToolButton(this);
+        b->setObjectName(QStringLiteral("pair%1").arg(first));
+        b->setCheckable(true);
+        b->setChecked(stereo.contains(first));
+        auto label = [b, first] {
+            b->setText(QStringLiteral("A%1-A%2 %3").arg(first).arg(first + 1).arg(b->isChecked() ? tr("Stereo") : tr("Mono")));
+        };
+        label();
+        connect(b, &QToolButton::toggled, b, label);
+        pairs_ << b;
+        grid->addWidget(b, pair % 8, pair / 8);
+    }
+    v->addLayout(grid);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    v->addWidget(buttons);
+}
+
+QString MultichannelMapDialog::trackFormats() const {
+    QList<model::ChannelGroup> groups;
+    for (int pair = 0; pair < pairs_.size(); ++pair) {
+        if (pairs_.at(pair)->isChecked()) groups << model::ChannelGroup{model::AudioFormat::Stereo, pair * 2 + 1};
+    }
+    return model::trackFormatsText(groups);
+}
+
+void MultichannelMapDialog::setStereo(int first, bool stereo) {
+    const int pair = (first - 1) / 2;
+    if (pair >= 0 && pair < pairs_.size()) pairs_.at(pair)->setChecked(stereo);
 }
 
 // ---------------------------------------------------------------- SettingsList

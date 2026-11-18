@@ -1554,6 +1554,14 @@
         <source>Follow</source>
         <translation type="unfinished">Lean</translation>
     </message>
+    <message>
+        <source>%1 cannot go in an AVI file; choose Avid DNxHR, H.264, Motion JPEG, PNG or Uncompressed.</source>
+        <translation type="unfinished">Ní féidir %1 a chur i gcomhad AVI; roghnaigh Avid DNxHR, H.264, Motion JPEG, PNG nó Neamhchomhbhrúite.</translation>
+    </message>
+    <message>
+        <source>%1 could not be written.</source>
+        <translation type="unfinished">Níorbh fhéidir %1 a scríobh.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -13374,7 +13382,7 @@ Teanga MCA: %2</translation>
     </message>
     <message>
         <source>Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</source>
-        <translation type="unfinished">Íomhánna (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</translation>
+        <translation type="obsolete">Íomhánna (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</translation>
     </message>
     <message>
         <source>Audio files (*.wav *.aif)</source>
@@ -14898,7 +14906,7 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     </message>
     <message>
         <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
-        <translation type="unfinished">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, Teormharcáilte le Táib, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
+        <translation type="obsolete">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, Teormharcáilte le Táib, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
     </message>
     <message>
         <source>Data Mixdown: load a sequence into the Record monitor first.</source>
@@ -15075,6 +15083,30 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     <message>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;</source>
         <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Ceadúnaithe faoin GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 soláthraí síneadh cláraithe.&lt;/p&gt;&lt;p&gt;Is é Inter cló na comhéadaine, faoin SIL Open Font License 1.1.&lt;/p&gt;</translation>
+    </message>
+    <message numerus="yes">
+        <source>Live Link: %n clip(s) follow their changed files.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AVI movies (*.avi)</source>
+        <translation type="unfinished">Scannáin AVI (*.avi)</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr *.cin *.psd)</source>
+        <translation type="unfinished">Íomhánna (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr *.cin *.psd)</translation>
+    </message>
+    <message>
+        <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, AVI, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
+        <translation type="unfinished">Easpórtáil go Comhad: ní féidir ach AAF, Avid Log Exchange, Teimpléad Táb-theoranta, araideacha Media Composer, Final Cut Pro 7 XML, MOV, MP4, AVI, Fuaim, Grafaic, DPX agus OpenEXR a easpórtáil go fóill (Easpórtáil Mar sa socrú Easpórtála).</translation>
+    </message>
+    <message>
+        <source>%1: its tracks could not be split to mono: %2</source>
+        <translation type="unfinished">%1: níorbh fhéidir a rianta a scoilt go mona: %2</translation>
     </message>
 </context>
 <context>
@@ -16119,6 +16151,25 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
     </message>
 </context>
 <context>
+    <name>lumenis::ui::MultichannelMapDialog</name>
+    <message>
+        <source>Set Multichannel Audio</source>
+        <translation type="unfinished">Socraigh Fuaim Ilchainéil</translation>
+    </message>
+    <message>
+        <source>Each pair of source channels as mono or stereo tracks:</source>
+        <translation type="unfinished">Gach péire cainéal foinse mar rianta mona nó steiréó:</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation type="unfinished">Steiréo</translation>
+    </message>
+    <message>
+        <source>Mono</source>
+        <translation type="unfinished">Monafónach</translation>
+    </message>
+</context>
+<context>
     <name>lumenis::ui::NewWorkspaceDialog</name>
     <message>
         <source>New Workspace</source>
@@ -16831,6 +16882,14 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>Always on: Cutthulhu&apos;s names keep to these rules on every system.</source>
         <translation type="unfinished">Ar siúl i gcónaí: cloíonn ainmneacha Cutthulhu leis na rialacha seo ar gach córas.</translation>
+    </message>
+    <message>
+        <source>Edit...</source>
+        <translation type="unfinished">Cuir in eagar...</translation>
+    </message>
+    <message>
+        <source>All mono</source>
+        <translation type="unfinished">Mona ar fad</translation>
     </message>
 </context>
 <context>
@@ -24661,6 +24720,34 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>8 field</source>
         <translation type="unfinished">8 réimse</translation>
+    </message>
+    <message>
+        <source>File Field Order</source>
+        <translation type="unfinished">Ord Réimsí an Chomhaid</translation>
+    </message>
+    <message>
+        <source>Odd (Upper Field First)</source>
+        <translation type="unfinished">Corr (Réimse Uachtair ar dTús)</translation>
+    </message>
+    <message>
+        <source>Even (Lower Field First)</source>
+        <translation type="unfinished">Cothrom (Réimse Íochtair ar dTús)</translation>
+    </message>
+    <message>
+        <source>Single Field</source>
+        <translation type="unfinished">Réimse Aonair</translation>
+    </message>
+    <message>
+        <source>Key Frame Every</source>
+        <translation type="unfinished">Eochairfhráma gach</translation>
+    </message>
+    <message>
+        <source>Limit Data Rate</source>
+        <translation type="unfinished">Teorannaigh an Ráta Sonraí</translation>
+    </message>
+    <message>
+        <source>KB/sec</source>
+        <translation type="unfinished">KB/s</translation>
     </message>
 </context>
 <context>

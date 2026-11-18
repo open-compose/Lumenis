@@ -1553,6 +1553,14 @@
         <source>Follow</source>
         <translation type="unfinished">Suivi</translation>
     </message>
+    <message>
+        <source>%1 cannot go in an AVI file; choose Avid DNxHR, H.264, Motion JPEG, PNG or Uncompressed.</source>
+        <translation type="unfinished">%1 ne peut pas aller dans un fichier AVI ; choisissez Avid DNxHR, H.264, Motion JPEG, PNG ou Non compressé.</translation>
+    </message>
+    <message>
+        <source>%1 could not be written.</source>
+        <translation type="unfinished">%1 n&apos;a pas pu être écrit.</translation>
+    </message>
 </context>
 <context>
     <name>Scopes</name>
@@ -13354,7 +13362,7 @@ Langue MCA : %2</translation>
     </message>
     <message>
         <source>Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</source>
-        <translation type="unfinished">Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</translation>
+        <translation type="obsolete">Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)</translation>
     </message>
     <message>
         <source>Audio files (*.wav *.aif)</source>
@@ -14854,7 +14862,7 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     </message>
     <message>
         <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
-        <translation type="unfinished">Exporter vers un fichier: seuls AAF, Avid Log Exchange, Délimité par tabulations, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
+        <translation type="obsolete">Exporter vers un fichier: seuls AAF, Avid Log Exchange, Délimité par tabulations, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
     </message>
     <message>
         <source>Data Mixdown: load a sequence into the Record monitor first.</source>
@@ -15030,6 +15038,29 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     <message>
         <source>&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Licensed under the GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 extension providers registered.&lt;/p&gt;&lt;p&gt;The interface font is Inter, under the SIL Open Font License 1.1.&lt;/p&gt;</source>
         <translation type="unfinished">&lt;h3&gt;%1 %2&lt;/h3&gt;&lt;p&gt;%3&lt;/p&gt;&lt;p&gt;Sous licence GNU General Public License v3.&lt;/p&gt;&lt;p&gt;%4 fournisseurs d&apos;extensions enregistrés.&lt;/p&gt;&lt;p&gt;La police de l&apos;interface est Inter, sous licence SIL Open Font License 1.1.&lt;/p&gt;</translation>
+    </message>
+    <message numerus="yes">
+        <source>Live Link: %n clip(s) follow their changed files.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AVI movies (*.avi)</source>
+        <translation type="unfinished">Films AVI (*.avi)</translation>
+    </message>
+    <message>
+        <source>Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr *.cin *.psd)</source>
+        <translation type="unfinished">Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr *.cin *.psd)</translation>
+    </message>
+    <message>
+        <source>Export to File: only AAF, Avid Log Exchange, Tab Delimited, Media Composer bins, Final Cut Pro 7 XML, MOV, MP4, AVI, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting).</source>
+        <translation type="unfinished">Exporter vers un fichier : seuls AAF, Avid Log Exchange, Délimité par tabulations, les chutiers Media Composer, Final Cut Pro 7 XML, MOV, MP4, AVI, Audio, Graphique, DPX et OpenEXR peuvent être exportés pour l&apos;instant (Exporter sous dans le réglage d&apos;export).</translation>
+    </message>
+    <message>
+        <source>%1: its tracks could not be split to mono: %2</source>
+        <translation type="unfinished">%1 : ses pistes n&apos;ont pas pu être scindées en mono : %2</translation>
     </message>
 </context>
 <context>
@@ -16072,6 +16103,25 @@ Ne le faites que si ce poste est hors ligne et n&apos;écrit pas activement.</tr
     </message>
 </context>
 <context>
+    <name>lumenis::ui::MultichannelMapDialog</name>
+    <message>
+        <source>Set Multichannel Audio</source>
+        <translation type="unfinished">Définir l&apos;audio multicanal</translation>
+    </message>
+    <message>
+        <source>Each pair of source channels as mono or stereo tracks:</source>
+        <translation type="unfinished">Chaque paire de canaux source en pistes mono ou stéréo :</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation type="unfinished">Stéréo</translation>
+    </message>
+    <message>
+        <source>Mono</source>
+        <translation type="unfinished">Mono</translation>
+    </message>
+</context>
+<context>
     <name>lumenis::ui::NewWorkspaceDialog</name>
     <message>
         <source>New Workspace</source>
@@ -16783,6 +16833,14 @@ Les fichiers média ne sont pas supprimés.</translation>
     <message>
         <source>Always on: Cutthulhu&apos;s names keep to these rules on every system.</source>
         <translation type="unfinished">Toujours activé : les noms de Cutthulhu respectent ces règles sur tous les systèmes.</translation>
+    </message>
+    <message>
+        <source>Edit...</source>
+        <translation type="unfinished">Modifier...</translation>
+    </message>
+    <message>
+        <source>All mono</source>
+        <translation type="unfinished">Tout en mono</translation>
     </message>
 </context>
 <context>
@@ -24611,6 +24669,34 @@ Les fichiers média ne sont pas supprimés.</translation>
     <message>
         <source>8 field</source>
         <translation type="unfinished">8 trames</translation>
+    </message>
+    <message>
+        <source>File Field Order</source>
+        <translation type="unfinished">Ordre des trames du fichier</translation>
+    </message>
+    <message>
+        <source>Odd (Upper Field First)</source>
+        <translation type="unfinished">Impaire (trame supérieure en premier)</translation>
+    </message>
+    <message>
+        <source>Even (Lower Field First)</source>
+        <translation type="unfinished">Paire (trame inférieure en premier)</translation>
+    </message>
+    <message>
+        <source>Single Field</source>
+        <translation type="unfinished">Trame unique</translation>
+    </message>
+    <message>
+        <source>Key Frame Every</source>
+        <translation type="unfinished">Image clé toutes les</translation>
+    </message>
+    <message>
+        <source>Limit Data Rate</source>
+        <translation type="unfinished">Limiter le débit</translation>
+    </message>
+    <message>
+        <source>KB/sec</source>
+        <translation type="unfinished">Ko/s</translation>
     </message>
 </context>
 <context>

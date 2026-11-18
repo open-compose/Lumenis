@@ -17,13 +17,15 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace lumenis::media {
 
 // MOV and MP4 (7.1a); MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) (7.2a, p.886-890, p.1174), all three written by
 // FFmpeg's OP1a muxer, which differ in the compressions they offer.
-enum class MovieContainer { Mov, Mp4, Mxf, Xdcam, MxfLegacy };
+// AVI (Export Settings: AVI, p.1181-1182; ROADMAP 11.6e) through FFmpeg's AVI muxer.
+enum class MovieContainer { Mov, Mp4, Mxf, Xdcam, MxfLegacy, Avi };
 
 // Source Scaling (p.895): how a frame is fitted to an output raster of another shape.
 enum class MovieScaling {
@@ -52,6 +54,9 @@ struct MovieCompression {
     int fixedMbps = 0;   // a resolution's own bit rate, e.g. XDCAM-50's 50 Mb/s
     QSize raster{};      // a resolution's own raster for a project of this height (XDCAM-25 and -17: 1440 x 1080)
     QList<QPair<QString, QString>> options{}; // the encoder's options, e.g. MPEG-2's GOP
+    // AVI (11.6e): DNxHR, H.264, Motion JPEG, PNG and the uncompressed ones, which AVI files carry by their codec tags
+    // (ours: not ProRes, HEVC or AV1, which have no common AVI tag).
+    bool avi = false;
 };
 
 // Every compression we offer, in the menu's order.
@@ -84,6 +89,17 @@ struct MovieExportOptions {
     int sampleRate = 48000;   // 48 kHz or 44.1 kHz ("does not support sample rates higher than 48kHz", p.879); MXF 48 kHz
     int bitDepth = 24;        // PCM's, 16 or 24
     QString startTimecode;    // embedded in the movie (p.881)
+    // AVI's File Field Order (p.1181) for an interlaced project: the project's own order (Project), "Odd (Upper Field
+    // First)", "Even (Lower Field First)", or "Single Field ... resizes the single field ... to fit the frame".
+    enum class FieldOrder { Project, Upper, Lower, Single };
+    FieldOrder fieldOrder = FieldOrder::Project;
+    // The project's fields: none when progressive, else whether its upper field comes first.
+    std::optional<bool> projectTopFirst;
+    // AVI Video Compression (p.1182): "Key Frame Every n frames" (0: the encoder's own) and "Limit Data Rate" in
+    // kilobytes a second (0: none), for the long-GOP compressions; the Compression Quality slider (1-100) for Motion JPEG.
+    int keyFrameEvery = 0;
+    int dataRateKBps = 0;
+    int quality = 0; // 0: the encoder's own
 };
 
 // What to export: `frames` frames at `frameRate`, each `picture(f)` (any size; fitted to the output raster), and
@@ -97,6 +113,10 @@ struct MovieSource {
     std::function<void(std::int64_t at, int count, std::vector<std::vector<float>>& out)> sound;
 };
 
+// An interlaced project's frame with AVI's File Field Order (MovieExportOptions::fieldOrder): its fields woven the
+// other way round, or its first field alone made into a frame; as it is otherwise.
+QImage fileFields(const QImage& picture, const MovieExportOptions& options);
+
 // `picture` drawn into an `out` raster by `scaling`, on black.
 QImage fitMoviePicture(const QImage& picture, QSize out, MovieScaling scaling);
 
@@ -107,8 +127,9 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
 
 // ---------------------------------------------------------------- stills and sound files (7.1b)
 
-// The Graphic export's formats (p.1186-1187) and the DPX and OpenEXR exports (p.890, p.900).
-enum class StillFormat { Png, Jpeg, Tiff, Bmp, Pict, Dpx, OpenExr };
+// The Graphic export's formats (p.1186-1187) and the DPX and OpenEXR exports (p.890, p.900). Cineon through our own
+// writer (cineon.h), Photoshop as a one-layer file through our PSD writer (psd.h).
+enum class StillFormat { Png, Jpeg, Tiff, Bmp, Pict, Dpx, OpenExr, Cineon, Photoshop };
 
 struct StillOptions {
     StillFormat format = StillFormat::Png;
@@ -123,7 +144,7 @@ struct StillOptions {
     double dpxFrameRate = 0;
 };
 
-// The file name extension of a format: "png", "jpg", "tif", "bmp", "pct", "dpx", "exr".
+// The file name extension of a format: "png", "jpg", "tif", "bmp", "pct", "dpx", "exr", "cin", "psd".
 QString stillSuffix(StillFormat format);
 // RGB from 0-255 into the legal 16-235.
 QImage legalRangePicture(const QImage& picture);

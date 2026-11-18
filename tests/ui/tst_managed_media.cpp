@@ -5,6 +5,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/background_queue.h"
@@ -923,6 +924,44 @@ private slots:
         QCOMPARE(videoTracks, 1);
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.first().length, std::int64_t{5});
         QVERIFY(cut.track(QStringLiteral("A1")));
+
+        // Mixdown with Video Edits (p.871-872): the video tracks with their edits stay, the mixdown above them.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoMixdownEdits"), QStringLiteral("with"));
+        auto withEdits = exportTo(QDir(dir.filePath(QStringLiteral("MixdownEdits"))).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(withEdits);
+        const model::BinItem* editedItem = nullptr;
+        for (const model::BinItem& i : withEdits->items) {
+            if (i.kind == model::BinItemKind::Sequence) editedItem = &i;
+        }
+        QVERIFY(editedItem);
+        const model::Sequence edited = model::Sequence::fromItem(*editedItem);
+        QVERIFY(edited.track(QStringLiteral("V1")) && edited.track(QStringLiteral("V2")));
+        QVERIFY(edited.track(QStringLiteral("V1"))->segments.first().name != edited.track(QStringLiteral("V2"))->segments.first().name);
+        QVERIFY(edited.track(QStringLiteral("V2"))->segments.first().name.endsWith(QStringLiteral("Video Mixdown")));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoMixdownEdits"), QStringLiteral("without"));
+
+        // Split Tracks to Mono (p.1176, on by default): no multichannel track goes out; off, they stay as they are.
+        const model::Sequence inBin = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+        const bool multichannel = std::any_of(inBin.tracks().begin(), inBin.tracks().end(), [](const model::Track& t) {
+            return t.kind == model::TrackKind::Audio && model::channelCount(t.format) > 1;
+        });
+        for (const model::Track& t : cut.tracks()) {
+            if (t.kind == model::TrackKind::Audio) QCOMPARE(model::channelCount(t.format), 1);
+        }
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("splitToMono"), false);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("link"));
+        auto unsplit = exportTo(QDir(dir.filePath(QStringLiteral("Unsplit"))).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(unsplit);
+        for (const model::BinItem& i : unsplit->items) {
+            if (i.kind != model::BinItemKind::Sequence) continue;
+            const model::Sequence u = model::Sequence::fromItem(i);
+            const bool kept = std::any_of(u.tracks().begin(), u.tracks().end(), [](const model::Track& t) {
+                return t.kind == model::TrackKind::Audio && model::channelCount(t.format) > 1;
+            });
+            QCOMPARE(kept, multichannel);
+        }
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("splitToMono"), true);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("mixdown"));
 
         // Export Media Difference Between Sequences (p.885-886): Copy All Media, excluding the media a copy of the
         // sequence uses, copies nothing; the clip keeps its own files.

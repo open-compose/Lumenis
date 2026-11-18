@@ -3,12 +3,16 @@
 // time, the sound resampled to 44.1 kHz when asked.
 #include "lumenis/media/movie_export.h"
 
+#include "lumenis/media/cineon.h"
+#include "lumenis/media/fields.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/pict.h"
 #include "lumenis/media/playback.h"
+#include "lumenis/media/psd.h"
 
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QObject>
 #include <QPainter>
@@ -66,7 +70,11 @@ const QList<MovieCompression>& movieCompressions() {
     };
     // DNxHR and ProRes go in MXF OP1a too ("Avid DNx as MXF OP1a wrapped media", p.888; ProRes "in OP-Atom, MXF
     // OP1a, and MOV containers", p.904).
-    for (MovieCompression& c : list) c.op1a = c.family == QLatin1String("Avid DNxHR") || c.family == QLatin1String("Apple ProRes");
+    for (MovieCompression& c : list) {
+        c.op1a = c.family == QLatin1String("Avid DNxHR") || c.family == QLatin1String("Apple ProRes");
+        c.avi = c.family == QLatin1String("Avid DNxHR") || c.family == QLatin1String("H.264") || c.family == QLatin1String("Motion JPEG") ||
+                c.family == QLatin1String("PNG") || c.family == QLatin1String("Uncompressed");
+    }
     auto mxfOnly = [&](const char* id, const char* family, const char* label, const char* encoder, const char* pixelFormat, int depth,
                        int mbps, QSize raster, QList<QPair<QString, QString>> options, bool xdcam, bool legacy) {
         MovieCompression c{QString::fromLatin1(id), QString::fromLatin1(family), QString::fromLatin1(label), QString::fromLatin1(encoder),
@@ -158,6 +166,7 @@ bool movieCompressionFits(const MovieCompression& c, MovieContainer container) {
     case MovieContainer::Mxf: return c.op1a;
     case MovieContainer::Xdcam: return c.xdcam;
     case MovieContainer::MxfLegacy: return c.legacy;
+    case MovieContainer::Avi: return c.avi;
     }
     return false;
 }
@@ -202,6 +211,18 @@ std::vector<float> interleave(const std::vector<std::vector<float>>& planes, int
 
 } // namespace
 
+QImage fileFields(const QImage& picture, const MovieExportOptions& o) {
+    if (!o.projectTopFirst || picture.isNull() || o.fieldOrder == MovieExportOptions::FieldOrder::Project) return picture;
+    const bool projectTop = *o.projectTopFirst;
+    // "Media Composer resizes the single field ... to fit the frame" (p.1181): the first field, the lines between made.
+    if (o.fieldOrder == MovieExportOptions::FieldOrder::Single) return fieldPicture(picture, 0, projectTop, FieldFill::Interpolate);
+    const bool top = o.fieldOrder == MovieExportOptions::FieldOrder::Upper;
+    if (top == projectTop) return picture;
+    // "Field 1 becomes the upper field (its lines become the odd-numbered lines)" (p.1181): the fields woven the other
+    // way round.
+    return weaveFields(fieldPicture(picture, 0, projectTop, FieldFill::Duplicate), fieldPicture(picture, 1, projectTop, FieldFill::Duplicate), top);
+}
+
 bool exportMovie(const QString& path, const MovieSource& source, const MovieExportOptions& o,
                  const std::function<bool(double)>& progress, QString* error) {
     auto fail = [&](const QString& text) {
@@ -215,7 +236,8 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
 
     WriterSettings w;
     const bool mxf = o.container == MovieContainer::Mxf || o.container == MovieContainer::Xdcam || o.container == MovieContainer::MxfLegacy;
-    w.format = mxf ? QStringLiteral("mxf") : o.container == MovieContainer::Mov ? QStringLiteral("mov") : QStringLiteral("mp4");
+    const bool avi = o.container == MovieContainer::Avi;
+    w.format = mxf ? QStringLiteral("mxf") : avi ? QStringLiteral("avi") : o.container == MovieContainer::Mov ? QStringLiteral("mov") : QStringLiteral("mp4");
     w.frameRate = source.frameRate;
     w.startTimecode = o.startTimecode;
     if (video) {
@@ -223,6 +245,7 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
         if (!c) return fail(QObject::tr("Unknown compression %1.").arg(o.compression));
         if (!movieCompressionFits(*c, o.container)) {
             if (mxf) return fail(QObject::tr("%1 cannot go in this kind of MXF file.").arg(c->label));
+            if (avi) return fail(QObject::tr("%1 cannot go in an AVI file; choose Avid DNxHR, H.264, Motion JPEG, PNG or Uncompressed.").arg(c->label));
             return fail(QObject::tr("%1 cannot go in an MP4 file; choose MOV, or H.264, HEVC or AV1.").arg(c->label));
         }
         if (!movieCompressionAvailable(*c)) return fail(movieCompressionProblem(*c));
@@ -242,6 +265,25 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
         if (c->bitRate && o.bitRateMbps > 0) w.bitRate = static_cast<std::int64_t>(o.bitRateMbps) * 1000000;
         if (c->fixedMbps > 0) w.bitRate = static_cast<std::int64_t>(c->fixedMbps) * 1000000;
         w.videoOptions << c->options;
+        // AVI Video Compression (p.1182).
+        if (avi) {
+            if (o.keyFrameEvery > 0) w.videoOptions << QPair<QString, QString>{QStringLiteral("g"), QString::number(o.keyFrameEvery)};
+            if (o.dataRateKBps > 0 && c->bitRate) {
+                w.bitRate = static_cast<std::int64_t>(o.dataRateKBps) * 8000;
+                w.videoOptions << QPair<QString, QString>{QStringLiteral("maxrate"), QString::number(static_cast<std::int64_t>(o.dataRateKBps) * 8000)}
+                               << QPair<QString, QString>{QStringLiteral("bufsize"), QString::number(static_cast<std::int64_t>(o.dataRateKBps) * 16000)};
+            }
+            // Motion JPEG's quality, as the Graphic export's JPEG Quality is mapped (writeStill).
+            if (o.quality > 0 && c->encoder == QLatin1String("mjpeg")) w.quality = std::clamp(31 - (std::clamp(o.quality, 1, 100) * 30) / 100, 1, 31);
+        }
+        // The File Field Order of an interlaced project's frames (p.1181); Single Field makes progressive frames.
+        if (o.projectTopFirst && o.fieldOrder != MovieExportOptions::FieldOrder::Single) {
+            w.interlaced = true;
+            const bool top = o.fieldOrder == MovieExportOptions::FieldOrder::Upper   ? true
+                             : o.fieldOrder == MovieExportOptions::FieldOrder::Lower ? false
+                                                                                     : *o.projectTopFirst;
+            w.bottomFieldFirst = !top;
+        }
     }
     // MXF's sound is 48 kHz (ours: as our managed MXF media, docs/spec/audio-settings.md).
     int rate = o.sampleRate == 44100 && !mxf ? 44100 : 48000;
@@ -275,7 +317,7 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
     std::vector<std::vector<float>> planes;
     for (std::int64_t f = 0; f < source.frames; ++f) {
         if (video) {
-            const QImage frame = fitMoviePicture(source.picture(f), outSize, o.scaling);
+            const QImage frame = fitMoviePicture(fileFields(source.picture(f), o), outSize, o.scaling);
             if (frame.isNull() || !writer.writeVideo(frame)) {
                 writer.finish();
                 return fail(QObject::tr("Frame %1 could not be written: %2").arg(f).arg(writer.lastError()));
@@ -318,6 +360,8 @@ QString stillSuffix(StillFormat format) {
     case StillFormat::Pict: return QStringLiteral("pct");
     case StillFormat::Dpx: return QStringLiteral("dpx");
     case StillFormat::OpenExr: return QStringLiteral("exr");
+    case StillFormat::Cineon: return QStringLiteral("cin");
+    case StillFormat::Photoshop: return QStringLiteral("psd");
     }
     return QStringLiteral("png");
 }
@@ -422,6 +466,27 @@ bool writeStill(const QString& path, const QImage& picture, const StillOptions& 
         if (!writePict(frame, path, false)) return fail(QObject::tr("The PICT file could not be written."));
         return true;
     }
+    if (o.format == StillFormat::Cineon || o.format == StillFormat::Photoshop) {
+        QByteArray bytes;
+        if (o.format == StillFormat::Cineon) {
+            bytes = cineonData(frame);
+        } else {
+            // One opaque layer, the picture (a background layer has no transparency), and the same merged picture.
+            PsdFile psd;
+            psd.size = frame.size();
+            PsdLayer layer;
+            layer.name = QStringLiteral("Background");
+            layer.rect = QRect(QPoint(0, 0), frame.size());
+            layer.image = frame.convertToFormat(QImage::Format_ARGB32);
+            psd.layers << layer;
+            bytes = psdData(psd, true);
+        }
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
+            return fail(QObject::tr("%1 could not be written.").arg(QDir::toNativeSeparators(path)));
+        }
+        return true;
+    }
     WriterSettings w;
     w.format = QStringLiteral("image2");
     w.formatOptions = {{QStringLiteral("update"), QStringLiteral("1")}};
@@ -455,7 +520,9 @@ bool writeStill(const QString& path, const QImage& picture, const StillOptions& 
         w.pixelFormat = QStringLiteral("gbrpf32le");
         w.videoOptions = {{QStringLiteral("format"), o.depth >= 32 ? QStringLiteral("float") : QStringLiteral("half")}};
         break;
-    case StillFormat::Pict: break;
+    case StillFormat::Pict:
+    case StillFormat::Cineon:
+    case StillFormat::Photoshop: break;
     }
     MediaWriter writer;
     QString why;

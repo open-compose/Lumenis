@@ -2718,11 +2718,25 @@ p.610–640, ch. 13 p.432–434).**
   Dynamic Media Folders use it; ours: DPX files only, the tab being
   "Support for DPX"). The Quality tab's preferences wait for linking
   that offers more than one resolution of a source.
+* **Multichannel Audio** (the Link Options tab, p.1203, p.330-332; ROADMAP
+  11.6e): on, linked clips take the mapping's tracks as their Track Formats.
+  Edit opens Set Multichannel Audio ("Click the format buttons to select
+  ... Mono, Stereo ... for each pair of source channels", up to 64 channels;
+  `MultichannelMapDialog`, the settings' `trackFormats` option type); the
+  mapping shows beside it as the Track Formats column writes it. "If the
+  source media does not have an audio channel on A2, Media Composer ignores
+  the channel": a pair a clip lacks a channel of stays mono.
+* **Live Link** (p.1204, p.319): clips linked with it on keep their file's
+  time; when the application is active again ("refocus or open Media
+  Composer") a clip whose file changed is linked afresh in its place ("The
+  updated clip appears in your bin (and sequence) and replaces the old
+  clip"), or, with other tracks or another duration, a new clip of the same
+  name goes into the bin beside it ("the system creates a new clip and will
+  not overwrite or replace the existing clip"; `MainWindow::checkLiveLinks`).
 * **Not yet:**
   * File > Input > Link to Volume for Export (AS-02, p.328).
-  * Automatic linking of mounted volumes (p.311).
-  * Multichannel audio mapping (p.330).
-  * Live Link (p.319).
+  * Automatic linking of mounted volumes (p.311), and with it the Volume
+    Mounting tab.
   * The Media Cache settings (p.1205).
 
 ### Image sequences (p.325–328)
@@ -2953,6 +2967,12 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * The Single/Dual Drives Mode button (p.135), on the tabs with an audio
   drive: single shows only the video drive menu, and the audio drive
   follows it. Dual by default.
+* Drive Filtering & Indexing (p.1207; ROADMAP 11.6e): Filter Out System Drive
+  and Filter Out Launch Drive leave the drives on the operating system's
+  volume and on the application's volume out of every drive menu and choice
+  (`media::setDriveFilters`, `filteredDrives`). Filter Network Drives Based on
+  Resolution (whether a network drive can play a resolution back) and the
+  Media Indexer's Auto-index stay dimmed: neither has a way to know here.
 * Later: drive groups and DisabledRes.txt (p.135–136).
 
 ### Import (p.211–216, settings p.1194–1199)

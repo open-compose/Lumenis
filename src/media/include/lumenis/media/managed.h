@@ -141,6 +141,15 @@ void setExtraMediaDrives(const QStringList& folders);
 // roots (cleaned paths) are left out of mediaDrives() until remountAllDrives(); "You can also remount
 // all the drives ... However, you cannot mount selected drives". Process-wide, not saved (ours).
 void unmountDrives(const QStringList& roots);
+// The Media Creation setting's Drive Filtering & Indexing tab (p.1207): "Filter Out System Drive ... Removes as a
+// storage choice the drive on which the operating system resides" and "Filter Out Launch Drive ... the drive on which
+// Media Composer resides". mediaDrives() leaves out the drives on those volumes (QStorageInfo::root() and the
+// application's folder's volume). Process-wide, set by MainWindow from the setting.
+void setDriveFilters(bool systemDrive, bool launchDrive);
+// The drives not on `systemRoot`'s or `launchRoot`'s volume (empty: not filtered), by their volumes' roots as
+// `volumeOf` gives them.
+QList<MediaDrive> filteredDrives(const QList<MediaDrive>& drives, const QString& systemRoot, const QString& launchRoot,
+                                 const std::function<QString(const QString& folder)>& volumeOf);
 void remountAllDrives();
 QStringList unmountedDrives();
 // The folders set with setExtraMediaDrives() (or, until then, from LUMENIS_MEDIA_DRIVES).

@@ -69,6 +69,20 @@ only the encoder's name, so `libx264` counts as H.264. An MP4's sound is
 AAC, or Opus in a build without AAC (ours). A compression that does not go
 in an MP4 is refused with the reason in the Console.
 
+## AVI (Export Settings: AVI Through QuickTime and AVI Video Compression, p.1181-1182; ROADMAP 11.6e)
+
+* Export As AVI writes through FFmpeg's AVI muxer (`MovieContainer::Avi`), with the MOV and MP4 tab's Export,
+  Compression, Image Size, Source Scaling, Color Levels and audio choices. The guide's AVI goes "through QuickTime or
+  other compression tools" (p.1181); ours offers the compressions an AVI file carries by a common codec tag: Avid
+  DNxHR, H.264, Motion JPEG, PNG and Uncompressed (`MovieCompression::avi`). Another one is refused with a message.
+* The AVI tab:
+  * File Field Order (p.1181): "Odd (Upper Field First) ... Field 1 becomes the upper field", "Even (Lower Field
+    First)", and "Single Field ... resizes the single field ... to fit the frame" (`media::fileFields`). It applies
+    to interlaced projects only ("For 23.976p, 24p, or 25p projects, these options do not appear"). Ours: the
+    default is Odd; NTSC SD's 486 lines are lower field first in the project.
+  * Compression Quality (1-100, Motion JPEG's quality as the Graphic export's JPEG Quality), Key Frame Every n frames
+    and Limit Data Rate in KB/sec (H.264's GOP and maximum rate), 0 for off (p.1182).
+
 ## Writing (`src/media/movie_export.*`)
 
 `media::exportMovie` fits each frame to the output raster
@@ -85,7 +99,11 @@ picture and sound as a movie (`MainWindow::exportStills`,
 
 * **Graphic** (Export Settings: Graphic, p.1185-1187): BMP, JPEG (Quality),
   PICT (our writer, `src/media/pict.*`), PNG and TIFF (8 or 16 bits);
-  Cineon and Photoshop later. Width x Height with Size to Fit (stretched)
+  Cineon through our own writer (`src/media/cineon.*`, Kodak's version 4.5
+  layout: 10-bit printing-density log codes, black at 95 and white at 685;
+  ours: the picture taken as Rec. 709 video and made linear first) and
+  Photoshop as a one-layer file through our PSD writer (`media::psdData`;
+  ROADMAP 11.6e). Width x Height with Size to Fit (stretched)
   or Crop/Pad (1:1 centred on black); Color Levels "Keep as Legal Range"
   squeezes RGB into 16-235, "Scale from Legal to Full Range" keeps our
   full-range pictures as they are.
@@ -145,7 +163,7 @@ Export As **MXF OP1a**, **XDCAM MXF OP1a** and **MXF OP1a (legacy)**
 * Export by dragging to a folder (p.869): with the Send To templates in 7.1c.
 * Export's "Mask Margins active area" source raster (p.894). Enable Mask Regions burns the mask margins into movie and
   still frames (8.5e3), and ACES projects' frames go to the Output Color Space (8.5e4b2; docs/spec/color-adapters.md).
-* File Field Order (p.1186), Cineon, Photoshop, PNG Interlaced, JPEG Progressive.
+* The Graphic export's File Field Order (p.1186), PNG Interlaced, JPEG Progressive.
 
 ## Tests
 

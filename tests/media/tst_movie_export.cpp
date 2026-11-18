@@ -3,12 +3,14 @@
 // timecode and colour range; compressions that do not fit the container or the build; a cancel removing the file.
 // 7.1b: stills in every Graphic format, DPX and OpenEXR read back, legal range, sequence file names, WAVE and AIFF-C.
 #include "lumenis/media/as11.h"
+#include "lumenis/media/cineon.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/movie_export.h"
 
 #include <QFileInfo>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <QtEndian>
 
 #include <cmath>
 #include <cstring>
@@ -337,6 +339,53 @@ private slots:
         QCOMPARE(info->audio().front()->codec, aac ? QStringLiteral("aac") : QStringLiteral("opus"));
     }
 
+    // AVI (p.1181-1182; ROADMAP 11.6e): DNxHR, H.264, Motion JPEG, PNG and uncompressed go in; ProRes does not. The
+    // File Field Order reweaves an interlaced project's frames or makes single-field ones.
+    void avi() {
+        QTemporaryDir dir;
+        MovieExportOptions o;
+        o.container = MovieContainer::Avi;
+        o.compression = QStringLiteral("prores_hq");
+        QString error;
+        const QString path = dir.filePath(QStringLiteral("out.avi"));
+        QVERIFY(!exportMovie(path, source(), o, {}, &error));
+        QVERIFY2(error.contains(QStringLiteral("AVI")), qPrintable(error));
+        QVERIFY(!QFileInfo::exists(path));
+        for (const char* id : {"dnxhr_lb", "mjpeg", "png", "uncompressed_8", "uncompressed_10"}) {
+            QVERIFY(movieCompressionFits(*findMovieCompression(QString::fromLatin1(id)), MovieContainer::Avi));
+        }
+        QVERIFY(!movieCompressionFits(*findMovieCompression(QStringLiteral("hevc_main")), MovieContainer::Avi));
+        o.compression = QStringLiteral("mjpeg");
+        o.quality = 90;
+        QVERIFY2(exportMovie(path, source(), o, {}, &error), qPrintable(error));
+        const auto info = probe(path);
+        QVERIFY(info && info->firstVideo() && !info->audio().empty());
+        QCOMPARE(info->firstVideo()->codec, QStringLiteral("mjpeg"));
+        QCOMPARE(info->format, QStringLiteral("avi"));
+        VideoReader reader;
+        QVERIFY(reader.open(path));
+        QVERIFY(near(reader.frame(0).pixel(8, 18), qRgb(255, 0, 0), 30));
+
+        // File Field Order: lines 0, 2, 4 ... white (the upper field) and the others black, in an upper-first project.
+        QImage striped(8, 8, QImage::Format_RGB32);
+        for (int y = 0; y < 8; ++y) {
+            for (int x = 0; x < 8; ++x) striped.setPixel(x, y, y % 2 == 0 ? qRgb(255, 255, 255) : qRgb(0, 0, 0));
+        }
+        MovieExportOptions f;
+        f.projectTopFirst = true;
+        f.fieldOrder = MovieExportOptions::FieldOrder::Upper;
+        QCOMPARE(fileFields(striped, f), striped); // the project's own order
+        f.fieldOrder = MovieExportOptions::FieldOrder::Lower;
+        const QImage lower = fileFields(striped, f);
+        QCOMPARE(qRed(lower.pixel(0, 1)), 255); // the first field on the lower lines now
+        QCOMPARE(qRed(lower.pixel(0, 0)), 0);
+        f.fieldOrder = MovieExportOptions::FieldOrder::Single;
+        const QImage single = fileFields(striped, f);
+        QVERIFY(qRed(single.pixel(0, 1)) > 200 && qRed(single.pixel(0, 2)) > 200); // the first field alone
+        f.projectTopFirst.reset();
+        QCOMPARE(fileFields(striped, f), striped); // a progressive project's frames are as they are
+    }
+
     void fullRange() {
         // Color Levels: full range in the stream, read back with the same colours either way.
         QTemporaryDir dir;
@@ -361,7 +410,7 @@ private slots:
         };
         for (const Case& c : {Case{StillFormat::Png, 8}, Case{StillFormat::Png, 16}, Case{StillFormat::Jpeg, 8}, Case{StillFormat::Tiff, 8},
                               Case{StillFormat::Tiff, 16}, Case{StillFormat::Bmp, 8}, Case{StillFormat::Dpx, 10}, Case{StillFormat::Dpx, 16},
-                              Case{StillFormat::OpenExr, 16}, Case{StillFormat::OpenExr, 32}}) {
+                              Case{StillFormat::OpenExr, 16}, Case{StillFormat::OpenExr, 32}, Case{StillFormat::Photoshop, 8}}) {
             StillOptions o;
             o.format = c.format;
             o.depth = c.depth;
@@ -374,6 +423,30 @@ private slots:
             QCOMPARE(back.size(), QSize(64, 36));
             QVERIFY2(near(back.pixel(8, 18), qRgb(255, 0, 0), 30) && near(back.pixel(56, 18), qRgb(0, 0, 255), 30), qPrintable(path));
         }
+        // Cineon through our own writer (p.1186; cineon.h): Kodak's header and 10-bit log codes, black at 95 and white at
+        // 685, read back near the picture.
+        StillOptions cin;
+        cin.format = StillFormat::Cineon;
+        const QString cinPath = dir.filePath(QStringLiteral("still.cin"));
+        QVERIFY(writeStill(cinPath, picture, cin));
+        QFile cinFile(cinPath);
+        QVERIFY(cinFile.open(QIODevice::ReadOnly));
+        const QByteArray cinBytes = cinFile.readAll();
+        QCOMPARE(qFromBigEndian<quint32>(cinBytes.constData()), quint32{0x802A5FD7});
+        QCOMPARE(cinBytes.mid(24, 4), QByteArray("V4.5"));
+        QCOMPARE(qFromBigEndian<quint32>(cinBytes.constData() + 200), quint32{64}); // pixels per line
+        QCOMPARE(qFromBigEndian<quint32>(cinBytes.constData() + 204), quint32{36});
+        QCOMPARE(cinBytes.size(), qsizetype{2048 + 64 * 36 * 4});
+        QImage blackWhite(2, 1, QImage::Format_RGB32);
+        blackWhite.setPixel(0, 0, qRgb(0, 0, 0));
+        blackWhite.setPixel(1, 0, qRgb(255, 255, 255));
+        const QByteArray bw = cineonData(blackWhite);
+        QCOMPARE(qFromBigEndian<quint32>(bw.constData() + 2048) >> 22, quint32{95});
+        QCOMPARE(qFromBigEndian<quint32>(bw.constData() + 2052) >> 22, quint32{685});
+        const auto cinBack = readCineon(cinBytes);
+        QVERIFY(cinBack && cinBack->size() == QSize(64, 36));
+        QVERIFY(near(cinBack->pixel(8, 18), qRgb(255, 0, 0), 6) && near(cinBack->pixel(56, 18), qRgb(0, 0, 255), 6));
+        QVERIFY(!readCineon(QByteArray(100, 'x')));
         // PICT through our own writer; its file starts after a 512-byte header.
         StillOptions pict;
         pict.format = StillFormat::Pict;

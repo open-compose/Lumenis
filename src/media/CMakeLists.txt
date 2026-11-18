@@ -30,6 +30,7 @@ add_library(lumenis_media STATIC
     color_effects.cpp
     intraframe.cpp
     pict.cpp
+    cineon.cpp
     psd.cpp
     plasma_wipe.cpp
     auto_correct.cpp
