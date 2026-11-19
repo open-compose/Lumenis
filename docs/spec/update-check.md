@@ -33,6 +33,11 @@ or installed by the application. Sparkle, WinSparkle and AppImageUpdate are not 
   the latest version" or "There is no release to compare with yet", or the failure in a message (`reportFailure`).
 * Open Release Page opens the release's page in the browser (`QDesktopServices::openUrl`); Later closes the notice.
 
+## Checked against a real release
+
+2026-11-19, the owner: Cutthulhu 2026.1 offered 2026.2 once it was published (the release gate's 10.6 row,
+docs/checklists/release-gate.md).
+
 ## Tests
 
 `tst_update_check`: versions compared, GitHub's answer read (and refused when it names no https page), each answer's

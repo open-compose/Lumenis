@@ -1188,7 +1188,7 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   a changed packaging step's shell locally on a dummy folder (each run takes an hour). Media Foundation's encoders
   refuse the GUI thread's single-threaded COM apartment, so `MediaWriter` calls them on an `EncoderThread`
   (`LUMENIS_ENCODER_THREAD=1` sends every encoder there, for tests); a new encoder call goes through `onEncoder`.
-  Left from the release gate: the update check from an older build (now testable: 2026.1 should offer 2026.2), the
+  The update check from an older build passed (2026.1 offered 2026.2, 2026-11-19). Left from the release gate: the
   owner's soak and screen-reader runs, the
   translation reviews and the seat's gates. Versions are YEAR.N, worked out by the release workflow (docs/spec/versioning.md): never edit
   `PRODUCT_VERSION` for a release. The About box names no other company (the owner's decision, 2026-11-15).

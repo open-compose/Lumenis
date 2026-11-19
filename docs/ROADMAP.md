@@ -2067,9 +2067,9 @@ Windows"). Next releases: run Actions > Release on `main` with no version (BUILD
 **Status (Phase 12, 2026-11-19): Cutthulhu 2026.2 was published on 2026-11-19** (tag `v2026.2`, the same 17 files as
 2026.1), with 10.1b's speed-ups (the video effects' passes, the audio mix on macOS and Windows) and 11.6's features. Its
 release run, the first since 2026.1's, passed on its first try. Left from the release gate (docs/checklists/
-release-gate.md): the update check from an older build, which can be tried now (2026.1's Help > Check for Updates should
-offer 2026.2), the owner's soak and screen-reader runs, the native speakers' reviews of the translations, the gates
-waiting for the Media Composer seat, and 10.0's steps that are the owner's.
+release-gate.md): the owner's soak and screen-reader runs, the native speakers' reviews of the translations, the gates
+waiting for the Media Composer seat, and 10.0's steps that are the owner's. The update check from an older build passed
+(the owner, 2026-11-19): 2026.1 offered 2026.2.
 
 ## 6. Immediate next steps
 
@@ -2086,35 +2086,32 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **Checks on the published release**
 
-3. Help > Check for Updates from an older build offers 2026.1 (10.6, release gate §2).
-4. A crash from a release package reads as functions and lines with its symbols (10.5, BUILDING.md "Crash reports").
-5. Tick docs/checklists/release-gate.md §4 on macOS and Linux (the Windows package was tried before publishing).
+3. A crash from a release package reads as functions and lines with its symbols (10.5, BUILDING.md "Crash reports").
+4. Tick docs/checklists/release-gate.md §4 on macOS and Linux (the Windows package was tried before publishing).
 
 **The owner's runs and reviews**
 
-6. The 72-hour soaks: Windows passed (2026-11-17); Linux again (its first run stopped at 64.6 hours); macOS; and the
+5. The 72-hour soaks: Windows passed (2026-11-17); Linux again (its first run stopped at 64.6 hours); macOS; and the
    sanitizer soaks (10.2, docs/spec/soak.md "The runs", BUILDING.md "Soak runs").
-7. The screen-reader checks (10.3d, docs/checklists/screen-readers.md).
-8. Native speakers' reviews of the German, French, Italian and Irish drafts (10.4, translations/glossary_*.md).
-9. Phase 0 gate 4 on Linux (a person following BUILDING.md on a fresh machine) and Phase 1 gate 5, the editor's
+6. The screen-reader checks (10.3d, docs/checklists/screen-readers.md).
+7. Native speakers' reviews of the German, French, Italian and Irish drafts (10.4, translations/glossary_*.md).
+8. Phase 0 gate 4 on Linux (a person following BUILDING.md on a fresh machine) and Phase 1 gate 5, the editor's
    session (docs/checklists/phase1-gate5.md).
-10. Run 423, stuck queued, deleted from the Actions page or by GitHub Support (10.0).
+9. Run 423, stuck queued, deleted from the Actions page or by GitHub Support (10.0).
 
 **Work that can go ahead now**
 
-11. The update check from an older build (the release gate's last automated-feature check): 2026.1's Help > Check for
-    Updates, or its check at startup, should offer 2026.2 (docs/checklists/release-gate.md, docs/spec/update-check.md).
-12. Keeping the hosted runners' benchmark baselines current (10.1c, docs/spec/performance.md): record them again from
+10. Keeping the hosted runners' benchmark baselines current (10.1c, docs/spec/performance.md): record them again from
     CI's logs after a change that makes a benchmark much faster (the step's notices say which). The audio mix on macOS
     and Windows, about twice Linux's time, is profiled only if editors report slow audio (10.1b).
-13. Fixes from what users of 2026.1 and 2026.2 report (GitHub issues, crash reports), each with a BUILDING.md entry and
+11. Fixes from what users of 2026.1 and 2026.2 report (GitHub issues, crash reports), each with a BUILDING.md entry and
     a check, released as 2026.3 and on (Actions > Release on `main`, BUILDING.md "Releases").
 
 **Waiting on a seat, hardware or a licence**
 
-14. With the licensed Media Composer seat again: Phase 2 gate 2's linking (M), Phase 3 gates 2 and 3 (our bins and
+12. With the licensed Media Composer seat again: Phase 2 gate 2's linking (M), Phase 3 gates 2 and 3 (our bins and
     AAF through Media Composer and back), Phase 4 gate 1's reference sequences, Phase 5's reference renders, 3.5
     (`.avp` projects and `.avs` settings, once there are samples), and how an AAF holds Mixdown with Video Edits' render
     track for Pro Tools (11.6e, docs/spec/aaf.md).
-15. With the SDKs and hardware: 7.3c, the AJA and Blackmagic modules, and the video output hardware gate.
-16. DCP validation once asdcplib is on a runner; XAVC Intra and DNxUncompressed once an open encoder exists (11.1).
+13. With the SDKs and hardware: 7.3c, the AJA and Blackmagic modules, and the video output hardware gate.
+14. DCP validation once asdcplib is on a runner; XAVC Intra and DNxUncompressed once an open encoder exists (11.1).
