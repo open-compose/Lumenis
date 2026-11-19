@@ -1188,7 +1188,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   a changed packaging step's shell locally on a dummy folder (each run takes an hour). Media Foundation's encoders
   refuse the GUI thread's single-threaded COM apartment, so `MediaWriter` calls them on an `EncoderThread`
   (`LUMENIS_ENCODER_THREAD=1` sends every encoder there, for tests); a new encoder call goes through `onEncoder`.
-  The update check from an older build passed (2026.1 offered 2026.2, 2026-11-19). Left from the release gate: the
+  The update check from an older build passed (2026.1 offered 2026.2, 2026-11-19). Since 2026.2, from users' reports: the
+  Timeline repaints when a bin item changes (`Timeline::binItemsChanged`, test `tst_main_window
+  clipColorRepaintsTimeline`); long-GOP media decodes on and keeps its last frames (`VideoReader::decodedFrames`, test
+  `tst_media longGopDecodesOnce`; docs/spec/performance.md "Long-GOP media"); linking long-GOP files offers to transcode
+  them (`MainWindow::offerTranscode`, `ConsolidateOptions::clipsTakeMedia`; tests `tst_media transcodeClipsTakeMedia`,
+  `tst_managed_media transcodeOfferAfterLinking`). Left from the release gate: the
   owner's soak and screen-reader runs, the
   translation reviews and the seat's gates. Versions are YEAR.N, worked out by the release workflow (docs/spec/versioning.md): never edit
   `PRODUCT_VERSION` for a release. The About box names no other company (the owner's decision, 2026-11-15).

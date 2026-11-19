@@ -927,7 +927,8 @@
             {"key": "liveLink", "type": "bool", "label": "Live Link", "default": false, "page": 1204},
             {"key": "reformat", "type": "choice", "style": "menu", "label": "Reformatting option", "default": "keepSize", "page": 1204,
              "choices": [{"value": "stretch", "label": "Stretch"}, {"value": "letterbox", "label": "Pillarbox/Letterbox"}, {"value": "crop", "label": "Center Crop"}, {"value": "keepSize", "label": "Center Keep Size"}]},
-            {"key": "sdWidescreen", "type": "bool", "label": "Always use 16:9 aspect ratio for SD clips", "default": false, "page": 1204}
+            {"key": "sdWidescreen", "type": "bool", "label": "Always use 16:9 aspect ratio for SD clips", "default": false, "page": 1204},
+            {"key": "offerTranscode", "type": "bool", "label": "Offer to transcode long-GOP clips after linking", "default": true, "ours": true}
           ]
         },
         {

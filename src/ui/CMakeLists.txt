@@ -87,6 +87,7 @@ add_library(lumenis_ui STATIC
     update_check.cpp
     export_drag.cpp
     main_window_report.cpp
+    main_window_transcode_offer.cpp
     main_window_proxy.cpp
     proxy_dialogs.cpp
     dynamic_media_folders_window.cpp

@@ -3900,6 +3900,7 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
     if (skipped > 0) {
         reportFailure(this, tr("Link: %n file(s) are not media that can be linked.", "", skipped));
     }
+    offerTranscode(doc->nodeId(), ids);
     return ids;
 }
 

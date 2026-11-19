@@ -15108,6 +15108,34 @@ Ná déan é sin ach amháin má tá an stáisiún sin as líne agus nach bhfuil
         <source>%1: its tracks could not be split to mono: %2</source>
         <translation type="unfinished">%1: níorbh fhéidir a rianta a scoilt go mona: %2</translation>
     </message>
+    <message>
+        <source>Transcode Long-GOP Clips</source>
+        <translation type="unfinished">Trascódaigh gearrthóga Long GOP</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n of the clips just linked use long-GOP compression (as H.264 and HEVC do), which plays and scrubs less smoothly than editing media.
+
+Transcode them to %1 in the background? Each clip then plays its new media; the linked files stay where they are.</source>
+        <translation type="unfinished">
+            <numerusform>Úsáideann %n de na gearrthóga a nascadh anois comhbhrú Long GOP (mar a úsáideann H.264 agus HEVC), a sheinntear agus a scrobhtar níos lú réidh ná meáin eagarthóireachta.
+
+Iad a thrascódú go %1 sa chúlra? Seinnfidh gach gearrthóg a meáin nua ansin; fanfaidh na comhaid nasctha mar a bhfuil siad.</numerusform>
+            <numerusform>Úsáideann %n de na gearrthóga a nascadh anois comhbhrú Long GOP (mar a úsáideann H.264 agus HEVC), a sheinntear agus a scrobhtar níos lú réidh ná meáin eagarthóireachta.
+
+Iad a thrascódú go %1 sa chúlra? Seinnfidh gach gearrthóg a meáin nua ansin; fanfaidh na comhaid nasctha mar a bhfuil siad.</numerusform>
+            <numerusform>Úsáideann %n de na gearrthóga a nascadh anois comhbhrú Long GOP (mar a úsáideann H.264 agus HEVC), a sheinntear agus a scrobhtar níos lú réidh ná meáin eagarthóireachta.
+
+Iad a thrascódú go %1 sa chúlra? Seinnfidh gach gearrthóg a meáin nua ansin; fanfaidh na comhaid nasctha mar a bhfuil siad.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Not Now</source>
+        <translation type="unfinished">Ní anois</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again</source>
+        <translation type="unfinished">Ná fiafraigh arís</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -24748,6 +24776,10 @@ Ní scriostar comhaid mheán.</translation>
     <message>
         <source>KB/sec</source>
         <translation type="unfinished">KB/s</translation>
+    </message>
+    <message>
+        <source>Offer to transcode long-GOP clips after linking</source>
+        <translation type="unfinished">Tairg gearrthóga Long GOP a thrascódú tar éis nasctha</translation>
     </message>
 </context>
 <context>

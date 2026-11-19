@@ -43,6 +43,13 @@ bool codecAllowed(const QString& codec);
 // Foundation, VA-API, Quick Sync, NVENC/NVDEC, AMF: "h264_videotoolbox", "aac_at", "h264_mf"), which the system or the
 // driver licenses (docs/EXTENSIONS.md, licensed technology).
 bool isOsCodec(const QString& implementation);
+// Whether a video codec (FFmpeg's name: "h264", "hevc", "mpeg2video") predicts frames from others (long GOP), so
+// frames between keyframes need decoding from the keyframe before them; false for intra-only codecs (DNx, ProRes,
+// image formats), lossless ones (FFV1) and unknown names.
+bool isLongGopCodec(const QString& codec);
+// Whether the file's first video stream is long GOP (isLongGopCodec); false for image sequences, files without video
+// and files that cannot be read. Linking offers to transcode such files (MainWindow::offerTranscode).
+bool isLongGopFile(const QString& path);
 // Whether FFmpeg has the encoder `name` ("prores_videotoolbox", "prores_ks") and this build may use it: an OS
 // encoder, or FFmpeg's own for a codec codecAllowed() takes (libx264 is H.264).
 bool encoderAvailable(const QString& name);

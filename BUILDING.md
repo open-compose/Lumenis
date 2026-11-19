@@ -316,8 +316,10 @@ pictures each time. It now decodes on to later frames before the next keyframe
 and keeps its last 48 frames (docs/spec/performance.md "Long-GOP media").
 `tst_media longGopDecodesOnce` fails if the decode counts grow again. Fast
 scrubbing across long-GOP clips still costs more than intra-frame media: to
-edit smoothly on slower machines, transcode them (Clip > Consolidate/Transcode
-to DNxHR or ProRes) or create proxies.
+edit smoothly on slower machines, transcode them. Linking such files offers it
+(Settings > Link > Link Options, "Offer to transcode long-GOP clips after
+linking"); Clip > Consolidate/Transcode to DNxHR or ProRes, or proxies, do it
+later. `tst_managed_media transcodeOfferAfterLinking` checks the offer.
 
 ### The "]" button under a monitor marks an OUT point
 

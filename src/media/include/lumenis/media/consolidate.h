@@ -69,6 +69,11 @@ struct ConsolidateOptions {
     // clip then name its MobID (MultiRez, p.1099-1101; 8.6a) and no ".new" clip is made; a sequence's clips keep the
     // media of the ranges it uses (with handles), partly online at that resolution (p.1118; 8.6c).
     bool newClips = true;
+    // Ours, for the offer after linking long-GOP files (MainWindow::offerTranscode): Transcode gives each selected
+    // master clip its new media itself, made naming the clip's MobID, as Consolidate does when the clips take the
+    // copies (p.349), so the clip and the sequences that use it play the new media. No ".new" or ".old" clip is made;
+    // the files it linked stay where they are (Relink > Linked Media links them again). Only with `newClips`.
+    bool clipsTakeMedia = false;
     // Transcode's "Keep Source's Frame Rate" or "Convert to Project Frame Rate" (p.355; 11.4a1): with
     // `convertToProjectRate`, selected master clips at another rate are made at `projectRate`, their frames and sound
     // taken by time (Link::fileFrame); the clips a sequence uses keep their rate (ours: the segments count their

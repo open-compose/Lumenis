@@ -1191,6 +1191,62 @@ private slots:
     // The Consolidate/Transcode options of 11.4a1 (p.351-356): Delete original media files when done, Relink selected
     // clips to target drive before skipping, Convert to Project Frame Rate, Framing (Frame Flex) and Convert Audio Sample
     // Rate.
+    // Ours, for the offer after linking long-GOP files: which codecs are long GOP, and Transcode with clipsTakeMedia,
+    // where the clip itself takes the new media (its MobID, no ".new" or ".old" clip).
+    void transcodeClipsTakeMedia() {
+        QVERIFY(isLongGopCodec(QStringLiteral("h264")));
+        QVERIFY(isLongGopCodec(QStringLiteral("hevc")));
+        QVERIFY(isLongGopCodec(QStringLiteral("mpeg2video")));
+        QVERIFY(!isLongGopCodec(QStringLiteral("dnxhd")));
+        QVERIFY(!isLongGopCodec(QStringLiteral("prores")));
+        QVERIFY(!isLongGopCodec(QStringLiteral("ffv1")));
+        QVERIFY(!isLongGopCodec(QStringLiteral("pcm_s16le")));
+        QVERIFY(!isLongGopCodec(QStringLiteral("nonsense")));
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Long.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("mpeg2video");
+        s.pixelFormat = QStringLiteral("yuv420p");
+        s.width = 128;
+        s.height = 96;
+        s.frameRate = Rational(25);
+        s.bitRate = 4'000'000;
+        s.videoOptions = {{QStringLiteral("g"), QStringLiteral("25")}};
+        QVERIFY(writeVideo(source, s, 30));
+        QVERIFY(isLongGopFile(source));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        auto linked = linkClip(*probe(source), o);
+        QVERIFY(linked);
+        linked->name = QStringLiteral("Long");
+        linked->color = QStringLiteral("#3264c8");
+        const QString drive = dir.filePath(QStringLiteral("A"));
+        QVERIFY(QDir().mkpath(drive));
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        options.creation.raster = QSize(256, 144);
+        options.creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        options.creation.videoDrive = drive;
+        options.clipsTakeMedia = true;
+        const ClipLookup none = [](const QString&, const QString&) { return std::optional<model::BinItem>(); };
+        const ConsolidateResult r = consolidate({*linked}, QStringLiteral("bin1"), none, {}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QVERIFY(r.added.isEmpty());
+        QCOMPARE(r.changed.size(), 1);
+        const model::BinItem& clip = r.changed.first();
+        QCOMPARE(clip.id, linked->id);
+        QCOMPARE(clip.name, QStringLiteral("Long"));
+        QCOMPARE(clip.color, QStringLiteral("#3264c8"));
+        QCOMPARE(model::mobIdOf(clip), model::mobIdOf(*linked)); // the new media name the clip
+        const auto link = linkOf(clip);
+        QVERIFY(link && link->isManaged());
+        QVERIFY(!isLongGopFile(link->file()));
+        QVERIFY(QFileInfo::exists(source)); // the linked file stays
+        FrameCache cache;
+        QVERIFY(near(cache.frame(clip, 12), colourOf(12), 16));
+    }
+
     void consolidateOptions() {
         QTemporaryDir dir;
         // A 25 fps clip with sound at 44.1 kHz, its left half red and its right half blue.

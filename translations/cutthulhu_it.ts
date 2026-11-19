@@ -15062,6 +15062,31 @@ Farlo solo se quella postazione è offline e non sta scrivendo.</translation>
         <source>%1: its tracks could not be split to mono: %2</source>
         <translation type="unfinished">%1: impossibile dividere le tracce in mono: %2</translation>
     </message>
+    <message>
+        <source>Transcode Long-GOP Clips</source>
+        <translation type="unfinished">Transcodifica clip Long GOP</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n of the clips just linked use long-GOP compression (as H.264 and HEVC do), which plays and scrubs less smoothly than editing media.
+
+Transcode them to %1 in the background? Each clip then plays its new media; the linked files stay where they are.</source>
+        <translation type="unfinished">
+            <numerusform>%n delle clip appena collegate usa la compressione Long GOP (come H.264 e HEVC), che si riproduce e si scorre meno fluidamente dei media di montaggio.
+
+Transcodificarle in %1 in background? Ogni clip riproduce poi i suoi nuovi media; i file collegati restano dove sono.</numerusform>
+            <numerusform>%n delle clip appena collegate usano la compressione Long GOP (come H.264 e HEVC), che si riproduce e si scorre meno fluidamente dei media di montaggio.
+
+Transcodificarle in %1 in background? Ogni clip riproduce poi i suoi nuovi media; i file collegati restano dove sono.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Not Now</source>
+        <translation type="unfinished">Non ora</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again</source>
+        <translation type="unfinished">Non chiedere più</translation>
+    </message>
 </context>
 <context>
     <name>lumenis::ui::ManageTranscriptsDialog</name>
@@ -24697,6 +24722,10 @@ I file media non vengono eliminati.</translation>
     <message>
         <source>KB/sec</source>
         <translation type="unfinished">KB/s</translation>
+    </message>
+    <message>
+        <source>Offer to transcode long-GOP clips after linking</source>
+        <translation type="unfinished">Proponi di transcodificare le clip Long GOP dopo il collegamento</translation>
     </message>
 </context>
 <context>

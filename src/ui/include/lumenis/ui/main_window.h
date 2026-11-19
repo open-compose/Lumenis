@@ -286,6 +286,20 @@ public:
     // Files that are not media are left out and named in the Console.
     // The bin is opened if needed; empty if it cannot be.
     QStringList linkFiles(const QString& binId, const QStringList& paths);
+    // Ours (docs/spec/performance.md "Long-GOP media"): when the Link setting's offerTranscode is on and some of the
+    // clips `ids` just linked into the bin are long-GOP files (media::isLongGopFile), a message that does not block
+    // offers to transcode them in the background; linkFiles() calls it.
+    void offerTranscode(const QString& binId, const QStringList& ids);
+    // The offer accepted: a Background Queue job a clip, at the Media Creation setting's Transcode resolution, each clip
+    // taking its new media itself (media::ConsolidateOptions::clipsTakeMedia).
+    void transcodeLinkedClips(const QString& binId, const QStringList& ids);
+    // Answers the offer for tests and the soak: the clips' names and the resolution offered.
+    struct TranscodeOfferAnswer {
+        bool transcode = false;
+        bool dontAskAgain = false;
+    };
+    using TranscodeOfferHook = std::function<TranscodeOfferAnswer(const QStringList& names, const QString& resolution)>;
+    void setTranscodeOfferHook(TranscodeOfferHook hook) { transcodeOfferHook_ = std::move(hook); }
     // Live Link (the Link Options tab, p.1204, p.319): clips linked with it on remember their file's time ("modified" in
     // BinItem::link). When the application is active again, a clip whose file has changed is linked afresh: "The updated
     // clip appears in your bin (and sequence) and replaces the old clip", unless its tracks or duration changed, when
@@ -1664,6 +1678,7 @@ private:
     std::function<bool(ManagedRelinkDialog&)> managedRelinkHook_;
     std::function<std::optional<BinDeleteChoice>(int, int)> binDeleteHook_;
     std::function<std::optional<bool>()> copyingMediaHook_;
+    TranscodeOfferHook transcodeOfferHook_;
     media::MediaDatabase mediaDb_;
     BackgroundQueue* backgroundQueue_ = nullptr;
     std::function<bool(BackgroundServicesDialog&)> backgroundServicesHook_;

@@ -148,3 +148,29 @@ frames and their hashes are the decoder's.
 Scrubbing far through long-GOP media still decodes from a keyframe at each
 position; for heavy work, transcode to an intra-frame resolution (DNxHR,
 ProRes) or make proxies, as Media Composer's guide also advises.
+
+### The offer to transcode (ours)
+
+When files are linked (`MainWindow::linkFiles`: the Source Browser, bin drops,
+Link to Volume) and the Link setting's Link Options tab has "Offer to transcode
+long-GOP clips after linking" on (the default, `"ours"`), the long-GOP master
+clips among them (`media::isLongGopFile`: not intra-only and not lossless-only,
+so FFV1 is left out; not image sequences) are offered in a message that does
+not block and is not modal (`MainWindow::offerTranscode`, object name
+`transcodeOffer`): Transcode, Not Now and Don't ask again, which turns the
+option off.
+
+Transcode queues a Background Queue job a clip at the Media Creation setting's
+Transcode resolution and drive (`MainWindow::transcodeLinkedClips`). With
+`media::ConsolidateOptions::clipsTakeMedia` each clip takes its new media
+itself, made naming the clip's MobID as Consolidate's copies are (p.349): no
+".new" or ".old" clip, so the clip and any sequence already using it play the
+new media. The clip keeps what was changed in the bin while the job ran; only
+the columns the transcode changed are taken from it. The linked files stay
+where they are; Relink > Linked Media links a clip to them again.
+`setTranscodeOfferHook` answers the offer for tests.
+
+Checks: `tst_media transcodeClipsTakeMedia` (the codecs, the clip taking its
+media) and `tst_managed_media transcodeOfferAfterLinking` (offered for MPEG-2
+and not FFV1, the job, the colour set meanwhile kept, Don't ask again, the
+message not modal).

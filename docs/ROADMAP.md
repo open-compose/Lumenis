@@ -2071,6 +2071,13 @@ release-gate.md): the owner's soak and screen-reader runs, the native speakers' 
 waiting for the Media Composer seat, and 10.0's steps that are the owner's. The update check from an older build passed
 (the owner, 2026-11-19): 2026.1 offered 2026.2.
 
+Since 2026.2, from users' reports (2026-11-19), for the next release: a clip colour set in a bin repaints the Timeline at
+once (`Timeline::binItemsChanged`); long-GOP media (H.264, HEVC, MPEG-2) decodes on instead of seeking back to the
+keyframe and keeps its last 48 frames, so playback, steps and reverse play decode each frame about once (docs/spec/
+performance.md "Long-GOP media"); and linking long-GOP files offers to transcode them in the background, each clip
+taking its new media itself (`MainWindow::offerTranscode`, the Link setting's "Offer to transcode long-GOP clips after
+linking").
+
 ## 6. Immediate next steps
 
 Updated 2026-11-17, after the first release (2026.1, Phase 12's status). The steps that build software are done; what

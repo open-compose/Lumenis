@@ -27,6 +27,8 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QApplication>
+#include <QMessageBox>
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
@@ -669,6 +671,113 @@ private slots:
         convertRate->setChecked(false);
         QVERIFY(!rate->isEnabled());
         QVERIFY(!dialog.options().convertSampleRate);
+    }
+
+    // Ours (a user's report, 2026-11-19): linking long-GOP files offers to transcode them; accepted, each clip takes its
+    // new media itself in the background and keeps what was changed in the bin meanwhile; Don't ask again turns the
+    // Link setting's option off. Intra-frame files are not offered.
+    void transcodeOfferAfterLinking() {
+        QTemporaryDir dir;
+        const QString intra = dir.filePath(QStringLiteral("A001.mov"));
+        QVERIFY(writeMovie(intra, 10));
+        const QString longGop = dir.filePath(QStringLiteral("B001.mov"));
+        {
+            media::WriterSettings s;
+            s.format = QStringLiteral("mov");
+            s.videoCodec = QStringLiteral("mpeg2video");
+            s.pixelFormat = QStringLiteral("yuv420p");
+            s.width = 256;
+            s.height = 144;
+            s.frameRate = Rational(25);
+            s.bitRate = 4'000'000;
+            s.videoOptions = {{QStringLiteral("g"), QStringLiteral("25")}};
+            media::MediaWriter w;
+            QVERIFY(w.open(longGop, s));
+            for (int i = 0; i < 20; ++i) {
+                QImage image(256, 144, QImage::Format_RGBA8888);
+                image.fill(QColor(200, 60, 60));
+                QVERIFY(w.writeVideo(image));
+            }
+            QVERIFY(w.finish());
+        }
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        Settings& settings = window.settings();
+        settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        settings.setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeResolution"), QStringLiteral("dnx_lb"));
+        QVERIFY(settings.flag(QStringLiteral("Link"), QStringLiteral("offerTranscode"))); // on by default
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QStringList offered;
+        QString resolution;
+        window.setTranscodeOfferHook([&](const QStringList& names, const QString& r) {
+            offered = names;
+            resolution = r;
+            return MainWindow::TranscodeOfferAnswer{true, false};
+        });
+        const QStringList ids = window.linkFiles(binId, {intra, longGop});
+        QCOMPARE(ids.size(), 2);
+        QCOMPARE(offered, QStringList{QStringLiteral("B001")});
+        QVERIFY(!resolution.isEmpty());
+        const QString clipId = ids.at(1);
+        bin->setColor({clipId}, QStringLiteral("#3264c8")); // while the job runs
+        window.backgroundQueue().waitForIdle();
+        QCoreApplication::processEvents();
+        QCOMPARE(window.backgroundQueue().jobs().size(), 1);
+        QCOMPARE(window.backgroundQueue().jobs().first().state, BackgroundQueue::State::Completed);
+        QCOMPARE(bin->bin().items.size(), 2); // no ".new" or ".old" clip
+        const model::BinItem* clip = bin->bin().item(clipId);
+        QVERIFY(clip);
+        QCOMPARE(clip->name, QStringLiteral("B001"));
+        QCOMPARE(clip->color, QStringLiteral("#3264c8"));
+        const auto link = media::linkOf(*clip);
+        QVERIFY(link && link->isManaged());
+        QVERIFY(!media::isLongGopFile(link->file()));
+        QVERIFY(QFileInfo::exists(longGop));
+        QVERIFY(!media::linkOf(*bin->bin().item(ids.at(0)))->isManaged()); // the intra-frame clip stays linked
+
+        // Not Now with Don't ask again: nothing is transcoded and the option goes off; the next link offers nothing.
+        window.setTranscodeOfferHook([&](const QStringList& names, const QString&) {
+            offered = names;
+            return MainWindow::TranscodeOfferAnswer{false, true};
+        });
+        window.backgroundQueue().clearInactive();
+        QCOMPARE(window.linkFiles(binId, {longGop}).size(), 1);
+        QVERIFY(window.backgroundQueue().jobs().isEmpty());
+        QVERIFY(!settings.flag(QStringLiteral("Link"), QStringLiteral("offerTranscode")));
+        offered.clear();
+        QCOMPARE(window.linkFiles(binId, {longGop}).size(), 1);
+        QVERIFY(offered.isEmpty());
+
+        // Without a hook the offer is a message that does not block.
+        window.setTranscodeOfferHook({});
+        settings.setValue(QStringLiteral("Link"), QStringLiteral("offerTranscode"), true);
+        QCOMPARE(window.linkFiles(binId, {longGop}).size(), 1);
+        auto* box = window.findChild<QMessageBox*>(QStringLiteral("transcodeOffer"));
+        QVERIFY(box && box->isVisible() && !box->isModal());
+        QVERIFY(!QApplication::activeModalWidget());
+        box->reject();
+        QCoreApplication::processEvents();
+        QVERIFY(window.backgroundQueue().jobs().isEmpty());
+        media::setExtraMediaDrives({});
     }
 
     void aafEmbeddedMedia() {

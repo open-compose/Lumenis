@@ -152,6 +152,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             if (const auto adapter = model::spatialAdapterOf(clip)) creation.spatial = model::withPixelAspect(*adapter, clip);
         }
         if (associating) creation.master = model::mobIdOf(clip);
+        if (options.clipsTakeMedia && options.newClips && in == 0 && out < 0) creation.master = model::mobIdOf(clip);
         const auto encoding = model::colorAdapterOf(clip);
         if (options.applyColorEncoding && encoding) {
             creation.colorTransformations = encoding->applied();
@@ -270,9 +271,10 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 continue;
             }
             made->markers = item.markers;
-            if (copy && takesCopy) {
+            if ((copy && takesCopy) || (!copy && options.clipsTakeMedia)) {
                 if (options.deleteOriginals) result.deleteFiles << managedFiles(item);
-                // The clip takes the copy; ".old", a new master clip, keeps the media it had (p.349). The
+                // The clip takes the copy (with clipsTakeMedia, its transcoded media); for Consolidate ".old", a new
+                // master clip, keeps the media it had (p.349). The
                 // clip keeps its MobID, so the sequences that name it play the copy: the copy's files
                 // were made naming it (make()), and it takes their file sources. The old files still
                 // name the clip's MobID too; they hold the same frames.
@@ -284,7 +286,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 relinked.modified = made->modified;
                 result.changed << relinked;
                 // Deleted originals leave no media for an ".old" clip.
-                if (!options.deleteOriginals) {
+                if (copy && !options.deleteOriginals) {
                     model::BinItem old = item;
                     old.id = model::newItemId();
                     old.mobId = MobId::generate();

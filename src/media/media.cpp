@@ -462,6 +462,22 @@ bool codecAllowed(const QString& codec) {
     return patentCodecsAllowed() || !isPatentCodec(codec);
 }
 
+bool isLongGopCodec(const QString& codec) {
+    const AVCodecDescriptor* desc = avcodec_descriptor_get_by_name(codec.toUtf8().constData());
+    // Lossless codecs that FFmpeg does not call intra-only (FFV1 carries its coder's state from frame to frame) are
+    // archive media, not what plays badly: left out.
+    // (H.264 is marked lossy and lossless, having a lossless mode.)
+    if (!desc || desc->type != AVMEDIA_TYPE_VIDEO || (desc->props & AV_CODEC_PROP_INTRA_ONLY)) return false;
+    return (desc->props & AV_CODEC_PROP_LOSSY) || !(desc->props & AV_CODEC_PROP_LOSSLESS);
+}
+
+bool isLongGopFile(const QString& path) {
+    if (ImageSequence::fromSpec(path)) return false;
+    const auto info = probe(path);
+    const StreamInfo* video = info ? info->firstVideo() : nullptr;
+    return video && isLongGopCodec(video->codec);
+}
+
 bool isOsCodec(const QString& implementation) {
     static const QStringList suffixes{QStringLiteral("_videotoolbox"), QStringLiteral("_at"),  QStringLiteral("_mf"),
                                       QStringLiteral("_vaapi"),        QStringLiteral("_qsv"), QStringLiteral("_nvenc"),
