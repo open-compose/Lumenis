@@ -7915,6 +7915,11 @@ QColor Timeline::trackColor(const model::Track& track) {
     return fill;
 }
 
+void Timeline::binItemsChanged() {
+    view_->update();
+    if (map_) map_->update();
+}
+
 QString Timeline::segmentColor(const model::Segment& segment) const {
     if (segment.isFiller()) return {};
     return model::timelineClipColor(clipColors_, segment, clipFacts(segment));

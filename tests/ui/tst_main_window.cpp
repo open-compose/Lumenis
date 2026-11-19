@@ -398,6 +398,67 @@ private slots:
         }
     }
 
+    // A user's report: a clip's colour changed in its bin showed in the Timeline only after a click there. The
+    // Timeline paints from the bins, so a colour set with the bin's Color column or menu must repaint it at once
+    // (Timeline::binItemsChanged from BinContainer::binItemsChanged).
+    void clipColorRepaintsTimeline() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        window.show();
+        settle();
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem clip;
+        clip.id = model::newItemId();
+        clip.name = QStringLiteral("A");
+        clip.kind = model::BinItemKind::MasterClip;
+        clip.editRate = Rational(25);
+        clip.durationFrames = 100;
+        doc->addItem(clip);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment s;
+        s.clipId = clip.id;
+        s.binId = doc->nodeId();
+        s.name = clip.name;
+        s.sourceTrack = QStringLiteral("V1");
+        s.length = 50;
+        seq.splice(QStringLiteral("V1"), 0, {s});
+        seq.storeIn(item);
+        doc->addItem(item);
+        window.composer().load(ui::MonitorId::Record, doc->nodeId(), item);
+        settle();
+        auto* view = window.timeline().findChild<ui::TimelineView*>();
+        QVERIFY(view && view->isVisible());
+        struct PaintCounter : QObject {
+            int paints = 0;
+            bool eventFilter(QObject*, QEvent* e) override {
+                if (e->type() == QEvent::Paint) ++paints;
+                return false;
+            }
+        } counter;
+        view->installEventFilter(&counter);
+        settle();
+        counter.paints = 0;
+        doc->setColor({clip.id}, QStringLiteral("#3264c8"));
+        settle();
+        QVERIFY2(counter.paints > 0, "the Timeline did not repaint after the clip's colour changed");
+        const model::Sequence shown = model::Sequence::fromItem(window.composer().state(ui::MonitorId::Record).current()->item);
+        model::ClipColorOptions o = window.timeline().clipColorOptions();
+        o.offline = false; // the clip has no media
+        window.timeline().setClipColorOptions(o);
+        QCOMPARE(window.timeline().segmentColor(shown.track(QStringLiteral("V1"))->segments.front()), QStringLiteral("#3264c8"));
+        view->removeEventFilter(&counter);
+    }
+
     void titlerAndBackToSourceRecord() {
         Project project;
         ext::ProviderRegistry providers;

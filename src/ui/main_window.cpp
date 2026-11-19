@@ -1903,7 +1903,11 @@ void MainWindow::createTools() {
             }
         }
     });
-    connect(binContainer_, &BinContainer::binItemsChanged, this, [this] { refreshTemplateBins(); });
+    connect(binContainer_, &BinContainer::binItemsChanged, this, [this] {
+        refreshTemplateBins();
+        // A clip's colour (or anything the Timeline shows of it) changed in a bin: paint it now.
+        timeline_->binItemsChanged();
+    });
     connect(timeline_, &Timeline::automaticCorrectionsChanged, this, [this] { refreshTemplateBins(); });
     connect(binContainer_, &BinContainer::activeBinChanged, this, [this] { refreshTemplateBins(); });
     // Applying Effects opens Effect Editor (Timeline settings, p.1220).

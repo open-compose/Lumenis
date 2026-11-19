@@ -485,6 +485,10 @@ public:
     // the selected tracks, that the display marks; in the Show Mismatches display rendered effects at another resolution
     // too. False, with a message, when there is none.
     bool findNextMismatched();
+    // Bin items changed (a clip's colour, name or other column): the Timeline draws its segments from the bins
+    // each time it paints, so it only needs painting again, and the Sequence Map with it. MainWindow calls it on
+    // BinContainer::binItemsChanged, so a clip colour set in a bin shows at once.
+    void binItemsChanged();
     // Update Media Status (p.1115): MainWindow relinks or refreshes (updateMediaStatusRequested), then the display is
     // worked out again.
     void updateMediaStatus();

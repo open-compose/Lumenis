@@ -72,6 +72,9 @@ Source mode the source buttons keep their green.
   * Set Local Clip Color and its undo;
   * the Select menu's colour choices;
   * the blue record button.
+* `tst_main_window clipColorRepaintsTimeline`: a colour set in a bin repaints
+  the Timeline at once (`Timeline::binItemsChanged`; a user's report,
+  2026-11-19).
 * Scenario `14-local-clip-color.json`.
 
 ## Later

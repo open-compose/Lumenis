@@ -295,6 +295,17 @@ Punch-In; docs/spec/punch-in.md):
 The Input Source menu lists the inputs miniaudio finds; "Default" is the
 system's choice.
 
+### A clip's colour changed in a bin shows in the Timeline only after a click there
+
+The Timeline paints each segment's colour from its clip in the bin, but it was
+not told when a bin item changed, so it kept the old picture until something
+else (a click, a scroll) made it paint. `MainWindow` now calls
+`Timeline::binItemsChanged()` on `BinContainer::binItemsChanged`, which every
+`BinDocument` change sends (the Color column, the bin's colour menu, renames).
+A new Timeline display that comes from bin items needs nothing more; a bin
+change that bypasses `BinDocument` must still emit `itemsChanged`.
+`tst_main_window clipColorRepaintsTimeline` fails if the repaint is lost.
+
 ### The "]" button under a monitor marks an OUT point
 
 Before this was fixed, the Composer's "]" button (left of Play) marked OUT and "[" marked IN. Media
