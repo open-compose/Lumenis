@@ -1,8 +1,8 @@
 # Cutthulhu — Project Plan and Roadmap
 
 Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push. The first
-release, 2026.1, was published on 2026-11-16 (Phase 12's status). Since then 10.1b (the slow paths) and 11.6 (Phase 11's
-left-overs) are done (2026-11-18); the next release carries them.
+release, 2026.1, was published on 2026-11-16, and 2026.2, with 10.1b (the slow paths) and 11.6 (Phase 11's
+left-overs), on 2026-11-19 (Phase 12's status).
 
 ## 1. Goal and honest scope
 
@@ -2062,10 +2062,14 @@ but not working (`osEncoderFor` opens them), the release FFmpeg 7.1.1 against SV
 macOS (now 9.0.2, as CI tests), Qt 6.8's `QTRY_COMPARE` under GCC 13, and two shell slips in the AppImage steps. The
 Windows candidate then could not export H.264: Media Foundation's encoders refuse Qt's single-threaded GUI thread, so
 they now run on a thread of the writer's own (`EncoderThread`; BUILDING.md "Export says H.264 is not available on
-Windows"). Next releases: run Actions > Release on `main` with no version (2026.2 and on; BUILDING.md "Releases").
-Left from the release gate (docs/checklists/release-gate.md): checking the update check from an older build now that a
-release exists, the owner's soak and screen-reader runs, the native speakers' reviews of the translations, the gates
-waiting for the Media Composer seat, 10.0's steps that are the owner's, and 10.1b/c.
+Windows"). Next releases: run Actions > Release on `main` with no version (BUILDING.md "Releases").
+
+**Status (Phase 12, 2026-11-19): Cutthulhu 2026.2 was published on 2026-11-19** (tag `v2026.2`, the same 17 files as
+2026.1), with 10.1b's speed-ups (the video effects' passes, the audio mix on macOS and Windows) and 11.6's features. Its
+release run, the first since 2026.1's, passed on its first try. Left from the release gate (docs/checklists/
+release-gate.md): the update check from an older build, which can be tried now (2026.1's Help > Check for Updates should
+offer 2026.2), the owner's soak and screen-reader runs, the native speakers' reviews of the translations, the gates
+waiting for the Media Composer seat, and 10.0's steps that are the owner's.
 
 ## 6. Immediate next steps
 
@@ -2098,14 +2102,13 @@ is left is mostly checks only a person can do, decisions, and work that waits on
 
 **Work that can go ahead now**
 
-11. The next release, 2026.2, with 10.1b's speed-ups and 11.6's features (Actions > Release on `main` with no version,
-    BUILDING.md "Releases"); 2026.1's update check tells its users, which is also the release gate's check of the
-    update check from an older build.
+11. The update check from an older build (the release gate's last automated-feature check): 2026.1's Help > Check for
+    Updates, or its check at startup, should offer 2026.2 (docs/checklists/release-gate.md, docs/spec/update-check.md).
 12. Keeping the hosted runners' benchmark baselines current (10.1c, docs/spec/performance.md): record them again from
     CI's logs after a change that makes a benchmark much faster (the step's notices say which). The audio mix on macOS
     and Windows, about twice Linux's time, is profiled only if editors report slow audio (10.1b).
-13. Fixes from what users of 2026.1 report (GitHub issues, crash reports), each with a BUILDING.md entry and a check,
-    released as 2026.2 and on (Actions > Release on `main`, BUILDING.md "Releases").
+13. Fixes from what users of 2026.1 and 2026.2 report (GitHub issues, crash reports), each with a BUILDING.md entry and
+    a check, released as 2026.3 and on (Actions > Release on `main`, BUILDING.md "Releases").
 
 **Waiting on a seat, hardware or a licence**
 

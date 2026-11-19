@@ -18,13 +18,13 @@ made (BUILDING.md "Releases").
 
 | Step | State | What is left |
 |---|---|---|
-| 10.1 performance | 10.1a and 10.1c done (the hosted runners' baselines, 2026-11-17); 10.1b started | 10.1b: the audio mix on macOS and Windows, profiled there (docs/spec/performance.md) |
+| 10.1 performance | done (10.1b 2026-11-18, in 2026.2) | the audio mix on macOS and Windows (about twice Linux's time) is profiled only if editors report slow audio (docs/spec/performance.md) |
 | 10.2 long-run stability | done but the runs | 72-hour soaks on each OS (Windows passed 2026-11-17; Linux stopped at 64.6 hours, again; macOS) and the sanitizer soaks (docs/spec/soak.md "The runs"), the owner's |
 | 10.3 accessibility | done but the hand check | docs/checklists/screen-readers.md with VoiceOver, Narrator or NVDA, and Orca, the owner's |
 | 10.4 localisation | done but the reviews | native speakers' reviews of German, French, Italian and Irish (translations/glossary_*.md) |
 | 10.5 crash reports | done | a crash from the release package reads as functions and lines with its symbols (BUILDING.md "Crash reports") |
-| 10.6 update check | done (12.1) | once a release is published: an older build's Help > Check for Updates offers it |
-| 10.7 release pipeline | done (12.2) but its first run | section 1 above |
+| 10.6 update check | done (12.1) | testable since 2026.2 was published (2026-11-19): 2026.1's Help > Check for Updates should offer it |
+| 10.7 release pipeline | done (12.2): 2026.1 published 2026-11-16, 2026.2 2026-11-19 (its run passed first time) | section 1 above |
 | 10.0 going public | done (2026-11-15) | the community files after §2.2; run 423, stuck queued, deleted from the Actions page or by GitHub Support |
 
 ## 3. Gates the phases left open

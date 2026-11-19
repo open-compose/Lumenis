@@ -1167,7 +1167,7 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Launch Drive `media::setDriveFilters`), is done, so 11.6 and Phase 11 are (2026-11-18; what stays dimmed, and why, is
   in ROADMAP's Phase 11 status). A settings option whose effect is always so here is `"always": true` (shown checked
   and dimmed); a value a dialog of the setting edits needs an option type of its own in `SettingsDialog`, as
-  `trackFormats` is, since a `"button"` option only tells MainWindow. The next release (2026.2) carries 10.1b and 11.6.
+  `trackFormats` is, since a `"button"` option only tells MainWindow. 2026.2 carries 10.1b and 11.6.
   10.6 is an update check that only tells the user (no automatic updates, the owner's decision).
   Phase 12 is finishing Phase 10 (the owner's choice, 2026-11-15; steps in ROADMAP). 12.1, the update check
   (docs/spec/update-check.md: `src/ui/update_check.*` over Qt Network, `MainWindow::checkForUpdates` from
@@ -1183,11 +1183,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   runs them with patent codecs off): skip only what the operating system cannot do, never DNx. 12.3, the release gate
   (docs/checklists/release-gate.md), is done, so Phase 12's steps are. **Cutthulhu 2026.1, the first release, was
   published on 2026-11-16** (ROADMAP's Phase 12 status; what its first runs found is in BUILDING.md "The first release
-  run failed (2026-11-16)"). The next release: Actions > Release on `main` with no version. Before a release run, run
+  run failed (2026-11-16)"). **Cutthulhu 2026.2 was published on 2026-11-19** (10.1b and 11.6; its run passed first
+  time). The next release: Actions > Release on `main` with no version. Before a release run, run
   a changed packaging step's shell locally on a dummy folder (each run takes an hour). Media Foundation's encoders
   refuse the GUI thread's single-threaded COM apartment, so `MediaWriter` calls them on an `EncoderThread`
   (`LUMENIS_ENCODER_THREAD=1` sends every encoder there, for tests); a new encoder call goes through `onEncoder`.
-  Left from the release gate: the update check from an older build, the owner's soak and screen-reader runs, the
+  Left from the release gate: the update check from an older build (now testable: 2026.1 should offer 2026.2), the
+  owner's soak and screen-reader runs, the
   translation reviews and the seat's gates. Versions are YEAR.N, worked out by the release workflow (docs/spec/versioning.md): never edit
   `PRODUCT_VERSION` for a release. The About box names no other company (the owner's decision, 2026-11-15).
   Name new features generically; ctest `trademark_names` checks.
