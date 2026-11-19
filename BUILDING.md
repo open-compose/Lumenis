@@ -1329,6 +1329,13 @@ If a run fails, its draft stays and takes its number: run the workflow again wit
 `2026.1`) to replace the draft. A version asked for replaces only an unpublished draft. A published release
 stops the run, and so does any existing release when the version is left empty.
 
+If a job was never given a runner ("The job was not acquired by Runner of type hosted", seen on macOS arm64 with
+2026.3), nothing of it ran: use **Re-run failed jobs** on the run. The draft, the other platforms' uploads and the
+version stay, and the checksum job runs once the re-run job has uploaded.
+
+A draft is shown on the Releases page only to someone signed in with write access; signed out (or after the login
+timed out) the page shows only published releases.
+
 ## Update check
 
 Cutthulhu asks GitHub for its latest release at start-up and from Help > Check for Updates (ROADMAP 10.6;

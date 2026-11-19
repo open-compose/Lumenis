@@ -2071,7 +2071,12 @@ release-gate.md): the owner's soak and screen-reader runs, the native speakers' 
 waiting for the Media Composer seat, and 10.0's steps that are the owner's. The update check from an older build passed
 (the owner, 2026-11-19): 2026.1 offered 2026.2.
 
-Since 2026.2, from users' reports (2026-11-19), for the next release: a clip colour set in a bin repaints the Timeline at
+**Status (Phase 12, 2026-11-19): Cutthulhu 2026.3 was published on 2026-11-19** (tag `v2026.3`, the same 17 files),
+with the fixes from users' reports below and get-ffmpeg's retries (BUILDING.md "get-ffmpeg: (403) Forbidden in CI").
+Its release run's macOS job was not given a runner at first (GitHub's capacity for macOS arm64); re-running the failed
+jobs finished it, with the draft and the other uploads kept.
+
+In 2026.3, from users' reports (2026-11-19): a clip colour set in a bin repaints the Timeline at
 once (`Timeline::binItemsChanged`); long-GOP media (H.264, HEVC, MPEG-2) decodes on instead of seeking back to the
 keyframe and keeps its last 48 frames, so playback, steps and reverse play decode each frame about once (docs/spec/
 performance.md "Long-GOP media"); and linking long-GOP files offers to transcode them in the background, each clip

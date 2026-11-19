@@ -24,7 +24,7 @@ made (BUILDING.md "Releases").
 | 10.4 localisation | done but the reviews | native speakers' reviews of German, French, Italian and Irish (translations/glossary_*.md) |
 | 10.5 crash reports | done | a crash from the release package reads as functions and lines with its symbols (BUILDING.md "Crash reports") |
 | 10.6 update check | done (12.1), checked 2026-11-19: 2026.1 offered 2026.2 (the owner) | — |
-| 10.7 release pipeline | done (12.2): 2026.1 published 2026-11-16, 2026.2 2026-11-19 (its run passed first time) | section 1 above |
+| 10.7 release pipeline | done (12.2): 2026.1 published 2026-11-16, 2026.2 2026-11-19 (its run passed first time), 2026.3 2026-11-19 (macOS re-run for want of a runner) | section 1 above |
 | 10.0 going public | done (2026-11-15) | the community files after §2.2; run 423, stuck queued, deleted from the Actions page or by GitHub Support |
 
 ## 3. Gates the phases left open

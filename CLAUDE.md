@@ -1184,11 +1184,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/checklists/release-gate.md), is done, so Phase 12's steps are. **Cutthulhu 2026.1, the first release, was
   published on 2026-11-16** (ROADMAP's Phase 12 status; what its first runs found is in BUILDING.md "The first release
   run failed (2026-11-16)"). **Cutthulhu 2026.2 was published on 2026-11-19** (10.1b and 11.6; its run passed first
-  time). The next release: Actions > Release on `main` with no version. Before a release run, run
+  time). **Cutthulhu 2026.3 was published on 2026-11-19** (the users' fixes below; when a release job is never given
+  a runner, re-run the failed jobs: the draft and the other uploads stay). The next release: Actions > Release on `main` with no version. Before a release run, run
   a changed packaging step's shell locally on a dummy folder (each run takes an hour). Media Foundation's encoders
   refuse the GUI thread's single-threaded COM apartment, so `MediaWriter` calls them on an `EncoderThread`
   (`LUMENIS_ENCODER_THREAD=1` sends every encoder there, for tests); a new encoder call goes through `onEncoder`.
-  The update check from an older build passed (2026.1 offered 2026.2, 2026-11-19). Since 2026.2, from users' reports: the
+  The update check from an older build passed (2026.1 offered 2026.2, 2026-11-19). In 2026.3, from users' reports: the
   Timeline repaints when a bin item changes (`Timeline::binItemsChanged`, test `tst_main_window
   clipColorRepaintsTimeline`); long-GOP media decodes on and keeps its last frames (`VideoReader::decodedFrames`, test
   `tst_media longGopDecodesOnce`; docs/spec/performance.md "Long-GOP media"); linking long-GOP files offers to transcode
