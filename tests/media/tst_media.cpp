@@ -172,6 +172,51 @@ private slots:
         }
     }
 
+    // A user's report: H.264 played and scrubbed badly on an M1. Every frame that was not the next one seeked back to
+    // the keyframe and decoded the group of pictures again. Long-GOP media now decodes on to a later frame before the
+    // next keyframe and keeps its last frames, so stepping and reverse play cost about one decode per frame.
+    void longGopDecodesOnce() {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("gop.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("mpeg2video");
+        s.pixelFormat = QStringLiteral("yuv420p");
+        s.width = 128;
+        s.height = 96;
+        s.frameRate = Rational(25);
+        s.bitRate = 4'000'000;
+        s.videoOptions = {{QStringLiteral("g"), QStringLiteral("50")}, {QStringLiteral("bf"), QStringLiteral("2")}};
+        QVERIFY(writeVideo(path, s, 150));
+        VideoReader reader;
+        QVERIFY(reader.open(path));
+        QCOMPARE(reader.frameCount(), 150);
+        QCOMPARE(reader.decodedFrames(), 0);
+        auto check = [&](int n) { return near(reader.frame(n), colourOf(n), 12); };
+        // Frame 60 is ten after the keyframe at 50.
+        QVERIFY(check(60));
+        const std::int64_t toSixty = reader.decodedFrames();
+        QVERIFY2(toSixty <= 16, qPrintable(QString::number(toSixty)));
+        // Three on decodes three, not the group again.
+        QVERIFY(check(63));
+        QVERIFY2(reader.decodedFrames() - toSixty <= 4, qPrintable(QString::number(reader.decodedFrames() - toSixty)));
+        // Reverse play from 63 to 20: kept frames, then one decode of the first group.
+        const std::int64_t before = reader.decodedFrames();
+        for (int n = 62; n >= 20; --n) QVERIFY2(check(n), qPrintable(QString::number(n)));
+        const std::int64_t reverse = reader.decodedFrames() - before;
+        QVERIFY2(reverse <= 80, qPrintable(QString::number(reverse))); // about 1150 seeking for each frame
+        // Past the next keyframe it seeks, as before, and frames are still right in any order.
+        const std::int64_t far = reader.decodedFrames();
+        QVERIFY(check(140));
+        QVERIFY2(reader.decodedFrames() - far <= 45, qPrintable(QString::number(reader.decodedFrames() - far)));
+        for (int n : {141, 139, 99, 100, 101, 0, 149, 49, 50, 75, 74, 76}) QVERIFY2(check(n), qPrintable(QString::number(n)));
+        // The frames' hashes are the decoder's, kept or not.
+        const QString kept = reader.frameMd5(75);
+        VideoReader fresh;
+        QVERIFY(fresh.open(path));
+        QCOMPARE(fresh.frameMd5(75), kept);
+    }
+
     void audioSamples() {
         // 24-bit PCM in WAV: a 440 Hz left channel, 880 Hz right.
         QTemporaryDir dir;

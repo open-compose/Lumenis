@@ -181,6 +181,11 @@ public:
     // comparing pictures.
     bool planes(std::int64_t number, QSize size, std::vector<std::uint16_t>* y, std::vector<std::uint16_t>* cb,
                 std::vector<std::uint16_t>* cr);
+    // Frames the decoder has given since open(), for tests and benchmarks: what the frames asked for cost. Long-GOP
+    // media (H.264, HEVC, MPEG-2 Long GOP) decodes on from the frame it is at when the frame asked for comes before
+    // the next keyframe, and keeps its last frames, so stepping, playing in reverse and scrubbing back and forth
+    // decode each group of pictures about once (docs/spec/performance.md "Long-GOP media").
+    std::int64_t decodedFrames() const;
 
 private:
     friend class MediaWriter;

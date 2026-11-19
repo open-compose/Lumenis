@@ -30,6 +30,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <deque>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -801,8 +802,79 @@ struct VideoReader::Impl {
     AVRational rate{25, 1};
     std::int64_t next = -1; // the frame the decoder gives next, -1: unknown
     bool eof = false;
+    std::int64_t decoded = 0; // frames received from the decoder (decodedFrames())
+
+    // Long-GOP media: frames between keyframes need the frames before them (set in open(); not for intra-only codecs
+    // or image sequences, where a seek costs one frame).
+    bool longGop = false;
+    // The last frames decoded, oldest first, as references (no copies), so a frame asked for again, or the one
+    // before (reverse play, scrubbing back), comes without decoding its group of pictures again. Bounded by count and
+    // by bytes, so 4K media keeps fewer.
+    struct Kept {
+        std::int64_t number;
+        AVFrame* frame;
+        std::size_t bytes;
+    };
+    std::deque<Kept> kept;
+    std::size_t keptBytes = 0;
+    static constexpr std::size_t kKeptFrames = 48;
+    static constexpr std::size_t kKeptBytes = std::size_t{192} << 20;
+
+    void clearKept() {
+        for (Kept& k : kept) av_frame_free(&k.frame);
+        kept.clear();
+        keptBytes = 0;
+    }
+
+    // Keeps the frame just decoded as `number`.
+    void keep(std::int64_t number) {
+        if (!longGop) return;
+        for (const Kept& k : kept) {
+            if (k.number == number) return;
+        }
+        AVFrame* copy = av_frame_clone(frame);
+        if (!copy) return;
+        std::size_t bytes = 0;
+        for (const AVBufferRef* b : copy->buf) {
+            if (b) bytes += b->size;
+        }
+        kept.push_back({number, copy, bytes});
+        keptBytes += bytes;
+        while (kept.size() > kKeptFrames || (keptBytes > kKeptBytes && kept.size() > 1)) {
+            keptBytes -= kept.front().bytes;
+            av_frame_free(&kept.front().frame);
+            kept.pop_front();
+        }
+    }
+
+    // Puts a kept frame `number` into `frame`; the decoder stays where it is.
+    bool fromKept(std::int64_t number) {
+        for (const Kept& k : kept) {
+            if (k.number != number) continue;
+            av_frame_unref(frame);
+            return av_frame_ref(frame, k.frame) == 0;
+        }
+        return false;
+    }
+
+    // The keyframe at or before frame n, from the container's index (MOV, MP4, MXF and Matroska have one); -1 when
+    // the index does not say.
+    std::int64_t keyframeBefore(std::int64_t n) const {
+        const AVIndexEntry* e = avformat_index_get_entry_from_timestamp(stream, toPts(n), AVSEEK_FLAG_BACKWARD);
+        return e ? toFrame(e->timestamp) : -1;
+    }
+
+    // Whether frame n, after the next frame, is cheaper to reach by decoding on than by seeking: no keyframe after
+    // the decoder's position comes before it. Without an index, up to a second ahead (a typical GOP).
+    bool decodeOnTo(std::int64_t n) const {
+        if (!longGop || next < 0 || eof || n <= next) return false;
+        const std::int64_t key = keyframeBefore(n);
+        if (key >= 0) return key <= next;
+        return n - next <= std::max<std::int64_t>(12, static_cast<std::int64_t>(std::lround(av_q2d(rate))));
+    }
 
     ~Impl() {
+        clearKept();
         sws_freeContext(sws);
         av_frame_free(&frame);
         av_packet_free(&packet);
@@ -844,6 +916,8 @@ struct VideoReader::Impl {
                 const std::int64_t pts = frame->best_effort_timestamp != kNoPts ? frame->best_effort_timestamp : frame->pts;
                 number = pts != kNoPts ? toFrame(pts) : (next >= 0 ? next : 0);
                 next = number + 1;
+                ++decoded;
+                keep(number);
                 return true;
             }
             if (rc == AVERROR_EOF) return false;
@@ -945,8 +1019,16 @@ bool VideoReader::open(const QString& path, int streamIndex, QString* error) {
         if (pts != kNoPts) d->first = pts;
     }
     d->seek(0);
+    // Intra-only codecs (DNx, ProRes, FFV1 ...) and image sequences seek to any frame at the cost of one.
+    const AVCodecDescriptor* desc = avcodec_descriptor_get(d->stream->codecpar->codec_id);
+    d->longGop = !ImageSequence::fromSpec(path) && !(desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY));
+    d->decoded = 0;
     d_ = std::move(d);
     return true;
+}
+
+std::int64_t VideoReader::decodedFrames() const {
+    return d_ ? d_->decoded : 0;
 }
 
 bool VideoReader::isOpen() const {
@@ -975,6 +1057,7 @@ bool VideoReader::Impl::rewind() {
     stream = fmt->streams[index];
     eof = false;
     next = -1;
+    clearKept(); // numbered as the old decoder counted
     return true;
 }
 
@@ -984,15 +1067,25 @@ bool VideoReader::Impl::rewind() {
 // every frame up to it. False past the end or if the frame cannot be found.
 bool VideoReader::Impl::locate(std::int64_t number) {
     if (number < 0 || (info.length > 0 && number >= info.length)) return false;
-    // The next frame continues decoding; anything else seeks first.
-    if (next != number) seek(number);
+    // A frame decoded lately (long-GOP media) needs no decoding.
+    if (number != next && fromKept(number)) return true;
+    // The next frame continues decoding, and so does a later one of long-GOP media before the next keyframe
+    // (decodeOnTo()); anything else seeks first.
+    bool onward = decodeOnTo(number);
+    if (next != number && !onward) seek(number);
     std::int64_t got = -1;
     bool rewound = false;
     for (;;) {
         while (decodeNext(got)) {
             if (got < number) continue;
-            if (got > number && !rewound) break; // the seek landed after it
+            if (got > number && !rewound) break; // the seek landed after it, or decoding on passed it
             return true;
+        }
+        if (onward) {
+            // Not found decoding on (frames missing from the stream): seek as for any other frame.
+            onward = false;
+            seek(number);
+            continue;
         }
         // Not found where the seek went, or passed: from the start, frame by
         // frame.

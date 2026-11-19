@@ -115,3 +115,36 @@ Mosaic Effect keep theirs (they read the original as they go).
 
 The slowest benchmarks are profiled and their hot paths fixed; BUILDING.md "Profiling" says how (perf on Linux,
 Instruments on macOS, Windows Performance Recorder and Analyzer on Windows).
+
+## Long-GOP media (a user's report, 2026-11-19)
+
+An editor on an M1 MacBook found H.264 clips glitchy to play and scrub.
+Release builds already decode H.264 and HEVC with the operating system's
+hardware decoder (docs/spec/release-codecs.md); the time went in
+`VideoReader::Impl::locate`, which seeked to the keyframe before any frame
+that was not the very next one and decoded the group of pictures (GOP) up to
+it. A dropped frame in playback, a step of a few frames, every frame of reverse
+play and every scrub position cost up to a whole GOP, and H.264 GOPs are often
+one to ten seconds long.
+
+Now, for codecs that are not intra-only (`AV_CODEC_PROP_INTRA_ONLY`; not
+image sequences):
+
+* a later frame before the next keyframe is reached by decoding on from where
+  the decoder is (`decodeOnTo`: the keyframe from the container's index, or up
+  to a second ahead when there is no index), and the reader seeks only when
+  that fails;
+* the last 48 decoded frames, up to 192 MB, are kept as references to the
+  decoder's frames (no copies; `Impl::kept`), so a frame asked for again or
+  the one before it comes without decoding. Reverse play decodes each stretch
+  of 48 frames once instead of a GOP per frame.
+
+`VideoReader::decodedFrames()` counts what frames cost. `tst_media
+longGopDecodesOnce` (MPEG-2 with a 50-frame GOP, so it runs with patent codecs
+off too): ten frames into a GOP costs a dozen decodes, three frames on costs
+three, reverse play over 43 frames costs about 64 (about 1150 before), and the
+frames and their hashes are the decoder's.
+
+Scrubbing far through long-GOP media still decodes from a keyframe at each
+position; for heavy work, transcode to an intra-frame resolution (DNxHR,
+ProRes) or make proxies, as Media Composer's guide also advises.

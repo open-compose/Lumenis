@@ -306,6 +306,19 @@ A new Timeline display that comes from bin items needs nothing more; a bin
 change that bypasses `BinDocument` must still emit `itemsChanged`.
 `tst_main_window clipColorRepaintsTimeline` fails if the repaint is lost.
 
+### H.264 or HEVC clips play or scrub jerkily (an M1 MacBook)
+
+Long-GOP media stores a whole picture only at keyframes, often one to ten
+seconds apart; the frames between need the ones before them. The reader used
+to seek back to the keyframe for any frame that was not the next one, so a
+dropped frame, a step, reverse play or a scrub decoded a whole group of
+pictures each time. It now decodes on to later frames before the next keyframe
+and keeps its last 48 frames (docs/spec/performance.md "Long-GOP media").
+`tst_media longGopDecodesOnce` fails if the decode counts grow again. Fast
+scrubbing across long-GOP clips still costs more than intra-frame media: to
+edit smoothly on slower machines, transcode them (Clip > Consolidate/Transcode
+to DNxHR or ProRes) or create proxies.
+
 ### The "]" button under a monitor marks an OUT point
 
 Before this was fixed, the Composer's "]" button (left of Play) marked OUT and "[" marked IN. Media
