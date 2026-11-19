@@ -46,9 +46,29 @@ function Get-Cached {
         Select-Object -First 1
 }
 
+# Tries a web request up to four times, waiting 5, 15 and 45 seconds between them. GitHub answers 403 or 429 when
+# the hosted runners' shared addresses are over the anonymous API limit, and downloads are sometimes cut off
+# (BUILDING.md, "get-ffmpeg: (403) Forbidden in CI").
+function Invoke-WithRetry([scriptblock]$Request) {
+    $wait = 5
+    for ($try = 1; ; $try++) {
+        try { return & $Request } catch {
+            if ($try -ge 4) { throw }
+            Write-Host "== $($_.Exception.Message) (try $try of 4); trying again in $wait seconds"
+            Start-Sleep -Seconds $wait
+            $wait *= 3
+        }
+    }
+}
+
 function Get-Latest {
-    $release = Invoke-RestMethod -UseBasicParsing -Headers @{ 'User-Agent' = 'cutthulhu-get-ffmpeg' } `
-        'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest'
+    # In CI the workflow's token lifts the anonymous limit, which runners sharing an address run into.
+    $headers = @{ 'User-Agent' = 'cutthulhu-get-ffmpeg' }
+    if ($env:GITHUB_TOKEN) { $headers['Authorization'] = "Bearer $env:GITHUB_TOKEN" }
+    $release = Invoke-WithRetry {
+        Invoke-RestMethod -UseBasicParsing -Headers $headers `
+            'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest'
+    }
     $zips = $release.assets | Where-Object { $_.name -match $pattern }
     if (-not $zips) {
         $names = ($release.assets | ForEach-Object name) -join ', '
@@ -72,8 +92,8 @@ try {
             New-Item -ItemType Directory -Force $Dest | Out-Null
             $zip = Join-Path $Dest $latest.Zip.name
             Write-Host "== Downloading $($latest.Zip.name)"
-            Invoke-WebRequest -UseBasicParsing -OutFile $zip $latest.Zip.browser_download_url
-            $sums = Invoke-WebRequest -UseBasicParsing $latest.Sums.browser_download_url
+            Invoke-WithRetry { Invoke-WebRequest -UseBasicParsing -OutFile $zip $latest.Zip.browser_download_url }
+            $sums = Invoke-WithRetry { Invoke-WebRequest -UseBasicParsing $latest.Sums.browser_download_url }
             $text = if ($sums.Content -is [byte[]]) { [Text.Encoding]::ASCII.GetString($sums.Content) } else { $sums.Content }
             $line = ($text -split "`n") | Where-Object { $_ -match [regex]::Escape($latest.Zip.name) } | Select-Object -First 1
             if (-not $line) { throw "checksums.sha256 has no entry for $($latest.Zip.name)" }

@@ -421,6 +421,15 @@ encoder (libx264, libx265 are GPL), and the reason went only to the Console. Now
 
 To see which encoders your FFmpeg has: `ffmpeg -hide_banner -encoders` in its `bin` folder.
 
+### get-ffmpeg: (403) Forbidden in CI
+
+The Windows job stopped at its FFmpeg step with "get-ffmpeg: The remote server returned an error: (403) Forbidden"
+(2026-11-19), while the same commit's run on `main` passed. The script asks GitHub's API for BtbN's latest release
+without signing in, and the hosted runners share addresses whose anonymous limit (60 requests an hour) other jobs had
+used up. Now `scripts\get-ffmpeg.ps1` sends the workflow's token (`GITHUB_TOKEN`, set in ci.yml's and release.yml's
+FFmpeg steps), and it tries each request four times, 5, 15 and 45 seconds apart (`Invoke-WithRetry`). On your own PC a
+403 means the same limit: wait an hour, or set `GITHUB_TOKEN` to a personal access token with no scopes.
+
 ### Export says H.264 is not available on Windows
 
 The 2026.1 release candidate on Windows 11 refused H.264 in Export to File: "H.264 is not available in this build"

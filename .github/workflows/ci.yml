@@ -396,6 +396,8 @@ jobs:
 
       - name: FFmpeg
         shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
